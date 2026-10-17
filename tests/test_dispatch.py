@@ -1052,6 +1052,25 @@ def test_dispatch_agent_auto_provisions_story_id_when_not_given(project_dir, mon
     assert row is not None
 
 
+def test_pilot_intent_refuses_local_after_downstream_capability_reroute(
+    project_dir, monkeypatch
+):
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import dispatch_pipeline
+
+    monkeypatch.setattr(
+        dispatch_pipeline, "resolve",
+        lambda request: request.__class__(**{**request.__dict__, "agent": "local"}),
+    )
+    monkeypatch.setattr(dispatch_pipeline, "authorize", lambda _request: None)
+
+    with pytest.raises(RuntimeError, match="requires a valid admitted isolated-runner receipt"):
+        dispatch_mod.dispatch_agent(
+            "agy", "summarize a focused test", task_type="test",
+            force_agent=True, local_pilot_requested=True,
+        )
+
+
 def test_dispatch_agent_defers_when_quota_exhausted(project_dir, monkeypatch):
     """Even with --force-agent, dispatch_agent must not bypass the quota gate."""
     import synlynk as sl
@@ -2923,6 +2942,48 @@ def test_local_dispatch_rejects_approved_model_not_live_before_aider(project_dir
         )
 
     assert spawn_calls == []
+
+
+def test_local_dispatch_uses_policy_and_live_inventory_not_stale_catalog(
+    project_dir, monkeypatch
+):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.db import upsert_harness_model
+
+    policy_dir = project_dir / ".agents"
+    policy_dir.mkdir()
+    (policy_dir / "local.json").write_text(
+        '{"endpoint":"http://127.0.0.1:8000","pinned_model":"ornith",'
+        '"models":[{"id":"ornith","pinned":true,"edit_format":"diff"}]}'
+    )
+    monkeypatch.setattr(
+        "synlynk.local_agent._health_check",
+        lambda endpoint, timeout=5, api_key=None: {
+            "reachable": True, "status": "healthy", "available_models": ["ornith"]
+        },
+    )
+    conn = sl._get_db()
+    # This is the failure mode observed on the evaluated host: an unauthenticated
+    # oMLX catalog probe recorded model-file shard stems, not live model IDs.
+    upsert_harness_model(conn, "local", "model-00001-of-00003")
+    conn.commit()
+    spawned = []
+    monkeypatch.setattr(
+        dispatch_mod.subprocess, "Popen",
+        lambda *args, **kwargs: spawned.append(args)
+        or type("DummyProc", (), {"pid": 9999})(),
+    )
+
+    try:
+        result = dispatch_mod.dispatch_agent(
+            "local", "summarize this file", model="ornith", db_conn=conn,
+            skip_preflight=True, context_mode="none",
+        )
+        assert result["id"]
+        assert spawned
+    finally:
+        conn.close()
 
 
 def test_local_dispatch_rejects_prism_model_without_fallback(project_dir, monkeypatch):

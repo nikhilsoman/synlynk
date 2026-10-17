@@ -2564,6 +2564,11 @@ def main(argv=None) -> None:
                 grants=getattr(args, "grant", []),
                 revokes=getattr(args, "revoke", []),
             )
+            if getattr(args, "local_pilot_class", None) and args.agent == "local":
+                raise ValueError(
+                    "--local-pilot-class requires auto-routing; omit the explicit "
+                    "'local' harness so the 20% cohort and isolated runner are enforced"
+                )
             if (
                 getattr(args, "local_pilot_class", None)
                 and not args.agent
@@ -2641,10 +2646,14 @@ def main(argv=None) -> None:
                     args.task, context_mode,
                     agent_id=resolved_agent_id,
                     story_id=getattr(args, "story_id", None),
-                    force_agent=getattr(args, "force_agent", False),
+                    force_agent=(
+                        getattr(args, "force_agent", False)
+                        or bool(getattr(args, "local_pilot_class", None))
+                    ),
                     requires_gh_write=_effective_requires_gh_write,
                     static_baseline=getattr(args, "static_baseline", False),
                     task_type=_effective_task_type,
+                    role=getattr(args, "role", None),
                 )
                 print()
                 print(f"agent:        {preview['agent']}")
@@ -2666,7 +2675,10 @@ def main(argv=None) -> None:
 
             job = dispatch_agent(args.agent or known_agents[0], args.task, story_id=args.story_id,
                                  agent_id=resolved_agent_id,
-                                 force_agent=getattr(args, "force_agent", False),
+                                 force_agent=(
+                                     getattr(args, "force_agent", False)
+                                     or bool(getattr(args, "local_pilot_class", None))
+                                 ),
                                  static_baseline=getattr(args, "static_baseline", False),
                                  requires_gh_write=_effective_requires_gh_write,
                                  task_type=_effective_task_type,
@@ -2690,7 +2702,10 @@ def main(argv=None) -> None:
                                  scope_paths=getattr(args, "scope_paths", []),
                                  session_id=getattr(args, "session_id", None),
                                  role=getattr(args, "role", None),
-                                 local_pilot_receipt=local_pilot_receipt)
+                                 local_pilot_receipt=local_pilot_receipt,
+                                 local_pilot_requested=bool(
+                                     getattr(args, "local_pilot_class", None)
+                                 ))
             if isinstance(job, dict) and job.get("status") == "blocked" and not job.get("pid"):
                 print(f"Error: {job.get('reason')}")
                 remediation = job.get("remediation")
