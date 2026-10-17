@@ -52,20 +52,25 @@ def test_zero_file_checkout_states_use_real_git(tmp_path, monkeypatch):
     branch_switch_time = time.time()
     monkeypatch.setattr("synlynk.circuit_breaker.time.time", lambda: branch_switch_time + 61)
     assert _worktree_branch_is_stable(str(worktree), "dispatch") is True
+    monkeypatch.undo()
     subprocess.run(["git", "-C", str(worktree), "switch", "-q", "--detach"], check=True)
     assert _worktree_branch_is_stable(str(worktree), "dispatch") is False
+    detach_time = time.time()
+    monkeypatch.setattr("synlynk.circuit_breaker.time.time", lambda: detach_time + 61)
+    assert _worktree_branch_is_stable(str(worktree), "dispatch") is True
 
 
-def test_codex_tool_loop_cache_sum_does_not_trip_fast_tier_or_zero_file(tmp_path, monkeypatch):
+def test_codex_tool_loop_cache_sum_does_not_trip_fast_tier_when_files_touched(tmp_path, monkeypatch):
     """job-fccc76c4 / job-fda2e4ef: one Codex turn summed ~1.2M input tokens,
-    of which ~1.18M were cache reads of a ~50k prompt. The live prompt never
-    approached the 500k zero-file or fast-tier limits. Those jobs were killed
-    anyway because the sum was priced and compared as fresh input.
+    of which ~1.18M were cache reads of a ~50k prompt. When files are touched,
+    the live prompt never approached the fast-tier limit (500k billed tokens),
+    so the circuit breaker must not trip.
     """
     log_file = tmp_path / "job.log"
     log_file.write_text(_codex_turn_log(1_248_424, 1_181_440, 6_645, 2_141))
     killed = []
     monkeypatch.setattr(os, "kill", lambda pid, sig: killed.append((pid, sig)))
+    monkeypatch.setattr("synlynk.dispatch._worktree_files_touched", lambda p, b=None: ["synlynk/core.py"])
 
     job = {
         "id": "job-fccc76c4",
@@ -97,6 +102,43 @@ def test_codex_tool_loop_cache_sum_does_not_trip_fast_tier_or_zero_file(tmp_path
     assert job["status"] == "running"
     assert res.total_tokens < 500_000
     assert res.cost_usd < 2.00
+
+
+def test_codex_cached_cumulative_input_trips_zero_file(tmp_path, monkeypatch):
+    """Simulates gh:#1937 / P0-8: A Codex job in a runaway tool loop accumulates
+    1.2M raw input tokens (mostly cached). With 0 files touched, evaluating raw
+    tokens against zero_file_token_threshold trips the breaker immediately, preventing
+    unbounded context replay loops."""
+    log_file = tmp_path / "job.log"
+    log_file.write_text(_codex_turn_log(1_248_424, 1_181_440, 6_645, 2_141))
+    monkeypatch.setattr(os, "kill", lambda pid, sig: None)
+    monkeypatch.setattr("synlynk.dispatch._worktree_files_touched", lambda p, b=None: [])
+
+    job = {
+        "id": "job-cache-loop-zero-file",
+        "agent": "codex",
+        "model_tier": "fast",
+        "pid": 4242,
+        "log_file": str(log_file),
+        "worktree_path": str(tmp_path),
+        "status": "running",
+    }
+    config = {
+        "circuit_breaker": {
+            "max_job_tokens": 5_000_000,
+            "max_job_cost_usd": 15.00,
+            "zero_file_token_threshold": 500_000,
+        }
+    }
+    res = evaluate_job_circuit_breaker(
+        job,
+        config=config,
+        sentinel_path=str(tmp_path / "sentinel.md"),
+        skip_identity_check_for_test=True,
+    )
+    assert res.tripped is True
+    assert job["status"] == STATUS_CIRCUIT_BREAKER_TRIPPED
+    assert "zero-file runaway" in res.reason.lower()
 
 
 def test_codex_uncached_cumulative_input_still_trips_zero_file(tmp_path, monkeypatch):
