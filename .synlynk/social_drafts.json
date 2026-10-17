@@ -2350,5 +2350,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2400 \u2014 commit approved dev preview roadmap, competitive synthesis, and GenericAPIAdapter (#2076) (PR #2400, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2400.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2400\n- Merged improvements and fixes for PR #2400."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/394-pr2402-trust-live-inventory-over-stale-model-ca.md",
+    "title": "PR #2402 \u2014 trust live inventory over stale model catalog",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2402",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2402."
+    ],
+    "tweet": "\ud83d\ude80 PR #2402 \u2014 trust live inventory over stale model catalog (PR #2402, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2402.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2402\n- Merged improvements and fixes for PR #2402."
   }
 ]
