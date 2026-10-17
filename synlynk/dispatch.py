@@ -4400,7 +4400,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         dconn = dconn()
         owns_dconn = True
 
-    if requested_model_input and dconn is not None:
+    # Local models have already been validated against the authoritative
+    # local policy and authenticated live oMLX inventory above. The global
+    # harness_models catalog is discovery metadata, and may be stale or
+    # polluted by filesystem shard names when an unauthenticated oMLX probe
+    # cannot read /v1/models. It must not override the local resolver.
+    if requested_model_input and dconn is not None and agent != "local":
         from synlynk.db import get_active_harness_models
 
         active_models = get_active_harness_models(dconn, harness=agent)
