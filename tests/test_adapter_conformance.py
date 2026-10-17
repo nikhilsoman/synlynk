@@ -21,11 +21,6 @@ _SIGNATURE_DRIFT_XFAIL = pytest.mark.xfail(
     reason="gh:#2078 — signature drift, tracked separately",
     strict=True,
 )
-_LOCAL_RECEIPT_XFAIL = pytest.mark.xfail(
-    reason="gh:#2079 — LocalAdapter.parse_output omits compatibility_evidence",
-    strict=True,
-)
-
 SIGNATURE_ADAPTERS = [
     pytest.param(ClaudeAdapter, marks=_SIGNATURE_DRIFT_XFAIL),
     pytest.param(CodexAdapter, marks=_SIGNATURE_DRIFT_XFAIL),
@@ -40,8 +35,8 @@ RECEIPT_ADAPTERS = [
     CodexAdapter,
     AgyAdapter,
     GrokAdapter,
+    LocalAdapter,
     MuseAdapter,
-    pytest.param(LocalAdapter, marks=_LOCAL_RECEIPT_XFAIL),
 ]
 
 
