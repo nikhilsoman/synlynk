@@ -172,6 +172,12 @@ def test_gh_shim_picks_up_refreshed_daemon_token(monkeypatch):
 
 
 def test_gh_shim_engages_under_login_shell(tmp_path):
+    import shutil
+    import pytest
+
+    zsh = shutil.which("zsh")
+    if not zsh:
+        pytest.skip("zsh not installed")
     _fake_gh(tmp_path)
     from synlynk.dispatch import _setup_shim_zdotdir
     from synlynk.gh_shim import write_shim
@@ -196,11 +202,12 @@ def test_gh_shim_engages_under_login_shell(tmp_path):
     (tmp_path / "home" / ".zprofile").write_text(f'export PATH="{tmp_path}:$PATH"\n')
 
     res = subprocess.run(
-        ["/bin/zsh", "-lc", "gh --version"],
+        [zsh, "-lc", "gh --version"],
         env=env,
         capture_output=True,
         text=True,
     )
     assert res.returncode == 0
     assert res.stdout == "gh-ran:my-login-token"
+
 

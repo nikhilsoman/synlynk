@@ -52,6 +52,12 @@ def test_shim_removes_all_verbose_spellings(tmp_path):
 
 
 def test_pytest_shim_engages_under_login_shell(tmp_path):
+    import shutil
+    import pytest
+
+    zsh = shutil.which("zsh")
+    if not zsh:
+        pytest.skip("zsh not installed")
     _fake_pytest(tmp_path)
     from synlynk.dispatch import _setup_shim_zdotdir
     from synlynk.pytest_shim import write_shim
@@ -74,10 +80,11 @@ def test_pytest_shim_engages_under_login_shell(tmp_path):
     (tmp_path / "home" / ".zprofile").write_text(f'export PATH="{tmp_path}:$PATH"\n')
 
     res = subprocess.run(
-        ["/bin/zsh", "-lc", "pytest test.py -v"],
+        [zsh, "-lc", "pytest test.py -v"],
         env=env,
         capture_output=True,
         text=True,
     )
     assert res.returncode == 0
     assert res.stdout.strip().splitlines() == ["test.py", "-q"]
+
