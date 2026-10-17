@@ -231,6 +231,16 @@ pm, review, deploy
 
 **Merge authority is enforced from `.synlynk/policy.json` (`merge_authority`)** — a reviewer must run `synlynk policy check-merge --role <role>` before `gh pr merge`; a non-zero exit means do not merge.
 
+## Multi-Task & Multi-Goal Series Tracking Protocol
+1. **Parent GitHub Issue Mandate:** Every multi-task, multi-goal series or epic must have a dedicated parent tracking issue created on GitHub prior to or immediately upon kickoff.
+2. **Standard Structure:** The parent issue body must lead with:
+   - **Intent:** The high-level strategic driver and rationale.
+   - **Context:** The architectural, system, or operational background.
+   - **Associated Tickets & PRs:** Explicit cross-links to all related issues, stories, and child PRs.
+3. **Conversational Status Rollups:** Following every task completion or PR merge, post the long-form conversational status rollup as a comment directly on the parent tracking issue (and cross-link in the PR where relevant).
+4. **Per-PR Blog Convention Retired:** The mechanical per-PR blog post generation convention (`synlynk marketing sync-pr` generating automated stubs in `docs/blog/`) is retired.
+5. **Milestone Retrospective Blogs:** Blogs remain part of the project but are reserved for milestone, epic, or feature-arc synthesis, focusing on full intent, technical pathways, learnings, and verified outcomes.
+
 ## Brainstorm-First Policy
 1. Do not write code before an approved spec exists in `docs/superpowers/specs/`.
 2. Run the brainstorm using the Architect/PM role via `synlynk dispatch` (or locally if running in Home Conductor mode).
