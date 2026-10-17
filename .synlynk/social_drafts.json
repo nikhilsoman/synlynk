@@ -1918,5 +1918,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2365 \u2014 isolate qualification runner artifacts (PR #2365, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2365.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2365\n- Merged improvements and fixes for PR #2365."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/367-pr2366-record-qwen-qualification-result.md",
+    "title": "PR #2366 \u2014 record Qwen qualification result",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2366",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2366."
+    ],
+    "tweet": "\ud83d\ude80 PR #2366 \u2014 record Qwen qualification result (PR #2366, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2366.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2366\n- Merged improvements and fixes for PR #2366."
   }
 ]
