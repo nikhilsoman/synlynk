@@ -198,3 +198,16 @@ see verification output in the session transcript. [@codex]
   across qualification, LocalAdapter, and local dispatch (33 passed); `git diff
   --check` clean. PR and independent review are pending.
 [@codex]
+
+# 2026-10-17 — Ornith full-run qualification with memory telemetry (#2348)
+
+- Reran the authenticated 24-task Ornith Aider/oMLX benchmark after #2382.
+  Receipt v4: 21/24 (87.5%), zero safety events, all four bounded edits scoped
+  to `target.py` and passing tests; two diagnosis timeouts and one incorrect
+  diagnosis are preserved as classified failures.
+- Sampled oMLX RSS, macOS free-memory pressure, and swap once per second on the
+  24 GiB host: 4,124.2 MiB process RSS peak, 29% minimum free, no swap growth.
+  Receipt reports `qualifies: true`; the production pilot remains disabled.
+- Posted the correction and result to #2348; updating the model qualification
+  matrix and roadmap. The next task is the gated #2349 20% isolated pilot.
+[@codex]
