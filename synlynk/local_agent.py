@@ -13,6 +13,7 @@ import subprocess as _subprocess
 import sys
 import urllib.error
 import urllib.request
+from typing import Any, Iterable, Optional
 
 from synlynk import _get_db
 
@@ -143,6 +144,86 @@ def _pinned_model(config: dict) -> str:
     return eligible[0]["id"]
 
 
+def resolve_effective_local_model(
+    config_path: Optional[str] = None,
+    requested_model: Optional[str] = None,
+    live_model_ids: Optional[Iterable[str]] = None,
+    catalog: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Resolve one auditable local model without silently translating IDs.
+
+    The local policy is authoritative for normal dispatch.  Live oMLX
+    inventory and global catalog metadata are evidence layers: they enrich the
+    receipt and expose drift, but neither may substitute a different model.
+    Explicit per-dispatch selection is intentionally deferred to gh:#2347.
+    """
+    try:
+        config = _load_local_config(config_path)
+    except FileNotFoundError:
+        if config_path is not None:
+            raise
+        # Preserve the established no-config dispatch behavior while still
+        # making the fallback policy explicit in the resolution record.
+        config = _DEFAULT_LOCAL_CONFIG
+    policy_model = _pinned_model(config)
+    if requested_model and requested_model != policy_model:
+        raise ValueError(
+            "local per-dispatch model selection is not enabled; requested "
+            f"{requested_model!r}, policy resolves {policy_model!r} (gh:#2347)"
+        )
+    model_entry = next(model for model in config["models"] if model["id"] == policy_model)
+    if model_entry.get("loader") == "prism-ml" and not _check_prism_ml_available():
+        fallback = next(
+            (
+                model
+                for model in config["models"]
+                if not model.get("loader") and _is_dispatch_eligible(model)
+            ),
+            None,
+        )
+        if fallback is None:
+            raise ValueError("local policy model requires prism-ml and no eligible fallback exists")
+        policy_model = fallback["id"]
+        model_entry = fallback
+    eligible_ids = {
+        model["id"] for model in config["models"] if _is_dispatch_eligible(model)
+    }
+    policy_ids = {model["id"] for model in config["models"]}
+
+    if catalog is None:
+        from synlynk.models import load_model_catalog
+
+        catalog = load_model_catalog()
+    catalog_ids = {
+        str(model.get("model_id"))
+        for model in (catalog.get("models", []) if catalog else [])
+        if isinstance(model, dict) and model.get("harness") == "local" and model.get("model_id")
+    }
+    live_ids = None if live_model_ids is None else {str(model_id) for model_id in live_model_ids}
+    health = "unknown" if live_ids is None else ("available" if policy_model in live_ids else "unavailable")
+
+    return {
+        "requested_model": requested_model or policy_model,
+        "resolved_model": policy_model,
+        "effective_model": policy_model,
+        "edit_format": model_entry.get("edit_format", "whole"),
+        "health": health,
+        "sources": {
+            "policy": policy_model,
+            "catalog": policy_model if policy_model in catalog_ids else None,
+            "live_inventory": policy_model if live_ids is not None and policy_model in live_ids else None,
+        },
+        "drift": {
+            "live_but_unapproved": sorted((live_ids or set()) - eligible_ids),
+            "policy_approved_but_not_live": (
+                sorted(eligible_ids - live_ids) if live_ids is not None else []
+            ),
+            "catalog_only": sorted(catalog_ids - policy_ids),
+            "policy_not_in_catalog": sorted(eligible_ids - catalog_ids),
+        },
+    }
+
+
 def _health_check(endpoint: str, timeout: int = 5, api_key: str = None) -> dict:
     """GETs {endpoint}/v1/models and reports reachability plus model ids."""
     headers = {}
@@ -192,7 +273,9 @@ _STARTER_TIER_GUARDRAIL_FLAGS = [
 ]
 
 
-def _local_dispatch_model_flags(config_path: str = None) -> list:
+def _local_dispatch_model_flags(
+    config_path: str = None, resolved_model: Optional[str] = None
+) -> list:
     """Builds aider model flags from .agents/local.json.
 
     Always appends Starter-tier safety guardrails (no autonomous lint/test
@@ -207,34 +290,17 @@ def _local_dispatch_model_flags(config_path: str = None) -> list:
         config = _load_local_config(config_path)
     except FileNotFoundError:
         return []
-    endpoint = config["endpoint"]
     try:
-        model_id = _pinned_model(config)
+        resolution = resolve_effective_local_model(
+            config_path=config_path, requested_model=resolved_model
+        )
     except ValueError:
         return []
-
-    def _entry_for(mid):
-        return next((model for model in config["models"] if model["id"] == mid), {})
-
-    model_entry = _entry_for(model_id)
-    if model_entry.get("loader") == "prism-ml" and not _check_prism_ml_available():
-        fallback = next(
-            (
-                model
-                for model in config["models"]
-                if not model.get("loader") and _is_dispatch_eligible(model)
-            ),
-            None,
-        )
-        if fallback is None:
-            return []
-        model_id = fallback["id"]
-        model_entry = fallback
-    edit_format = model_entry.get("edit_format", "whole")
+    endpoint = config["endpoint"]
     return [
         "--openai-api-base", f"{endpoint}/v1",
-        "--model", f"openai/{model_id}",
-        "--edit-format", edit_format,
+        "--model", f"openai/{resolution['effective_model']}",
+        "--edit-format", resolution["edit_format"],
     ] + _STARTER_TIER_GUARDRAIL_FLAGS
 
 
@@ -283,6 +349,17 @@ def cmd_local_doctor(config_path: str = None, init: bool = False) -> int:
     seed_local_capability_envelope(_get_db())
     print("  ✓ starter capability envelope seeded (docs/testing, execute stage)")
     available = set(result["available_models"])
+    resolution = resolve_effective_local_model(
+        config_path=config_path if os.path.exists(config_path) else None,
+        live_model_ids=available,
+    )
+    print(
+        "  ✓ effective model: "
+        f"{resolution['effective_model']} ({resolution['edit_format']}, {resolution['health']})"
+    )
+    for drift_kind, model_ids in resolution["drift"].items():
+        if model_ids:
+            print(f"  ⚠ model drift [{drift_kind}]: {', '.join(model_ids)}")
     missing = [model["id"] for model in config["models"] if model["id"] not in available]
     for model in config["models"]:
         model_id = model["id"]

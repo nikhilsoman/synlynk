@@ -28,7 +28,9 @@ class LocalAdapter:
         from synlynk.dispatch import _dispatch_flags_for_agent
 
         flags = _dispatch_flags_for_agent(
-            "local", skip_permissions=getattr(request, "skip_permissions", False)
+            "local",
+            skip_permissions=getattr(request, "skip_permissions", False),
+            local_model=request.model,
         )
         return flags + self.translate_permissions(
             request.permissions,

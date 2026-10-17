@@ -384,7 +384,28 @@ def resolve_dispatch_model(
     tier = model_tier or resolve_model_tier(task, impact["score"], role=role, task_type=task_type)
     from synlynk.models import resolve_tier_model
 
-    resolved_model = model
+    local_resolution = None
+    if harness == "local":
+        from synlynk.local_agent import resolve_effective_local_model
+        from synlynk.models import load_model_catalog
+
+        config_path = None
+        if repo_root:
+            candidate = os.path.join(repo_root, ".agents", "local.json")
+            if os.path.isfile(candidate):
+                config_path = candidate
+        resolution_started = time.monotonic()
+        local_resolution = resolve_effective_local_model(
+            config_path=config_path,
+            requested_model=model,
+            catalog=load_model_catalog(repo_root),
+        )
+        local_resolution["resolution_ms"] = round(
+            (time.monotonic() - resolution_started) * 1000, 3
+        )
+        resolved_model = local_resolution["effective_model"]
+    else:
+        resolved_model = model
     if not resolved_model:
         if harness == "codex" and model_tier is None:
             try:
@@ -407,6 +428,7 @@ def resolve_dispatch_model(
         "impact_reports": impact["reports"],
         "requested_model": model or resolved_model,
         "resolved_model": resolved_model,
+        "local_resolution": local_resolution,
     }
 
 
@@ -569,7 +591,9 @@ def _print_pending_nudges() -> None:
         pass
 
 
-def _dispatch_flags_for_agent(agent: str, skip_permissions: bool = False) -> list:
+def _dispatch_flags_for_agent(
+    agent: str, skip_permissions: bool = False, local_model: Optional[str] = None
+) -> list:
     """Return the executable dispatch flags for an agent baseline."""
     baselines_map = _pkg("HARNESS_CAPABILITY_BASELINES", HARNESS_CAPABILITY_BASELINES)
     baselines = baselines_map.get(agent, {})
@@ -584,7 +608,7 @@ def _dispatch_flags_for_agent(agent: str, skip_permissions: bool = False) -> lis
     if agent == "local":
         from synlynk.local_agent import _local_dispatch_model_flags
 
-        flags = flags + _local_dispatch_model_flags()
+        flags = flags + _local_dispatch_model_flags(resolved_model=local_model)
     if skip_permissions and agent in {"claude", "agy"}:
         flags.append("--dangerously-skip-permissions")
     if skip_permissions and agent == "grok" and "--always-approve" not in flags:
@@ -4244,7 +4268,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     overrides = _load_harness_overrides(agent)
     for key, value in overrides.get("dispatch_flags", {}).items():
         flags = flags + [f"--{key}"] if value in (None, "") else flags + [f"--{key}", str(value)]
-    if model:
+    if model and agent != "local":
         flags += ["--model", model]
     if effort:
         flags += ["--effort", effort]
@@ -4277,7 +4301,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             task=task,
             story_id=story_id,
             job_id=job_id,
-            model=model,
+            # Preserve the caller's request for adapter validation. ``model``
+            # is already the effective ID here and may be a policy fallback;
+            # passing it back would incorrectly look like a new explicit swap.
+            model=requested_model_input,
             effort=effort,
             model_tier=model_tier,
             task_type=task_type,
@@ -4289,8 +4316,6 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         flags = baselines["non_interactive_flags"] + dispatch_flags
         for key, value in overrides.get("dispatch_flags", {}).items():
             flags = flags + [f"--{key}"] if value in (None, "") else flags + [f"--{key}", str(value)]
-        if model:
-            flags += ["--model", model]
         if effort:
             flags += ["--effort", effort]
     if task_type == "review":
@@ -4896,6 +4921,16 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "impact_score": model_routing["impact_score"],
         "requested_model": model_routing["requested_model"],
         "resolved_model": model_routing["resolved_model"],
+        "local_model_resolution": model_routing["local_resolution"],
+        "local_model_receipt": (
+            {
+                **model_routing["local_resolution"],
+                "retry_count": 0,
+                "memory_mib": None,
+            }
+            if model_routing["local_resolution"] is not None
+            else None
+        ),
         "fence": fence_data,
         "scope_paths": scope_paths or [],
         "requires_gh_write": requires_gh_write,
@@ -4969,6 +5004,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 "impact_score": "INTEGER DEFAULT 0",
                 "requested_model": "TEXT",
                 "resolved_model": "TEXT",
+                "local_model_resolution": "TEXT",
+                "local_model_receipt": "TEXT",
                 "requested_harness": "TEXT",
                 "actual_harness": "TEXT",
                 "fallback_reason": "TEXT",
@@ -5093,6 +5130,15 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 "UPDATE daemon_jobs SET base_sha=? WHERE job_id=?",
                 (base_sha, job_id),
             )
+            if agent == "local":
+                dconn.execute(
+                    "UPDATE daemon_jobs SET local_model_resolution=?, local_model_receipt=? WHERE job_id=?",
+                    (
+                        json.dumps(model_routing["local_resolution"], sort_keys=True),
+                        json.dumps(job["local_model_receipt"], sort_keys=True),
+                        job_id,
+                    ),
+                )
             if container_failed:
                 dconn.execute(
                     "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? WHERE job_id=?",
@@ -5126,6 +5172,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             "job_id": job_id,
             "context_mode": context_mode,
             "context_bytes": context_bytes,
+            "requested_model": model_routing["requested_model"],
+            "resolved_model": model_routing["resolved_model"],
+            "local_model_resolution": model_routing["local_resolution"],
+            "local_model_receipt": job["local_model_receipt"],
         })
     return job
 
