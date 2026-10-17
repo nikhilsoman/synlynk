@@ -2286,5 +2286,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2398 \u2014 report deferred dispatch jobs (PR #2398, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2398.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2398\n- Merged improvements and fixes for PR #2398."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/390-pr2359-fix-gh-2254-in-synlynk-synlynk-jobs-json.md",
+    "title": "PR #2359 \u2014 Fix gh:#2254: in synlynk, 'synlynk jobs --json' and (job-52b8deb2)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-17",
+    "pr": "#2359",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2359."
+    ],
+    "tweet": "\ud83d\ude80 PR #2359 \u2014 Fix gh:#2254: in synlynk, 'synlynk jobs --json' and (job-52b8deb2) (PR #2359, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2359.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2359\n- Merged improvements and fixes for PR #2359."
   }
 ]
