@@ -320,6 +320,161 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [237](./237-decide-panel-roadmap.md) | Convening the Panel on Our Own Review | [#1919](https://github.com/nikhilsoman/synlynk/pull/1919) | 2026-10-02 |
 | [238](./238-decide-panel-roadmap-fidelity-fix.md) | The Synthesis Lost Detail the Panel Actually Gave Us | [#1920](https://github.com/nikhilsoman/synlynk/pull/1920) | 2026-10-03 |
 | [239](./239-pr1934-version-single-source.md) | PR #1934 — CI release gate and version single source | 1934 | 2026-10-03 |
+| [224](./224-pr1741-cap-behind-dirty-pr-review-retry-churn-a.md) | PR #1741 — cap BEHIND/DIRTY PR-review retry churn and block retries on critical cost inflation | [#1741](https://github.com/nikhilsoman/synlynk/pull/1741) | 2026-09-23 |
+| [225](./225-pr1744-vizor-cross-workspace-daemon.md) | PR #1744 — Vizor cross-workspace daemon | [#1744](https://github.com/nikhilsoman/synlynk/pull/1744) | 2026-09-23 |
+| [226](./226-pr1747-align-github-app-token-refresh-cache-pat.md) | PR #1747 — align GitHub App token refresh cache paths [LIVE-14] (#1746) | [#1747](https://github.com/nikhilsoman/synlynk/pull/1747) | 2026-09-23 |
+| [227](./227-pr1751-devlog-checkpoint-for-live-14-session.md) | PR #1751 — devlog checkpoint for LIVE-14 session | [#1751](https://github.com/nikhilsoman/synlynk/pull/1751) | 2026-09-23 |
+| [228](./228-pr1755-resolve-codex-config-model-and-git-workt.md) | PR #1755 — resolve codex config model and git worktree identity slug (#1748, #1742) | [#1755](https://github.com/nikhilsoman/synlynk/pull/1755) | 2026-09-23 |
+| [229](./229-pr1756-backfill-registry-repo-path-and-inspect-.md) | PR #1756 — backfill registry repo_path and inspect daemon install returncode (#1743, #1749) | [#1756](https://github.com/nikhilsoman/synlynk/pull/1756) | 2026-09-23 |
+| [230](./230-pr1754-deduplicate-harness-sop-sections.md) | PR #1754 — deduplicate harness SOP sections | [#1754](https://github.com/nikhilsoman/synlynk/pull/1754) | 2026-09-23 |
+| [231](./231-pr1757-guard-sandbox-state-migration-and-mutex-.md) | PR #1757 — guard sandbox state migration and mutex-lock vizor render context (#1733, #1750) | [#1757](https://github.com/nikhilsoman/synlynk/pull/1757) | 2026-09-23 |
+| [232](./232-pr1753-fail-dispatch-early-without-role-github-.md) | PR #1753 — fail dispatch early without role GitHub token | [#1753](https://github.com/nikhilsoman/synlynk/pull/1753) | 2026-09-23 |
+| [233](./233-pr1758-modern-multi-workspace-hub-ui-and-index-.md) | PR #1758 — modern multi-workspace hub UI and /index.html routing fallback | [#1758](https://github.com/nikhilsoman/synlynk/pull/1758) | 2026-09-23 |
+| [234](./234-pr1759-guard-db-path-resolution-and-daemon-poll.md) | PR #1759 — guard DB_PATH resolution and daemon polling outside project roots | [#1759](https://github.com/nikhilsoman/synlynk/pull/1759) | 2026-09-23 |
+| [235](./235-pr1760-support-head-requests-in-workspaceroutin.md) | PR #1760 — support HEAD requests in WorkspaceRoutingHandler | [#1760](https://github.com/nikhilsoman/synlynk/pull/1760) | 2026-09-24 |
+| [236](./236-pr1761-cut-named-release-v0-22-0.md) | PR #1761 — cut named release v0.22.0 | [#1761](https://github.com/nikhilsoman/synlynk/pull/1761) | 2026-09-24 |
+| [237](./237-pr1762-bump-development-version-to-0-23-0-dev.md) | PR #1762 — bump development version to 0.23.0-dev | [#1762](https://github.com/nikhilsoman/synlynk/pull/1762) | 2026-09-24 |
+| [238](./238-pr1764-correct-stale-model-catalog-entries-in-m.md) | PR #1764 — correct stale model catalog entries in models.py and models.json | [#1764](https://github.com/nikhilsoman/synlynk/pull/1764) | 2026-09-24 |
+| [239](./239-pr1765-implement-two-tier-accordion-navigation-.md) | PR #1765 — implement two-tier accordion navigation, overview canvas, and activity stream | [#1765](https://github.com/nikhilsoman/synlynk/pull/1765) | 2026-09-24 |
+| [240](./240-pr1768-remove-legacy-embedded-sidebar-and-tab-b.md) | PR #1768 — remove legacy embedded sidebar and tab bar from gantt view | [#1768](https://github.com/nikhilsoman/synlynk/pull/1768) | 2026-09-24 |
+| [267](./267-pr2173-make-post-merge-marketing-sync-idempoten.md) | PR #2173 — make post-merge marketing sync idempotent | [#2173](https://github.com/nikhilsoman/synlynk/pull/2173) | 2026-10-10 |
+| [268](./268-pr2184-record-job-status-false-negative-fix-str.md) | PR #2184 — record job-status false-negative fix-strategy decision | [#2184](https://github.com/nikhilsoman/synlynk/pull/2184) | 2026-10-10 |
+| [269](./269-pr2183-add-synlynk-goal-update-subcommand-gh-21.md) | PR #2183 — add 'synlynk goal update' subcommand (gh:#2182) | [#2183](https://github.com/nikhilsoman/synlynk/pull/2183) | 2026-10-10 |
+| [270](./270-pr2181-enable-autonomous-ticks-in-installed-ser.md) | PR #2181 — enable autonomous ticks in installed services | [#2181](https://github.com/nikhilsoman/synlynk/pull/2181) | 2026-10-10 |
+| [271](./271-pr2180-align-xdist-evaluation-with-shipped-ci-p.md) | PR #2180 — align xdist evaluation with shipped CI policy | [#2180](https://github.com/nikhilsoman/synlynk/pull/2180) | 2026-10-10 |
+| [272](./272-pr2171-capability-sweep-quality-signal-design-s.md) | PR #2171 — capability sweep quality signal — design spec + implementation plan | [#2171](https://github.com/nikhilsoman/synlynk/pull/2171) | 2026-10-10 |
+| [273](./273-pr2179-clean-up-no-op-job-worktrees.md) | PR #2179 — clean up no-op job worktrees | [#2179](https://github.com/nikhilsoman/synlynk/pull/2179) | 2026-10-10 |
+| [274](./274-pr2188-wire-synlynk-autonomous-into-all-three-s.md) | PR #2188 — wire SYNLYNK_AUTONOMOUS into all three service installers | [#2188](https://github.com/nikhilsoman/synlynk/pull/2188) | 2026-10-11 |
+| [275](./275-pr2189-align-dispatch-flags-with-exec-cli-contr.md) | PR #2189 — align dispatch flags with exec CLI contract | [#2189](https://github.com/nikhilsoman/synlynk/pull/2189) | 2026-10-11 |
+| [276](./276-pr2174-correct-post-265-frontmatter.md) | PR #2174 — correct post 265 frontmatter | [#2174](https://github.com/nikhilsoman/synlynk/pull/2174) | 2026-10-11 |
+| [277](./277-pr1900-bump-markdown-it-from-14-2-0-to-14-3-2-i.md) | PR #1900 — bump markdown-it from 14.2.0 to 14.3.2 in /website | [#1900](https://github.com/nikhilsoman/synlynk/pull/1900) | 2026-10-11 |
+| [278](./278-pr2176-bump-liquidjs-from-10-27-1-to-10-30-0-in.md) | PR #2176 — bump liquidjs from 10.27.1 to 10.30.0 in /website | [#2176](https://github.com/nikhilsoman/synlynk/pull/2176) | 2026-10-11 |
+| [279](./279-pr2190-add-real-muse-spark-1-3-model-catalog-en.md) | PR #2190 — add real muse-spark-1.3 model catalog entry | [#2190](https://github.com/nikhilsoman/synlynk/pull/2190) | 2026-10-11 |
+| [280](./280-pr2156-archive-superseded-regen-write-through-r.md) | PR #2156 — archive superseded regen write-through reconciliation spec | [#2156](https://github.com/nikhilsoman/synlynk/pull/2156) | 2026-10-11 |
+| [281](./281-pr2191-pass-prompt-positionally-for-prompt-via-.md) | PR #2191 — pass prompt positionally for prompt_via_arg agents with no prompt_flag | [#2191](https://github.com/nikhilsoman/synlynk/pull/2191) | 2026-10-11 |
+| [282](./282-pr2193-muse-harness-has-no-real-network-depende.md) | PR #2193 — muse harness has no real network dependency, baseline required_endpoints was a fabricated host | [#2193](https://github.com/nikhilsoman/synlynk/pull/2193) | 2026-10-11 |
+| [283](./283-pr2195-capture-nested-muse-exec-usage.md) | PR #2195 — capture nested Muse exec usage | [#2195](https://github.com/nikhilsoman/synlynk/pull/2195) | 2026-10-11 |
+| [284](./284-pr2197-revisable-terminal-job-status-verdicts-b.md) | PR #2197 — revisable terminal job-status verdicts by evidence strength | [#2197](https://github.com/nikhilsoman/synlynk/pull/2197) | 2026-10-11 |
+| [285](./285-pr2199-add-missing-frontmatter-fields-to-blog-p.md) | PR #2199 — add missing frontmatter fields to blog post 267 | [#2199](https://github.com/nikhilsoman/synlynk/pull/2199) | 2026-10-11 |
+| [286](./286-pr2196-prioritize-verified-remote-evidence-over.md) | PR #2196 — prioritize verified remote evidence over unknown_contract | [#2196](https://github.com/nikhilsoman/synlynk/pull/2196) | 2026-10-11 |
+| [287](./287-pr2198-refresh-stale-graphify-graph-surface-con.md) | PR #2198 — refresh stale Graphify graph, surface context-build failures | [#2198](https://github.com/nikhilsoman/synlynk/pull/2198) | 2026-10-11 |
+| [288](./288-pr2200-wire-retry-gates-into-terminal-json-reco.md) | PR #2200 — wire retry gates into terminal JSON reconciliation | [#2200](https://github.com/nikhilsoman/synlynk/pull/2200) | 2026-10-11 |
+| [289](./289-pr2208-bridge-openrouter-through-generic-gatewa.md) | PR #2208 — bridge OpenRouter through generic gateway dispatch | [#2208](https://github.com/nikhilsoman/synlynk/pull/2208) | 2026-10-11 |
+| [290](./290-pr2209-add-capability-routing-report-1993.md) | PR #2209 — add capability routing report (#1993) | [#2209](https://github.com/nikhilsoman/synlynk/pull/2209) | 2026-10-11 |
+| [291](./291-pr2211-hermes-local-model-measurement-wiring-de.md) | PR #2211 — Hermes local-model measurement wiring design spec (roadmap Week 3 pillar 4) | [#2211](https://github.com/nikhilsoman/synlynk/pull/2211) | 2026-10-11 |
+| [292](./292-pr2212-sqlite-wal-soak-test-design-spec-plan-gh.md) | PR #2212 — SQLite WAL soak test design spec + plan (gh:#2102) | [#2212](https://github.com/nikhilsoman/synlynk/pull/2212) | 2026-10-11 |
+| [293](./293-pr2207-sqlite-wal-concurrent-writer-soak-test-g.md) | PR #2207 — SQLite WAL concurrent-writer soak test (gh:#2102) | [#2207](https://github.com/nikhilsoman/synlynk/pull/2207) | 2026-10-11 |
+| [294](./294-pr2213-add-circuit-breaker-log-size-runaway-net.md) | PR #2213 — add circuit-breaker log-size runaway net | [#2213](https://github.com/nikhilsoman/synlynk/pull/2213) | 2026-10-11 |
+| [295](./295-pr2186-record-pillar-1-blocker-review-backlog-t.md) | PR #2186 — record Pillar 1 blocker review + backlog triage pause | [#2186](https://github.com/nikhilsoman/synlynk/pull/2186) | 2026-10-11 |
+| [296](./296-pr2153-backfill-3-cost-entries-dropped-by-regen.md) | PR #2153 — backfill 3 cost entries dropped by regeneration bug | [#2153](https://github.com/nikhilsoman/synlynk/pull/2153) | 2026-10-11 |
+| [297](./297-pr2217-add-log-size-runaway-circuit-breaker-net.md) | PR #2217 — add log-size runaway circuit breaker net (gh:#1937) | [#2217](https://github.com/nikhilsoman/synlynk/pull/2217) | 2026-10-11 |
+| [298](./298-pr2215-avoid-zero-file-kill-during-branch-trans.md) | PR #2215 — avoid zero-file kill during branch transition | [#2215](https://github.com/nikhilsoman/synlynk/pull/2215) | 2026-10-11 |
+| [299](./299-pr2222-migrate-github-app-auth-governs-engine-c.md) | PR #2222 — migrate github_app_auth/governs_engine config readers to workspace.json (gh:#2147) | [#2222](https://github.com/nikhilsoman/synlynk/pull/2222) | 2026-10-11 |
+| [300](./300-pr2223-migrate-state-registry-team-version-poli.md) | PR #2223 — migrate state_registry/team/version_policy config readers to workspace.json (gh:#2147) | [#2223](https://github.com/nikhilsoman/synlynk/pull/2223) | 2026-10-11 |
+| [301](./301-pr2225-migrate-autonomy-agent-store-handover-co.md) | PR #2225 — migrate autonomy/agent_store/handover config readers to workspace.json (gh:#2147) | [#2225](https://github.com/nikhilsoman/synlynk/pull/2225) | 2026-10-11 |
+| [302](./302-pr2226-muse-harness-config-fix-design-implement.md) | PR #2226 — Muse harness config fix design + implementation plan (gh:#2187) | [#2226](https://github.com/nikhilsoman/synlynk/pull/2226) | 2026-10-11 |
+| [303](./303-pr2228-cover-muse-adapter-permission-flag-trans.md) | PR #2228 — cover Muse adapter permission flag translation (gh:#2187) | [#2228](https://github.com/nikhilsoman/synlynk/pull/2228) | 2026-10-11 |
+| [304](./304-pr2234-scope-review-task-type-uses-persisted-va.md) | PR #2234 — scope-review task_type uses persisted value before prompt substring fallback (gh:#2232) | [#2234](https://github.com/nikhilsoman/synlynk/pull/2234) | 2026-10-12 |
+| [305](./305-pr2235-spill-oversized-dispatch-verify-step-out.md) | PR #2235 — spill oversized dispatch verify-step output to a log file (gh:#2232) | [#2235](https://github.com/nikhilsoman/synlynk/pull/2235) | 2026-10-12 |
+| [306](./306-pr2239-enforce-circuit-breaker-during-bare-disp.md) | PR #2239 — enforce circuit breaker during bare dispatch | [#2239](https://github.com/nikhilsoman/synlynk/pull/2239) | 2026-10-12 |
+| [307](./307-pr2238-prevent-generated-docs-leaking-into-disp.md) | PR #2238 — prevent generated docs leaking into dispatch worktrees | [#2238](https://github.com/nikhilsoman/synlynk/pull/2238) | 2026-10-12 |
+| [308](./308-pr2250-add-job-scoped-context-packs-gh-2243-sto.md) | PR #2250 — add job-scoped context packs (gh:#2243, story-c04f64b1) | [#2250](https://github.com/nikhilsoman/synlynk/pull/2250) | 2026-10-13 |
+| [309](./309-pr2248-move-policy-sops-out-of-root-claude-md-g.md) | PR #2248 — move policy SOPs out of root CLAUDE.md (gh:#2243, story-c04f64b1) | [#2248](https://github.com/nikhilsoman/synlynk/pull/2248) | 2026-10-13 |
+| [310](./310-pr2249-add-task-boundary-compaction-trigger-to-.md) | PR #2249 — add task-boundary compaction trigger to the dispatch wrapper (gh:#2243, story-c04f64b1) | [#2249](https://github.com/nikhilsoman/synlynk/pull/2249) | 2026-10-13 |
+| [311](./311-pr2247-stop-writing-phantom-grok-md-gh-2243-sto.md) | PR #2247 — stop writing phantom GROK.md (gh:#2243, story-c04f64b1) | [#2247](https://github.com/nikhilsoman/synlynk/pull/2247) | 2026-10-13 |
+| [312](./312-pr2253-pass-muse-api-key-through-to-dispatched-.md) | PR #2253 — pass Muse API key through to dispatched jobs | [#2253](https://github.com/nikhilsoman/synlynk/pull/2253) | 2026-10-13 |
+| [268](./268-prTBD-pm-tpm-durable-wake-cycle-charters.md) | Durable PM/TPM charters get a real wake cycle and CLI surface | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-10-13 |
+| [313](./313-pr2246-finalize-pm-tpm-durable-wake-cycle-chart.md) | PR #2246 — finalize PM/TPM durable wake-cycle charters | [#2246](https://github.com/nikhilsoman/synlynk/pull/2246) | 2026-10-13 |
+| [314](./314-pr2257-add-opt-in-personal-hosted-relay-with-du.md) | PR #2257 — add opt-in personal hosted relay with durable replay | [#2257](https://github.com/nikhilsoman/synlynk/pull/2257) | 2026-10-13 |
+| [315](./315-pr2267-block-scheduling-of-stories-with-no-goal.md) | PR #2267 — block scheduling of stories with no goal link (gh:#2262) | [#2267](https://github.com/nikhilsoman/synlynk/pull/2267) | 2026-10-13 |
+| [316](./316-pr2266-add-goal-match-confidence-threshold-gh-2.md) | PR #2266 — add goal-match confidence threshold (gh:#2262) | [#2266](https://github.com/nikhilsoman/synlynk/pull/2266) | 2026-10-13 |
+| [317](./317-pr2269-add-autonomy-pass-chaining-backlog-pipel.md) | PR #2269 — add _autonomy_pass() chaining backlog pipeline + mode-gated scheduling | [#2269](https://github.com/nikhilsoman/synlynk/pull/2269) | 2026-10-13 |
+| [318](./318-pr2272-preserve-cross-harness-pr-review-routing.md) | PR #2272 — preserve cross-harness PR review routing | [#2272](https://github.com/nikhilsoman/synlynk/pull/2272) | 2026-10-13 |
+| [319](./319-pr2274-exclude-implementer-harness-from-review-.md) | PR #2274 — exclude implementer harness from review capability probe (gh:#2271) | [#2274](https://github.com/nikhilsoman/synlynk/pull/2274) | 2026-10-14 |
+| [320](./320-pr2283-tier-the-instruction-writer-by-per-harne.md) | PR #2283 — tier the instruction writer by per-harness reload confidence (gh:#2243) | [#2283](https://github.com/nikhilsoman/synlynk/pull/2283) | 2026-10-14 |
+| [321](./321-pr2279-auto-opt-agy-into-skip-permissions-gh-22.md) | PR #2279 — auto-opt Agy into skip_permissions (gh:#2216) | [#2279](https://github.com/nikhilsoman/synlynk/pull/2279) | 2026-10-14 |
+| [322](./322-pr2282-align-museadapter-command-building-and-c.md) | PR #2282 — align MuseAdapter command building and conformance tests with real CLI contract (gh:#2109) | [#2282](https://github.com/nikhilsoman/synlynk/pull/2282) | 2026-10-14 |
+| [323](./323-pr2278-validate-agy-tier-models-against-live-di.md) | PR #2278 — validate Agy tier models against live discovery (gh:#2268) | [#2278](https://github.com/nikhilsoman/synlynk/pull/2278) | 2026-10-14 |
+| [324](./324-pr2281-order-gh-write-harnesses-by-measured-qua.md) | PR #2281 — order gh-write harnesses by measured quality | [#2281](https://github.com/nikhilsoman/synlynk/pull/2281) | 2026-10-14 |
+| [325](./325-pr2285-resolve-false-permission-denied-and-summ.md) | PR #2285 — resolve false PERMISSION_DENIED and summary status mismatch (gh:#2205) | [#2285](https://github.com/nikhilsoman/synlynk/pull/2285) | 2026-10-14 |
+| [326](./326-pr2280-stop-cold-start-tiebreak-from-selecting-.md) | PR #2280 — stop cold-start tiebreak from selecting local (gh:#2048) | [#2280](https://github.com/nikhilsoman/synlynk/pull/2280) | 2026-10-14 |
+| [327](./327-pr2286-stop-false-job-status-denials-and-stale-.md) | PR #2286 — stop false job-status denials and stale file lists | [#2286](https://github.com/nikhilsoman/synlynk/pull/2286) | 2026-10-14 |
+| [328](./328-pr2292-model-catalog-discovery-design-spec-plan.md) | PR #2292 — model catalog discovery design spec + plan (gh:#2291) | [#2292](https://github.com/nikhilsoman/synlynk/pull/2292) | 2026-10-14 |
+| [329](./329-pr2293-add-provider-aware-harness-model-catalog.md) | PR #2293 — add provider-aware harness model catalog | [#2293](https://github.com/nikhilsoman/synlynk/pull/2293) | 2026-10-14 |
+| [330](./330-pr2290-parse-aider-token-lines-for-the-local-ha.md) | PR #2290 — parse aider token lines for the local harness | [#2290](https://github.com/nikhilsoman/synlynk/pull/2290) | 2026-10-14 |
+| [269](./269-pr-model-catalog-discovery-pass.md) | PR #2296 — One discovery pass for every harness baseline | 2296 | 2026-10-14 |
+| [331](./331-pr2296-discover-harness-catalogs-from-live-base.md) | PR #2296 — discover harness catalogs from live baselines | [#2296](https://github.com/nikhilsoman/synlynk/pull/2296) | 2026-10-14 |
+| [332](./332-pr2289-bind-root-for-token-refresh.md) | PR #2289 — bind root for token refresh | [#2289](https://github.com/nikhilsoman/synlynk/pull/2289) | 2026-10-14 |
+| [333](./333-pr2295-resolve-dispatch-from-live-catalog.md) | PR #2295 — resolve dispatch from live catalog | [#2295](https://github.com/nikhilsoman/synlynk/pull/2295) | 2026-10-14 |
+| [270](./270-pr-model-catalog-24h-refresh.md) | The model catalog refreshes itself every 24 hours | 2297 | 2026-10-14 |
+| [334](./334-pr2297-refresh-the-model-catalog-every-24h.md) | PR #2297 — refresh the model catalog every 24h | [#2297](https://github.com/nikhilsoman/synlynk/pull/2297) | 2026-10-14 |
+| [335](./335-pr2299-log-v0-25-1-release-prep-pm-session-cost.md) | PR #2299 — log v0.25.1 release-prep PM session cost | [#2299](https://github.com/nikhilsoman/synlynk/pull/2299) | 2026-10-14 |
+| [336](./336-pr2300-recover-continuous-momentum-design-spec-.md) | PR #2300 — recover continuous-momentum design spec from stashed WIP | [#2300](https://github.com/nikhilsoman/synlynk/pull/2300) | 2026-10-14 |
+| [337](./337-pr2301-pytest-verbosity-shim-design-for-gh-2294.md) | PR #2301 — pytest verbosity shim design for gh:#2294 | [#2301](https://github.com/nikhilsoman/synlynk/pull/2301) | 2026-10-14 |
+| [338](./338-pr2303-quiet-pytest-in-dispatched-jobs.md) | PR #2303 — quiet pytest in dispatched jobs | [#2303](https://github.com/nikhilsoman/synlynk/pull/2303) | 2026-10-14 |
+| [272](./272-prTBD-charter-superpowers-binding.md) | PR #TBD — Charters Learn to Bind Skills, Not Just Roles | 2306 | 2026-10-14 |
+| [339](./339-pr2306-charter-superpowers-skill-binding-design.md) | PR #2306 — charter superpowers-skill binding design for gh:#2305 | [#2306](https://github.com/nikhilsoman/synlynk/pull/2306) | 2026-10-14 |
+| [340](./340-pr2308-bind-superpowers-skills-to-dispatched-ch.md) | PR #2308 — bind superpowers skills to dispatched charters | [#2308](https://github.com/nikhilsoman/synlynk/pull/2308) | 2026-10-14 |
+| [273](./273-prTBD-onboarding-engine-wiring.md) | PR #TBD — Five Modules, Zero Callers: Finding the Other Dead Charter Bug | 2310 | 2026-10-14 |
+| [341](./341-pr2311-onboarding-engine-wiring-design-gh-2310.md) | PR #2311 — onboarding-engine wiring design (gh:#2310) | [#2311](https://github.com/nikhilsoman/synlynk/pull/2311) | 2026-10-14 |
+| [342](./342-pr2312-add-dependency-probing-to-synlynk-probe.md) | PR #2312 — add dependency probing to synlynk probe | [#2312](https://github.com/nikhilsoman/synlynk/pull/2312) | 2026-10-14 |
+| [343](./343-pr2313-wire-fleet-template-commands.md) | PR #2313 — wire fleet template commands | [#2313](https://github.com/nikhilsoman/synlynk/pull/2313) | 2026-10-14 |
+| [344](./344-pr2316-wire-topology-discovery-into-onboarding-.md) | PR #2316 — wire topology_discovery into onboarding confirm flow | [#2316](https://github.com/nikhilsoman/synlynk/pull/2316) | 2026-10-14 |
+| [275](./275-prTBD-first-win-loop-wiring.md) | PR #TBD — Making the First Win Reach S10 | TBD | 2026-10-15 |
+| [345](./345-pr2317-wire-first-win-cycle-into-s10.md) | PR #2317 — wire first-win cycle into S10 | [#2317](https://github.com/nikhilsoman/synlynk/pull/2317) | 2026-10-14 |
+| [346](./346-pr2315-wire-synlynk-upgrade-all-to-version-poli.md) | PR #2315 — wire synlynk upgrade --all to version_policy (gh:#2310 Task 3) | [#2315](https://github.com/nikhilsoman/synlynk/pull/2315) | 2026-10-14 |
+| [347](./347-pr2322-track-daemon-health-autonomy-wiring-init.md) | PR #2322 — track daemon health & autonomy-wiring initiative (v0.25.2) | [#2322](https://github.com/nikhilsoman/synlynk/pull/2322) | 2026-10-15 |
+| [348](./348-pr2323-spec-plan-for-daemon-cwd-health-fix-gh-2.md) | PR #2323 — spec + plan for daemon cwd health fix (gh:#2261, gh:#2288) | [#2323](https://github.com/nikhilsoman/synlynk/pull/2323) | 2026-10-15 |
+| [349](./349-pr2324-unconditionally-resolve-repo-root-in-chi.md) | PR #2324 — unconditionally resolve repo root in child-main entry points | [#2324](https://github.com/nikhilsoman/synlynk/pull/2324) | 2026-10-15 |
+| [350](./350-pr2326-spec-plan-for-daemon-autonomy-pass-wirin.md) | PR #2326 — spec + plan for daemon autonomy-pass wiring (gh:#2262 Task 4) | [#2326](https://github.com/nikhilsoman/synlynk/pull/2326) | 2026-10-15 |
+| [351](./351-pr2327-wire-hybrid-interval-idle-autonomy-pass-.md) | PR #2327 — wire hybrid interval+idle autonomy-pass trigger into poll loop (gh:#2262 Task 4) | [#2327](https://github.com/nikhilsoman/synlynk/pull/2327) | 2026-10-15 |
+| [352](./352-pr2335-repair-capability-rating-quality-verific.md) | PR #2335 — repair capability rating quality verification | [#2335](https://github.com/nikhilsoman/synlynk/pull/2335) | 2026-10-15 |
+| [353](./353-pr1899-bump-brace-expansion-from-1-1-16-to-1-1-.md) | PR #1899 — bump brace-expansion from 1.1.16 to 1.1.21 in /website | [#1899](https://github.com/nikhilsoman/synlynk/pull/1899) | 2026-10-15 |
+| [354](./354-pr2265-isolate-generated-todo-writes-in-tests.md) | PR #2265 — isolate generated todo writes in tests | [#2265](https://github.com/nikhilsoman/synlynk/pull/2265) | 2026-10-15 |
+| [355](./355-pr2042-close-ci-follow-up-for-1943.md) | PR #2042 — close CI follow-up for #1943 | [#2042](https://github.com/nikhilsoman/synlynk/pull/2042) | 2026-10-15 |
+| [356](./356-pr1970-post-243-for-pr-1967-claude-local-adapte.md) | PR #1970 — post 243 for PR #1967 — Claude/local adapter port, gh:#1924 close | [#1970](https://github.com/nikhilsoman/synlynk/pull/1970) | 2026-10-16 |
+| [357](./357-pr2340-mock-webbrowser-open-in-test-role-add-id.md) | PR #2340 — mock webbrowser.open in test_role_add_identity_prompt and stub globally (#2339) | [#2340](https://github.com/nikhilsoman/synlynk/pull/2340) | 2026-10-16 |
+| [358](./358-pr2341-add-frontier-lab-architecture-review.md) | PR #2341 — add frontier-lab architecture review | [#2341](https://github.com/nikhilsoman/synlynk/pull/2341) | 2026-10-16 |
+| [359](./359-pr2354-approve-local-harness-operationalization.md) | PR #2354 — approve Local Harness operationalization design | [#2354](https://github.com/nikhilsoman/synlynk/pull/2354) | 2026-10-16 |
+| [360](./360-pr2356-record-local-model-qualification-evidenc.md) | PR #2356 — record local model qualification evidence | [#2356](https://github.com/nikhilsoman/synlynk/pull/2356) | 2026-10-16 |
+| [361](./361-pr2358-tolerate-concurrent-quality-repair.md) | PR #2358 — tolerate concurrent quality repair | [#2358](https://github.com/nikhilsoman/synlynk/pull/2358) | 2026-10-16 |
+| [362](./362-pr2355-isolate-aider-qualification-network.md) | PR #2355 — isolate Aider qualification network | [#2355](https://github.com/nikhilsoman/synlynk/pull/2355) | 2026-10-16 |
+| [363](./363-pr2351-modernize-authenticated-local-hardware-c.md) | PR #2351 — modernize authenticated local hardware checks | [#2351](https://github.com/nikhilsoman/synlynk/pull/2351) | 2026-10-16 |
+| [364](./364-pr2364-retry-concurrent-schema-refresh.md) | PR #2364 — retry concurrent schema refresh | [#2364](https://github.com/nikhilsoman/synlynk/pull/2364) | 2026-10-16 |
+| [365](./365-pr2363-add-isolated-qualification-benchmark.md) | PR #2363 — add isolated qualification benchmark | [#2363](https://github.com/nikhilsoman/synlynk/pull/2363) | 2026-10-16 |
+| [366](./366-pr2365-isolate-qualification-runner-artifacts.md) | PR #2365 — isolate qualification runner artifacts | [#2365](https://github.com/nikhilsoman/synlynk/pull/2365) | 2026-10-17 |
+| [367](./367-pr2366-record-qwen-qualification-result.md) | PR #2366 — record Qwen qualification result | [#2366](https://github.com/nikhilsoman/synlynk/pull/2366) | 2026-10-17 |
+| [368](./368-pr2370-route-execution-through-adapter.md) | PR #2370 — route execution through adapter | [#2370](https://github.com/nikhilsoman/synlynk/pull/2370) | 2026-10-17 |
+| [369](./369-pr2371-register-migration-22-for-subscriptions-.md) | PR #2371 — register migration 22 for subscriptions harness rename and clean shards (#1926) | [#2371](https://github.com/nikhilsoman/synlynk/pull/2371) | 2026-10-17 |
+| [370](./370-pr2372-unify-effective-model-resolution.md) | PR #2372 — unify effective model resolution | [#2372](https://github.com/nikhilsoman/synlynk/pull/2372) | 2026-10-17 |
+| [371](./371-pr2373-parameterize-qualification-candidate.md) | PR #2373 — parameterize qualification candidate | [#2373](https://github.com/nikhilsoman/synlynk/pull/2373) | 2026-10-17 |
+| [372](./372-pr2374-preserve-byte-timeout-receipts.md) | PR #2374 — preserve byte timeout receipts | [#2374](https://github.com/nikhilsoman/synlynk/pull/2374) | 2026-10-17 |
+| [373](./373-pr2375-eliminate-false-negative-status-verdicts.md) | PR #2375 — eliminate false-negative status verdicts on review and merge dispatches (P0-2) | [#2375](https://github.com/nikhilsoman/synlynk/pull/2375) | 2026-10-17 |
+| [374](./374-pr2377-blog-test-isolation-sqlite-row-hardening.md) | PR #2377 — blog test isolation, sqlite row hardening, and daemon stale worktree handling (P0-3 PR 2) | [#2377](https://github.com/nikhilsoman/synlynk/pull/2377) | 2026-10-17 |
+| [375](./375-pr2376-enforce-login-shell-shim-isolation-and-d.md) | PR #2376 — enforce login-shell shim isolation and dynamic token refresh (P0-3 PR 1) | [#2376](https://github.com/nikhilsoman/synlynk/pull/2376) | 2026-10-17 |
+| [376](./376-pr2378-record-ornith-qualification-result.md) | PR #2378 — record Ornith qualification result | [#2378](https://github.com/nikhilsoman/synlynk/pull/2378) | 2026-10-17 |
+| [377](./377-pr2379-surface-tiering-with-8-core-verbs-and-ex.md) | PR #2379 — surface tiering with 8 core verbs and experimental quarantine fence (P0-4) | [#2379](https://github.com/nikhilsoman/synlynk/pull/2379) | 2026-10-17 |
+| [378](./378-pr2382-classify-qualification-failures-safely.md) | PR #2382 — classify qualification failures safely | [#2382](https://github.com/nikhilsoman/synlynk/pull/2382) | 2026-10-17 |
+| [379](./379-pr2383-safe-by-default-permissions-with-role-sc.md) | PR #2383 — safe-by-default permissions with role-scoped profiles and strict bypass audit (P0-5) | [#2383](https://github.com/nikhilsoman/synlynk/pull/2383) | 2026-10-17 |
+| [380](./380-pr2381-record-gemma-qualification-result.md) | PR #2381 — record Gemma qualification result | [#2381](https://github.com/nikhilsoman/synlynk/pull/2381) | 2026-10-17 |
+| [381](./381-pr2387-codify-parent-tracking-issue-protocol-re.md) | PR #2387 — codify parent tracking issue protocol, retire per-PR blogs, and add remaining P0 design spec | [#2387](https://github.com/nikhilsoman/synlynk/pull/2387) | 2026-10-17 |
+| [382](./382-pr2389-circuit-breaker-prompt-cache-fix-capabil.md) | PR #2389 — circuit breaker prompt-cache fix, capability report expansion, and stale goal reconciliation (P0-8, P0-6, P0-10) | [#2389](https://github.com/nikhilsoman/synlynk/pull/2389) | 2026-10-17 |
+| [383](./383-pr2385-record-ornith-qualification-memory-evide.md) | PR #2385 — record Ornith qualification memory evidence | [#2385](https://github.com/nikhilsoman/synlynk/pull/2385) | 2026-10-17 |
+| [384](./384-pr2388-local-harness-unify-local-model-resoluti.md) | PR #2388 — [Local Harness] Unify local model resolution and live inventory | [#2388](https://github.com/nikhilsoman/synlynk/pull/2388) | 2026-10-17 |
+| [385](./385-pr2390-pypi-release-workflow-thin-vs-code-clien.md) | PR #2390 — PyPI release workflow, thin VS Code client, and worktree-isolated magic heal (P0-9, P0-7) | [#2390](https://github.com/nikhilsoman/synlynk/pull/2390) | 2026-10-17 |
+| [386](./386-pr2391-add-isolated-graduated-pilot.md) | PR #2391 — add isolated graduated pilot | [#2391](https://github.com/nikhilsoman/synlynk/pull/2391) | 2026-10-17 |
+| [387](./387-pr2396-send-pilot-context-as-one-aider-message.md) | PR #2396 — send pilot context as one Aider message | [#2396](https://github.com/nikhilsoman/synlynk/pull/2396) | 2026-10-17 |
+| [388](./388-pr2397-verify-aider-task-receipts-from-answer-o.md) | PR #2397 — verify Aider task receipts from answer output | [#2397](https://github.com/nikhilsoman/synlynk/pull/2397) | 2026-10-17 |
+| [389](./389-pr2398-report-deferred-dispatch-jobs.md) | PR #2398 — report deferred dispatch jobs | [#2398](https://github.com/nikhilsoman/synlynk/pull/2398) | 2026-10-17 |
+| [390](./390-pr2359-fix-gh-2254-in-synlynk-synlynk-jobs-json.md) | PR #2359 — Fix gh:#2254: in synlynk, 'synlynk jobs --json' and (job-52b8deb2) | [#2359](https://github.com/nikhilsoman/synlynk/pull/2359) | 2026-10-17 |
+| [391](./391-pr2399-support-tuple-backed-status-projections.md) | PR #2399 — support tuple-backed status projections | [#2399](https://github.com/nikhilsoman/synlynk/pull/2399) | 2026-10-17 |
+| [392](./392-pr2360-fix-gh-2258-synlynk-s-own-docs-agents-md.md) | PR #2360 — Fix gh:#2258: synlynk's own docs (AGENTS.md / AI_INS (job-4eb12c0e) | [#2360](https://github.com/nikhilsoman/synlynk/pull/2360) | 2026-10-17 |
+| [393](./393-pr2400-commit-approved-dev-preview-roadmap-comp.md) | PR #2400 — commit approved dev preview roadmap, competitive synthesis, and GenericAPIAdapter (#2076) | [#2400](https://github.com/nikhilsoman/synlynk/pull/2400) | 2026-10-17 |
+| [394](./394-pr2402-trust-live-inventory-over-stale-model-ca.md) | PR #2402 — trust live inventory over stale model catalog | [#2402](https://github.com/nikhilsoman/synlynk/pull/2402) | 2026-10-17 |
+| [395](./395-pr2404-fail-closed-on-explicit-pilot-bypass.md) | PR #2404 — fail closed on explicit pilot bypass | [#2404](https://github.com/nikhilsoman/synlynk/pull/2404) | 2026-10-17 |
+| [396](./396-pr2406-prevent-local-pilot-fallback-isolation-b.md) | PR #2406 — prevent Local Pilot fallback isolation bypass | [#2406](https://github.com/nikhilsoman/synlynk/pull/2406) | 2026-10-17 |
+| [397](./397-pr2362-fix-gh-2260-python3-m-synlynk-pr-check-o.md) | PR #2362 — Fix gh:#2260: 'python3 -m synlynk pr check' (or 'syn (job-7945916e) | [#2362](https://github.com/nikhilsoman/synlynk/pull/2362) | 2026-10-17 |
+| [398](./398-pr2361-fix-gh-2320-dispatched-job-worktrees-in-.md) | PR #2361 — Fix gh:#2320: dispatched job worktrees in synlynk cu (job-01306c88) | [#2361](https://github.com/nikhilsoman/synlynk/pull/2361) | 2026-10-17 |
 
 ## Per-PR Post Template
 
