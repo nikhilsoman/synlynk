@@ -180,7 +180,7 @@ def test_version_shows_synlynk(uninit_cli):
 def test_help_exits_zero_and_lists_commands(uninit_cli):
     result = uninit_cli.run("--help")
     assert result.returncode == 0
-    for cmd in ("exec", "status", "init", "sentinel"):
+    for cmd in ("init", "status", "dispatch", "jobs"):
         assert cmd in result.stdout, f"'{cmd}' missing from --help output"
 
 
