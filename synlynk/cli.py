@@ -1213,7 +1213,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     )
     dispatch_parser.add_argument(
         "--model", default=None,
-        help="Explicit model identifier; overrides automatic model selection",
+        help="Explicit model identifier; for local, use an exact dispatch-approved oMLX ID "
+             "already present in live /v1/models inventory (no load/reload or fallback)",
     )
     dispatch_parser.add_argument(
         "--effort", choices=["low", "high"], default=None,
