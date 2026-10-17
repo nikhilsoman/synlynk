@@ -1,0 +1,53 @@
+{
+  "name": "synlynk-vscode",
+  "displayName": "Synlynk Autonomous Agent Workspace",
+  "description": "Zero-friction VS Code client for Synlynk multi-agent orchestration across Claude, Codex, Agy, and Grok.",
+  "version": "0.1.0",
+  "publisher": "synlynk",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Programming Languages",
+    "Other"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onCommand:synlynk.dispatch",
+    "onCommand:synlynk.jobs",
+    "onCommand:synlynk.status",
+    "onCommand:synlynk.logs",
+    "onCommand:synlynk.doctor"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "synlynk.dispatch",
+        "title": "Synlynk: Dispatch Task to Agent Fleet",
+        "category": "Synlynk"
+      },
+      {
+        "command": "synlynk.jobs",
+        "title": "Synlynk: Show Dispatched Jobs",
+        "category": "Synlynk"
+      },
+      {
+        "command": "synlynk.status",
+        "title": "Synlynk: Check Platform Health & Burn Rate",
+        "category": "Synlynk"
+      },
+      {
+        "command": "synlynk.logs",
+        "title": "Synlynk: View Job Logs",
+        "category": "Synlynk"
+      },
+      {
+        "command": "synlynk.doctor",
+        "title": "Synlynk: Run Workspace Diagnostics (Doctor)",
+        "category": "Synlynk"
+      }
+    ]
+  }
+}
