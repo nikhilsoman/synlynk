@@ -32,29 +32,33 @@ def test_default_help_shows_only_core_verbs(capsys):
 
 def test_experimental_warning_without_flag(monkeypatch, capsys):
     monkeypatch.delenv("SYNLYNK_EXPERIMENTAL", raising=False)
-    with patch("synlynk.mesh.cmd_multirepo_mesh", return_value=0):
-        with pytest.raises(SystemExit):
+    with patch("synlynk.mesh.cmd_multirepo_mesh", return_value=0) as mock_mesh:
+        with pytest.raises(SystemExit) as exc_info:
             cli_mod.main(["mesh"])
-    
+        assert exc_info.value.code == 1
+        mock_mesh.assert_not_called()
+
     err = capsys.readouterr().err
     assert "Notice: 'mesh' is an experimental prototype. Use 'synlynk --experimental mesh ...' to proceed." in err
 
 
 def test_experimental_no_warning_with_flag(monkeypatch, capsys):
     monkeypatch.delenv("SYNLYNK_EXPERIMENTAL", raising=False)
-    with patch("synlynk.mesh.cmd_multirepo_mesh", return_value=0):
+    with patch("synlynk.mesh.cmd_multirepo_mesh", return_value=0) as mock_mesh:
         with pytest.raises(SystemExit):
             cli_mod.main(["--experimental", "mesh"])
-    
+        mock_mesh.assert_called_once()
+
     err = capsys.readouterr().err
     assert "is an experimental prototype" not in err
 
 
 def test_experimental_no_warning_with_env(monkeypatch, capsys):
     monkeypatch.setenv("SYNLYNK_EXPERIMENTAL", "1")
-    with patch("synlynk.mesh.cmd_multirepo_mesh", return_value=0):
+    with patch("synlynk.mesh.cmd_multirepo_mesh", return_value=0) as mock_mesh:
         with pytest.raises(SystemExit):
             cli_mod.main(["mesh"])
-    
+        mock_mesh.assert_called_once()
+
     err = capsys.readouterr().err
     assert "is an experimental prototype" not in err

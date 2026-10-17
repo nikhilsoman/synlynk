@@ -2265,6 +2265,7 @@ def main(argv=None) -> None:
             f"Notice: '{args.command}' is an experimental prototype. Use 'synlynk --experimental {args.command} ...' to proceed.",
             file=sys.stderr,
         )
+        sys.exit(1)
 
     if args.command == "init":
         if getattr(args, "brownfield", False):
