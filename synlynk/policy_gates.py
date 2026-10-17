@@ -51,6 +51,8 @@ def classify_governs_violations(violations: list[dict]) -> tuple[str, str]:
 
 
 def record_gate_event(conn, *, pr_number: int, gate: str, mode: str, verdict: str, detail: str) -> None:
+    if pr_number is None:
+        return
     try:
         conn.execute(
             "INSERT INTO policy_gate_events (pr_number, gate, mode, verdict, detail, recorded_at) "
