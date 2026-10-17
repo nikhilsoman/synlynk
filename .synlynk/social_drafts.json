@@ -1998,5 +1998,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2373 \u2014 parameterize qualification candidate (PR #2373, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2373.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2373\n- Merged improvements and fixes for PR #2373."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/372-pr2374-preserve-byte-timeout-receipts.md",
+    "title": "PR #2374 \u2014 preserve byte timeout receipts",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2374",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2374."
+    ],
+    "tweet": "\ud83d\ude80 PR #2374 \u2014 preserve byte timeout receipts (PR #2374, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2374.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2374\n- Merged improvements and fixes for PR #2374."
   }
 ]
