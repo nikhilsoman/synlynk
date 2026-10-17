@@ -453,6 +453,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [374](./374-pr2377-blog-test-isolation-sqlite-row-hardening.md) | PR #2377 — blog test isolation, sqlite row hardening, and daemon stale worktree handling (P0-3 PR 2) | [#2377](https://github.com/nikhilsoman/synlynk/pull/2377) | 2026-10-17 |
 | [375](./375-pr2376-enforce-login-shell-shim-isolation-and-d.md) | PR #2376 — enforce login-shell shim isolation and dynamic token refresh (P0-3 PR 1) | [#2376](https://github.com/nikhilsoman/synlynk/pull/2376) | 2026-10-17 |
 | [376](./376-pr2378-record-ornith-qualification-result.md) | PR #2378 — record Ornith qualification result | [#2378](https://github.com/nikhilsoman/synlynk/pull/2378) | 2026-10-17 |
+| [377](./377-pr2379-surface-tiering-with-8-core-verbs-and-ex.md) | PR #2379 — surface tiering with 8 core verbs and experimental quarantine fence (P0-4) | [#2379](https://github.com/nikhilsoman/synlynk/pull/2379) | 2026-10-17 |
 
 ## Per-PR Post Template
 

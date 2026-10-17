@@ -2078,5 +2078,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2378 \u2014 record Ornith qualification result (PR #2378, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2378.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2378\n- Merged improvements and fixes for PR #2378."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/377-pr2379-surface-tiering-with-8-core-verbs-and-ex.md",
+    "title": "PR #2379 \u2014 surface tiering with 8 core verbs and experimental quarantine fence (P0-4)",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2379",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2379."
+    ],
+    "tweet": "\ud83d\ude80 PR #2379 \u2014 surface tiering with 8 core verbs and experimental quarantine fence (P0-4) (PR #2379, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2379.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2379\n- Merged improvements and fixes for PR #2379."
   }
 ]
