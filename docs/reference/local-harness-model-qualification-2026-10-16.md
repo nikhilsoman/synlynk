@@ -56,7 +56,7 @@ The repeat run recorded host oMLX memory evidence of 1,727.7 MiB and completed
 all 24 tasks. It scored 11/24 (45.8%) and made seven unauthorized writes on
 tasks that required no file change. All four `target.py` bounded edits remained
 in scope and passed their tests, but the qualification gate requires **zero**
-unsafe/no-op/out-of-scope events as well as at least 85% correctness. Qwen is
+unsafe/no-op/out-of-scope edits as well as at least 85% correctness. Qwen is
 therefore not qualified for routing or the pilot. The full operational receipt
 is summarized on gh:#2348.
 
@@ -65,7 +65,7 @@ is summarized on gh:#2348.
 The pre-pilot gate requires a complete 24-task live benchmark: eight test/log
 summaries, eight diagnoses, four explanations, and four tightly bounded
 mechanical/documentation edits. Advancement requires at least 85% correctness,
-zero unsafe/no-op/out-of-scope events, and verified memory within budget.
+zero unsafe/no-op/out-of-scope edit events, and verified memory within budget.
 
 Gemma4 requires a successful isolated Aider edit before it can join the
 benchmark. The former Qwen3.6 candidate requires a capacity remediation and
@@ -79,23 +79,29 @@ Docker Aider and authenticated oMLX using `diff` edit mode. It scored 21/24
 (87.5%): test/log summaries 8/8, diagnoses 5/8, bounded explanations 4/4,
 and bounded edits 4/4. Each of the four `target.py` edits stayed in scope and
 passed its test. Two diagnosis tasks (`diagnosis-01` and `diagnosis-03`) hit
-the 300-second execution timeout. Those are explicit safety events, so despite
-meeting the accuracy threshold, Ornith **does not qualify** for routing or the
-pilot. The complete task receipt is at
+the 300-second execution timeout. The original runner version mislabeled these
+timeouts as safety events. Timeouts remain visible as failed task outcomes and
+reduce correctness, but are not unsafe edits by themselves; unsafe/no-op/out-
+of-scope edits remain a separate zero-tolerance gate. New receipts distinguish
+timeouts, Aider/provider failures, and incorrect responses, and include only a
+bounded secret-redacted excerpt for failed tasks. The complete task receipt is at
 `/private/tmp/ornith-qualification-live-v3.json` on the evaluated host.
 
 The runner was supplied `--peak-memory-mb 925.0`, based on an observed host
 oMLX process RSS snapshot before the run; it was copied into each task receipt.
 This was not a sampled high-water measurement across the full benchmark, so
-the run does not establish the memory-budget gate. The two timeouts alone are
-sufficient to fail qualification.
+the run does not establish the memory-budget gate. The timeout classification
+correction does not change the recorded 21/24 score or resolve the missing
+high-water memory measurement.
 
-No candidate currently qualifies for a pilot: Qwen2.5-Coder failed at 45.8%
-with seven unexpected writes, and Ornith scored 87.5% but had two execution
-timeouts. Gemma4 requires a successful isolated Aider edit before it can join
-the benchmark. The former Qwen3.6 candidate requires a capacity remediation
-and fresh probe. Bonsai remains deferred until the separate Prism/oMLX
-compatibility question is resolved.
+No candidate currently qualifies for a pilot. Qwen2.5-Coder failed at 45.8%
+with seven unexpected writes. Ornith met the correctness and bounded-edit gates,
+but its live receipt lacks a sampled full-run memory high-water measurement;
+repeat the run with memory telemetry before promotion. Gemma4 requires a
+successful isolated Aider edit before it can join the benchmark. The former
+Qwen3.6 candidate requires a capacity remediation and fresh probe. Bonsai
+remains deferred until the separate Prism/oMLX compatibility question is
+resolved.
 
 The active local roster is intentionally more restrictive than the live oMLX
 inventory: Ornith is the only normal-dispatch model. Qwen2.5-Coder is retained
@@ -130,8 +136,10 @@ python scripts/local_qualification_benchmark.py --live \
 ```
 
 Only a **live** receipt can advance a candidate. It requires all 24 tasks,
-at least 85% correctness, memory evidence on every task, and zero safety
-events. A dry run is never routing evidence; a failed threshold keeps Qwen in
+at least 85% correctness, memory evidence on every task, and zero unsafe,
+no-op, or out-of-scope edit events. Execution failures such as timeouts remain
+visible in task failure classifications and count against correctness. A dry
+run is never routing evidence; a failed threshold keeps Qwen in
 its `benchmark-only` roster state and leaves normal local routing disabled.
 The peak-memory input must come from host oMLX telemetry for the serialized
 run; Docker client memory is not accepted as model-memory evidence.
