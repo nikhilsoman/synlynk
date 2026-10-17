@@ -10,9 +10,10 @@
 - **2026-10-17 Local Pilot prompt delivery:** Aider's ordinary interactive
   stdin treats the multiline Synlynk context prompt as separate inputs. The
   isolated runner must use Aider's `--message-file /dev/stdin` mode so the full
-  task context is one request; keep optional model-catalog warnings disabled
-  because pilot containers are relay-only networked. A stopped run with no
-  valid task receipt is failure evidence, never an accepted pilot result.
+  task context is one request. `--no-show-model-warnings` suppresses warnings
+  but does not prevent Aider/LiteLLM's optional public catalog lookup; the
+  relay-only pilot network blocks it. A stopped run with no valid task receipt
+  is failure evidence, never an accepted pilot result.
   [@codex]
 - **2026-10-17 Local Harness pilot containment:** Local Pilot is additive and
   opt-in per dispatch via an explicit allowlisted class; plain `auto` retains
@@ -120,3 +121,11 @@
   `qualifies: true`. This authorizes only model qualification; implement and
   review the isolated 20% pilot in #2349 before enabling local production
   traffic. [@codex]
+- **2026-10-17 Local Pilot Aider receipt framing:** Aider 0.86.2 emits startup
+  and THINKING sections before its ANSWER section, and terminal-width wrapping
+  split an otherwise correct task receipt in the first live retry. Local task
+  receipt validation must inspect the first ANSWER line; generic harness
+  receipt strictness remains unchanged. `--no-pretty` and
+  `--no-suggest-shell-commands` are enabled for the bounded pilot. The printed
+  `find` text was not executed: the runner receipt records a read-only outcome
+  with no changed paths. [@codex]
