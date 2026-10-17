@@ -206,6 +206,9 @@ see verification output in the session transcript. [@codex]
   attach receipt evidence. Added focused regression coverage for the production
   evidence helper, including auth failure classification and non-local isolation.
 - Verification: focused adapter, dispatch, and jobs tests (35 passed).
+- Sparse review worktrees may omit `.agents/local.json`; the on-disk roster
+  assertion now skips only in that case, while full-checkout CI still exercises
+  the exact policy content.
 - The next planned prerequisite is completing resolver/live-inventory parity
   before enabling any local pilot routing.
 [@codex]
