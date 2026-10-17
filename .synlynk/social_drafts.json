@@ -2334,5 +2334,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2360 \u2014 Fix gh:#2258: synlynk's own docs (AGENTS.md / AI_INS (job-4eb12c0e) (PR #2360, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2360.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2360\n- Merged improvements and fixes for PR #2360."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/393-pr2400-commit-approved-dev-preview-roadmap-comp.md",
+    "title": "PR #2400 \u2014 commit approved dev preview roadmap, competitive synthesis, and GenericAPIAdapter (#2076)",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2400",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2400."
+    ],
+    "tweet": "\ud83d\ude80 PR #2400 \u2014 commit approved dev preview roadmap, competitive synthesis, and GenericAPIAdapter (#2076) (PR #2400, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2400.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2400\n- Merged improvements and fixes for PR #2400."
   }
 ]
