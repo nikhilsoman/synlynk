@@ -376,6 +376,8 @@ def resolve_dispatch_model(
     model_tier: Optional[str] = None,
     repo_root: Optional[str] = None,
     scope_paths: Optional[Sequence[str]] = None,
+    require_live_inventory: bool = False,
+    live_model_ids: Optional[Sequence[str]] = None,
 ) -> dict:
     """Resolve model metadata while keeping role and harness untouched."""
     if model_tier is not None and model_tier not in MODEL_TIERS:
@@ -384,7 +386,30 @@ def resolve_dispatch_model(
     tier = model_tier or resolve_model_tier(task, impact["score"], role=role, task_type=task_type)
     from synlynk.models import resolve_tier_model
 
-    resolved_model = model
+    local_resolution = None
+    if harness == "local":
+        from synlynk.local_agent import resolve_effective_local_model
+        from synlynk.models import load_model_catalog
+
+        config_path = None
+        if repo_root:
+            candidate = os.path.join(repo_root, ".agents", "local.json")
+            if os.path.isfile(candidate):
+                config_path = candidate
+        resolution_started = time.monotonic()
+        local_resolution = resolve_effective_local_model(
+            config_path=config_path,
+            requested_model=model,
+            live_model_ids=live_model_ids,
+            catalog=load_model_catalog(repo_root),
+            require_live_inventory=require_live_inventory,
+        )
+        local_resolution["resolution_ms"] = round(
+            (time.monotonic() - resolution_started) * 1000, 3
+        )
+        resolved_model = local_resolution["effective_model"]
+    else:
+        resolved_model = model
     if not resolved_model:
         if harness == "codex" and model_tier is None:
             try:
@@ -407,6 +432,7 @@ def resolve_dispatch_model(
         "impact_reports": impact["reports"],
         "requested_model": model or resolved_model,
         "resolved_model": resolved_model,
+        "local_resolution": local_resolution,
     }
 
 
@@ -569,7 +595,9 @@ def _print_pending_nudges() -> None:
         pass
 
 
-def _dispatch_flags_for_agent(agent: str, skip_permissions: bool = False) -> list:
+def _dispatch_flags_for_agent(
+    agent: str, skip_permissions: bool = False, local_model: Optional[str] = None
+) -> list:
     """Return the executable dispatch flags for an agent baseline."""
     baselines_map = _pkg("HARNESS_CAPABILITY_BASELINES", HARNESS_CAPABILITY_BASELINES)
     baselines = baselines_map.get(agent, {})
@@ -584,7 +612,7 @@ def _dispatch_flags_for_agent(agent: str, skip_permissions: bool = False) -> lis
     if agent == "local":
         from synlynk.local_agent import _local_dispatch_model_flags
 
-        flags = flags + _local_dispatch_model_flags()
+        flags = flags + _local_dispatch_model_flags(resolved_model=local_model)
     if skip_permissions and agent in {"claude", "agy"}:
         flags.append("--dangerously-skip-permissions")
     if skip_permissions and agent == "grok" and "--always-approve" not in flags:
@@ -747,10 +775,12 @@ def _role_for_story(story_id: str) -> Optional[str]:
     if not get_db:
         return None
     conn = get_db()
-    if conn is None:
+    try:
+        row = conn.execute("SELECT role FROM stories WHERE story_id=?", (story_id,)).fetchone()
+        return row[0] if row else None
+    except Exception:
         return None
-    row = conn.execute("SELECT role FROM stories WHERE story_id=?", (story_id,)).fetchone()
-    return row[0] if row else None
+
 
 
 def _infer_dispatch_defaults(
@@ -1169,11 +1199,73 @@ def _create_pytest_shim() -> Tuple[tempfile.TemporaryDirectory, str]:
     return shim_dir, shim_path
 
 
+def _setup_shim_zdotdir(shim_dir_path: str) -> str:
+    """Create an isolated ZDOTDIR ensuring synlynk shims stay at the front of PATH under zsh -lc."""
+    zdot_dir = os.path.join(shim_dir_path, "zdot")
+    os.makedirs(zdot_dir, mode=0o700, exist_ok=True)
+    header = (
+        'if [ -n "$SYNLYNK_SHIM_DIR" ]; then\n'
+        '  export PATH="$SYNLYNK_SHIM_DIR:$PATH"\n'
+        'fi\n'
+    )
+    zshenv_content = (
+        'if [ -f "$HOME/.zshenv" ]; then\n'
+        '  source "$HOME/.zshenv"\n'
+        'fi\n'
+        + header
+    )
+    zprofile_content = (
+        'if [ -f "$HOME/.zprofile" ]; then\n'
+        '  source "$HOME/.zprofile"\n'
+        'fi\n'
+        + header
+    )
+    zshrc_content = (
+        'if [ -f "$HOME/.zshrc" ]; then\n'
+        '  source "$HOME/.zshrc"\n'
+        'fi\n'
+        + header
+    )
+    with open(os.path.join(zdot_dir, ".zshenv"), "w", encoding="utf-8") as f:
+        f.write(zshenv_content)
+    with open(os.path.join(zdot_dir, ".zprofile"), "w", encoding="utf-8") as f:
+        f.write(zprofile_content)
+    with open(os.path.join(zdot_dir, ".zshrc"), "w", encoding="utf-8") as f:
+        f.write(zshrc_content)
+    return zdot_dir
+
+
+def _create_dispatch_shims() -> Tuple[tempfile.TemporaryDirectory, dict]:
+    """Create short-lived pytest and gh shims with login-shell isolation."""
+    from synlynk.gh_shim import write_shim as write_gh_shim
+    from synlynk.pytest_shim import write_shim as write_pytest_shim
+
+    shim_dir = tempfile.TemporaryDirectory(prefix="synlynk-dispatch-shims-")
+    write_pytest_shim(os.path.join(shim_dir.name, "pytest"))
+    write_gh_shim(os.path.join(shim_dir.name, "gh"))
+    zdot_dir = _setup_shim_zdotdir(shim_dir.name)
+
+    env_vars = {
+        "SYNLYNK_SHIM_DIR": shim_dir.name,
+        "ZDOTDIR": zdot_dir,
+        "BASH_ENV": os.path.join(zdot_dir, ".zshenv"),
+        "ENV": os.path.join(zdot_dir, ".zshenv"),
+        "SYNLYNK_ALLOW_CWD_FALLBACK": "1",
+        "SYNLYNK_FAST_CLI": "1",
+    }
+    return shim_dir, env_vars
+
+
 def _exec_child_env() -> Tuple[dict, tempfile.TemporaryDirectory]:
-    """Return the inherited env with the shared GitHub CLI PATH guard."""
+    """Return the inherited env with the shared GitHub CLI PATH guard and shell isolation."""
     shim_dir, _shim_path = _create_exec_gh_shim()
+    zdot_dir = _setup_shim_zdotdir(shim_dir.name)
     env = os.environ.copy()
     env["SYNLYNK_HARNESS"] = "1"
+    env["SYNLYNK_SHIM_DIR"] = shim_dir.name
+    env["ZDOTDIR"] = zdot_dir
+    env["BASH_ENV"] = os.path.join(zdot_dir, ".zshenv")
+    env["ENV"] = os.path.join(zdot_dir, ".zshenv")
     env["PATH"] = shim_dir.name + os.pathsep + env.get("PATH", "")
     return env, shim_dir
 
@@ -1263,9 +1355,17 @@ def _build_subprocess_env(
                 "Or set SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1 to opt into host `gh` auth "
                 "(uses personal keyring — not recommended; see #569)."
             )
-    pytest_shim_dir, _pytest_shim_path = _create_pytest_shim()
-    proc_env["PATH"] = pytest_shim_dir.name + os.pathsep + proc_env.get("PATH", "")
-    return proc_env, pytest_shim_dir
+    shim_dir, shim_env_vars = _create_dispatch_shims()
+    proc_env["SYNLYNK_HARNESS"] = "1"
+    proc_env["SYNLYNK_SHIM_DIR"] = shim_env_vars["SYNLYNK_SHIM_DIR"]
+    proc_env["ZDOTDIR"] = shim_env_vars["ZDOTDIR"]
+    proc_env["BASH_ENV"] = shim_env_vars["BASH_ENV"]
+    proc_env["ENV"] = shim_env_vars["ENV"]
+    proc_env["PATH"] = shim_dir.name + os.pathsep + proc_env.get("PATH", "")
+    resolved_role = agent_role or _role_for_story(story_id)
+    if resolved_role:
+        proc_env["SYNLYNK_GH_ROLE"] = resolved_role
+    return proc_env, shim_dir
 
 
 def _cleanup_shim_after_process(process, shim_dir: tempfile.TemporaryDirectory) -> None:
@@ -1550,7 +1650,7 @@ def _worktree_files_touched(worktree_path: Optional[str], base_sha: Optional[str
     ``base_sha`` is the commit recorded at dispatch. Stacked jobs must not
     report files their parent branch already committed (gh:#2245).
     """
-    if not _worktree_path_is_available(worktree_path, "collect touched files"):
+    if not worktree_path or not os.path.isdir(worktree_path):
         return []
 
     resolve_job_diff_base = _pkg("_resolve_job_diff_base")
@@ -4059,19 +4159,6 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             "Register an adapter before dispatching it."
         ) from exc
 
-    if agent in {"grok", "agy"} and not skip_permissions:
-        # Grok's CLI has no working non-bypass headless mode (LIVE-13:
-        # docs/rca/2026-09-22-LIVE-13-grok-headless-dispatch-permission-bypass.md).
-        # Auto-opt-in here (rather than requiring every caller to pass
-        # --dangerously-skip-permissions) so existing Grok dispatch workflows
-        # keep working unchanged after gh:#1925 part 1 made the bypass gated
-        # instead of unconditional. See
-        # docs/superpowers/specs/2026-10-04-grok-failclosed-permission-enforcement-design.md.
-        # Agy's --sandbox mode denies RunCommand outright and still reports
-        # SUCCESS (gh:#2216, job-0d75bb61). Same auto-opt-in so review and
-        # shell dispatches get --dangerously-skip-permissions instead.
-        skip_permissions = True
-
     # A capability gate may reroute the harness (for example, Grok write
     # denial or GitHub-write routing). Re-resolve against the final harness so
     # automatic model defaults never leak across sandbox boundaries.
@@ -4084,6 +4171,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         model_tier=model_tier,
         repo_root=os.getcwd(),
         scope_paths=scope_paths,
+        require_live_inventory=(agent == "local"),
     )
     model = model_routing["resolved_model"]
 
@@ -4091,6 +4179,26 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if not job_id:
         _job_seed = dispatch_time if dispatch_time is not None else time.time()
         job_id = "job-" + _hashlib_early.md5(f"{agent}{task}{_job_seed}".encode()).hexdigest()[:8]
+
+    if requires_gh_write and agent == "grok" and not skip_permissions:
+        skip_permissions = True
+
+    if skip_permissions:
+        print(
+            "  \033[1;33m⚠ SECURITY WARNING: --dangerously-skip-permissions is enabled. "
+            "Dispatched agent has unconstrained execution permissions.\033[0m",
+            file=sys.stderr,
+        )
+        try:
+            sentinel_path = os.path.join(".synlynk", "sentinel.md")
+            _write_sentinel_alert(
+                "WARNING",
+                "DANGEROUS_PERMISSIONS_BYPASS",
+                f"Job {job_id}: --dangerously-skip-permissions explicitly enabled for agent '{agent}' with role '{resolved_agent_role or 'dev'}'",
+                sentinel_path,
+            )
+        except Exception as e:
+            logger.debug("Sentinel alert write failure: %s", e)
 
     dconn = db_conn
     owns_dconn = False
@@ -4244,7 +4352,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     overrides = _load_harness_overrides(agent)
     for key, value in overrides.get("dispatch_flags", {}).items():
         flags = flags + [f"--{key}"] if value in (None, "") else flags + [f"--{key}", str(value)]
-    if model:
+    if model and agent != "local":
         flags += ["--model", model]
     if effort:
         flags += ["--effort", effort]
@@ -4267,6 +4375,33 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         revokes=revokes,
         read_only=task_type == "review",
     )
+    if agent == "local":
+        # LocalAdapter is the production owner of local command construction.
+        # Rebuild the prefix after permissions are known so it can refuse a
+        # request Aider cannot enforce, rather than relying on registry-only
+        # conformance coverage.
+        local_request = DispatchRequest(
+            agent=agent,
+            task=task,
+            story_id=story_id,
+            job_id=job_id,
+            # Pass the single resolved ID through the adapter. The original
+            # request remains separate in job metadata; this value is already
+            # verified against policy and live oMLX inventory.
+            model=model_routing["resolved_model"],
+            effort=effort,
+            model_tier=model_tier,
+            task_type=task_type,
+            permissions=permissions,
+            read_only=task_type == "review",
+            skip_permissions=skip_permissions,
+        )
+        dispatch_flags = adapter.build_cmd(local_request)
+        flags = baselines["non_interactive_flags"] + dispatch_flags
+        for key, value in overrides.get("dispatch_flags", {}).items():
+            flags = flags + [f"--{key}"] if value in (None, "") else flags + [f"--{key}", str(value)]
+        if effort:
+            flags += ["--effort", effort]
     if task_type == "review":
         # Keep compatibility with test/integration adapters that implement the
         # historical two-argument translator while using the hardened native
@@ -4467,6 +4602,19 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         flags = flags + ["-C", worktree_path]
     if agent == "muse" and worktree_path and "--workspace" not in flags:
         flags = flags + ["--workspace", worktree_path]
+    if agent == "claude" and worktree_path:
+        try:
+            from synlynk.policy import get_role_permission_profile
+            perm_profile = get_role_permission_profile(resolved_agent_role or "dev", repo_path=os.getcwd())
+            if perm_profile and "allowed_tools" in perm_profile:
+                claude_dir = os.path.join(worktree_path, ".claude")
+                os.makedirs(claude_dir, exist_ok=True)
+                claude_settings_path = os.path.join(claude_dir, "settings.json")
+                if not os.path.exists(claude_settings_path):
+                    with open(claude_settings_path, "w", encoding="utf-8") as f:
+                        json.dump({"allowedTools": perm_profile["allowed_tools"]}, f, indent=2)
+        except Exception as e:
+            logger.debug("Failed to inject Claude permission profile: %s", e)
     worktree_synlynk_dir = os.path.join(worktree_path, ".synlynk")
     logs_dir = os.path.join(worktree_synlynk_dir, "logs")
     prompts_dir = os.path.join(worktree_synlynk_dir, "prompts")
@@ -4870,6 +5018,16 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "impact_score": model_routing["impact_score"],
         "requested_model": model_routing["requested_model"],
         "resolved_model": model_routing["resolved_model"],
+        "local_model_resolution": model_routing["local_resolution"],
+        "local_model_receipt": (
+            {
+                **model_routing["local_resolution"],
+                "retry_count": 0,
+                "memory_mib": None,
+            }
+            if model_routing["local_resolution"] is not None
+            else None
+        ),
         "fence": fence_data,
         "scope_paths": scope_paths or [],
         "requires_gh_write": requires_gh_write,
@@ -4943,6 +5101,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 "impact_score": "INTEGER DEFAULT 0",
                 "requested_model": "TEXT",
                 "resolved_model": "TEXT",
+                "local_model_resolution": "TEXT",
+                "local_model_receipt": "TEXT",
                 "requested_harness": "TEXT",
                 "actual_harness": "TEXT",
                 "fallback_reason": "TEXT",
@@ -5067,6 +5227,15 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 "UPDATE daemon_jobs SET base_sha=? WHERE job_id=?",
                 (base_sha, job_id),
             )
+            if agent == "local":
+                dconn.execute(
+                    "UPDATE daemon_jobs SET local_model_resolution=?, local_model_receipt=? WHERE job_id=?",
+                    (
+                        json.dumps(model_routing["local_resolution"], sort_keys=True),
+                        json.dumps(job["local_model_receipt"], sort_keys=True),
+                        job_id,
+                    ),
+                )
             if container_failed:
                 dconn.execute(
                     "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? WHERE job_id=?",
@@ -5100,6 +5269,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             "job_id": job_id,
             "context_mode": context_mode,
             "context_bytes": context_bytes,
+            "requested_model": model_routing["requested_model"],
+            "resolved_model": model_routing["resolved_model"],
+            "local_model_resolution": model_routing["local_resolution"],
+            "local_model_receipt": job["local_model_receipt"],
         })
     return job
 

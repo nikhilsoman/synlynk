@@ -76,6 +76,64 @@ def test_explicit_model_and_tier_override_automatic_routing(tmp_path):
     assert routed["resolved_model"] == "my-private-model"
 
 
+def test_local_resolution_uses_policy_model_not_legacy_catalog_tier(tmp_path):
+    policy_dir = tmp_path / ".agents"
+    policy_dir.mkdir()
+    (policy_dir / "local.json").write_text(
+        json.dumps(
+            {
+                "endpoint": "http://127.0.0.1:8000",
+                "pinned_model": "Ornith-1.0-9B-4bit",
+                "models": [
+                    {
+                        "id": "Ornith-1.0-9B-4bit",
+                        "pinned": True,
+                        "edit_format": "diff",
+                    }
+                ],
+            }
+        )
+    )
+    routed = resolve_dispatch_model("local", "summarize a test failure", repo_root=str(tmp_path))
+    assert routed["resolved_model"] == "Ornith-1.0-9B-4bit"
+    assert routed["local_resolution"]["effective_model"] == routed["resolved_model"]
+    assert routed["local_resolution"]["edit_format"] == "diff"
+
+
+def test_local_model_resolution_accepts_only_exact_policy_and_live_id(tmp_path):
+    policy_dir = tmp_path / ".agents"
+    policy_dir.mkdir()
+    (policy_dir / "local.json").write_text(json.dumps({
+        "endpoint": "http://127.0.0.1:8000",
+        "pinned_model": "ornith",
+        "models": [
+            {"id": "ornith", "pinned": True, "edit_format": "diff"},
+            {"id": "qwen", "dispatch_eligible": False, "edit_format": "whole"},
+        ],
+    }))
+
+    routed = resolve_dispatch_model(
+        "local",
+        "summarize a test failure",
+        model="ornith",
+        repo_root=str(tmp_path),
+        live_model_ids=["ornith", "qwen", "other"],
+    )
+
+    assert routed["requested_model"] == "ornith"
+    assert routed["resolved_model"] == "ornith"
+    assert routed["local_resolution"]["drift"]["live_but_unapproved"] == ["other", "qwen"]
+    with pytest.raises(ValueError, match="not dispatch-approved"):
+        resolve_dispatch_model(
+            "local", "summarize", model="qwen", repo_root=str(tmp_path),
+            live_model_ids=["ornith", "qwen"],
+        )
+    with pytest.raises(ValueError, match="not currently served"):
+        resolve_dispatch_model(
+            "local", "summarize", repo_root=str(tmp_path), live_model_ids=["other"]
+        )
+
+
 def test_unknown_model_tier_fails_closed(tmp_path):
     with pytest.raises(ValueError, match="Unknown model tier"):
         resolve_dispatch_model("codex", "small task", model_tier="ultra", repo_root=str(tmp_path))

@@ -28,17 +28,27 @@ Start with the [documentation hub](docs/README.md), the [10-minute quickstart](d
 
 ## Install
 
-**Recommended Method (via pipx):**
+**From PyPI (Standard / Global CLI):**
+```bash
+pip install synlynk
+# or isolated via pipx
+pipx install synlynk
+```
+
+**From Source / Git:**
 ```bash
 pipx install git+https://github.com/nikhilsoman/synlynk
 ```
+
+**Visual Studio Code Extension:**
+Native IDE reach into agent dispatch, jobs, logs, and diagnostics is available in [`clients/vscode/`](clients/vscode/).
 
 **Run directly without installing (contributor / checkout mode):**
 ```bash
 python3 bin/synlynk.py <command>
 ```
 
-**Requirements:** Python 3.9+, stdlib only — no dependencies.
+**Requirements:** Python 3.10+, stdlib only — zero required external dependencies.
 
 ## Quick start
 

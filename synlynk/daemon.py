@@ -283,6 +283,8 @@ class WatchDaemon:
             # time out) so a concurrent start() cannot also pass the
             # not-running check and double-spawn (#349).
             self._await_child_pidfile()
+            if not self._is_running():
+                time.sleep(0.5)
             if self._is_running():
                 print(self._started_message)
                 print("    Tip: run 'synlynk daemon --install-service' so this survives a crash/reboot.")

@@ -1462,7 +1462,7 @@ def test_review_codex_gh_write_keeps_repository_read_only(project_dir, monkeypat
     )
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
-    dispatch_mod.dispatch_agent(
+    job = dispatch_mod.dispatch_agent(
         "codex",
         "review PR #937 and post findings",
         task_type="review",
@@ -2348,52 +2348,14 @@ def test_grok_dispatch_deduplicates_boolean_permission_and_baseline_flags(projec
         force_agent=True,
         skip_preflight=True,
         context_mode="none",
+        skip_permissions=True,
     )
 
     assert captured["command"][2].count("--always-approve") == 1
 
 
-def test_grok_dispatch_auto_skips_permissions_by_default(project_dir, monkeypatch):
-    """A Grok dispatch with no explicit skip_permissions arg must still succeed
-    with the bypass flags present — dispatch_agent() auto-opts-in for Grok
-    (gh:#1925 part 1) since Grok's CLI has no working non-bypass headless mode."""
-    import synlynk.dispatch as dispatch_mod
-
-    captured = {}
-
-    def fake_popen(command, *args, **kwargs):
-        captured["command"] = command
-
-        class FakeProc:
-            pid = 12345
-
-        return FakeProc()
-
-    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(dispatch_mod, "_preflight_dispatch", lambda *a, **kw: {"passed": True})
-
-    dispatch_mod.dispatch_agent(
-        agent="grok",
-        task="run tests",
-        grants=["run:shell"],
-        force_agent=True,
-        skip_preflight=True,
-        context_mode="none",
-        # skip_permissions deliberately omitted — must default to working behavior.
-    )
-
-    shell_cmd = captured["command"][2]
-    assert "--always-approve" in shell_cmd
-    assert "--permission-mode bypassPermissions" in shell_cmd
-
-
-def test_agy_dispatch_auto_skips_permissions_by_default(project_dir, monkeypatch):
-    """Agy review/shell dispatches must not stay on --sandbox (gh:#2216).
-
-    --sandbox denies RunCommand and the job still exits SUCCESS. Match Grok's
-    unconditional skip_permissions auto-opt-in so the CLI gets
-    --dangerously-skip-permissions.
-    """
+def test_dispatch_does_not_auto_enable_skip_permissions_agy(project_dir, monkeypatch):
+    """Agy review/shell dispatches stay on --sandbox by default unless explicitly opted in."""
     import synlynk.dispatch as dispatch_mod
 
     captured = {}
@@ -2418,11 +2380,125 @@ def test_agy_dispatch_auto_skips_permissions_by_default(project_dir, monkeypatch
         role="qa",
         skip_preflight=True,
         context_mode="none",
+        # skip_permissions omitted -> must default to False
     )
 
     shell_cmd = captured["command"][2]
-    assert "--dangerously-skip-permissions" in shell_cmd
-    assert "--sandbox" not in shell_cmd
+    assert "--sandbox" in shell_cmd
+    assert "--dangerously-skip-permissions" not in shell_cmd
+
+
+def test_dispatch_does_not_auto_enable_skip_permissions_grok(project_dir, monkeypatch):
+    """Grok dispatches fail closed when permissions are requested without explicit skip_permissions."""
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+
+    def fake_popen(command, *args, **kwargs):
+        captured["command"] = command
+
+        class FakeProc:
+            pid = 12345
+
+        return FakeProc()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(dispatch_mod, "_preflight_dispatch", lambda *a, **kw: {"passed": True})
+
+    with pytest.raises(dispatch_mod.PermissionEnforcementError) as exc_info:
+        dispatch_mod.dispatch_agent(
+            agent="grok",
+            task="run tests",
+            grants=["run:shell"],
+            force_agent=True,
+            skip_preflight=True,
+            context_mode="none",
+            # skip_permissions omitted -> must fail closed
+        )
+    assert "grok has no scoped-permission headless mode" in str(exc_info.value)
+
+
+def test_dispatch_explicit_skip_permissions_emits_audit_and_warning(project_dir, monkeypatch, capsys):
+    """Explicit skip_permissions emits a security warning to stderr and writes a sentinel alert."""
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+    alerts = []
+
+    def fake_popen(command, *args, **kwargs):
+        captured["command"] = command
+
+        class FakeProc:
+            pid = 12345
+
+        return FakeProc()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(dispatch_mod, "_preflight_dispatch", lambda *a, **kw: {"passed": True})
+    monkeypatch.setattr(dispatch_mod, "_write_sentinel_alert", lambda *a, **kw: alerts.append(a))
+
+    dispatch_mod.dispatch_agent(
+        agent="agy",
+        task="review the patch",
+        task_type="review",
+        grants=["run:shell"],
+        force_agent=True,
+        role="qa",
+        skip_preflight=True,
+        context_mode="none",
+        skip_permissions=True,
+    )
+
+    err = capsys.readouterr().err
+    assert "SECURITY WARNING: --dangerously-skip-permissions is enabled" in err
+    assert any(a[1] == "DANGEROUS_PERMISSIONS_BYPASS" for a in alerts)
+
+
+def test_claude_dispatch_injects_settings_json(project_dir, monkeypatch, tmp_path):
+    """Claude dispatch injects .claude/settings.json into the job worktree based on role permission profile."""
+    import synlynk.dispatch as dispatch_mod
+    import json
+
+    captured = {}
+
+    def fake_popen(command, *args, **kwargs):
+        captured["command"] = command
+
+        class FakeProc:
+            pid = 12345
+
+        return FakeProc()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(dispatch_mod, "_preflight_dispatch", lambda *a, **kw: {"passed": True})
+
+    # Mock worktree creation to point to tmp_path
+    worktree_dir = tmp_path / "worktree"
+    worktree_dir.mkdir()
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_create_job_worktree",
+        lambda *a, **kw: {"path": str(worktree_dir), "base_branch": "main", "base_sha": "abc"},
+    )
+    # Also patch pipeline.prepare_worktree
+    import synlynk.dispatch_pipeline as dispatch_pipeline
+    monkeypatch.setattr(dispatch_pipeline, "prepare_worktree", lambda req: {"path": str(worktree_dir), "base_branch": "main", "base_sha": "abc"})
+
+    dispatch_mod.dispatch_agent(
+        agent="claude",
+        task="implement feature",
+        role="dev",
+        force_agent=True,
+        skip_preflight=True,
+        context_mode="none",
+    )
+
+    settings_file = worktree_dir / ".claude" / "settings.json"
+    assert settings_file.exists()
+    settings_data = json.loads(settings_file.read_text())
+    assert "allowedTools" in settings_data
+    assert "run_command:pytest" in settings_data["allowedTools"]
+
 
 
 def test_permissions_to_flags_agy_review_shell_uses_skip_when_opted_in():
@@ -2628,6 +2704,114 @@ def test_permissions_to_flags_local_no_permissions_is_noop():
 
     assert _permissions_to_flags("local", []) == []
     assert _permissions_to_flags("local", None) == []
+
+
+def test_local_dispatch_forwards_one_live_selected_model_through_adapter(project_dir, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.harness_adapters.local import LocalAdapter
+
+    adapter = LocalAdapter()
+    calls = []
+    recorded_commands = []
+    policy_dir = project_dir / ".agents"
+    policy_dir.mkdir()
+    (policy_dir / "local.json").write_text(
+        '{"endpoint":"http://127.0.0.1:8000","pinned_model":"ornith",'
+        '"models":[{"id":"ornith","pinned":true,"edit_format":"diff"},'
+        '{"id":"other","edit_format":"whole"}]}'
+    )
+    monkeypatch.setattr(
+        "synlynk.local_agent._health_check",
+        lambda endpoint, timeout=5, api_key=None: {
+            "reachable": True, "status": "healthy", "available_models": ["ornith", "other"]
+        },
+    )
+    original_build = adapter.build_cmd
+
+    def spy_build(request):
+        calls.append(request)
+        return original_build(request)
+
+    monkeypatch.setattr(adapter, "build_cmd", spy_build)
+    monkeypatch.setattr("synlynk.harness_adapters.registry.get_adapter", lambda agent: adapter)
+    def fake_popen(cmd, *args, **kwargs):
+        if cmd[:2] == ["sh", "-c"]:
+            recorded_commands.append(cmd)
+        return type("DummyProc", (), {"pid": 9999})()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+
+    job = dispatch_mod.dispatch_agent(
+        agent="local",
+        task="summarize this file",
+        model="other",
+        skip_preflight=True,
+        context_mode="none",
+    )
+
+    assert len(calls) == 1
+    assert calls[0].agent == "local"
+    assert calls[0].permissions == []
+    shell_cmd = recorded_commands[0][2]
+    assert "--model openai/other" in shell_cmd
+    assert "--model openai/ornith" not in shell_cmd
+    assert job["model_at_dispatch"] == "other"
+    assert job["requested_model"] == "other"
+    assert job["resolved_model"] == "other"
+    assert job["local_model_receipt"]["effective_model"] == "other"
+    assert job["local_model_receipt"]["edit_format"] == "whole"
+
+
+def test_local_dispatch_rejects_approved_model_not_live_before_aider(project_dir, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    policy_dir = project_dir / ".agents"
+    policy_dir.mkdir()
+    (policy_dir / "local.json").write_text(
+        '{"endpoint":"http://127.0.0.1:8000","pinned_model":"ornith",'
+        '"models":[{"id":"ornith","pinned":true,"edit_format":"diff"},'
+        '{"id":"other","edit_format":"whole"}]}'
+    )
+    monkeypatch.setattr(
+        "synlynk.local_agent._health_check",
+        lambda endpoint, timeout=5, api_key=None: {
+            "reachable": True, "status": "healthy", "available_models": ["ornith"]
+        },
+    )
+    spawn_calls = []
+    monkeypatch.setattr(
+        dispatch_mod.subprocess, "Popen", lambda *args, **kwargs: spawn_calls.append(args)
+    )
+
+    with pytest.raises(ValueError, match="other.*not currently served.*discovered IDs: ornith"):
+        dispatch_mod.dispatch_agent(
+            agent="local", task="summarize this file", model="other",
+            skip_preflight=True, context_mode="none",
+        )
+
+    assert spawn_calls == []
+
+
+def test_local_dispatch_rejects_prism_model_without_fallback(project_dir, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    policy_dir = project_dir / ".agents"
+    policy_dir.mkdir()
+    (policy_dir / "local.json").write_text(
+        '{"endpoint":"http://127.0.0.1:8000",'
+        '"pinned_model":"bonsai","models":['
+        '{"id":"ornith","edit_format":"diff"},'
+        '{"id":"bonsai","pinned":true,"edit_format":"diff","loader":"prism-ml"}]}'
+    )
+    monkeypatch.setattr("synlynk.local_agent._check_prism_ml_available", lambda: False)
+
+    with pytest.raises(ValueError, match="refusing to substitute"):
+        dispatch_mod.dispatch_agent(
+            agent="local",
+            task="summarize this file",
+            skip_preflight=True,
+            context_mode="none",
+        )
 
 
 def test_resolve_dispatch_base_ref_stacks_on_current_feature_branch(git_worktree_repo, monkeypatch):
@@ -3224,7 +3408,7 @@ def test_dispatch_agent_story_id_wins_over_agent_id_role_for_harness_selection(p
     job = sl.dispatch_agent(
         "claude", "implement the feature", agent_id=agent_id,
         story_id="story-with-capability-match", force_agent=False,
-        context_mode="none",
+        context_mode="none", skip_permissions=True,
     )
 
     assert job["agent"] == "grok"

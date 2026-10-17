@@ -1,14 +1,16 @@
 """Real-inference tests against a live oMLX instance + real Aider subprocess.
-NOT run in standard CI — requires oMLX running locally (`omlx serve`) with the
-.agents/local.json roster downloaded, and the `aider` CLI installed. Run explicitly:
-`pytest tests/test_local_agent_hardware.py -m local_hardware -v`"""
 
-import json
+NOT run in standard CI. They use the repository's current ``.agents/local.json``
+instead of a stale fixture, require its models to be served by oMLX, and require
+``OPENAI_API_KEY`` when the endpoint requires authentication. Run explicitly:
+``pytest tests/test_local_agent_hardware.py -m local_hardware -v``.
+"""
+
 import os
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import patch
+from pathlib import Path
 
 import pytest
 
@@ -16,55 +18,39 @@ from synlynk.local_agent import (
     _health_check,
     _load_local_config,
     _local_dispatch_model_flags,
-    _pinned_model,
 )
 
-
-_LOCAL_CONFIG = {
-    "name": "local",
-    "endpoint": "http://127.0.0.1:8080",
-    "models": [
-        {"id": "ornith-1.0-9b", "pinned": True, "edit_format": "whole"},
-        {"id": "qwen-coder", "pinned": False, "edit_format": "whole"},
-        {"id": "gemma-coder", "pinned": False, "edit_format": "diff"},
-    ],
-    "hardware_tier": "16gb-default",
-}
-
-
-def _make_local_config() -> tuple:
-    tmpdir = tempfile.TemporaryDirectory()
-    config_path = os.path.join(tmpdir.name, "local.json")
-    with open(config_path, "w") as f:
-        json.dump(_LOCAL_CONFIG, f)
-    return tmpdir, config_path
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_LOCAL_CONFIG_PATH = _REPO_ROOT / ".agents" / "local.json"
 
 
 class _LocalHardwareBase(unittest.TestCase):
     def setUp(self):
-        self._tmpdir, config_path = _make_local_config()
-        self.addCleanup(self._tmpdir.cleanup)
-
-        self._config_patcher = patch(
-            "synlynk.local_agent._DEFAULT_CONFIG_PATH", config_path
-        )
-        self._config_patcher.start()
-        self.addCleanup(self._config_patcher.stop)
-
-        self.config = _load_local_config()
-        result = _health_check(self.config["endpoint"])
+        if not _LOCAL_CONFIG_PATH.exists():
+            self.skipTest(f"local config not found: {_LOCAL_CONFIG_PATH}")
+        self.config_path = str(_LOCAL_CONFIG_PATH)
+        self.config = _load_local_config(self.config_path)
+        self.api_key = os.environ.get("OPENAI_API_KEY")
+        if not self.api_key:
+            self.skipTest("OPENAI_API_KEY is required for authenticated local oMLX checks")
+        result = _health_check(self.config["endpoint"], api_key=self.api_key)
         if not result["reachable"]:
             self.skipTest(
-                f"oMLX not reachable at {self.config['endpoint']} — start with `omlx serve`"
+                f"authenticated oMLX unavailable at {self.config['endpoint']}: "
+                f"{result['error']}"
             )
+        self.available_models = set(result["available_models"])
+
+    def selected_model_id(self) -> str:
+        flags = _local_dispatch_model_flags(self.config_path)
+        model_index = flags.index("--model")
+        return flags[model_index + 1].removeprefix("openai/")
 
 
 @pytest.mark.local_hardware
 class TestRealOmlxHealthCheck(_LocalHardwareBase):
-    def test_pinned_model_is_available(self):
-        result = _health_check(self.config["endpoint"])
-        pinned = _pinned_model(self.config)
-        self.assertIn(pinned, result["available_models"])
+    def test_effective_local_model_is_available(self):
+        self.assertIn(self.selected_model_id(), self.available_models)
 
 
 @pytest.mark.local_hardware
@@ -92,7 +78,9 @@ class TestAiderSubprocessEndToEnd(_LocalHardwareBase):
                     "Only edit add.py."
                 )
 
-            flags = ["--no-auto-commits", "--yes-always"] + _local_dispatch_model_flags()
+            flags = ["--no-auto-commits", "--yes-always"] + _local_dispatch_model_flags(
+                self.config_path
+            )
             proc = subprocess.run(
                 ["aider"] + flags + ["--message-file", prompt_file, "add.py"],
                 cwd=d,
@@ -106,6 +94,7 @@ class TestAiderSubprocessEndToEnd(_LocalHardwareBase):
 
         self.assertEqual(proc.returncode, 0)
         self.assertIn("def add", content)
+        self.assertNotEqual(content, "# implement add(a, b) below\n")
 
 
 if __name__ == "__main__":

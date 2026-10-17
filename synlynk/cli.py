@@ -383,6 +383,11 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     from synlynk._constants import VERSION, HARNESS_CAPABILITY_BASELINES
 
     parser.add_argument("--version", action="version", version=f"synlynk {VERSION}")
+    parser.add_argument(
+        "--experimental",
+        action="store_true",
+        help="Unlock experimental prototype commands",
+    )
     subparsers = parser.add_subparsers(dest="command")
     if selected_command is not None:
         subparsers = _LazySubparsers(subparsers, selected_command)
@@ -1208,7 +1213,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     )
     dispatch_parser.add_argument(
         "--model", default=None,
-        help="Explicit model identifier; overrides automatic model selection",
+        help="Explicit model identifier; for local, use an exact dispatch-approved oMLX ID "
+             "already present in live /v1/models inventory (no load/reload or fallback)",
     )
     dispatch_parser.add_argument(
         "--effort", choices=["low", "high"], default=None,
@@ -1248,7 +1254,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         help="Bypass harness preflight checks"
     )
     dispatch_parser.add_argument(
-        "--dangerously-skip-permissions", action="store_true", dest="skip_permissions",
+        "--dangerously-skip-permissions", "--insecure-skip-permissions", action="store_true", dest="skip_permissions",
         help="Explicitly bypass harness permission prompts (unsafe; opt-in only)",
     )
     dispatch_parser.add_argument(
@@ -1818,6 +1824,11 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         dest="as_json",
         help="Output the proposal as JSON instead of text",
     )
+    report_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Apply proposed routing changes to .synlynk/policy.json",
+    )
 
     instructions_parser = subparsers.add_parser(
         "instructions", help="Manage synlynk instruction files across AI tools"
@@ -1965,6 +1976,24 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     addon_install_parser = addon_sub.add_parser("install", help="Install an add-on bundle")
     addon_install_parser.add_argument("bundle", choices=_list_available_addons())
 
+    def format_root_help() -> str:
+        return (
+            "synlynk: The Universal Context Switchboard for AI Devs\n\n"
+            "Core Commands:\n"
+            "  init       Initialize synlynk in a repository\n"
+            "  scan       Scan and classify repository signals\n"
+            "  dispatch   Dispatch autonomous task execution to agents\n"
+            "  jobs       Inspect and stream job execution and status\n"
+            "  status     Display workspace health, goals, and burn rate\n"
+            "  doctor     Run diagnostic health checks\n"
+            "  heal       Auto-heal drifting state, worktrees, and docs\n"
+            "  probe      Probe ambient harness capabilities and drift\n\n"
+            "Advanced & Experimental:\n"
+            "  Use 'synlynk help --all' to view operational tools (pr, story, goal, policy).\n"
+            "  Pass '--experimental' to unlock experimental prototype commands.\n"
+        )
+
+    parser.format_help = format_root_help
     return parser
 
 
@@ -2231,6 +2260,18 @@ def main(argv=None) -> None:
     args = parser.parse_args(cli_tokens)
     help_parsers = getattr(parser, "_synlynk_help_parsers", {})
     _warn_stale_repo_version(VERSION)
+
+    from synlynk.taxonomy import EXPERIMENTAL_COMMANDS
+    if (
+        getattr(args, "command", None) in EXPERIMENTAL_COMMANDS
+        and not getattr(args, "experimental", False)
+        and not os.environ.get("SYNLYNK_EXPERIMENTAL")
+    ):
+        print(
+            f"Notice: '{args.command}' is an experimental prototype. Use 'synlynk --experimental {args.command} ...' to proceed.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     if args.command == "init":
         if getattr(args, "brownfield", False):
@@ -3041,7 +3082,10 @@ def main(argv=None) -> None:
             cmd_capability_sweep(cost_cap_override=getattr(args, "cost_cap", None))
         elif args.capability_action == "report":
             from synlynk.capability_report import cmd_capability_report
-            cmd_capability_report(as_json=getattr(args, "as_json", False))
+            cmd_capability_report(
+                as_json=getattr(args, "as_json", False),
+                apply=getattr(args, "apply", False),
+            )
     elif args.command == "instructions":
         action = getattr(args, "instructions_action", None)
         if action == "status" or action is None:
