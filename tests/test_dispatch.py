@@ -365,6 +365,33 @@ def test_cli_dispatch_dry_run_prints_preview_and_creates_no_job(project_dir, mon
     assert "no job, worktree, or cost entry created" in captured.out
 
 
+def test_cli_dispatch_reports_deferred_job_without_assuming_started_pid(
+    project_dir, monkeypatch, capsys
+):
+    import synlynk as sl
+    import synlynk.cli as cli_mod
+
+    monkeypatch.setattr(
+        sl,
+        "dispatch_agent",
+        lambda *a, **kw: {
+            "deferred": True,
+            "reason": "local_concurrency",
+            "job_id": "job-deferred",
+        },
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["synlynk", "dispatch", "local", "--task", "summarize a test log", "--force-agent"],
+    )
+
+    cli_mod.main()
+
+    output = capsys.readouterr().out
+    assert "[job-deferred] queued for retry (deferred: local_concurrency)" in output
+    assert "dispatched  PID" not in output
+
+
 def test_cli_dispatch_dry_run_empty_task_fails_closed_before_preview(project_dir, monkeypatch, capsys):
     import synlynk as sl
     import synlynk.cli as cli_mod
