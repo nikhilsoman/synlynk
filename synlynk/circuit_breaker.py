@@ -149,9 +149,7 @@ def _worktree_branch_is_stable(worktree_path: Optional[str], expected_branch: Op
         )
     except Exception:
         return True
-    if result.returncode != 0:
-        return False
-    if (result.stdout or "").strip() == expected_branch:
+    if result.returncode == 0 and (result.stdout or "").strip() == expected_branch:
         return True
     try:
         reflog = subprocess.run(
@@ -192,7 +190,9 @@ def evaluate_job_circuit_breaker(
     # Codex turn.completed input_tokens sums every tool-loop request, and
     # cached_input_tokens is already inside that sum. Limits compare the
     # uncached remainder so a ~50k prompt replayed from cache is not treated
-    # as a million-token prompt.
+    # as a million-token prompt for cost/token ceilings, but runaway loop
+    # detection (zero-file threshold) tracks cumulative raw tokens to prevent
+    # prompt-cache blindspot loops (gh:#1937).
     from synlynk.costs import extract_tokens, split_billed_tokens
     from synlynk.jobs import _job_cost_usd
     from synlynk.dispatch import _worktree_files_touched
@@ -203,6 +203,7 @@ def evaluate_job_circuit_breaker(
     cache_read_tokens = int(getattr(token_counts, "cache_read_tokens", 0) or 0)
     in_tokens, _cache = split_billed_tokens(agent, raw_in, cache_read_tokens)
     total_tokens = in_tokens + out_tokens
+    raw_total_tokens = raw_in + out_tokens
 
     model_version = job.get("model_version") or job.get("model_at_dispatch")
     cost_usd = _job_cost_usd(
@@ -237,13 +238,13 @@ def evaluate_job_circuit_breaker(
             f"Log size runaway: {log_size_bytes:,} bytes >= {max_log_size_bytes:,} bytes "
             f"(extracted tokens: {total_tokens:,} — likely mid-turn token-extraction blind spot)"
         )
-    elif total_tokens >= zero_file_threshold:
+    elif total_tokens >= zero_file_threshold or raw_total_tokens >= zero_file_threshold:
         files_touched_list = _worktree_files_touched(worktree_path) if worktree_path else []
         files_touched = len(files_touched_list)
         if files_touched == 0 and _worktree_branch_is_stable(
             worktree_path, job.get("worktree_branch")
         ):
-            reason = f"Zero-file runaway: {total_tokens:,} tokens with 0 files touched (limit: {zero_file_threshold:,})"
+            reason = f"Zero-file runaway: {raw_total_tokens:,} tokens with 0 files touched (limit: {zero_file_threshold:,})"
 
     if not reason:
         return CircuitBreakerResult(

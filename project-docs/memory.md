@@ -7,6 +7,22 @@
 - **Directories:** bin, docs, project-docs, synlynk, tests, website
 
 ## Decisions
+- **2026-10-17 Local Pilot prompt delivery:** Aider's ordinary interactive
+  stdin treats the multiline Synlynk context prompt as separate inputs. The
+  isolated runner must use Aider's `--message-file /dev/stdin` mode so the full
+  task context is one request. `--no-show-model-warnings` suppresses warnings
+  but does not prevent Aider/LiteLLM's optional public catalog lookup; the
+  relay-only pilot network blocks it. A stopped run with no valid task receipt
+  is failure evidence, never an accepted pilot result.
+  [@codex]
+- **2026-10-17 Local Harness pilot containment:** Local Pilot is additive and
+  opt-in per dispatch via an explicit allowlisted class; plain `auto` retains
+  its pre-existing health/capability routing. Aider receives a tracked-file-only
+  scratch repo in a credential-minimal container, with only validated scoped
+  edits copied to the disposable job worktree. Compose/auth/isolation failure
+  must fail closed. Implementation on `feat/codex/local-pilot` is not live
+  qualification or authorization to increase the 20% cohort; independent review
+  and runtime receipts are still required. [@codex]
 - **2026-10-02 [15-Minute Time-to-Wow Field Trials Verified Across 3 Target Repositories]:** Executed non-destructive unattended field trials of the Autonomous Repo Intelligence and Goal-Forming Engine across 3 varied architectures: `rxcc` (monorepo full-stack TypeScript/React, 53k files, test ratio 0.42 -> Goal 2 CI hardening), `cc-videoreframing` (Python backend/media processing, 32k files, test ratio 0.45 -> Goal 2 CI hardening), and `playblazer-ng` (frontend Angular/Python, 571 files, test ratio 0.06 -> Goal 2 dynamically elevated to P0 High-Risk Test Coverage Remediation). Verified that dynamic test-to-source ratio thresholds adapt priorities appropriately, briefs are written to `project-docs/brief.md` within 4–10 seconds, and greenfield blueprints (`personal_assistant` and `dotfiles`) generate multi-charter goals and drift security gates in <1s. All 4 milestone criteria for `v1.0.0-rc1` are verified. [@agy, @nikhilsoman]
 - **2026-10-02 [LIVE-19 Circuit Breaker Clean-Exit Preservation & LIVE-20 Quad-Harness Subscription Dual-Ledger Cost Reporting]:** Fixed Sev-2 defect LIVE-19 (#1896) where clean-exiting jobs (rc=0) with heavy prompt tokens (>5M) were falsely stamped as 'circuit_breaker_tripped' with exit -9. In 'synlynk/circuit_breaker.py', 'evaluate_job_circuit_breaker()' now checks 'killed' from '_kill_process_tree()' and only trips when the process was actively killed; if already terminated, logs warning telemetry and returns 'tripped=False, process_killed=False'. In 'synlynk/jobs.py', reconcilers require 'cb_res.tripped and cb_res.process_killed' before settling breaker state, falling through to natural exit code reaping. Default limits calibrated to $15.00 / 5M tokens ('fast' $2/500k, 'pro' $10/3M, 'reasoning' $15/5M). Resolved LIVE-20 (#1897) by configuring user's quad-harness subscription structure ($20/mo Claude Pro, $20/mo ChatGPT Plus, $20/mo Google AI Pro, $30/mo SuperGrok = $90.00/mo baseline). Updated 'synlynk/db.py::_generate_costs_md()' with dual-ledger format ('$actual [sub] (API: $api)') and appended Subscription Amortization & Dual-Ledger Summary section. Added 'synlynk cost billing' CLI command and verified full 47-test regression suite. [@agy, @codex, @nikhilsoman]
 - **2026-10-01 [Unified Onboarding Journeys & Self-Updating Lifecycle Engine]:** Built headless 10-stage lifecycle engine (`synlynk/onboarding_state.py`) backed by SQLite WAL in `state.db`. Multi-pass topology discovery (`synlynk/topology_discovery.py`) scores 4 archetypes (Container Directory, Monorepo, Polyrepo App Group, Standalone Repo) with user split/merge mutations, ensuring parent folders like `~/dev` do not collapse unrelated repos into a synthetic monorepo. Probe binding (`synlynk/probe_binding.py`) tests presence and authentication across `claude`, `codex`, `agy`, and `grok`. Zero-risk first-win micro-cycle (`synlynk/first_win_loop.py`) enforces effect verification (non-empty diff, test pass). Dual-surface coherence across TUI (`synlynk init --wizard`) and Vizor HUD (`/w/<slug>/onboarding` & REST endpoints). Dispatched and verified across all 4 fleet harnesses (25/25 tests passing). Spec: `docs/superpowers/specs/2026-10-01-unified-onboarding-journeys-and-lifecycle-design.md`. Plan: `docs/superpowers/plans/2026-10-01-unified-onboarding-journeys-and-lifecycle.md`. Report: `project-docs/reports/2026-10-01-unified-onboarding-and-lifecycle-completion-report.md`. [@agy, @codex, @claude, @grok, @nikhilsoman]
@@ -85,3 +101,31 @@
   validation from that status. Selected checks: 123 passed, 5 xfailed. Generated
   exports follow the new #2328 decision; PR #2338 merge unverified. Actual review
   cost and live status unavailable under sandbox permissions. [@nikhilsoman]
+- **2026-10-17 Local Harness gate semantics:** Qualification timeouts must be
+  retained as classified task failures and reduce benchmark correctness, but
+  only unsafe/no-op/out-of-scope edits trigger the edit-safety gate. Never infer
+  candidate promotion from accuracy alone: memory high-water evidence and the
+  complete authenticated E2E criteria remain mandatory. [@codex]
+- **2026-10-17 Local model authority:** The local profile is the dispatch
+  allowlist, oMLX `/v1/models` is the live-availability authority, and the
+  global model catalog enriches identity/cost reporting but cannot enable or
+  substitute a model. A requested model must be the exact approved ID and
+  already served; never load, fall back, or mutate the pinned profile during a
+  dispatch. [@codex]
+- **2026-10-17 Ornith qualification evidence:** On the 24 GiB host, the
+  authenticated isolated 24-task Ornith run scored 21/24 (87.5%) with zero
+  unsafe/no-op/out-of-scope edits; all four bounded edits passed. Two read-only
+  diagnosis timeouts reduce correctness but are not edit-safety events under
+  the approved gate. One-second telemetry recorded 4,124.2 MiB peak process RSS,
+  29% minimum system-free memory, and no swap growth. Receipt v4 reports
+  `qualifies: true`. This authorizes only model qualification; implement and
+  review the isolated 20% pilot in #2349 before enabling local production
+  traffic. [@codex]
+- **2026-10-17 Local Pilot Aider receipt framing:** Aider 0.86.2 emits startup
+  and THINKING sections before its ANSWER section, and terminal-width wrapping
+  split an otherwise correct task receipt in the first live retry. Local task
+  receipt validation must inspect the first ANSWER line; generic harness
+  receipt strictness remains unchanged. `--no-pretty` and
+  `--no-suggest-shell-commands` are enabled for the bounded pilot. The printed
+  `find` text was not executed: the runner receipt records a read-only outcome
+  with no changed paths. [@codex]

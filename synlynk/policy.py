@@ -75,6 +75,61 @@ DEFAULT_WORKSPACE_POLICY: Dict[str, Any] = {
             "architect": {"default_harness": "claude", "scope": ["roadmap", "brainstorm"]},
             "marketing": {"default_harness": "agy", "scope": ["content", "blog", "comms"]},
         },
+        "permission_profiles": {
+            "dev": {
+                "allowed_tools": [
+                    "read_file",
+                    "write_file",
+                    "replace_file_content",
+                    "run_command:pytest",
+                    "run_command:python",
+                    "run_command:git status",
+                    "run_command:git add",
+                    "run_command:git commit",
+                    "run_command:git diff",
+                ],
+                "prohibited": [
+                    "network",
+                    "modify_git_config",
+                    "host_files",
+                ],
+            },
+            "qa": {
+                "allowed_tools": [
+                    "read_file",
+                    "run_command:pytest",
+                    "run_command:python",
+                    "run_command:git status",
+                    "run_command:git diff",
+                    "run_command:synlynk pr check",
+                    "run_command:gh pr view",
+                    "run_command:gh pr review",
+                ],
+                "prohibited": [
+                    "write_file_outside_scratch",
+                    "delete_file",
+                    "network",
+                ],
+            },
+            "pm": {
+                "allowed_tools": [
+                    "read_file",
+                    "write_file",
+                    "replace_file_content",
+                    "run_command:git status",
+                    "run_command:git diff",
+                ],
+                "prohibited": [
+                    "network",
+                ],
+            },
+        },
+        "ceremony_policy": {
+            "parent_issue_required_for_multi_task": True,
+            "conversational_rollup_target": "parent_issue_or_pr",
+            "per_pr_blog_convention": "retired",
+            "milestone_blog_focus": ["intent", "context", "pathway", "outcome"],
+        },
     },
 }
 
@@ -281,4 +336,12 @@ def verify_testbed_receipt(
         return data.get("overall_verdict") == "PASSED" and bool(data.get("signature"))
     except Exception:
         return False
+
+
+def get_role_permission_profile(role: str, repo_path: str = ".") -> Dict[str, Any]:
+    """Return the permission profile for a given role (dev, qa, pm, etc.)."""
+    policy = load_policy(repo_path=repo_path)
+    profiles = policy.get("permission_profiles") or DEFAULT_WORKSPACE_POLICY["defaults"].get("permission_profiles", {})
+    return profiles.get(role, profiles.get("dev", {}))
+
 

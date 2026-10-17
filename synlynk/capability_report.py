@@ -16,10 +16,10 @@ DISCIPLINE_TO_TASK_TYPE = {
     "cli": "cli-plumbing",
     "devops": "infra",
     "architecture": "review",
-    "docs": None,
-    "security": None,
+    "docs": "content",
+    "security": "refactor",
     "ml": None,
-    "PROG": None,
+    "PROG": "implement",
 }
 
 
@@ -29,15 +29,21 @@ def _column_exists(conn, table: str, column: str) -> bool:
 
 
 def _fetch_rows(conn):
-    """Return rows and whether capability_ratings has quality_verified."""
+    """Return rows and whether capability_ratings has quality_verified.
+
+    Filters out synthetic seed rows (local agent, quality=0.6, or seed story IDs).
+    """
     has_quality_verified = _column_exists(
         conn, "capability_ratings", "quality_verified"
     )
+    has_quality = _column_exists(conn, "capability_ratings", "quality")
     qv_select = "cr.quality_verified" if has_quality_verified else "NULL"
+    quality_filter = " AND (cr.quality IS NULL OR cr.quality != 0.6)" if has_quality else ""
     query = (
         "SELECT cr.story_id, cr.agent, cr.discipline, cr.pr_review_cycles, "
         f"{qv_select}, ce.total_cost_usd, ce.pr_number, ce.job_id "
-        "FROM capability_ratings cr JOIN cost_entries ce ON cr.story_id = ce.story_id"
+        "FROM capability_ratings cr JOIN cost_entries ce ON cr.story_id = ce.story_id "
+        f"WHERE cr.agent != 'local' AND cr.story_id NOT LIKE 'seed-%' AND cr.story_id NOT LIKE 'local-seed-%'{quality_filter}"
     )
     rows = conn.execute(query).fetchall()
     return [tuple(row) for row in rows], has_quality_verified
@@ -166,11 +172,52 @@ def _load_policy(path: str = ".synlynk/policy.json") -> dict:
         return json.load(policy_file)
 
 
-def cmd_capability_report(as_json: bool = False) -> None:
-    """Print a read-only task allocation proposal from the canonical state DB."""
+def apply_proposals(proposals: list, policy_path: str = ".synlynk/policy.json") -> bool:
+    """Apply proposed task allocation routing changes to policy.json."""
+    if not proposals:
+        print("No routing changes to apply.")
+        return False
+    policy = _load_policy(policy_path)
+    allocations = (
+        policy.setdefault("overrides", {})
+        .setdefault("dev_authority", {})
+        .setdefault("task_allocation", {})
+    )
+    changes_made = False
+    for p in proposals:
+        task_type = p["task_type"]
+        new_harness = p["proposed_harness"]
+        old_harness = p["current_harness"]
+        if task_type in allocations:
+            allocations[task_type]["harness"] = new_harness
+            fallbacks = allocations[task_type].setdefault("fallback", [])
+            if old_harness not in fallbacks:
+                fallbacks.insert(0, old_harness)
+            if new_harness in fallbacks:
+                fallbacks.remove(new_harness)
+            changes_made = True
+            print(f"Applied routing update for '{task_type}': {old_harness} -> {new_harness}")
+        else:
+            allocations[task_type] = {"harness": new_harness, "fallback": [old_harness]}
+            changes_made = True
+            print(f"Added routing for '{task_type}': {new_harness} (fallback: {old_harness})")
+    if changes_made:
+        with open(policy_path, "w") as f:
+            json.dump(policy, f, indent=2)
+            f.write("\n")
+        print(f"Updated {policy_path} successfully.")
+    return changes_made
+
+
+def cmd_capability_report(
+    as_json: bool = False,
+    apply: bool = False,
+    policy_path: str = ".synlynk/policy.json",
+) -> None:
+    """Print or apply a task allocation proposal from the canonical state DB."""
     from synlynk import _get_db
 
-    policy = _load_policy()
+    policy = _load_policy(policy_path)
     min_sample_size = policy["capability_policy"]["min_sample_size"]
     current_task_allocation = policy["overrides"]["dev_authority"]["task_allocation"]
 
@@ -182,6 +229,10 @@ def cmd_capability_report(as_json: bool = False) -> None:
 
     summary = summarize_buckets(buckets, min_sample_size)
     proposals = propose_diff(summary, current_task_allocation, min_sample_size)
+
+    if apply:
+        apply_proposals(proposals, policy_path=policy_path)
+        return
 
     if as_json:
         print(

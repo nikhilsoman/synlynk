@@ -92,6 +92,7 @@ BUILTIN_FAMILIES = (
     ModelFamily("deepseek-r1", "local", ContextGeometry(128_000, 8_192, True), ("tool_calling",)),
     ModelFamily("qwen2-5", "alibaba", ContextGeometry(128_000, 8_192, False), ("tool_calling",)),
     ModelFamily("hermes-3", "nous-research", ContextGeometry(128_000, 8_192, True), ("tool_calling",)),
+    ModelFamily("ornith-1", "local"),
 )
 
 BUILTIN_MODEL_CATALOG = (
@@ -112,6 +113,7 @@ BUILTIN_MODEL_CATALOG = (
     _remote("gpt-5.6-luna", "gpt-5.6", "codex", EntitlementTier.INCLUDED_IN_BASE),
     _remote("grok-4.7", "grok-4", "grok", EntitlementTier.METERED_EXTRA_USAGE_ONLY),
     _remote("grok-4.6", "grok-4", "grok", EntitlementTier.SUBSCRIPTION_CAPPED),
+    ModelSpec("Ornith-1.0-9B-4bit", "ornith-1", "local", locality="on_device_local", quantization="4bit", entitlement_tier=EntitlementTier.ZERO_COST_LOCAL),
     ModelSpec("gemma-2-9b-it-q4", "gemma-2", "local", locality="on_device_local", quantization="Q4_K_M", entitlement_tier=EntitlementTier.ZERO_COST_LOCAL),
     ModelSpec("deepseek-r1", "deepseek-r1", "local", locality="on_device_local", entitlement_tier=EntitlementTier.ZERO_COST_LOCAL),
     ModelSpec("qwen2.5", "qwen2-5", "local", locality="on_device_local", entitlement_tier=EntitlementTier.ZERO_COST_LOCAL),
@@ -147,7 +149,7 @@ def load_model_catalog(repo_path: Optional[str] = None) -> dict[str, Any]:
                 "agy": "gemini-3.8-flash-medium",
                 "codex": "gpt-5.6-luna",
                 "grok": "grok-4.6",
-                "local": "qwen2.5",
+                "local": "Ornith-1.0-9B-4bit",
                 "muse": "muse-spark-1.3",
             },
             "pro": {
@@ -155,7 +157,7 @@ def load_model_catalog(repo_path: Optional[str] = None) -> dict[str, Any]:
                 "agy": "gemini-3.8-flash-high",
                 "codex": "gpt-5.6-luna",
                 "grok": "grok-4.7",
-                "local": "qwen2.5",
+                "local": "Ornith-1.0-9B-4bit",
                 "muse": "muse-spark-1.3",
             },
             "reasoning": {
@@ -163,7 +165,7 @@ def load_model_catalog(repo_path: Optional[str] = None) -> dict[str, Any]:
                 "agy": "claude-opus-4-6-thinking",
                 "codex": "gpt-5.6-luna",
                 "grok": "grok-4.7",
-                "local": "deepseek-r1",
+                "local": "Ornith-1.0-9B-4bit",
             },
             "hermes": {
                 "local": "Hermes-3-Llama-3.1-8B",
@@ -297,16 +299,22 @@ def get_models_from_catalog(repo_path: Optional[str] = None) -> list[ModelSpec]:
         rates = m.get("rates", {})
         if not isinstance(rates, RateCard):
             rates = RateCard(**rates) if isinstance(rates, dict) else RateCard()
+        harness_binding = m.get("harness", m.get("harness_binding", "claude"))
         specs.append(
             ModelSpec(
                 model_id=m["model_id"],
                 family_id=m.get("family", m.get("family_id", "generic")),
-                harness_binding=m.get("harness", m.get("harness_binding", "claude")),
+                harness_binding=harness_binding,
+                locality=m.get(
+                    "locality",
+                    "on_device_local" if harness_binding == "local" else "remote_api",
+                ),
+                quantization=m.get("quantization"),
                 rates=rates,
                 entitlement_tier=m.get("entitlement_tier", EntitlementTier.METERED_EXTRA_USAGE_ONLY),
                 context_geometry=ContextGeometry(
-                    max_input_tokens=m.get("context_window", 200000),
-                    max_output_tokens=m.get("max_output", 8192),
+                    max_input_tokens=m.get("context_window", 0),
+                    max_output_tokens=m.get("max_output", 0),
                 ),
             )
         )

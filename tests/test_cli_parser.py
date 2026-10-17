@@ -211,7 +211,8 @@ def test_fast_cli_preserves_help_and_invalid_command_paths():
     )
 
     assert help_result.returncode == 0
-    assert "sentinel" in help_result.stdout
+    assert "dispatch" in help_result.stdout
+    assert "sentinel" not in help_result.stdout
     assert invalid_result.returncode == 2
     assert "invalid choice" in invalid_result.stderr
 
