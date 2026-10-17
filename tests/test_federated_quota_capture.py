@@ -40,8 +40,10 @@ def test_runner_registry_includes_migration_21_in_order():
     from synlynk.migrations.runner import MIGRATIONS
 
     versions = [item.version for item in MIGRATIONS]
-    assert versions == [16, 17, 18, 19, 20, 21]
-    assert MIGRATIONS[-1].name == "harness_model_catalog"
+    assert 21 in versions
+    assert versions[:6] == [16, 17, 18, 19, 20, 21]
+    migration_21 = next(item for item in MIGRATIONS if item.version == 21)
+    assert migration_21.name == "harness_model_catalog"
 
 
 def test_default_registry_matches_the_spec():
