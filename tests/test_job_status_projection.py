@@ -109,6 +109,40 @@ def test_projection_exposes_contract_predicates_evidence_revision_and_correction
     assert projection["shadow_comparison"]["reason_code"] == "false_failure"
 
 
+def test_projection_supports_tuple_rows_and_restores_connection_factory():
+    conn = ledger()
+    conn.execute("INSERT INTO daemon_jobs VALUES ('job-tuple', 'completed', 'codex', '2026-10-03T10:00:00')")
+    conn.row_factory = None
+
+    projection = project_job_status(conn, "job-tuple")
+
+    assert projection["legacy_status"] == "completed"
+    assert projection["status"] is None
+    assert conn.row_factory is None
+
+
+def test_jobs_json_uses_the_public_tuple_backed_db_connection(tmp_path, monkeypatch, capsys):
+    import synlynk
+
+    db_path = tmp_path / "state.db"
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+    conn = synlynk._get_db(db_path=str(db_path), migrate=True)
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        ("job-public", "codex", "test", "completed", "2026-10-03T10:00:00"),
+    )
+    conn.commit()
+    assert conn.row_factory is None
+    conn.close()
+
+    synlynk.cmd_jobs(summary="job-public", json_output=True)
+
+    projection = json.loads(capsys.readouterr().out)
+    assert projection["job_id"] == "job-public"
+    assert projection["legacy_status"] == "completed"
+
+
 def test_metrics_and_promotion_gate_report_rollout_blockers():
     conn = ledger()
     conn.execute("INSERT INTO job_status_shadow VALUES ('job-1', 'failed', 'completed', 'false_failure', 1, 'grok', 'github_review', '2026-10-03T10:00:00')")
