@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the isolated Qwen2.5-Coder Local Harness qualification benchmark.
+"""Run an isolated local-model Harness qualification benchmark.
 
 This runner intentionally bypasses normal ``synlynk dispatch local`` routing:
 the candidate remains benchmark-only and each live task runs in a disposable
@@ -234,7 +234,13 @@ def _dry_executor(task: BenchmarkTask, workspace: Path, model_id: str, edit_form
 Executor = Callable[[BenchmarkTask, Path, str, str], ExecutionEvidence]
 
 
-def _evaluate(task: BenchmarkTask, evidence: ExecutionEvidence, workspace: Path) -> TaskReceipt:
+def _evaluate(
+    task: BenchmarkTask,
+    evidence: ExecutionEvidence,
+    workspace: Path,
+    model_id: str,
+    edit_format: str,
+) -> TaskReceipt:
     changed_paths = _changed_paths(workspace)
     unsafe = []
     if task.requires_change and not changed_paths:
@@ -247,10 +253,17 @@ def _evaluate(task: BenchmarkTask, evidence: ExecutionEvidence, workspace: Path)
     if task.test_command:
         test_result = "passed" if subprocess.run(task.test_command, cwd=workspace, capture_output=True, check=False).returncode == 0 else "failed"
     correct = evidence.exit_code == 0 and all(term.lower() in evidence.output.lower() for term in task.expected_terms) and test_result != "failed" and not unsafe
-    return TaskReceipt(task.task_id, task.category, MODEL_ID, EDIT_FORMAT, evidence.exit_code == 0, correct, test_result, not any(event.endswith("edit") for event in unsafe), evidence.retries, 0.0, evidence.peak_memory_mb, changed_paths, unsafe)
+    return TaskReceipt(task.task_id, task.category, model_id, edit_format, evidence.exit_code == 0, correct, test_result, not any(event.endswith("edit") for event in unsafe), evidence.retries, 0.0, evidence.peak_memory_mb, changed_paths, unsafe)
 
 
-def run_benchmark(*, executor: Executor, mode: str, tasks: Iterable[BenchmarkTask] = BENCHMARK_TASKS) -> BenchmarkReceipt:
+def run_benchmark(
+    *,
+    executor: Executor,
+    mode: str,
+    tasks: Iterable[BenchmarkTask] = BENCHMARK_TASKS,
+    model_id: str = MODEL_ID,
+    edit_format: str = EDIT_FORMAT,
+) -> BenchmarkReceipt:
     tasks = tuple(tasks)
     validate_corpus(tasks)
     receipts = []
@@ -259,10 +272,16 @@ def run_benchmark(*, executor: Executor, mode: str, tasks: Iterable[BenchmarkTas
             workspace = Path(directory)
             _prepare_workspace(task, workspace)
             started = time.monotonic()
-            receipt = _evaluate(task, executor(task, workspace, MODEL_ID, EDIT_FORMAT), workspace)
+            receipt = _evaluate(
+                task,
+                executor(task, workspace, model_id, edit_format),
+                workspace,
+                model_id,
+                edit_format,
+            )
             receipt.wall_time_s = round(time.monotonic() - started, 3)
             receipts.append(receipt)
-    return BenchmarkReceipt(mode, receipts)
+    return BenchmarkReceipt(mode, receipts, model_id=model_id, aider_mode=edit_format)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -270,6 +289,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--live", action="store_true", help="use Docker-only local oMLX qualification")
     parser.add_argument("--output", type=Path, help="write JSON receipt")
     parser.add_argument("--peak-memory-mb", type=float, help="peak host oMLX memory for this serialized live run")
+    parser.add_argument("--model-id", default=MODEL_ID, help="exact live oMLX model ID to qualify")
+    parser.add_argument("--edit-format", default=EDIT_FORMAT, help="Aider edit format for the candidate")
     args = parser.parse_args(argv)
     if args.live and args.peak_memory_mb is None:
         parser.error("--live requires --peak-memory-mb from host oMLX telemetry")
@@ -278,7 +299,12 @@ def main(argv: list[str] | None = None) -> int:
         executor = lambda task, workspace, model_id, edit_format: _docker_executor(
             task, workspace, model_id, edit_format, peak_memory_mb=args.peak_memory_mb
         )
-    receipt = run_benchmark(executor=executor, mode="live" if args.live else "dry-run")
+    receipt = run_benchmark(
+        executor=executor,
+        mode="live" if args.live else "dry-run",
+        model_id=args.model_id,
+        edit_format=args.edit_format,
+    )
     payload = json.dumps(receipt.to_dict(), indent=2) + "\n"
     if args.output:
         args.output.write_text(payload)

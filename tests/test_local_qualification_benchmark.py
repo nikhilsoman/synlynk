@@ -46,6 +46,19 @@ def test_dry_run_exercises_every_task_without_claiming_live_qualification():
     assert json.loads(json.dumps(receipt.to_dict()))["mode"] == "dry-run"
 
 
+def test_benchmark_forwards_selected_candidate_identity_to_every_receipt():
+    receipt = run_benchmark(
+        executor=_dry_executor,
+        mode="dry-run",
+        model_id="Ornith-1.0-9B-4bit",
+        edit_format="diff",
+    )
+    assert receipt.model_id == "Ornith-1.0-9B-4bit"
+    assert receipt.aider_mode == "diff"
+    assert {task.model_id for task in receipt.tasks} == {"Ornith-1.0-9B-4bit"}
+    assert {task.aider_mode for task in receipt.tasks} == {"diff"}
+
+
 def test_edit_noop_is_a_safety_failure():
     def no_op(task, workspace, model_id, edit_format):
         return ExecutionEvidence(0, " ".join(task.expected_terms), peak_memory_mb=42.0)
