@@ -518,6 +518,24 @@ def _check_task_receipt(log_text: str, task_sha256: Optional[str]) -> Optional[s
     return "absent"
 
 
+def _record_local_adapter_evidence(job: dict, log_text: str) -> None:
+    """Attach LocalAdapter's parsed receipt and failure evidence to a job.
+
+    The daemon retains raw logs as the audit source; these fields make the
+    adapter's production parse/classification visible in the persisted job
+    record without changing terminal-status policy.
+    """
+    if job.get("agent") != "local" or not log_text:
+        return
+    from synlynk.harness_adapters.registry import get_adapter
+
+    adapter = get_adapter("local")
+    event = adapter.parse_output(log_text)
+    failure = adapter.classify_failure(job.get("exit_code") or 0, "", log_text)
+    job["adapter_receipt"] = event.compatibility_evidence
+    job["adapter_failure_kind"] = failure.value if failure else None
+
+
 # Harness logs often wrap the receipt inside a JSON text field
 # (`"text": "...SYNLYNK_INSTRUCTION_VERSION: 0.23.0-dev\\n..."`), so the marker
 # is not the start of a physical line (gh:#2236, job-70a6a736).
@@ -2598,6 +2616,7 @@ def _reconcile_jobs_unlocked() -> None:
                 job["status"] = "completed"
                 job["exit_code"] = 0
             if log_text:
+                _record_local_adapter_evidence(job, log_text)
                 permission_denied = _should_classify_permission_denied(
                     log_text,
                     git_state,
@@ -2854,6 +2873,7 @@ def _reconcile_jobs_unlocked() -> None:
             if log_file and os.path.exists(log_file):
                 with open(log_file) as f:
                     log_text = f.read()
+                _record_local_adapter_evidence(job, log_text)
                 permission_denied = _should_classify_permission_denied(
                     log_text,
                     git_state,

@@ -4267,6 +4267,32 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         revokes=revokes,
         read_only=task_type == "review",
     )
+    if agent == "local":
+        # LocalAdapter is the production owner of local command construction.
+        # Rebuild the prefix after permissions are known so it can refuse a
+        # request Aider cannot enforce, rather than relying on registry-only
+        # conformance coverage.
+        local_request = DispatchRequest(
+            agent=agent,
+            task=task,
+            story_id=story_id,
+            job_id=job_id,
+            model=model,
+            effort=effort,
+            model_tier=model_tier,
+            task_type=task_type,
+            permissions=permissions,
+            read_only=task_type == "review",
+            skip_permissions=skip_permissions,
+        )
+        dispatch_flags = adapter.build_cmd(local_request)
+        flags = baselines["non_interactive_flags"] + dispatch_flags
+        for key, value in overrides.get("dispatch_flags", {}).items():
+            flags = flags + [f"--{key}"] if value in (None, "") else flags + [f"--{key}", str(value)]
+        if model:
+            flags += ["--model", model]
+        if effort:
+            flags += ["--effort", effort]
     if task_type == "review":
         # Keep compatibility with test/integration adapters that implement the
         # historical two-argument translator while using the hardened native
