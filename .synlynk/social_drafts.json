@@ -2110,5 +2110,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2382 \u2014 classify qualification failures safely (PR #2382, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2382.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2382\n- Merged improvements and fixes for PR #2382."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/379-pr2383-safe-by-default-permissions-with-role-sc.md",
+    "title": "PR #2383 \u2014 safe-by-default permissions with role-scoped profiles and strict bypass audit (P0-5)",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2383",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2383."
+    ],
+    "tweet": "\ud83d\ude80 PR #2383 \u2014 safe-by-default permissions with role-scoped profiles and strict bypass audit (P0-5) (PR #2383, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2383.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2383\n- Merged improvements and fixes for PR #2383."
   }
 ]
