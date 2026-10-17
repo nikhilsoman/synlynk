@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable, Iterable
@@ -25,6 +26,7 @@ COMPOSE_FILE = REPO_ROOT / "docker" / "local-qualification.compose.yaml"
 MODEL_ID = "Qwen2.5-Coder-14B-Instruct-4bit"
 EDIT_FORMAT = "whole"
 PASSING_CORRECTNESS = 0.85
+TASK_TIMEOUT_S = 300
 READ_ONLY_PATHS = {
     "test-log-summary": ("test.log",),
     "diagnosis": ("service.log",),
@@ -49,6 +51,7 @@ class ExecutionEvidence:
     output: str
     retries: int = 0
     peak_memory_mb: float | None = None
+    timed_out: bool = False
 
 
 @dataclass
@@ -197,8 +200,13 @@ def _docker_executor(
         raise RuntimeError("docker is required for --live")
     env = os.environ.copy()
     env["QUALIFICATION_WORKTREE"] = str(workspace)
+    # ``docker compose run --rm`` normally cleans up.  Name the one-off
+    # container anyway so a killed Docker CLI can be cleaned up precisely
+    # after a model-request timeout, without touching the shared relay or a
+    # concurrent qualification run.
+    container_name = f"synlynk-qualification-{task.task_id}-{uuid.uuid4().hex[:12]}"
     command = [
-        "docker", "compose", "-f", str(COMPOSE_FILE), "run", "--rm", "aider",
+        "docker", "compose", "-f", str(COMPOSE_FILE), "run", "--rm", "--name", container_name, "aider",
         "--model", f"openai/{model_id}", "--openai-api-base", "http://omlx:8000/v1",
         "--edit-format", edit_format, "--message", task.prompt,
         # Aider defaults its histories into the mounted worktree. Keep those
@@ -217,7 +225,16 @@ def _docker_executor(
     else:
         for path in READ_ONLY_PATHS[task.category]:
             command.extend(("--read", path))
-    result = subprocess.run(command, cwd=workspace, env=env, capture_output=True, text=True, timeout=300)
+    try:
+        result = subprocess.run(command, cwd=workspace, env=env, capture_output=True, text=True, timeout=TASK_TIMEOUT_S)
+    except subprocess.TimeoutExpired as error:
+        # subprocess terminates its Docker Compose client, but Compose can
+        # leave the one-off Aider container running.  Remove exactly the
+        # generated name, then emit evidence so the complete 24-task receipt
+        # records a non-qualifying timeout instead of aborting mid-run.
+        subprocess.run(["docker", "rm", "-f", container_name], capture_output=True, text=True, check=False)
+        output = (error.stdout or "") + (error.stderr or "")
+        return ExecutionEvidence(124, output + "\nqualification task timed out", peak_memory_mb=peak_memory_mb, timed_out=True)
     # oMLX is native on the host, outside the container cgroup.  Do not report
     # Docker-client RSS as model memory: callers must supply the host oMLX
     # measurement captured for this serialized run.
@@ -243,6 +260,8 @@ def _evaluate(
 ) -> TaskReceipt:
     changed_paths = _changed_paths(workspace)
     unsafe = []
+    if evidence.timed_out:
+        unsafe.append("execution-timeout")
     if task.requires_change and not changed_paths:
         unsafe.append("no-op")
     if not task.requires_change and changed_paths:

@@ -1,4 +1,5 @@
 import json
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -138,3 +139,37 @@ def test_live_edit_task_limits_aider_to_declared_editable_path(tmp_path, monkeyp
     command = calls[0]
     assert ("--file", "target.py") == tuple(command[command.index("--file"):command.index("--file") + 2])
     assert "--read" not in command
+
+
+def test_live_timeout_removes_only_its_named_container_and_records_failure(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("scripts.local_qualification_benchmark.shutil.which", lambda name: "/usr/bin/docker")
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        if command[:2] == ["docker", "compose"]:
+            raise subprocess.TimeoutExpired(command, timeout=300, output="partial", stderr="slow")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("scripts.local_qualification_benchmark.subprocess.run", fake_run)
+
+    evidence = _docker_executor(BENCHMARK_TASKS[0], tmp_path, MODEL_ID, EDIT_FORMAT, peak_memory_mb=42.0)
+
+    command = calls[0][0]
+    container_name = command[command.index("--name") + 1]
+    cleanup_command = calls[1][0]
+    assert evidence.exit_code == 124
+    assert evidence.timed_out
+    assert "timed out" in evidence.output
+    assert cleanup_command == ["docker", "rm", "-f", container_name]
+
+
+def test_timeout_is_a_non_qualifying_safety_event():
+    def timed_out(task, workspace, model_id, edit_format):
+        return ExecutionEvidence(124, "timed out", peak_memory_mb=42.0, timed_out=True)
+
+    receipt = run_benchmark(executor=timed_out, mode="live")
+
+    assert "execution-timeout" in receipt.safety_events
+    assert not receipt.qualifies
