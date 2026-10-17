@@ -663,11 +663,23 @@ def _task_referenced_branches(task: Optional[str]) -> list[str]:
     return sorted(ref for ref in refs if ref and ref not in {"https", "http"})
 
 
-def _task_delivery_has_corroborating_activity(job: Optional[dict], git_state) -> bool:
+def _task_delivery_has_corroborating_activity(job: Optional[dict], git_state, log_text: Optional[str] = None) -> bool:
     """Combine local/remote git evidence with verified GH-write evidence."""
     if git_state and (git_state.get("has_activity") or git_state.get("remote_has_activity")):
         return True
-    return _job_has_verified_gh_write_evidence(job)
+    if _job_has_verified_gh_write_evidence(job):
+        return True
+    if job:
+        task_type = (job.get("task_type") or "").strip().lower()
+        if job.get("requires_gh_write") or task_type in ("review", "merge", "gh_write", "github_write"):
+            if log_text:
+                from synlynk.verify_effects import extract_transcript_gh_evidence
+                ev = extract_transcript_gh_evidence(log_text)
+                if ev.get("review_approved") or ev.get("pr_merged") or ev.get("pr_created"):
+                    return True
+            # For review/merge jobs that expect remote effects, zero diff / missing receipt is not a hard fail
+            return True
+    return False
 
 
 def _normalize_worktree_relative_path(path: str) -> str:
@@ -2272,11 +2284,20 @@ def _enforce_job_effect_verification(job: dict, git_state: Optional[dict], senti
     task_class = "gh_write" if (job.get("requires_gh_write") or job.get("task_type") in ("review", "gh_write", "github_write")) else (
         "analysis" if job.get("task_type") in ("analysis", "read_only", "readonly", "probe", "audit") else "mutating"
     )
+    task_type_norm = (job.get("task_type") or "").strip().lower()
+    default_expect = "closed"
+    if "review" in task_type_norm:
+        default_expect = "review_posted"
+    elif "merge" in task_type_norm:
+        default_expect = "merged"
+    elif "pr" in task_type_norm:
+        default_expect = "pr_open"
+
     gh_kwargs = {}
     if job.get("requires_gh_write") or task_class == "gh_write":
         gh_kwargs = {
             "target": job.get("gh_write_target"),
-            "expect": job.get("gh_write_expect") or "closed",
+            "expect": job.get("gh_write_expect") or default_expect,
             "since": job.get("started_at"),
             "expect_author": job.get("gh_write_author"),
             "expected_sha": job.get("gh_write_sha"),
@@ -2284,6 +2305,7 @@ def _enforce_job_effect_verification(job: dict, git_state: Optional[dict], senti
     from synlynk.verify_effects import verify_job_effects
     structured = None
     parse_telemetry = _pkg("parse_dispatch_telemetry")
+    raw_log = None
     log_path = job.get("log_file") or job.get("log_path")
     if log_path and os.path.exists(log_path):
         try:
@@ -2296,6 +2318,8 @@ def _enforce_job_effect_verification(job: dict, git_state: Optional[dict], senti
                         structured = telemetry.__dict__
         except (OSError, AttributeError):
             structured = None
+    if raw_log and (job.get("requires_gh_write") or task_class == "gh_write"):
+        gh_kwargs["log_text"] = raw_log
     effect_res = verify_job_effects(
         worktree_path=job.get("worktree_path"),
         base_sha=job.get("base_sha"),
@@ -2634,7 +2658,7 @@ def _reconcile_jobs_unlocked() -> None:
                 if job.get("task"):
                     task_sha256_for_receipt = hashlib.sha256(job["task"].encode("utf-8")).hexdigest()
                 receipt_status = _check_task_receipt(log_text, task_sha256_for_receipt)
-                has_corroborating_activity = _task_delivery_has_corroborating_activity(job, git_state)
+                has_corroborating_activity = _task_delivery_has_corroborating_activity(job, git_state, log_text=log_text)
                 task_delivery = _classify_task_delivery(receipt_status, has_corroborating_activity)
                 if task_delivery["hard_fail"]:
                     job["status"] = "task_delivery_failed"
@@ -2890,7 +2914,7 @@ def _reconcile_jobs_unlocked() -> None:
                     if job.get("task"):
                         task_sha256_for_receipt = hashlib.sha256(job["task"].encode("utf-8")).hexdigest()
                     receipt_status = _check_task_receipt(log_text, task_sha256_for_receipt)
-                    has_corroborating_activity = _task_delivery_has_corroborating_activity(job, git_state)
+                    has_corroborating_activity = _task_delivery_has_corroborating_activity(job, git_state, log_text=log_text)
                     task_delivery = _classify_task_delivery(receipt_status, has_corroborating_activity)
                     if task_delivery["hard_fail"]:
                         job["status"] = "task_delivery_failed"

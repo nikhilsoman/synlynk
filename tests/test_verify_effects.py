@@ -358,3 +358,20 @@ def test_structured_completion_overrides_nonzero_wrapper_exit():
     )
     assert result.verified is True
     assert result.status == STATUS_COMPLETED
+
+
+def test_review_task_with_zero_diff_and_transcript_evidence_succeeds():
+    from synlynk.verify_effects import verify_job_effects
+    log = "Task execution log:\n$ gh pr review 2306 --approve -b 'looks good'\nApproved pull request #2306\n"
+    res = verify_job_effects(
+        worktree_path=None,
+        task_class="review",
+        expected_gh_effect="review_posted",
+        exit_code=0,
+        structured_telemetry={"available": False},
+        gh_verify_kwargs={"log_text": log, "expect": "review_posted", "target": "2306"},
+    )
+    assert res.verified is True
+    assert res.status == STATUS_COMPLETED
+    assert res.gh_verified is True
+
