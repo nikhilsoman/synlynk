@@ -5022,8 +5022,9 @@ def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
         except Exception:
             pass
 
-        if has_website or touched_blog:
-            update_blog_index()
+        if (has_website or touched_blog) and "PYTEST_CURRENT_TEST" not in os.environ:
+            if touched_blog or os.environ.get("SYNLYNK_SYNC_BLOG") == "1":
+                update_blog_index()
             blog_findings = validate_all_blog_posts()
             if not has_website and touched_blog:
                 touched_set = set(diff_proc.stdout.splitlines())

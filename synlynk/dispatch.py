@@ -1574,7 +1574,7 @@ def _worktree_files_touched(worktree_path: Optional[str], base_sha: Optional[str
     ``base_sha`` is the commit recorded at dispatch. Stacked jobs must not
     report files their parent branch already committed (gh:#2245).
     """
-    if not _worktree_path_is_available(worktree_path, "collect touched files"):
+    if not worktree_path or not os.path.isdir(worktree_path):
         return []
 
     resolve_job_diff_base = _pkg("_resolve_job_diff_base")
