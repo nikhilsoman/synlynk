@@ -1824,6 +1824,11 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         dest="as_json",
         help="Output the proposal as JSON instead of text",
     )
+    report_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Apply proposed routing changes to .synlynk/policy.json",
+    )
 
     instructions_parser = subparsers.add_parser(
         "instructions", help="Manage synlynk instruction files across AI tools"
@@ -3077,7 +3082,10 @@ def main(argv=None) -> None:
             cmd_capability_sweep(cost_cap_override=getattr(args, "cost_cap", None))
         elif args.capability_action == "report":
             from synlynk.capability_report import cmd_capability_report
-            cmd_capability_report(as_json=getattr(args, "as_json", False))
+            cmd_capability_report(
+                as_json=getattr(args, "as_json", False),
+                apply=getattr(args, "apply", False),
+            )
     elif args.command == "instructions":
         action = getattr(args, "instructions_action", None)
         if action == "status" or action is None:
