@@ -282,6 +282,7 @@ def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path:
     candidate = {"severity": severity, "code": code, "message": message}
     identity = _alert_identity(candidate)
     now = datetime.now(timezone.utc)
+    policy = _sentinel_policy()
     with _sentinel_file_lock(sentinel_file):
         existing = ""
         if os.path.exists(sentinel_file):
@@ -291,11 +292,25 @@ def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path:
         alerts = _iter_sentinel_alerts(sentinel_file, active_only=False)
         matching = [alert for alert in alerts if _alert_identity(alert) == identity]
         if matching:
-            first = min(
-                (a.get("first_seen_dt") or a.get("timestamp_dt") for a in matching if a.get("timestamp_dt")),
-                default=now,
+            latest = max(
+                (a.get("last_seen_dt") or a.get("timestamp_dt") for a in matching if a.get("timestamp_dt")),
+                default=None,
             )
-            occurrences = sum(int(a.get("occurrences", 1)) for a in matching) + 1
+            within_window = (
+                latest is not None
+                and (now - latest).total_seconds() <= policy["dedup_window_seconds"]
+            )
+            if within_window:
+                first = min(
+                    (a.get("first_seen_dt") or a.get("timestamp_dt") for a in matching if a.get("timestamp_dt")),
+                    default=now,
+                )
+                occurrences = sum(int(a.get("occurrences", 1)) for a in matching) + 1
+            else:
+                # Keep one compact row per subject, but begin a fresh incident
+                # window after a sufficiently long quiet period.
+                first = now
+                occurrences = 1
             replacement = _format_sentinel_alert(
                 severity, code, message, occurrences, first, now,
             )
