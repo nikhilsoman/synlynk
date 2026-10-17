@@ -2254,5 +2254,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2396 \u2014 send pilot context as one Aider message (PR #2396, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2396.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2396\n- Merged improvements and fixes for PR #2396."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/388-pr2397-verify-aider-task-receipts-from-answer-o.md",
+    "title": "PR #2397 \u2014 verify Aider task receipts from answer output",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2397",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2397."
+    ],
+    "tweet": "\ud83d\ude80 PR #2397 \u2014 verify Aider task receipts from answer output (PR #2397, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2397.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2397\n- Merged improvements and fixes for PR #2397."
   }
 ]
