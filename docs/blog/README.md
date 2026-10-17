@@ -447,6 +447,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [368](./368-pr2370-route-execution-through-adapter.md) | PR #2370 — route execution through adapter | [#2370](https://github.com/nikhilsoman/synlynk/pull/2370) | 2026-10-17 |
 | [369](./369-pr2371-register-migration-22-for-subscriptions-.md) | PR #2371 — register migration 22 for subscriptions harness rename and clean shards (#1926) | [#2371](https://github.com/nikhilsoman/synlynk/pull/2371) | 2026-10-17 |
 | [370](./370-pr2372-unify-effective-model-resolution.md) | PR #2372 — unify effective model resolution | [#2372](https://github.com/nikhilsoman/synlynk/pull/2372) | 2026-10-17 |
+| [371](./371-pr2373-parameterize-qualification-candidate.md) | PR #2373 — parameterize qualification candidate | [#2373](https://github.com/nikhilsoman/synlynk/pull/2373) | 2026-10-17 |
 
 ## Per-PR Post Template
 
