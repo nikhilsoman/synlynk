@@ -102,6 +102,26 @@ def test_resolve_tier_model_replaces_stale_agy_catalog_id(tmp_path, monkeypatch)
     assert resolve_tier_model("reasoning", "agy", repo_path=str(tmp_path)) == "claude-opus-4-6-thinking"
 
 
+def test_resolve_tier_model_uses_canonical_discovery_pass(tmp_path, monkeypatch):
+    catalog = {"tiers": {"fast": {"agy": "gemini-3.7-flash-medium"}}}
+    path = tmp_path / ".synlynk"
+    path.mkdir()
+    (path / "models.json").write_text(json.dumps(catalog))
+
+    monkeypatch.setenv("SYNLYNK_FORCE_MODEL_DISCOVERY", "1")
+    monkeypatch.setattr(
+        "synlynk.models.discover_models",
+        lambda: [
+            ModelSpec("gemini-3.8-flash-medium", "discovered", "agy", discovered=True),
+            ModelSpec("claude-sonnet-4-6", "discovered", "claude", discovered=True),
+        ],
+    )
+    from synlynk.models import _DISCOVERY_CACHE
+    _DISCOVERY_CACHE.clear()
+
+    assert resolve_tier_model("fast", "agy", repo_path=str(tmp_path)) == "gemini-3.8-flash-medium"
+
+
 def test_resolve_tier_model_keeps_catalog_id_when_probe_is_empty(tmp_path, monkeypatch):
     catalog = {"tiers": {"fast": {"agy": "gemini-3.7-flash-medium"}}}
     path = tmp_path / ".synlynk"

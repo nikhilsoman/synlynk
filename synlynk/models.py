@@ -519,7 +519,7 @@ def probe_cli_harness(harness: str, executable: str | None = None, timeout: floa
 
 
 def discovered_model_ids(harness: str) -> list[str]:
-    """Return live model ids from the same probe ``discover_models()`` uses.
+    """Return live model ids from the canonical ``discover_models()`` pass.
 
     Pytest skips the probe unless ``SYNLYNK_FORCE_MODEL_DISCOVERY=1``, so
     catalog unit tests stay offline. A successful probe is cached briefly.
@@ -531,7 +531,14 @@ def discovered_model_ids(harness: str) -> list[str]:
     cached = _DISCOVERY_CACHE.get(harness)
     if cached and (now - cached[0]) < _DISCOVERY_TTL_SECONDS:
         return list(cached[1])
-    ids = tuple(spec.model_id for spec in probe_cli_harness(harness))
+    # Keep resolver validation on the same discovery path exposed by
+    # ``synlynk models discover``.  Calling the harness probe here directly
+    # made the two paths drift and let stale Agy catalog ids reach dispatch.
+    ids = tuple(
+        spec.model_id
+        for spec in discover_models()
+        if spec.harness_binding == harness
+    )
     _DISCOVERY_CACHE[harness] = (now, ids)
     return list(ids)
 
