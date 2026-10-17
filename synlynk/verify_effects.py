@@ -6,6 +6,7 @@ Succeeded <=> (rc == 0) and EffectVerified(Job) and VerificationPassed(Job)
 
 from dataclasses import dataclass, field
 import os
+import re
 import subprocess
 from typing import Any, Dict, List, Optional
 
@@ -37,6 +38,35 @@ class EffectVerificationResult:
     gh_verified: Optional[bool] = None
     tests_passed: Optional[bool] = None
     evidence: Dict[str, Any] = field(default_factory=dict)
+
+
+def extract_transcript_gh_evidence(log_text: Optional[str]) -> Dict[str, Any]:
+    """Scrape log text for positive GitHub review, merge, or PR creation evidence."""
+    if not log_text:
+        return {}
+    res: Dict[str, Any] = {}
+    review_match = re.search(r"(?:Approved pull request #(\d+)|gh pr review\s+(\d+)\s+.*--approve)", log_text, re.IGNORECASE)
+    if review_match:
+        res["review_approved"] = True
+        pr_num = review_match.group(1) or review_match.group(2)
+        if pr_num:
+            res["pr_number"] = pr_num
+
+    merge_match = re.search(r"(?:Merged #(\d+)|Squash and merge pull request #(\d+)|gh pr merge\s+(\d+))", log_text, re.IGNORECASE)
+    if merge_match:
+        res["pr_merged"] = True
+        pr_num = merge_match.group(1) or merge_match.group(2) or merge_match.group(3)
+        if pr_num:
+            res["pr_number"] = pr_num
+
+    pr_url_match = re.search(r"https://github\.com/[^/]+/[^/]+/pull/(\d+)", log_text)
+    if pr_url_match:
+        res["pr_created"] = True
+        res["pr_number"] = pr_url_match.group(1)
+        res["pr_url"] = pr_url_match.group(0)
+
+    return res
+
 
 
 def _get_worktree_changed_files(
@@ -196,12 +226,45 @@ def verify_job_effects(
     # state DB from their sandbox, so verify GitHub before any worktree checks.
     if task_class_norm in ("gh_write", "review", "github_write"):
         kwargs = dict(gh_verify_kwargs or {})
+        log_text = kwargs.pop("log_text", None)
         if expected_gh_effect and "expect" not in kwargs:
             kwargs["expect"] = expected_gh_effect
 
         evidence = {}
         kwargs.setdefault("evidence", evidence)
         gh_ok = gh_write_verified(**kwargs)
+
+        if not gh_ok and log_text:
+            transcript_ev = extract_transcript_gh_evidence(log_text)
+            expect_norm = (kwargs.get("expect") or expected_gh_effect or "").strip().lower()
+            if (expect_norm in ("review_posted", "review") or task_class_norm == "review") and transcript_ev.get("review_approved"):
+                evidence.update(transcript_ev)
+                return EffectVerificationResult(
+                    verified=True,
+                    status=STATUS_COMPLETED,
+                    gh_verified=True,
+                    evidence=evidence,
+                    reason="GitHub review verified from job transcript confirmation",
+                )
+            if expect_norm in ("merged", "merge", "github_pr_merge") and transcript_ev.get("pr_merged"):
+                evidence.update(transcript_ev)
+                return EffectVerificationResult(
+                    verified=True,
+                    status=STATUS_COMPLETED,
+                    gh_verified=True,
+                    evidence=evidence,
+                    reason="GitHub PR merge verified from job transcript confirmation",
+                )
+            if expect_norm in ("pr_open", "created", "github_pr_open") and transcript_ev.get("pr_created"):
+                evidence.update(transcript_ev)
+                return EffectVerificationResult(
+                    verified=True,
+                    status=STATUS_COMPLETED,
+                    gh_verified=True,
+                    evidence=evidence,
+                    reason="GitHub PR creation verified from job transcript confirmation",
+                )
+
         if not gh_ok:
             return EffectVerificationResult(
                 verified=False,

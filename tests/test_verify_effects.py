@@ -358,3 +358,77 @@ def test_structured_completion_overrides_nonzero_wrapper_exit():
     )
     assert result.verified is True
     assert result.status == STATUS_COMPLETED
+
+
+def test_review_task_with_zero_diff_and_transcript_evidence_succeeds():
+    from synlynk.verify_effects import verify_job_effects
+    log = "Task execution log:\n$ gh pr review 2306 --approve -b 'looks good'\nApproved pull request #2306\n"
+    res = verify_job_effects(
+        worktree_path=None,
+        task_class="review",
+        expected_gh_effect="review_posted",
+        exit_code=0,
+        structured_telemetry={"available": False},
+        gh_verify_kwargs={"log_text": log, "expect": "review_posted", "target": "2306"},
+    )
+    assert res.verified is True
+    assert res.status == STATUS_COMPLETED
+    assert res.gh_verified is True
+
+
+def test_merge_task_with_transcript_evidence_succeeds():
+    from synlynk.verify_effects import verify_job_effects
+    log = "Task execution log:\n$ gh pr merge 2306 --squash --delete-branch\nSquash and merge pull request #2306\n"
+    res = verify_job_effects(
+        worktree_path=None,
+        task_class="gh_write",
+        expected_gh_effect="merged",
+        exit_code=0,
+        structured_telemetry={"available": False},
+        gh_verify_kwargs={"log_text": log, "expect": "merged", "target": "2306"},
+    )
+    assert res.verified is True
+    assert res.status == STATUS_COMPLETED
+    assert res.gh_verified is True
+
+
+def test_enforce_job_effect_verification_default_expect_prioritizes_merge():
+    from unittest.mock import patch
+    import synlynk.verify_effects as effects
+    import synlynk.jobs as jobs
+    from synlynk.verify_effects import EffectVerificationResult
+
+    captured = {}
+    fake = lambda **kwargs: (captured.update(kwargs) or EffectVerificationResult(verified=True, status="completed"))
+
+    for task_type in ("review_and_merge", "review/merge", "squash_merge", "merge"):
+        captured.clear()
+        job = {"status": "completed", "task_type": task_type, "requires_gh_write": True}
+        with patch.object(effects, "verify_job_effects", fake):
+            jobs._enforce_job_effect_verification(job, None, "/tmp/missing-sentinel")
+        assert captured["gh_verify_kwargs"]["expect"] == "merged", f"Failed for {task_type}"
+
+    # Pure review task type defaults to review_posted
+    captured.clear()
+    job = {"status": "completed", "task_type": "review", "requires_gh_write": True}
+    with patch.object(effects, "verify_job_effects", fake):
+        jobs._enforce_job_effect_verification(job, None, "/tmp/missing-sentinel")
+    assert captured["gh_verify_kwargs"]["expect"] == "review_posted"
+
+
+def test_extract_transcript_gh_evidence_handles_review_and_merge():
+    from synlynk.verify_effects import extract_transcript_gh_evidence
+
+    log = (
+        "Output:\n"
+        "$ gh pr review 2375 --approve\n"
+        "Approved pull request #2375\n"
+        "$ gh pr merge 2375 --squash --delete-branch\n"
+        "Merged #2375 into main\n"
+    )
+    evidence = extract_transcript_gh_evidence(log)
+    assert evidence["review_approved"] is True
+    assert evidence["pr_merged"] is True
+    assert evidence["pr_number"] == "2375"
+
+
