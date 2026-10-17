@@ -1902,5 +1902,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2363 \u2014 add isolated qualification benchmark (PR #2363, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2363.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-16) - PR #2363\n- Merged improvements and fixes for PR #2363."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/366-pr2365-isolate-qualification-runner-artifacts.md",
+    "title": "PR #2365 \u2014 isolate qualification runner artifacts",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2365",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2365."
+    ],
+    "tweet": "\ud83d\ude80 PR #2365 \u2014 isolate qualification runner artifacts (PR #2365, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2365.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2365\n- Merged improvements and fixes for PR #2365."
   }
 ]
