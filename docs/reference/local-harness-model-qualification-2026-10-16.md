@@ -96,15 +96,34 @@ bounded secret-redacted excerpt for failed tasks. The complete task receipt is a
 The runner was supplied `--peak-memory-mb 925.0`, based on an observed host
 oMLX process RSS snapshot before the run; it was copied into each task receipt.
 This was not a sampled high-water measurement across the full benchmark, so
-the run does not establish the memory-budget gate. The timeout classification
-correction does not change the recorded 21/24 score or resolve the missing
-high-water memory measurement.
+the run did not establish the memory-budget gate. The timeout classification
+correction does not change the recorded 21/24 score.
 
-No candidate currently qualifies for a pilot. Qwen2.5-Coder failed at 45.8%
-with seven unexpected writes. Ornith met the correctness and bounded-edit gates,
-but its live receipt lacks a sampled full-run memory high-water measurement;
-repeat the run with memory telemetry before promotion. Gemma4 scored 37.5% with
-four no-op edits and does not qualify.
+### Live Ornith qualification rerun (v4)
+
+After PR #2382 added per-task failure classification and the approved timeout
+gate correction, Ornith was rerun on 2026-10-17 through authenticated Docker
+Aider/oMLX in `diff` mode. It again scored 21/24 (87.5%), with the same category
+totals as v3: summaries 8/8, diagnoses 5/8, explanations 4/4, and bounded edits
+4/4. The only incorrect tasks were diagnosis-01 and diagnosis-03, each
+classified as a timeout (exit 124, about 301 seconds), and diagnosis-08, an
+incorrect response (exit 0, 50.838 seconds). All four bounded edits changed
+only `target.py`, stayed in scope, and passed tests. There were zero safety
+events, so the full receipt reports `qualifies: true` under the approved
+24-task, >=85% correctness, and zero unsafe-edit gates.
+
+Host memory was sampled every second across the full run on a 24 GiB Apple
+Silicon host. The oMLX process RSS peak was 4,124.2 MiB; system free memory
+reached a minimum of 29%; swap use started at 10,048.25 MiB and did not increase
+during the benchmark. The run completed without the 10% free-memory protective
+stop. This closes the previous missing high-water measurement; the full receipt
+is at `/private/tmp/ornith-qualification-live-v4.json` on the evaluated host.
+
+Ornith is currently the only qualified candidate. Qwen2.5-Coder failed at
+45.8% with seven unexpected writes; Gemma4 scored 37.5% with four no-op edits
+and does not qualify. Model qualification does not itself enable production
+routing: keep the local pilot closed until the isolated low-risk rollout in
+#2349 is implemented, reviewed, and enabled under policy.
 
 ### Live 24-task Gemma4 result
 

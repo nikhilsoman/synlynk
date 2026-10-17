@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "as_of": "2026-10-14",
+  "as_of": "2026-10-17",
   "tiers": {
     "fast": {
       "claude": "claude-haiku-4-5-20251001",
       "agy": "gemini-3.8-flash-medium",
       "codex": "gpt-5.6-luna",
       "grok": "grok-4.6",
-      "local": "qwen2.5",
+      "local": "Ornith-1.0-9B-4bit",
       "muse": "muse-spark-1.3"
     },
     "pro": {
@@ -15,7 +15,7 @@
       "agy": "gemini-3.8-flash-high",
       "codex": "gpt-5.6-luna",
       "grok": "grok-4.7",
-      "local": "qwen2.5",
+      "local": "Ornith-1.0-9B-4bit",
       "muse": "muse-spark-1.3"
     },
     "reasoning": {
@@ -23,13 +23,27 @@
       "agy": "claude-opus-4-6-thinking",
       "codex": "gpt-5.6-luna",
       "grok": "grok-4.7",
-      "local": "deepseek-r1"
+      "local": "Ornith-1.0-9B-4bit"
     },
     "hermes": {
       "local": "Hermes-3-Llama-3.1-8B"
     }
   },
   "models": [
+    {
+      "model_id": "Ornith-1.0-9B-4bit",
+      "family": "ornith-1",
+      "harness": "local",
+      "locality": "on_device_local",
+      "quantization": "4bit",
+      "context_window": 0,
+      "max_output": 0,
+      "rates": {
+        "input_per_1k": 0.0,
+        "output_per_1k": 0.0
+      },
+      "entitlement_tier": "zero_cost_local"
+    },
     {
       "model_id": "claude-sonnet-5",
       "family": "claude-5",

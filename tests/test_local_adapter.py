@@ -57,5 +57,5 @@ def test_local_resolve_model_supports_hermes_tier():
 
 def test_local_resolve_model_preserves_existing_local_tiers():
     adapter = LocalAdapter()
-    assert adapter.resolve_model("fast", None) == "qwen2.5"
-    assert adapter.resolve_model("reasoning", None) == "deepseek-r1"
+    assert adapter.resolve_model("fast", None) == "Ornith-1.0-9B-4bit"
+    assert adapter.resolve_model("reasoning", None) == "Ornith-1.0-9B-4bit"

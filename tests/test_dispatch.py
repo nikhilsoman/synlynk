@@ -2706,7 +2706,7 @@ def test_permissions_to_flags_local_no_permissions_is_noop():
     assert _permissions_to_flags("local", None) == []
 
 
-def test_local_dispatch_builds_production_flags_through_adapter(project_dir, monkeypatch):
+def test_local_dispatch_forwards_one_live_selected_model_through_adapter(project_dir, monkeypatch):
     import synlynk.dispatch as dispatch_mod
     from synlynk.harness_adapters.local import LocalAdapter
 
@@ -2717,7 +2717,14 @@ def test_local_dispatch_builds_production_flags_through_adapter(project_dir, mon
     policy_dir.mkdir()
     (policy_dir / "local.json").write_text(
         '{"endpoint":"http://127.0.0.1:8000","pinned_model":"ornith",'
-        '"models":[{"id":"ornith","pinned":true,"edit_format":"diff"}]}'
+        '"models":[{"id":"ornith","pinned":true,"edit_format":"diff"},'
+        '{"id":"other","edit_format":"whole"}]}'
+    )
+    monkeypatch.setattr(
+        "synlynk.local_agent._health_check",
+        lambda endpoint, timeout=5, api_key=None: {
+            "reachable": True, "status": "healthy", "available_models": ["ornith", "other"]
+        },
     )
     original_build = adapter.build_cmd
 
@@ -2737,6 +2744,7 @@ def test_local_dispatch_builds_production_flags_through_adapter(project_dir, mon
     job = dispatch_mod.dispatch_agent(
         agent="local",
         task="summarize this file",
+        model="other",
         skip_preflight=True,
         context_mode="none",
     )
@@ -2745,14 +2753,46 @@ def test_local_dispatch_builds_production_flags_through_adapter(project_dir, mon
     assert calls[0].agent == "local"
     assert calls[0].permissions == []
     shell_cmd = recorded_commands[0][2]
-    assert "--model openai/ornith" in shell_cmd
-    assert "--model ornith" not in shell_cmd
-    assert job["model_at_dispatch"] == "ornith"
-    assert job["local_model_receipt"]["effective_model"] == "ornith"
-    assert job["local_model_receipt"]["edit_format"] == "diff"
+    assert "--model openai/other" in shell_cmd
+    assert "--model openai/ornith" not in shell_cmd
+    assert job["model_at_dispatch"] == "other"
+    assert job["requested_model"] == "other"
+    assert job["resolved_model"] == "other"
+    assert job["local_model_receipt"]["effective_model"] == "other"
+    assert job["local_model_receipt"]["edit_format"] == "whole"
 
 
-def test_local_dispatch_keeps_prism_fallback_as_effective_aider_model(project_dir, monkeypatch):
+def test_local_dispatch_rejects_approved_model_not_live_before_aider(project_dir, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    policy_dir = project_dir / ".agents"
+    policy_dir.mkdir()
+    (policy_dir / "local.json").write_text(
+        '{"endpoint":"http://127.0.0.1:8000","pinned_model":"ornith",'
+        '"models":[{"id":"ornith","pinned":true,"edit_format":"diff"},'
+        '{"id":"other","edit_format":"whole"}]}'
+    )
+    monkeypatch.setattr(
+        "synlynk.local_agent._health_check",
+        lambda endpoint, timeout=5, api_key=None: {
+            "reachable": True, "status": "healthy", "available_models": ["ornith"]
+        },
+    )
+    spawn_calls = []
+    monkeypatch.setattr(
+        dispatch_mod.subprocess, "Popen", lambda *args, **kwargs: spawn_calls.append(args)
+    )
+
+    with pytest.raises(ValueError, match="other.*not currently served.*discovered IDs: ornith"):
+        dispatch_mod.dispatch_agent(
+            agent="local", task="summarize this file", model="other",
+            skip_preflight=True, context_mode="none",
+        )
+
+    assert spawn_calls == []
+
+
+def test_local_dispatch_rejects_prism_model_without_fallback(project_dir, monkeypatch):
     import synlynk.dispatch as dispatch_mod
 
     policy_dir = project_dir / ".agents"
@@ -2763,27 +2803,15 @@ def test_local_dispatch_keeps_prism_fallback_as_effective_aider_model(project_di
         '{"id":"ornith","edit_format":"diff"},'
         '{"id":"bonsai","pinned":true,"edit_format":"diff","loader":"prism-ml"}]}'
     )
-    recorded_commands = []
-
-    def fake_popen(cmd, *args, **kwargs):
-        if cmd[:2] == ["sh", "-c"]:
-            recorded_commands.append(cmd)
-        return type("DummyProc", (), {"pid": 9999})()
-
     monkeypatch.setattr("synlynk.local_agent._check_prism_ml_available", lambda: False)
-    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
 
-    job = dispatch_mod.dispatch_agent(
-        agent="local",
-        task="summarize this file",
-        skip_preflight=True,
-        context_mode="none",
-    )
-
-    shell_cmd = recorded_commands[0][2]
-    assert "--model openai/ornith" in shell_cmd
-    assert "--model openai/bonsai" not in shell_cmd
-    assert job["model_at_dispatch"] == "ornith"
+    with pytest.raises(ValueError, match="refusing to substitute"):
+        dispatch_mod.dispatch_agent(
+            agent="local",
+            task="summarize this file",
+            skip_preflight=True,
+            context_mode="none",
+        )
 
 
 def test_resolve_dispatch_base_ref_stacks_on_current_feature_branch(git_worktree_repo, monkeypatch):
