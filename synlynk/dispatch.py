@@ -4090,7 +4090,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    skip_permissions: bool = False,
                    container_image: str | None = None,
                    routing_fallback: Optional[dict] = None,
-                   local_pilot_receipt: Optional[dict] = None) -> dict:
+                   local_pilot_receipt: Optional[dict] = None,
+                   local_pilot_requested: bool = False) -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
@@ -4194,6 +4195,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     probed_agent = take_probed_dispatch_harness()
     initial_agent = agent
     agent = request.agent
+    if local_pilot_requested and agent == "local" and not local_pilot_receipt:
+        raise RuntimeError(
+            "Local Pilot dispatch refused: local execution requires a valid admitted "
+            "isolated-runner receipt. Retry through auto-routing after checking pilot eligibility."
+        )
     if agent != initial_agent and not force_agent:
         print(_capability_reroute_message(initial_agent, agent, probed_agent))
     # Reject unsupported harnesses before model resolution opens state.db.
