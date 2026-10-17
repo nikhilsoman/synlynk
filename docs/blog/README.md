@@ -445,6 +445,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [366](./366-pr2365-isolate-qualification-runner-artifacts.md) | PR #2365 — isolate qualification runner artifacts | [#2365](https://github.com/nikhilsoman/synlynk/pull/2365) | 2026-10-17 |
 | [367](./367-pr2366-record-qwen-qualification-result.md) | PR #2366 — record Qwen qualification result | [#2366](https://github.com/nikhilsoman/synlynk/pull/2366) | 2026-10-17 |
 | [368](./368-pr2370-route-execution-through-adapter.md) | PR #2370 — route execution through adapter | [#2370](https://github.com/nikhilsoman/synlynk/pull/2370) | 2026-10-17 |
+| [369](./369-pr2371-register-migration-22-for-subscriptions-.md) | PR #2371 — register migration 22 for subscriptions harness rename and clean shards (#1926) | [#2371](https://github.com/nikhilsoman/synlynk/pull/2371) | 2026-10-17 |
 
 ## Per-PR Post Template
 

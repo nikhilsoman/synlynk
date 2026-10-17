@@ -1950,5 +1950,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2370 \u2014 route execution through adapter (PR #2370, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2370.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2370\n- Merged improvements and fixes for PR #2370."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/369-pr2371-register-migration-22-for-subscriptions-.md",
+    "title": "PR #2371 \u2014 register migration 22 for subscriptions harness rename and clean shards (#1926)",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2371",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2371."
+    ],
+    "tweet": "\ud83d\ude80 PR #2371 \u2014 register migration 22 for subscriptions harness rename and clean shards (#1926) (PR #2371, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2371.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2371\n- Merged improvements and fixes for PR #2371."
   }
 ]
