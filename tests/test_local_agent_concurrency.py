@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 import synlynk
 from synlynk import dispatch as dispatch_module
+from synlynk import local_agent
 from synlynk.dispatch import _defer_local_concurrency, _local_concurrency_exceeded
 
 
@@ -139,6 +140,15 @@ class TestSchedulerLocalConcurrency(unittest.TestCase):
                 popen_calls.append(1)
             return FakeProcess()
 
+        local_model_id = "ornith-concurrency-test"
+        local_config = {
+            "name": "local",
+            "endpoint": "http://127.0.0.1:8000",
+            "pinned_model": local_model_id,
+            "models": [{"id": local_model_id, "pinned": True, "edit_format": "diff"}],
+            "max_concurrent": 1,
+        }
+
         def dispatch_once(job_id):
             conn = sqlite3.connect(db_file.name, timeout=5)
             try:
@@ -163,6 +173,12 @@ class TestSchedulerLocalConcurrency(unittest.TestCase):
         ]
         with patch.object(dispatch_module, "_local_max_concurrent", return_value=1), \
              patch.object(dispatch_module, "_local_concurrency_exceeded", side_effect=synchronized_exceeded), \
+             patch.object(local_agent, "_load_local_config", return_value=local_config), \
+             patch("synlynk.local_agent._health_check", return_value={
+                 "reachable": True,
+                 "status": "healthy",
+                 "available_models": [local_model_id],
+             }), \
              patch("synlynk.local_agent_seed.seed_local_capability_envelope"), \
              patch.object(dispatch_module, "_create_job_worktree", return_value={
                  "path": db_file.name + ".worktree",

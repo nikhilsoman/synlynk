@@ -176,9 +176,10 @@ Patch release (rescoped from planned v0.14.0 minor — Agent/Harness terminology
 Two-tier policy.json (workspace defaults + repo overrides), check_authority() gates on dispatch/release/roadmap/goal actions, synlynk policy check-merge/sync-branch-protection/show commands. Branch protection live-verified on synlynk's own repo (gh:#1122, plan docs/superpowers/plans/2026-08-23-workspace-policy-and-autonomous-loop.md, Tasks 1-9). Precedes v0.16.0 Autonomous Loop (Tasks 10-13).
 
 
-## 1.0.0 — Developer Preview Public Launch [planned] (target: 2026-10-01)
+## 1.0.0 — Developer Preview Public Launch [planned] (target: 2026-10-31)
 
 Public GitHub tag v1.0.0 is NOT cut yet. Ceremony: synlynk.com collateral, HN/Product Hunt (#1515), book excerpt (#1514). Wave 1 implementation is done; this arc is the launch event.
+Target realigned to 2026-10-31 per Dev Preview Revised Roadmap (`docs/strategy/2026-10-10-dev-preview-revised-roadmap.md`) and Deep Review 2026-10-16. Prior milestone tracking goals reconciled in `state.db`: `goal-5be4eb8b` (Mandatory Architecture) superseded into `goal-9ef9a965`/`goal-85656c82`; `goal-56d4beee` superseded by `goal-eacab0dc`; `goal-d38e3c83` (Fleet Scheduler v2) superseded pending v1 telemetry; `goal-d3333441` (Unattended merge & trust closure) marked done.
 
 - [ ] P0 Foundation and reset (P0)
   Reconcile main/origin, stale worktrees, daemon/runtime, sentinel noise, and release blockers. Establish a clean baseline and freeze non-launch work.
@@ -236,7 +237,7 @@ Named release v0.20.0. BS-6 visualizer, unattended milestone loop, deep scan bri
 - [x] Harness Specialization & Diagnostic Circuit Breakers (P1)
   Role matrix routing + >3 turn diagnostic churn auto-handoff
 
-## v1.0.0-rc1 — 15-Minute First Win Field Trials & Zero-Risk Install [planned] (target: 2026-10-01)
+## v1.0.0-rc1 — 15-Minute First Win Field Trials & Zero-Risk Install [planned] (target: 2026-10-31)
 
 pipx distribution, 15-min wow journey across 3 target repos, browser Vizor onboarding, autonomous goal brainstorm, test suite runtime remediation (#1492). Aligned with 1.0.0 Developer Preview date.
 
@@ -301,6 +302,12 @@ Self-management core, Board governance, Jev AST decisioning, swarms, concierge, 
 ## v0.25.0 — Sovereign Silicon: Local oMLX Fleet [planned] (target: 2026-10-22)
 
 Zero-cloud offline local model inference harness optimized for Apple Silicon MLX
+
+Status (2026-10-17): authenticated Aider/oMLX proof, LocalAdapter parity, and
+effective-model resolution are merged. Ornith now passes the approved stack
+qualification under #2348. #2349's opt-in isolated 20% pilot implementation
+is on `feat/codex/local-pilot`; focused integration checks pass and the
+non-author review/live-runtime gates remain before any pilot traffic.
 
 - [ ] Local oMLX / Aider Harness Integration (#1710) (P0)
   Real subprocess dispatch to local MLX models (Llama-3, Qwen-2.5, DeepSeek)

@@ -26,7 +26,9 @@ def test_migration_creates_attestation_table(project_dir, monkeypatch):
         "PRAGMA table_info(job_provenance_attestations)"
     )}
     assert {"job_id", "role", "task_type", "purpose", "attested_by", "rationale", "source"} <= columns
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 21
+    from synlynk.migrations.runner import MIGRATIONS
+
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == MIGRATIONS[-1].version
     conn.close()
 
 
@@ -38,7 +40,9 @@ def test_migration_adds_attestation_table_to_existing_v17_database():
     conn.execute("PRAGMA user_version=17")
     run_pending_migrations(conn)
 
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 21
+    from synlynk.migrations.runner import MIGRATIONS
+
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == MIGRATIONS[-1].version
     assert conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='job_provenance_attestations'"
     ).fetchone() == (1,)

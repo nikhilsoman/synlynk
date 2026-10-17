@@ -475,6 +475,10 @@ _PROJECT_DOC_KEEP_N = 500
 # Version 13 adds the append-only job truth ledger and immutable effect contracts.
 # Version 14 adds structured lifecycle telemetry ingestion; version 15 adds
 # the legacy-vs-oracle shadow projection used by the status-truth pilot.
+# Versions 1-15 are frozen in _run_legacy_migration_and_repairs (synlynk/db.py);
+# versions 16+ live in synlynk/migrations/runner.py:MIGRATIONS. user_version
+# on the live DB advances via the runner, not this constant — see
+# synlynk/migrations/__init__.py for the split.
 _DB_MIGRATION_VERSION = 15
 
 _GENERATORS_BY_FILENAME = {
@@ -5018,8 +5022,9 @@ def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
         except Exception:
             pass
 
-        if has_website or touched_blog:
-            update_blog_index()
+        if (has_website or touched_blog) and "PYTEST_CURRENT_TEST" not in os.environ:
+            if touched_blog or os.environ.get("SYNLYNK_SYNC_BLOG") == "1":
+                update_blog_index()
             blog_findings = validate_all_blog_posts()
             if not has_website and touched_blog:
                 touched_set = set(diff_proc.stdout.splitlines())

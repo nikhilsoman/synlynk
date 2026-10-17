@@ -293,3 +293,48 @@ def test_check_authority_gh_write_stays_allocation_only(tmp_path, monkeypatch):
     repo.mkdir()
     result = check_authority("task_dispatch:gh_write", role="dev", repo_path=str(repo))
     assert result.allowed is True
+
+
+def test_permission_profiles_in_default_policy():
+    profiles = DEFAULT_WORKSPACE_POLICY["defaults"]["permission_profiles"]
+    assert "dev" in profiles
+    assert "qa" in profiles
+    assert "pm" in profiles
+
+    dev = profiles["dev"]
+    assert "run_command:pytest" in dev["allowed_tools"]
+    assert "network" in dev["prohibited"]
+
+    qa = profiles["qa"]
+    assert "run_command:synlynk pr check" in qa["allowed_tools"]
+    assert "write_file_outside_scratch" in qa["prohibited"]
+
+
+def test_get_role_permission_profile_reads_defaults_and_overrides(tmp_path, monkeypatch):
+    from synlynk.policy import get_role_permission_profile
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    # Default fallback
+    profile = get_role_permission_profile("qa", repo_path=str(repo))
+    assert "run_command:gh pr review" in profile["allowed_tools"]
+
+    # Repo override
+    repo_policy_path = repo / ".synlynk" / "policy.json"
+    _write_json(repo_policy_path, {
+        "schema_version": 1,
+        "repo_id": "custom",
+        "overrides": {
+            "permission_profiles": {
+                "qa": {
+                    "allowed_tools": ["custom_qa_tool"],
+                    "prohibited": [],
+                }
+            }
+        }
+    })
+    override_profile = get_role_permission_profile("qa", repo_path=str(repo))
+    assert override_profile["allowed_tools"] == ["custom_qa_tool"]
+
