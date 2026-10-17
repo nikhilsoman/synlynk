@@ -178,7 +178,7 @@ def _generate_task_context(story_id: Optional[str], out_path: str = None, role: 
         )
 
     # Active tasks only (not deferred, not done)
-    todo_path = os.path.join("project-docs", "todo.md")
+    todo_path = os.path.join(_pkg("_generated_project_docs_dir")(), "todo.md")
     if os.path.exists(todo_path):
         active = [l for l in open(todo_path) if "- [ ]" in l]
         if active:
@@ -369,7 +369,8 @@ def generate_context(scope: str = "full", out_path: str = None, role: Optional[s
                 out.write("\n".join(lines) + "\n\n---\n\n")
 
         # Active + deferred tasks; superseded/absorbed/done excluded
-        todo_path = os.path.join(docs_dir, "todo.md")
+        generated_docs = _pkg("_generated_project_docs_dir")()
+        todo_path = os.path.join(generated_docs, "todo.md")
         if os.path.exists(todo_path):
             active, deferred = [], []
             with open(todo_path) as f:
@@ -409,7 +410,7 @@ def generate_context(scope: str = "full", out_path: str = None, role: Optional[s
                     print(warning)
 
         # Roadmap: header rows + In Progress rows only
-        roadmap_path = os.path.join(docs_dir, "roadmap.md")
+        roadmap_path = os.path.join(generated_docs, "roadmap.md")
         if os.path.exists(roadmap_path):
             out.write("## Roadmap (active)\n")
             with open(roadmap_path) as f:

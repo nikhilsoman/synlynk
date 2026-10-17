@@ -976,7 +976,7 @@ def _build_team_digest() -> dict:
         pass
 
     top_todo = None
-    todo_path = os.path.join(_pkg("_docs_dir")(), "todo.md")
+    todo_path = os.path.join(_pkg("_generated_project_docs_dir")(), "todo.md")
     if os.path.exists(todo_path):
         with open(todo_path) as f:
             for line in f:

@@ -46,6 +46,15 @@ def isolated_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def isolate_generated_project_exports(tmp_path, monkeypatch):
+    """Keep canonical export writes inside each test's temporary home."""
+    import synlynk
+
+    export_dir = tmp_path / "canonical-product" / "project-docs"
+    monkeypatch.setattr(synlynk, "_generated_project_docs_dir", lambda: str(export_dir))
+
+
+@pytest.fixture(autouse=True)
 def isolate_local_http_token(tmp_path, monkeypatch):
     """Keep daemon/Vizor HTTP tokens out of the real home directory."""
     import synlynk.local_http_auth as http_auth
@@ -172,6 +181,12 @@ def project_dir(tmp_path, monkeypatch):
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("SYNLYNK_TEST_PROJECT_DIR", "1")
+    import synlynk
+    export_dir = tmp_path / "canonical-product" / "project-docs"
+    export_dir.mkdir(parents=True, exist_ok=True)
+    for name in ("todo.md", "roadmap.md", "costs.md"):
+        shutil.copyfile(tmp_path / "project-docs" / name, export_dir / name)
+    monkeypatch.setattr(synlynk, "_generated_project_docs_dir", lambda: str(export_dir))
     return tmp_path
 
 

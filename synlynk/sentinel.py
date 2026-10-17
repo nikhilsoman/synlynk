@@ -262,8 +262,8 @@ def log_telemetry_event(event: dict) -> None:
 
 def _check_costs_freshness() -> None:
     """Warns if costs.md hasn't been updated in the current session (>1 hour)."""
-    from synlynk import _docs_dir, _is_migrated, _synlynk_project_docs_dir
-    docs = _synlynk_project_docs_dir() if _is_migrated() else _docs_dir()
+    from synlynk import _generated_project_docs_dir
+    docs = _generated_project_docs_dir()
     costs_file = os.path.join(docs, "costs.md")
     if not os.path.exists(costs_file):
         return

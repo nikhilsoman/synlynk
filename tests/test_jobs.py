@@ -9,6 +9,17 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
+def test_autocommit_excludes_generated_docs_and_canonical_exports(tmp_path, monkeypatch):
+    import synlynk.jobs as jobs
+    import synlynk
+
+    canonical = tmp_path / "home" / "workspaces" / "synlynk" / "project-docs"
+    monkeypatch.setattr(synlynk, "_generated_project_docs_dir", lambda: str(canonical))
+    for name in ("todo.md", "roadmap.md", "costs.md"):
+        assert jobs._is_autocommit_excluded(f"project-docs/{name}")
+        assert jobs._is_autocommit_excluded(str(canonical / name))
+
+
 def test_check_scope_compliance_all_files_match_single_glob():
     from synlynk.jobs import _check_scope_compliance
 

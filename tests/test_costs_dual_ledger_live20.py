@@ -22,9 +22,9 @@ def test_generate_costs_md_formats_subscription_row(tmp_path, monkeypatch):
     conn.commit()
     conn.close()
 
-    docs_dir = sl._synlynk_project_docs_dir()
+    docs_dir = os.path.join(str(tmp_path), "canonical", "project-docs")
     os.makedirs(docs_dir, exist_ok=True)
-    monkeypatch.setattr(sl, "_docs_dir", sl._synlynk_project_docs_dir)
+    monkeypatch.setattr(sl, "_generated_project_docs_dir", lambda: docs_dir)
     monkeypatch.setattr(sl, "_is_migrated", lambda: True)
 
     _generate_costs_md()
@@ -43,9 +43,9 @@ def test_generate_costs_md_formats_subscription_row(tmp_path, monkeypatch):
 def test_parse_costs_md_dual_ledger(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk", exist_ok=True)
-    docs_dir = sl._synlynk_project_docs_dir()
+    docs_dir = os.path.join(str(tmp_path), "canonical", "project-docs")
     os.makedirs(docs_dir, exist_ok=True)
-    monkeypatch.setattr(sl, "_docs_dir", sl._synlynk_project_docs_dir)
+    monkeypatch.setattr(sl, "_generated_project_docs_dir", lambda: docs_dir)
 
     costs_file = os.path.join(docs_dir, "costs.md")
     with open(costs_file, "w") as f:

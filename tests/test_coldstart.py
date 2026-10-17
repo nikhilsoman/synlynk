@@ -119,6 +119,7 @@ def test_prompt_new_project_questions_implementer_optional(monkeypatch):
 
 def test_run_new_project_flow_writes_config_and_roadmap_row(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_TEST_PROJECT_DIR", "1")
     monkeypatch.setattr("builtins.input", lambda prompt: "")
     answers = {
         "goal": "Build a recipe-sharing CLI",
@@ -129,8 +130,11 @@ def test_run_new_project_flow_writes_config_and_roadmap_row(tmp_path, monkeypatc
     _run_new_project_flow(answers)
 
     assert os.path.exists(".synlynk/config.json")
-    assert os.path.exists("project-docs/roadmap.md")
-    roadmap_text = open("project-docs/roadmap.md").read()
+    import synlynk
+    roadmap_path = os.path.join(synlynk._generated_project_docs_dir(), "roadmap.md")
+    assert os.path.exists(roadmap_path)
+    roadmap_text = open(roadmap_path).read()
+    assert not os.path.exists("project-docs/roadmap.md")
     assert "Build a recipe-sharing CLI" in roadmap_text
 
     captured = capsys.readouterr()

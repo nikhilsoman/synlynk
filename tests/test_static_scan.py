@@ -1,5 +1,6 @@
 # tests/test_static_scan.py
 import os
+from pathlib import Path
 import sqlite3
 import sys
 import pytest
@@ -533,10 +534,13 @@ def test_generate_context_omits_source_architecture_without_git(tmp_path, monkey
 
 
 def test_generate_context_source_architecture_before_roadmap(tmp_path, monkeypatch, isolated_db):
+    import synlynk
     monkeypatch.chdir(tmp_path)
     (tmp_path / "project-docs").mkdir()
-    (tmp_path / "project-docs" / "todo.md").write_text("# Todo\n- [ ] Task one\n")
-    (tmp_path / "project-docs" / "roadmap.md").write_text(
+    generated_docs = Path(synlynk._generated_project_docs_dir())
+    generated_docs.mkdir(parents=True, exist_ok=True)
+    (generated_docs / "todo.md").write_text("# Todo\n- [ ] Task one\n")
+    (generated_docs / "roadmap.md").write_text(
         "# Roadmap\n| Priority | Feature | Description | Status | Target Release | Owner |\n"
         "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
         "| P0 | X | Y | In Progress | v1.0 | Z |\n"

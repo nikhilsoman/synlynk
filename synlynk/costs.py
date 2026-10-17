@@ -1071,7 +1071,6 @@ def cmd_cost_true_up(month: str = None, harness: str = None) -> dict:
                      api_equivalent_usd=0.0, actual_usd=variance,
                      payment_mode="subscription", notes=note)
     _pkg("_generate_costs_md")()
-    _pkg("_dr_sync")("costs.md")
     print(f"True-up {month}: billed ${billed:.4f}, recorded ${actual:.4f}, variance ${variance:.4f}")
     return {"month": month, "billed_usd": billed, "recorded_usd": actual, "variance_usd": variance}
 
@@ -1194,46 +1193,24 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
     actual_usd = payment_value.actual_usd
     short_cmd = (command[:20] + '...') if len(command) > 20 else command
     ts = time.strftime('%Y-%m-%d %H:%M')
-    if suspicious_token_count:
-        flag = "[est?] "
-    else:
-        flag = "" if cost_source == "actual" else ("[legacy] " if cost_source == "legacy_unknown" else "[est] ")
-    if payment_value.mode == "subscription":
-        mode_tag = "[in-quota]" if actual_usd == 0.0 else "[overage]"
-    elif payment_value.mode == "credit_grant":
-        mode_tag = "[credit]"
-    else:
-        mode_tag = ""
-    actual_display = f"${actual_usd:.4f} {mode_tag}".strip()
-    entry = (f"| {ts} | {agent_name} | 1 | {in_tokens}/{out_tokens} "
-             f"| {flag}${est_cost:.4f} | {actual_display} | exec: {short_cmd} |\n")
 
     from synlynk.db import _insert_cost_row
 
-    if _pkg("_is_migrated")():
-        _insert_cost_row(
-            session_date=ts, agent=agent or agent_name, model=model_version,
-            input_tokens=in_tokens, output_tokens=out_tokens, cache_read_tokens=cache_read_tokens,
-            cost_source=cost_source, estimate_basis=estimate_basis, total_cost_usd=est_cost,
-            notes=f"exec: {short_cmd}", story_id=story_id, epic_id=epic_id, phase_id=phase_id,
-            job_id=job_id,
-            api_equivalent_usd=payment_value.api_equivalent_usd,
-            actual_usd=actual_usd,
-            payment_mode=payment_value.mode,
-            dispatch_context=dispatch_context,
-            harness=harness or agent_name,
-            agent_role=agent_role,
-            turn_breakdown=turn_breakdown,
-        )
-        _pkg("_generate_costs_md")()
-        _pkg("_dr_sync")("costs.md")
-    else:
-        _pkg("_check_upstream_divergence")()
-        costs_file = os.path.join(_pkg("_docs_dir")(), "costs.md")
-        if not os.path.exists(costs_file):
-            return
-        with open(costs_file, "a") as f:
-            f.write(entry)
+    _insert_cost_row(
+        session_date=ts, agent=agent or agent_name, model=model_version,
+        input_tokens=in_tokens, output_tokens=out_tokens, cache_read_tokens=cache_read_tokens,
+        cost_source=cost_source, estimate_basis=estimate_basis, total_cost_usd=est_cost,
+        notes=f"exec: {short_cmd}", story_id=story_id, epic_id=epic_id, phase_id=phase_id,
+        job_id=job_id,
+        api_equivalent_usd=payment_value.api_equivalent_usd,
+        actual_usd=actual_usd,
+        payment_mode=payment_value.mode,
+        dispatch_context=dispatch_context,
+        harness=harness or agent_name,
+        agent_role=agent_role,
+        turn_breakdown=turn_breakdown,
+    )
+    _pkg("_generate_costs_md")()
 
 
 def _compute_burn_rate() -> tuple:
@@ -1368,7 +1345,7 @@ def check_budgets() -> None:
 
 def parse_costs_md() -> tuple:
     """Returns (total_usd, total_requests) by parsing costs.md's real-dollar column."""
-    costs_file = os.path.join(_pkg("_docs_dir")(), "costs.md")
+    costs_file = os.path.join(_pkg("_generated_project_docs_dir")(), "costs.md")
     total_usd = 0.0
     total_requests = 0
     if not os.path.exists(costs_file):

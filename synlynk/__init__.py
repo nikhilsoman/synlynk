@@ -694,6 +694,13 @@ def _synlynk_project_docs_dir() -> str:
     return os.path.join(_project_root(), ".synlynk", "project-docs")
 
 
+def _generated_project_docs_dir() -> str:
+    """Home-directory export location beside this product's canonical state DB."""
+    from synlynk.product_store import identity_slug_from_config, product_root
+
+    return str(product_root(identity_slug_from_config(_project_root())) / "project-docs")
+
+
 def _dr_sync(relative_path: str) -> None:
     try:
         workspace_path = os.path.join('.synlynk', 'workspace.json')
@@ -2679,17 +2686,15 @@ def checkpoint() -> None:
     canonical_id = _resolve_member_id(username)
     if _is_migrated():
         devlog_path = os.path.join(_synlynk_project_docs_dir(), "devlogs", f"{canonical_id}.md")
-        docs_dir = _synlynk_project_docs_dir()
     else:
         devlog_path = os.path.join(_docs_dir(), "devlogs", f"{canonical_id}.md")
-        docs_dir = _docs_dir()
 
     # Legacy projects may have a hand-written todo.md but no story rows yet.
     # Import it once before checkpointing so the database remains the source of truth.
     conn = _get_db()
     story_count = conn.execute("SELECT COUNT(*) FROM stories").fetchone()[0]
     if story_count == 0:
-        _import_todo_to_stories(docs_dir, conn=conn)
+        _import_todo_to_stories(_generated_project_docs_dir(), conn=conn)
         conn.commit()
 
     resolved_rows = conn.execute(
@@ -3110,9 +3115,14 @@ def cmd_status(json_output: bool = False, platform: bool = False) -> None:
     username = get_username()
     mode = get_mode()
 
+    # Keep the home sidecar current whenever status renders its state views.
+    _generate_todo_md()
+    _generate_roadmap_md()
+    _generate_costs_md()
+
     # Active tasks
     active_tasks = []
-    todo_path = "project-docs/todo.md"
+    todo_path = os.path.join(_generated_project_docs_dir(), "todo.md")
     if os.path.exists(todo_path):
         with open(todo_path) as f:
             for line in f:
@@ -3492,6 +3502,12 @@ def init(force: bool = False, agents: list = None,
     from synlynk.capability_sweep import _seed_capability_ledger_from_baseline
 
     _seed_capability_ledger_from_baseline(_get_db())
+
+    # Database-backed state documents are exported beside the canonical DB;
+    # project-docs in a checkout retains only authored files such as memory.md.
+    _generate_todo_md()
+    _generate_roadmap_md()
+    _generate_costs_md()
 
     # LIVE-21: make probe metadata available before the first dispatch.  Do
     # not probe fallback names when no harness is installed: some harness
