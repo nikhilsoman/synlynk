@@ -1934,5 +1934,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2366 \u2014 record Qwen qualification result (PR #2366, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2366.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2366\n- Merged improvements and fixes for PR #2366."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/368-pr2370-route-execution-through-adapter.md",
+    "title": "PR #2370 \u2014 route execution through adapter",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2370",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2370."
+    ],
+    "tweet": "\ud83d\ude80 PR #2370 \u2014 route execution through adapter (PR #2370, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2370.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2370\n- Merged improvements and fixes for PR #2370."
   }
 ]
