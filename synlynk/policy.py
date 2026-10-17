@@ -123,6 +123,12 @@ DEFAULT_WORKSPACE_POLICY: Dict[str, Any] = {
                 ],
             },
         },
+        "ceremony_policy": {
+            "parent_issue_required_for_multi_task": True,
+            "conversational_rollup_target": "parent_issue_or_pr",
+            "per_pr_blog_convention": "retired",
+            "milestone_blog_focus": ["intent", "context", "pathway", "outcome"],
+        },
     },
 }
 
