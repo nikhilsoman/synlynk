@@ -2366,5 +2366,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2402 \u2014 trust live inventory over stale model catalog (PR #2402, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2402.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2402\n- Merged improvements and fixes for PR #2402."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/395-pr2404-fail-closed-on-explicit-pilot-bypass.md",
+    "title": "PR #2404 \u2014 fail closed on explicit pilot bypass",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2404",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2404."
+    ],
+    "tweet": "\ud83d\ude80 PR #2404 \u2014 fail closed on explicit pilot bypass (PR #2404, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2404.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2404\n- Merged improvements and fixes for PR #2404."
   }
 ]

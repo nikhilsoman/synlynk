@@ -471,6 +471,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [392](./392-pr2360-fix-gh-2258-synlynk-s-own-docs-agents-md.md) | PR #2360 — Fix gh:#2258: synlynk's own docs (AGENTS.md / AI_INS (job-4eb12c0e) | [#2360](https://github.com/nikhilsoman/synlynk/pull/2360) | 2026-10-17 |
 | [393](./393-pr2400-commit-approved-dev-preview-roadmap-comp.md) | PR #2400 — commit approved dev preview roadmap, competitive synthesis, and GenericAPIAdapter (#2076) | [#2400](https://github.com/nikhilsoman/synlynk/pull/2400) | 2026-10-17 |
 | [394](./394-pr2402-trust-live-inventory-over-stale-model-ca.md) | PR #2402 — trust live inventory over stale model catalog | [#2402](https://github.com/nikhilsoman/synlynk/pull/2402) | 2026-10-17 |
+| [395](./395-pr2404-fail-closed-on-explicit-pilot-bypass.md) | PR #2404 — fail closed on explicit pilot bypass | [#2404](https://github.com/nikhilsoman/synlynk/pull/2404) | 2026-10-17 |
 
 ## Per-PR Post Template
 
