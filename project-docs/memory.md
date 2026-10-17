@@ -96,3 +96,12 @@
   substitute a model. A requested model must be the exact approved ID and
   already served; never load, fall back, or mutate the pinned profile during a
   dispatch. [@codex]
+- **2026-10-17 Ornith qualification evidence:** On the 24 GiB host, the
+  authenticated isolated 24-task Ornith run scored 21/24 (87.5%) with zero
+  unsafe/no-op/out-of-scope edits; all four bounded edits passed. Two read-only
+  diagnosis timeouts reduce correctness but are not edit-safety events under
+  the approved gate. One-second telemetry recorded 4,124.2 MiB peak process RSS,
+  29% minimum system-free memory, and no swap growth. Receipt v4 reports
+  `qualifies: true`. This authorizes only model qualification; implement and
+  review the isolated 20% pilot in #2349 before enabling local production
+  traffic. [@codex]

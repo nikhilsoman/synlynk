@@ -304,8 +304,9 @@ Self-management core, Board governance, Jev AST decisioning, swarms, concierge, 
 Zero-cloud offline local model inference harness optimized for Apple Silicon MLX
 
 Status (2026-10-17): authenticated Aider/oMLX proof, LocalAdapter parity, and
-effective-model resolution are merged. Qualification remains in progress under
-#2348; no candidate has passed all gates, so the low-risk pilot remains disabled.
+effective-model resolution are merged. Ornith now passes the approved stack
+qualification under #2348; #2349's isolated 20% pilot implementation and
+review are still required before any local production traffic.
 
 - [ ] Local oMLX / Aider Harness Integration (#1710) (P0)
   Real subprocess dispatch to local MLX models (Llama-3, Qwen-2.5, DeepSeek)
