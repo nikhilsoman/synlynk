@@ -2095,3 +2095,24 @@ after GitHub connectivity failed. Generated roadmap/todo/cost views were not
 hand-edited. Actual session cost is unavailable and was not invented. No
 implementation dispatched, external messages sent, or policy changed.
 [@nikhilsoman, reviewed by Codex]
+
+## 2026-10-17 — Local Harness isolated pilot implementation (#2349)
+
+- Implemented an explicit, deterministic 20% pilot cohort for qualified Ornith
+  work classes only. Existing `auto` routing is unchanged unless an explicit
+  pilot class is provided.
+- Added a credential-minimal Docker Compose runner with an internal-only Aider
+  network, fixed oMLX relay, tracked-file-only scratch copy, scope validation,
+  edit safety checks, redacted logs, and sidecar result receipts. Setup failure
+  never falls back to host Aider.
+- Verification: 221 focused pilot/dispatch/fallback tests passed; adapter and
+  conformance subset 72 passed, 3 expected failures. Compose config validates.
+  The broad repository suite was stopped after 398.91 seconds at 37%; at that
+  point it showed 1,769 passed, 10 failed, 3 setup errors, 5 skipped, 3 xfailed.
+  Failures included socket/process operations denied by this sandbox and legacy
+  fallback expectations, the latter fixed and reverified in the focused set.
+- No live pilot dispatched: this process has no `OPENAI_API_KEY` and local
+  reports oMLX unavailable. No PR merge or local-traffic enablement claimed.
+  Next: independent QA review, then run the approved pilot only with the live
+  credential/runtime and collect the 30-job gate evidence.
+[@nikhilsoman, Codex]

@@ -1,3 +1,4 @@
+import hashlib
 import os
 import sqlite3
 import subprocess
@@ -2760,6 +2761,111 @@ def test_local_dispatch_forwards_one_live_selected_model_through_adapter(project
     assert job["resolved_model"] == "other"
     assert job["local_model_receipt"]["effective_model"] == "other"
     assert job["local_model_receipt"]["edit_format"] == "whole"
+
+
+def test_local_pilot_dispatch_uses_isolated_runner_and_records_cohort_receipt(project_dir, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.harness_adapters.local import LocalAdapter
+
+    adapter = LocalAdapter()
+    policy_dir = project_dir / ".agents"
+    policy_dir.mkdir()
+    (policy_dir / "local.json").write_text(
+        '{"endpoint":"http://127.0.0.1:8000","pinned_model":"ornith",'
+        '"models":[{"id":"ornith","pinned":true,"edit_format":"diff"}]}'
+    )
+    monkeypatch.setenv("OPENAI_API_KEY", "local-pilot-test-key")
+    monkeypatch.setattr(
+        "synlynk.local_agent._health_check",
+        lambda endpoint, timeout=5, api_key=None: {
+            "reachable": True, "status": "healthy", "available_models": ["ornith"]
+        },
+    )
+    monkeypatch.setattr("synlynk.harness_adapters.registry.get_adapter", lambda agent: adapter)
+    monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda root: {
+        "enabled": True, "qualified": True, "isolated": True,
+        "share": 0.2, "qualified_models": ["ornith"],
+    })
+    runner_calls = []
+
+    def fake_build(**kwargs):
+        runner_calls.append(kwargs)
+        return (["python", "-m", "synlynk.local_pilot_runner"], {
+            "PATH": "/usr/bin", "OPENAI_API_KEY": "local-pilot-test-key",
+        })
+
+    monkeypatch.setattr("synlynk.local_pilot.build_isolated_compose_shell", fake_build)
+    spawned = []
+    original_popen = dispatch_mod.subprocess.Popen
+
+    def fake_popen(cmd, *args, **kwargs):
+        if cmd and cmd[0] == "git":
+            return original_popen(cmd, *args, **kwargs)
+        spawned.append((cmd, kwargs))
+        return type("DummyProc", (), {"pid": 9998})()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    receipt_payload = {
+        "route_local": True, "reason": "eligible_local_cohort",
+        "pilot_class": "test_summary", "share": 0.2, "bucket": 137,
+        "dispatch_key_sha256": hashlib.sha256(b"test-2").hexdigest(),
+        "dispatch_key": "test-2", "task_sha256": hashlib.sha256(
+            b"summarize focused test output"
+        ).hexdigest(),
+        "role": "dev", "scope_paths": ["test.log"],
+        "requested_model": None,
+        "effective_model": "ornith", "qualified_models": ["ornith"],
+        "edit_format": "diff", "model_health": "available",
+    }
+    receipt = dispatch_mod._seal_local_pilot_receipt(receipt_payload)
+    job = dispatch_mod.dispatch_agent(
+        agent="local", story_id="test-2", task="summarize focused test output", role="dev",
+        skip_preflight=True, context_mode="none", scope_paths=["test.log"],
+        local_pilot_receipt=receipt,
+    )
+
+    assert len(runner_calls) == 1
+    assert runner_calls[0]["aider_args"]
+    assert spawned[0][0] == ["python", "-m", "synlynk.local_pilot_runner"]
+    assert spawned[0][1]["env"]["OPENAI_API_KEY"] == "local-pilot-test-key"
+    assert "GH_TOKEN" not in spawned[0][1]["env"]
+    expected_receipt = {
+        **{key: value for key, value in receipt_payload.items() if key != "dispatch_key"},
+        "result_receipt_file": job["log_file"] + ".pilot.json",
+    }
+    assert job["local_pilot_receipt"] == expected_receipt
+    assert job["local_model_receipt"]["pilot"] == expected_receipt
+
+
+def test_local_pilot_rejects_forged_and_cross_story_replayed_receipts(project_dir, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    forged = {"route_local": True, "pilot_class": "test_summary"}
+    with pytest.raises(RuntimeError, match="invalid Local Pilot routing receipt"):
+        dispatch_mod.dispatch_agent(
+            agent="local", task="summarize something", role="dev",
+            local_pilot_receipt=forged,
+        )
+
+    monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda root: {
+        "enabled": True, "qualified": True, "isolated": True,
+        "share": 0.2, "qualified_models": ["ornith"],
+    })
+    payload = {
+        "route_local": True, "reason": "eligible_local_cohort",
+        "pilot_class": "test_summary", "share": 0.2, "bucket": 688,
+        "dispatch_key_sha256": hashlib.sha256(b"story-8").hexdigest(),
+        "dispatch_key": "story-8",
+        "task_sha256": hashlib.sha256(b"original task").hexdigest(),
+        "role": "dev", "scope_paths": ["test.log"], "requested_model": None,
+        "effective_model": "ornith", "qualified_models": ["ornith"],
+    }
+    signed = dispatch_mod._seal_local_pilot_receipt(payload)
+    with pytest.raises(RuntimeError, match="admission no longer matches"):
+        dispatch_mod.dispatch_agent(
+            agent="local", story_id="story-9", task="original task", role="dev",
+            scope_paths=["test.log"], local_pilot_receipt=signed,
+        )
 
 
 def test_local_dispatch_rejects_approved_model_not_live_before_aider(project_dir, monkeypatch):
