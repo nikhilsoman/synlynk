@@ -2645,6 +2645,7 @@ def main(argv=None) -> None:
                     requires_gh_write=_effective_requires_gh_write,
                     static_baseline=getattr(args, "static_baseline", False),
                     task_type=_effective_task_type,
+                    role=getattr(args, "role", None),
                 )
                 print()
                 print(f"agent:        {preview['agent']}")
