@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -27,6 +28,8 @@ MODEL_ID = "Qwen2.5-Coder-14B-Instruct-4bit"
 EDIT_FORMAT = "whole"
 PASSING_CORRECTNESS = 0.85
 TASK_TIMEOUT_S = 300
+FAILURE_EXCERPT_LIMIT = 500
+_SECRET_ENV_NAME = re.compile(r"(?:TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL|AUTH)", re.IGNORECASE)
 READ_ONLY_PATHS = {
     "test-log-summary": ("test.log",),
     "diagnosis": ("service.log",),
@@ -69,6 +72,9 @@ class TaskReceipt:
     peak_memory_mb: float | None
     changed_paths: list[str]
     unsafe_events: list[str]
+    failure_class: str | None = None
+    execution_exit_code: int | None = None
+    failure_excerpt: str | None = None
 
 
 @dataclass
@@ -186,6 +192,22 @@ def _changed_paths(workspace: Path) -> list[str]:
     return [line[3:] for line in result.stdout.splitlines() if line]
 
 
+def _failure_excerpt(output: str) -> str:
+    """Return a bounded diagnostic excerpt with common and configured secrets redacted."""
+    sanitized = output
+    for name, value in os.environ.items():
+        if _SECRET_ENV_NAME.search(name) and value:
+            sanitized = re.sub(re.escape(value), "[REDACTED]", sanitized, flags=re.IGNORECASE)
+    sanitized = re.sub(
+        r"(?i)(authorization\s*:\s*bearer\s+)[^\s,;]+",
+        r"\1[REDACTED]",
+        sanitized,
+    )
+    sanitized = re.sub(r"\bsk-[A-Za-z0-9_-]{8,}\b", "[REDACTED]", sanitized)
+    sanitized = re.sub(r"\bAKIA[0-9A-Z]{16}\b", "[REDACTED]", sanitized)
+    return sanitized[:FAILURE_EXCERPT_LIMIT]
+
+
 def _docker_executor(
     task: BenchmarkTask,
     workspace: Path,
@@ -266,8 +288,6 @@ def _evaluate(
 ) -> TaskReceipt:
     changed_paths = _changed_paths(workspace)
     unsafe = []
-    if evidence.timed_out:
-        unsafe.append("execution-timeout")
     if task.requires_change and not changed_paths:
         unsafe.append("no-op")
     if not task.requires_change and changed_paths:
@@ -278,7 +298,31 @@ def _evaluate(
     if task.test_command:
         test_result = "passed" if subprocess.run(task.test_command, cwd=workspace, capture_output=True, check=False).returncode == 0 else "failed"
     correct = evidence.exit_code == 0 and all(term.lower() in evidence.output.lower() for term in task.expected_terms) and test_result != "failed" and not unsafe
-    return TaskReceipt(task.task_id, task.category, model_id, edit_format, evidence.exit_code == 0, correct, test_result, not any(event.endswith("edit") for event in unsafe), evidence.retries, 0.0, evidence.peak_memory_mb, changed_paths, unsafe)
+    failure_class = (
+        "timeout" if evidence.timed_out
+        else "aider-provider-failure" if evidence.exit_code != 0
+        else "incorrect-response" if not correct
+        else None
+    )
+    failure_excerpt = _failure_excerpt(evidence.output) if not correct else None
+    return TaskReceipt(
+        task.task_id,
+        task.category,
+        model_id,
+        edit_format,
+        evidence.exit_code == 0,
+        correct,
+        test_result,
+        not any(event.endswith("edit") for event in unsafe),
+        evidence.retries,
+        0.0,
+        evidence.peak_memory_mb,
+        changed_paths,
+        unsafe,
+        failure_class,
+        evidence.exit_code,
+        failure_excerpt,
+    )
 
 
 def run_benchmark(

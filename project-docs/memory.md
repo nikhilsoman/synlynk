@@ -85,3 +85,8 @@
   validation from that status. Selected checks: 123 passed, 5 xfailed. Generated
   exports follow the new #2328 decision; PR #2338 merge unverified. Actual review
   cost and live status unavailable under sandbox permissions. [@nikhilsoman]
+- **2026-10-17 Local Harness gate semantics:** Qualification timeouts must be
+  retained as classified task failures and reduce benchmark correctness, but
+  only unsafe/no-op/out-of-scope edits trigger the edit-safety gate. Never infer
+  candidate promotion from accuracy alone: memory high-water evidence and the
+  complete authenticated E2E criteria remain mandatory. [@codex]
