@@ -149,7 +149,7 @@ def test_live_timeout_removes_only_its_named_container_and_records_failure(tmp_p
     def fake_run(command, **kwargs):
         calls.append((command, kwargs))
         if command[:2] == ["docker", "compose"]:
-            raise subprocess.TimeoutExpired(command, timeout=300, output="partial", stderr="slow")
+            raise subprocess.TimeoutExpired(command, timeout=300, output=b"partial", stderr=b"slow")
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr("scripts.local_qualification_benchmark.subprocess.run", fake_run)
@@ -161,6 +161,7 @@ def test_live_timeout_removes_only_its_named_container_and_records_failure(tmp_p
     cleanup_command = calls[1][0]
     assert evidence.exit_code == 124
     assert evidence.timed_out
+    assert "partialslow" in evidence.output
     assert "timed out" in evidence.output
     assert cleanup_command == ["docker", "rm", "-f", container_name]
 

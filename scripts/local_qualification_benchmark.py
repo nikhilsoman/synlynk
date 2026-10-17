@@ -233,7 +233,13 @@ def _docker_executor(
         # generated name, then emit evidence so the complete 24-task receipt
         # records a non-qualifying timeout instead of aborting mid-run.
         subprocess.run(["docker", "rm", "-f", container_name], capture_output=True, text=True, check=False)
-        output = (error.stdout or "") + (error.stderr or "")
+        # subprocess documents that TimeoutExpired output can remain bytes
+        # even when the invocation requested text mode. Normalize both
+        # streams before assembling the receipt evidence.
+        def timeout_text(value: str | bytes | None) -> str:
+            return value.decode(errors="replace") if isinstance(value, bytes) else (value or "")
+
+        output = timeout_text(error.stdout) + timeout_text(error.stderr)
         return ExecutionEvidence(124, output + "\nqualification task timed out", peak_memory_mb=peak_memory_mb, timed_out=True)
     # oMLX is native on the host, outside the container cgroup.  Do not report
     # Docker-client RSS as model memory: callers must supply the host oMLX
