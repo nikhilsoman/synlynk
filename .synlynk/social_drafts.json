@@ -2206,5 +2206,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2388 \u2014 [Local Harness] Unify local model resolution and live inventory (PR #2388, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2388.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2388\n- Merged improvements and fixes for PR #2388."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/385-pr2390-pypi-release-workflow-thin-vs-code-clien.md",
+    "title": "PR #2390 \u2014 PyPI release workflow, thin VS Code client, and worktree-isolated magic heal (P0-9, P0-7)",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2390",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2390."
+    ],
+    "tweet": "\ud83d\ude80 PR #2390 \u2014 PyPI release workflow, thin VS Code client, and worktree-isolated magic heal (P0-9, P0-7) (PR #2390, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2390.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2390\n- Merged improvements and fixes for PR #2390."
   }
 ]
