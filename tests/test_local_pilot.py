@@ -283,6 +283,8 @@ def test_isolated_runner_cleans_up_compose_and_redacts_persisted_logs(tmp_path, 
     assert aider_calls[0][aider_calls[0].index("aider") + 1:] == [
         "--model", "openai/ornith",
         "--no-show-model-warnings",
+        "--no-pretty",
+        "--no-suggest-shell-commands",
         "--message-file", "/dev/stdin",
         "--read", "test.log",
     ]
