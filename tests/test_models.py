@@ -38,7 +38,9 @@ def test_builtin_catalog_uses_current_remote_models_and_preserves_local_models()
         "gemini-3.8-flash-medium", "gemini-3.8-flash-high", "claude-opus-4-6-thinking",
         "gpt-5.6-luna", "grok-4.7", "grok-4.6",
     } <= model_ids
-    assert {"deepseek-r1", "gemma-2-9b-it-q4", "qwen2.5"} <= model_ids
+    assert {
+        "Ornith-1.0-9B-4bit", "deepseek-r1", "gemma-2-9b-it-q4", "qwen2.5"
+    } <= model_ids
     assert {
         "Hermes-3-Llama-3.1-8B",
         "Hermes-3-Llama-3.1-70B",
@@ -51,6 +53,39 @@ def test_builtin_catalog_uses_current_remote_models_and_preserves_local_models()
         "gemini-3-flash-preview", "gemini-3.1-pro-preview",
         "grok-2-latest", "gpt-4o-2024-11-20", "o3",
     }
+
+
+def test_local_model_catalog_tracks_qualified_ornith_identity_and_unknown_geometry(tmp_path):
+    from synlynk.models import EntitlementTier, get_models_from_catalog, load_model_catalog
+
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    catalog = {
+        "schema_version": 1,
+        "tiers": {"fast": {"local": "Ornith-1.0-9B-4bit"}},
+        "models": [{
+            "model_id": "Ornith-1.0-9B-4bit",
+            "family": "ornith-1",
+            "harness": "local",
+            "locality": "on_device_local",
+            "quantization": "4bit",
+            "context_window": 0,
+            "max_output": 0,
+            "rates": {"input_per_1k": 0.0, "output_per_1k": 0.0},
+            "entitlement_tier": "zero_cost_local",
+        }],
+    }
+    (synlynk_dir / "models.json").write_text(json.dumps(catalog))
+
+    loaded = load_model_catalog(str(tmp_path))
+    model = next(m for m in get_models_from_catalog(str(tmp_path)) if m.model_id.startswith("Ornith"))
+
+    assert loaded["tiers"]["fast"]["local"] == model.model_id
+    assert model.harness_binding == "local"
+    assert model.locality == "on_device_local"
+    assert model.quantization == "4bit"
+    assert model.context_geometry.max_input_tokens == 0
+    assert model.entitlement_tier == EntitlementTier.ZERO_COST_LOCAL
 
 
 def test_model_registry_persists_and_queries(project_dir):

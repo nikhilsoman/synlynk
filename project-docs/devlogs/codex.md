@@ -198,3 +198,18 @@ see verification output in the session transcript. [@codex]
   across qualification, LocalAdapter, and local dispatch (33 passed); `git diff
   --check` clean. PR and independent review are pending.
 [@codex]
+
+## 2026-10-17 — Unified local model resolution (#2346/#2347)
+
+- Replaced the local pinned-only resolver with exact-ID selection across the
+  approved local policy, authenticated live oMLX inventory, and global model
+  catalog. The final resolved ID now drives adapter flags, job metadata,
+  receipts, and cost attribution; unknown, unapproved, unavailable, and
+  unsupported-loader models fail before Aider starts without substitution.
+- Made inventory health distinguish authentication, timeout, endpoint, and
+  malformed-inventory failures. Updated the catalog's local tier default to
+  qualified Ornith and added identity/quantization metadata without inventing
+  context limits.
+- Verification: local agent/resolver/catalog/adapter/conformance suites
+  (109 passed, 3 expected xfails); local dispatch integration (9 passed).
+[@codex]

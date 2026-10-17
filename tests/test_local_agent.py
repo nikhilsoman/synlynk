@@ -107,7 +107,7 @@ class TestNewRosterSchema(unittest.TestCase):
         }
         self.assertEqual(local_agent._pinned_model(config), "ornith")
 
-    def test_returns_empty_dispatch_flags_when_no_model_is_eligible(self):
+    def test_refuses_dispatch_flags_when_no_model_is_eligible(self):
         config = {
             "endpoint": "http://127.0.0.1:8000",
             "models": [{"id": "qwen", "dispatch_eligible": False}],
@@ -117,11 +117,12 @@ class TestNewRosterSchema(unittest.TestCase):
             json.dump(config, f)
             path = f.name
         try:
-            self.assertEqual(local_agent._local_dispatch_model_flags(path), [])
+            with self.assertRaisesRegex(ValueError, "no dispatch-eligible models"):
+                local_agent._local_dispatch_model_flags(path)
         finally:
             os.unlink(path)
 
-    def test_bonsai_excluded_when_prism_ml_absent(self):
+    def test_bonsai_refused_when_prism_ml_absent_without_silent_fallback(self):
         config = {
             "endpoint": "http://127.0.0.1:8000",
             "pinned_model": "Ternary-Bonsai-2-27B-mlx-2bit",
@@ -135,11 +136,10 @@ class TestNewRosterSchema(unittest.TestCase):
             path = f.name
         try:
             with patch("importlib.util.find_spec", return_value=None):
-                flags = local_agent._local_dispatch_model_flags(config_path=path)
+                with self.assertRaisesRegex(ValueError, "refusing to substitute"):
+                    local_agent._local_dispatch_model_flags(config_path=path)
         finally:
             os.unlink(path)
-        self.assertIn("openai/Ornith-1.0-9B-4bit", flags)
-        self.assertNotIn("openai/Ternary-Bonsai-2-27B-mlx-2bit", flags)
 
 
 class TestLoadLocalConfig(unittest.TestCase):
@@ -222,13 +222,87 @@ class TestEffectiveLocalModelResolution(unittest.TestCase):
         self.assertEqual(result["drift"]["live_but_unapproved"], ["gemma", "qwen"])
         self.assertEqual(result["drift"]["catalog_only"], ["gemma"])
 
-    def test_rejects_unimplemented_per_dispatch_selection(self):
+    def test_rejects_benchmark_only_model_for_dispatch_selection(self):
         path = self._policy_path()
         try:
-            with self.assertRaisesRegex(ValueError, "per-dispatch model selection"):
+            with self.assertRaisesRegex(ValueError, "not dispatch-approved"):
                 local_agent.resolve_effective_local_model(path, requested_model="qwen")
         finally:
             os.unlink(path)
+
+    def test_selects_exact_approved_live_model_and_preserves_other_layers(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as handle:
+            json.dump({
+                "endpoint": "http://127.0.0.1:8000",
+                "pinned_model": "ornith",
+                "models": [
+                    {"id": "ornith", "pinned": True, "edit_format": "diff"},
+                    {"id": "other", "dispatch_eligible": True, "edit_format": "whole"},
+                ],
+            }, handle)
+            path = handle.name
+        try:
+            result = local_agent.resolve_effective_local_model(
+                config_path=path,
+                requested_model="other",
+                live_model_ids=["ornith", "other", "unapproved"],
+                catalog={"models": [{"model_id": "other", "harness": "local"}]},
+            )
+        finally:
+            os.unlink(path)
+
+        self.assertEqual(result["requested_model"], "other")
+        self.assertEqual(result["effective_model"], "other")
+        self.assertEqual(result["edit_format"], "whole")
+        self.assertEqual(result["sources"], {
+            "policy": "other", "catalog": "other", "live_inventory": "other"
+        })
+        self.assertEqual(result["drift"]["live_but_unapproved"], ["unapproved"])
+        self.assertEqual(result["catalog_model"]["model_id"], "other")
+
+    def test_rejects_policy_model_absent_from_live_inventory_without_fallback(self):
+        path = self._policy_path()
+        try:
+            with self.assertRaisesRegex(ValueError, "not currently served.*Start oMLX"):
+                local_agent.resolve_effective_local_model(
+                    config_path=path, live_model_ids=["qwen-coder"]
+                )
+        finally:
+            os.unlink(path)
+
+    @patch("synlynk.local_agent._health_check")
+    def test_requires_healthy_live_inventory_for_production_resolution(self, mock_health):
+        path = self._policy_path()
+        mock_health.return_value = {
+            "reachable": True,
+            "status": "healthy",
+            "available_models": ["ornith"],
+        }
+        try:
+            result = local_agent.resolve_effective_local_model(
+                config_path=path, require_live_inventory=True
+            )
+        finally:
+            os.unlink(path)
+        self.assertEqual(result["inventory_status"], "healthy")
+        self.assertEqual(result["health"], "available")
+
+    @patch("synlynk.local_agent._health_check")
+    def test_auth_failure_is_actionable_and_does_not_leak_api_key(self, mock_health):
+        path = self._policy_path()
+        mock_health.return_value = {
+            "reachable": False, "status": "unauthenticated", "error": "HTTP 401 Unauthorized"
+        }
+        try:
+            with self.assertRaisesRegex(ValueError, "configure OPENAI_API_KEY") as raised:
+                local_agent.resolve_effective_local_model(
+                    config_path=path,
+                    require_live_inventory=True,
+                    api_key="never-print-this-secret",
+                )
+        finally:
+            os.unlink(path)
+        self.assertNotIn("never-print-this-secret", str(raised.exception))
 
 
 class TestHealthCheck(unittest.TestCase):
@@ -243,6 +317,7 @@ class TestHealthCheck(unittest.TestCase):
         mock_urlopen.return_value.__enter__.return_value = mock_resp
         result = local_agent._health_check("http://127.0.0.1:8080")
         self.assertTrue(result["reachable"])
+        self.assertEqual(result["status"], "healthy")
         self.assertIn("ornith-1.0-9b", result["available_models"])
 
     @patch("synlynk.local_agent.urllib.request.urlopen")
@@ -252,7 +327,43 @@ class TestHealthCheck(unittest.TestCase):
         mock_urlopen.side_effect = urllib.error.URLError("connection refused")
         result = local_agent._health_check("http://127.0.0.1:8080")
         self.assertFalse(result["reachable"])
+        self.assertEqual(result["status"], "endpoint_unavailable")
         self.assertIn("connection refused", result["error"])
+
+    @patch("synlynk.local_agent.urllib.request.urlopen")
+    def test_health_check_rejects_malformed_inventory(self, mock_urlopen):
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({"models": [{"id": "ornith"}]}).encode("utf-8")
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+        result = local_agent._health_check("http://127.0.0.1:8080")
+
+        self.assertFalse(result["reachable"])
+        self.assertEqual(result["status"], "malformed_inventory")
+
+    @patch("synlynk.local_agent.urllib.request.urlopen")
+    def test_health_check_classifies_unauthenticated_without_echoing_key(self, mock_urlopen):
+        import urllib.error
+
+        mock_urlopen.side_effect = urllib.error.HTTPError(
+            "http://127.0.0.1:8080/v1/models", 401, "Unauthorized", {}, None
+        )
+        result = local_agent._health_check(
+            "http://127.0.0.1:8080", api_key="never-print-this-secret"
+        )
+
+        self.assertFalse(result["reachable"])
+        self.assertEqual(result["status"], "unauthenticated")
+        self.assertNotIn("never-print-this-secret", json.dumps(result))
+
+    @patch("synlynk.local_agent.urllib.request.urlopen")
+    def test_health_check_classifies_direct_timeout(self, mock_urlopen):
+        mock_urlopen.side_effect = TimeoutError("timed out")
+
+        result = local_agent._health_check("http://127.0.0.1:8080")
+
+        self.assertFalse(result["reachable"])
+        self.assertEqual(result["status"], "timeout")
 
 
 class TestLocalDispatchModelFlags(unittest.TestCase):

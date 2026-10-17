@@ -376,6 +376,8 @@ def resolve_dispatch_model(
     model_tier: Optional[str] = None,
     repo_root: Optional[str] = None,
     scope_paths: Optional[Sequence[str]] = None,
+    require_live_inventory: bool = False,
+    live_model_ids: Optional[Sequence[str]] = None,
 ) -> dict:
     """Resolve model metadata while keeping role and harness untouched."""
     if model_tier is not None and model_tier not in MODEL_TIERS:
@@ -398,7 +400,9 @@ def resolve_dispatch_model(
         local_resolution = resolve_effective_local_model(
             config_path=config_path,
             requested_model=model,
+            live_model_ids=live_model_ids,
             catalog=load_model_catalog(repo_root),
+            require_live_inventory=require_live_inventory,
         )
         local_resolution["resolution_ms"] = round(
             (time.monotonic() - resolution_started) * 1000, 3
@@ -4167,6 +4171,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         model_tier=model_tier,
         repo_root=os.getcwd(),
         scope_paths=scope_paths,
+        require_live_inventory=(agent == "local"),
     )
     model = model_routing["resolved_model"]
 
@@ -4380,10 +4385,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             task=task,
             story_id=story_id,
             job_id=job_id,
-            # Preserve the caller's request for adapter validation. ``model``
-            # is already the effective ID here and may be a policy fallback;
-            # passing it back would incorrectly look like a new explicit swap.
-            model=requested_model_input,
+            # Pass the single resolved ID through the adapter. The original
+            # request remains separate in job metadata; this value is already
+            # verified against policy and live oMLX inventory.
+            model=model_routing["resolved_model"],
             effort=effort,
             model_tier=model_tier,
             task_type=task_type,

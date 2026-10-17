@@ -90,3 +90,9 @@
   only unsafe/no-op/out-of-scope edits trigger the edit-safety gate. Never infer
   candidate promotion from accuracy alone: memory high-water evidence and the
   complete authenticated E2E criteria remain mandatory. [@codex]
+- **2026-10-17 Local model authority:** The local profile is the dispatch
+  allowlist, oMLX `/v1/models` is the live-availability authority, and the
+  global model catalog enriches identity/cost reporting but cannot enable or
+  substitute a model. A requested model must be the exact approved ID and
+  already served; never load, fall back, or mutate the pinned profile during a
+  dispatch. [@codex]
