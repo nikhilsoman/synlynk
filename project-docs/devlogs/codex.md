@@ -213,7 +213,9 @@ see verification output in the session transcript. [@codex]
 - Verification: local agent/resolver/catalog/adapter/conformance suites
   (109 passed, 3 expected xfails); local dispatch integration (9 passed).
 - Independent CI caught that the concurrency race test now reached production
-  live-inventory validation. Added a deterministic healthy oMLX inventory
-  fixture to keep that test isolated while preserving fail-closed dispatch;
-  expanded local suite passes (311 passed, 3 expected xfails).
+  live-inventory validation. Made its model-policy and healthy-inventory
+  fixtures deterministic, and skip the on-disk policy assertion only when
+  sparse review worktrees omit `.agents/local.json` (full-checkout CI still
+  covers that assertion). The expanded local suite passes (306 passed, 3
+  expected xfails).
 [@codex]
