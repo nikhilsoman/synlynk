@@ -23,8 +23,11 @@ class LocalRunnerDriver(SwarmRunnerDriver):
         command = job_spec.get("command") or job_spec.get("cmd") or ["true"]
         if isinstance(command, str):
             command = ["sh", "-c", command]
+        env = job_spec.get("env")
+        if env is not None:
+            env = {**os.environ, **{str(key): str(value) for key, value in env.items()}}
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                   text=True, cwd=job_spec.get("cwd"), env=job_spec.get("env"))
+                                   text=True, cwd=job_spec.get("cwd"), env=env)
         self.processes[runner_id] = process
         self.specs[runner_id] = job_spec
         threading.Thread(target=self._wait, args=(runner_id,), daemon=True).start()
