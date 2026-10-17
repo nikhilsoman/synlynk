@@ -24,10 +24,21 @@ def rollout_mode(env: Mapping[str, str] | None = None) -> str:
     return value if value in ROLLOUT_MODES else "shadow"
 
 
-def _row_dict(row) -> dict[str, Any] | None:
+def _columns(cursor) -> list[str]:
+    description = getattr(cursor, "description", None) or []
+    return [column[0] for column in description]
+
+
+def _row_dict(row, columns: list[str] | tuple[str, ...] | None = None) -> dict[str, Any] | None:
     if row is None:
         return None
-    return {key: row[key] for key in row.keys()} if hasattr(row, "keys") else dict(row)
+    if isinstance(row, dict):
+        return dict(row)
+    if hasattr(row, "keys"):
+        return {key: row[key] for key in row.keys()}
+    if columns is not None:
+        return dict(zip(columns, row))
+    return dict(row)
 
 
 def _json(value, default):
@@ -78,23 +89,29 @@ def _confidence(decision: Mapping[str, Any] | None) -> str:
 
 def project_job_status(conn, job_id: str) -> dict[str, Any]:
     """Return the versioned status/evidence contract for one job."""
-    daemon = _row_dict(conn.execute("SELECT * FROM daemon_jobs WHERE job_id=?", (job_id,)).fetchone())
-    contract = _row_dict(conn.execute("SELECT * FROM job_effect_contract WHERE job_id=?", (job_id,)).fetchone()) or {
+    daemon_cursor = conn.execute("SELECT * FROM daemon_jobs WHERE job_id=?", (job_id,))
+    daemon = _row_dict(daemon_cursor.fetchone(), _columns(daemon_cursor))
+    contract_cursor = conn.execute("SELECT * FROM job_effect_contract WHERE job_id=?", (job_id,))
+    contract = _row_dict(contract_cursor.fetchone(), _columns(contract_cursor)) or {
         "kind": "unknown_contract", "contract_version": 1, "required_predicates_json": "{}"
     }
     contract["required_predicates"] = _json(contract.pop("required_predicates_json", "{}"), {})
     evidence = []
-    for row in conn.execute(
+    evidence_cursor = conn.execute(
         "SELECT evidence_id, kind, result, observed_at, source, confidence, attempt, event_id, payload_json "
         "FROM job_evidence WHERE job_id=? ORDER BY observed_at, evidence_id", (job_id,)
-    ).fetchall():
-        item = _row_dict(row)
+    )
+    evidence_columns = _columns(evidence_cursor)
+    for row in evidence_cursor.fetchall():
+        item = _row_dict(row, evidence_columns)
         payload = _json(item.pop("payload_json"), {})
         item.update({key: payload[key] for key in ("target", "target_match", "actor_match", "sha_match", "expected_actor", "causal_match", "reason") if key in payload})
         evidence.append(item)
-    decisions = [_row_dict(row) for row in conn.execute(
+    decisions_cursor = conn.execute(
         "SELECT * FROM job_terminal_decision WHERE job_id=? ORDER BY revision", (job_id,)
-    ).fetchall()]
+    )
+    decisions_columns = _columns(decisions_cursor)
+    decisions = [_row_dict(row, decisions_columns) for row in decisions_cursor.fetchall()]
     latest = decisions[-1] if decisions else None
     canonical = latest.get("status") if latest else None
     legacy = daemon.get("status") if daemon else None
@@ -156,7 +173,9 @@ def record_shadow_comparison(conn, job_id: str) -> dict[str, Any]:
 
 def job_truth_metrics(conn) -> dict[str, Any]:
     """Return bounded pilot metrics with harness/effect dimensions."""
-    rows = [dict(row) for row in conn.execute("SELECT job_id, legacy_status, oracle_status, reason_code, disagreement, harness, effect_kind, observed_at FROM job_status_shadow").fetchall()]
+    shadow_cursor = conn.execute("SELECT job_id, legacy_status, oracle_status, reason_code, disagreement, harness, effect_kind, observed_at FROM job_status_shadow")
+    shadow_columns = _columns(shadow_cursor)
+    rows = [_row_dict(row, shadow_columns) for row in shadow_cursor.fetchall()]
     reasons = Counter(row["reason_code"] for row in rows)
     disagreements = defaultdict(Counter)
     disagreement_reasons = Counter()
