@@ -199,6 +199,28 @@ see verification output in the session transcript. [@codex]
   --check` clean. PR and independent review are pending.
 [@codex]
 
+## 2026-10-17 — Unified local model resolution (#2346/#2347)
+
+- Replaced the local pinned-only resolver with exact-ID selection across the
+  approved local policy, authenticated live oMLX inventory, and global model
+  catalog. The final resolved ID now drives adapter flags, job metadata,
+  receipts, and cost attribution; unknown, unapproved, unavailable, and
+  unsupported-loader models fail before Aider starts without substitution.
+- Made inventory health distinguish authentication, timeout, endpoint, and
+  malformed-inventory failures. Updated the catalog's local tier default to
+  qualified Ornith and added identity/quantization metadata without inventing
+  context limits.
+- Verification: local agent/resolver/catalog/adapter/conformance suites
+  (109 passed, 3 expected xfails); local dispatch integration (9 passed).
+- Added regression coverage at the jobs reconciliation boundary to verify the
+  LocalAdapter receipt and auth-failure classification are persisted only for
+  local jobs, preserving the #2345 adapter contract.
+- Independent CI caught that the concurrency race test now reached production
+  live-inventory validation. Made its model-policy and healthy-inventory
+  fixtures deterministic, and skip the on-disk policy assertion only when
+  sparse review worktrees omit `.agents/local.json` (full-checkout CI still
+  covers that assertion). The expanded local suite passes (306 passed, 3
+  expected xfails).
 # 2026-10-17 — Ornith full-run qualification with memory telemetry (#2348)
 
 - Reran the authenticated 24-task Ornith Aider/oMLX benchmark after #2382.
