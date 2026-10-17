@@ -7,6 +7,12 @@
 - **Directories:** bin, docs, project-docs, synlynk, tests, website
 
 ## Decisions
+- **2026-10-17 Local Pilot denial is sticky:** Once an explicit local-pilot
+  intent is denied or routed to a frontier fallback, capability routing must
+  not later select host-side `local`. Bind the selected frontier harness and
+  enforce at the dispatch boundary that pilot-intended local execution requires
+  a valid signed isolated-runner receipt. Keep the pilot disabled pending
+  independent verification of LIVE-25 (#2405). [@codex]
 - **2026-10-17 Local Pilot prompt delivery:** Aider's ordinary interactive
   stdin treats the multiline Synlynk context prompt as separate inputs. The
   isolated runner must use Aider's `--message-file /dev/stdin` mode so the full
