@@ -460,6 +460,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [381](./381-pr2387-codify-parent-tracking-issue-protocol-re.md) | PR #2387 — codify parent tracking issue protocol, retire per-PR blogs, and add remaining P0 design spec | [#2387](https://github.com/nikhilsoman/synlynk/pull/2387) | 2026-10-17 |
 | [382](./382-pr2389-circuit-breaker-prompt-cache-fix-capabil.md) | PR #2389 — circuit breaker prompt-cache fix, capability report expansion, and stale goal reconciliation (P0-8, P0-6, P0-10) | [#2389](https://github.com/nikhilsoman/synlynk/pull/2389) | 2026-10-17 |
 | [383](./383-pr2385-record-ornith-qualification-memory-evide.md) | PR #2385 — record Ornith qualification memory evidence | [#2385](https://github.com/nikhilsoman/synlynk/pull/2385) | 2026-10-17 |
+| [384](./384-pr2388-local-harness-unify-local-model-resoluti.md) | PR #2388 — [Local Harness] Unify local model resolution and live inventory | [#2388](https://github.com/nikhilsoman/synlynk/pull/2388) | 2026-10-17 |
 
 ## Per-PR Post Template
 

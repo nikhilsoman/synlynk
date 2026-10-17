@@ -2190,5 +2190,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2385 \u2014 record Ornith qualification memory evidence (PR #2385, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2385.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2385\n- Merged improvements and fixes for PR #2385."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/384-pr2388-local-harness-unify-local-model-resoluti.md",
+    "title": "PR #2388 \u2014 [Local Harness] Unify local model resolution and live inventory",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2388",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2388."
+    ],
+    "tweet": "\ud83d\ude80 PR #2388 \u2014 [Local Harness] Unify local model resolution and live inventory (PR #2388, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2388.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2388\n- Merged improvements and fixes for PR #2388."
   }
 ]
