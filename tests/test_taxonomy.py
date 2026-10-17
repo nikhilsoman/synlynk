@@ -89,7 +89,6 @@ def test_taxonomy_three_tiers_classification():
     assert "spike" in EXPERIMENTAL_COMMANDS
     assert "board" in EXPERIMENTAL_COMMANDS
     assert "gateway" in EXPERIMENTAL_COMMANDS
-    assert "relay" in EXPERIMENTAL_COMMANDS
     assert "mesh" in EXPERIMENTAL_COMMANDS
 
     core_entries = entries_for_help("core")
@@ -100,6 +99,7 @@ def test_taxonomy_three_tiers_classification():
     op_cmds = {entry["command"] for entry in op_entries}
     assert any("story" in c for c in op_cmds)
     assert any("pr" in c for c in op_cmds)
+    assert any("relay" in c for c in op_cmds)
     for cmd in op_cmds:
         root = cmd.split()[0]
         assert root not in CORE_COMMANDS

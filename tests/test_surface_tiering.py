@@ -21,9 +21,10 @@ def test_default_help_shows_only_core_verbs(capsys):
     assert "  sentinel" not in help_text
     assert "  story" not in help_text
     assert "  policy" not in help_text
+    assert "  relay" not in help_text
 
     # Experimental commands should not be listed in root help
-    for exp in ("concierge", "addon", "media", "spike", "board", "gateway", "relay", "mesh"):
+    for exp in ("concierge", "addon", "media", "spike", "board", "gateway", "mesh"):
         assert f"  {exp}" not in help_text, f"Experimental '{exp}' should not be in default help"
 
     assert "synlynk help --all" in help_text

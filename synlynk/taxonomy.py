@@ -24,7 +24,6 @@ EXPERIMENTAL_COMMANDS = {
     "wave6",
     "board",
     "gateway",
-    "relay",
     "mesh",
 }
 
