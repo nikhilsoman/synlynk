@@ -1462,7 +1462,7 @@ def test_review_codex_gh_write_keeps_repository_read_only(project_dir, monkeypat
     )
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
-    dispatch_mod.dispatch_agent(
+    job = dispatch_mod.dispatch_agent(
         "codex",
         "review PR #937 and post findings",
         task_type="review",
@@ -2636,6 +2636,13 @@ def test_local_dispatch_builds_production_flags_through_adapter(project_dir, mon
 
     adapter = LocalAdapter()
     calls = []
+    recorded_commands = []
+    policy_dir = project_dir / ".agents"
+    policy_dir.mkdir()
+    (policy_dir / "local.json").write_text(
+        '{"endpoint":"http://127.0.0.1:8000","pinned_model":"ornith",'
+        '"models":[{"id":"ornith","pinned":true,"edit_format":"diff"}]}'
+    )
     original_build = adapter.build_cmd
 
     def spy_build(request):
@@ -2644,13 +2651,14 @@ def test_local_dispatch_builds_production_flags_through_adapter(project_dir, mon
 
     monkeypatch.setattr(adapter, "build_cmd", spy_build)
     monkeypatch.setattr("synlynk.harness_adapters.registry.get_adapter", lambda agent: adapter)
-    monkeypatch.setattr(
-        dispatch_mod.subprocess,
-        "Popen",
-        lambda *args, **kwargs: type("DummyProc", (), {"pid": 9999})(),
-    )
+    def fake_popen(cmd, *args, **kwargs):
+        if cmd[:2] == ["sh", "-c"]:
+            recorded_commands.append(cmd)
+        return type("DummyProc", (), {"pid": 9999})()
 
-    dispatch_mod.dispatch_agent(
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+
+    job = dispatch_mod.dispatch_agent(
         agent="local",
         task="summarize this file",
         skip_preflight=True,
@@ -2660,6 +2668,46 @@ def test_local_dispatch_builds_production_flags_through_adapter(project_dir, mon
     assert len(calls) == 1
     assert calls[0].agent == "local"
     assert calls[0].permissions == []
+    shell_cmd = recorded_commands[0][2]
+    assert "--model openai/ornith" in shell_cmd
+    assert "--model ornith" not in shell_cmd
+    assert job["model_at_dispatch"] == "ornith"
+    assert job["local_model_receipt"]["effective_model"] == "ornith"
+    assert job["local_model_receipt"]["edit_format"] == "diff"
+
+
+def test_local_dispatch_keeps_prism_fallback_as_effective_aider_model(project_dir, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    policy_dir = project_dir / ".agents"
+    policy_dir.mkdir()
+    (policy_dir / "local.json").write_text(
+        '{"endpoint":"http://127.0.0.1:8000",'
+        '"pinned_model":"bonsai","models":['
+        '{"id":"ornith","edit_format":"diff"},'
+        '{"id":"bonsai","pinned":true,"edit_format":"diff","loader":"prism-ml"}]}'
+    )
+    recorded_commands = []
+
+    def fake_popen(cmd, *args, **kwargs):
+        if cmd[:2] == ["sh", "-c"]:
+            recorded_commands.append(cmd)
+        return type("DummyProc", (), {"pid": 9999})()
+
+    monkeypatch.setattr("synlynk.local_agent._check_prism_ml_available", lambda: False)
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+
+    job = dispatch_mod.dispatch_agent(
+        agent="local",
+        task="summarize this file",
+        skip_preflight=True,
+        context_mode="none",
+    )
+
+    shell_cmd = recorded_commands[0][2]
+    assert "--model openai/ornith" in shell_cmd
+    assert "--model openai/bonsai" not in shell_cmd
+    assert job["model_at_dispatch"] == "ornith"
 
 
 def test_resolve_dispatch_base_ref_stacks_on_current_feature_branch(git_worktree_repo, monkeypatch):

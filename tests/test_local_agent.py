@@ -181,6 +181,56 @@ class TestPinnedModel(unittest.TestCase):
         self.assertEqual(local_agent._pinned_model(config), "a")
 
 
+class TestEffectiveLocalModelResolution(unittest.TestCase):
+    def _policy_path(self):
+        handle = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+        json.dump(
+            {
+                "endpoint": "http://127.0.0.1:8000",
+                "pinned_model": "ornith",
+                "models": [
+                    {"id": "ornith", "pinned": True, "edit_format": "diff"},
+                    {"id": "qwen", "dispatch_eligible": False, "edit_format": "whole"},
+                ],
+            },
+            handle,
+        )
+        handle.close()
+        return handle.name
+
+    def test_reports_effective_model_and_all_three_source_layers(self):
+        path = self._policy_path()
+        try:
+            result = local_agent.resolve_effective_local_model(
+                config_path=path,
+                live_model_ids=["ornith", "qwen", "gemma"],
+                catalog={
+                    "models": [
+                        {"model_id": "ornith", "harness": "local"},
+                        {"model_id": "gemma", "harness": "local"},
+                    ]
+                },
+            )
+        finally:
+            os.unlink(path)
+        self.assertEqual(result["effective_model"], "ornith")
+        self.assertEqual(result["edit_format"], "diff")
+        self.assertEqual(result["health"], "available")
+        self.assertEqual(result["sources"], {
+            "policy": "ornith", "catalog": "ornith", "live_inventory": "ornith"
+        })
+        self.assertEqual(result["drift"]["live_but_unapproved"], ["gemma", "qwen"])
+        self.assertEqual(result["drift"]["catalog_only"], ["gemma"])
+
+    def test_rejects_unimplemented_per_dispatch_selection(self):
+        path = self._policy_path()
+        try:
+            with self.assertRaisesRegex(ValueError, "per-dispatch model selection"):
+                local_agent.resolve_effective_local_model(path, requested_model="qwen")
+        finally:
+            os.unlink(path)
+
+
 class TestHealthCheck(unittest.TestCase):
     """oMLX's OpenAI-compatible /v1/models endpoint."""
 
@@ -267,6 +317,26 @@ class TestLocalDispatchModelFlagsProviderPrefix(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertIn("Ornith-1.0-9B-4bit", printed)
         self.assertNotIn("Missing models", printed)
+        self.assertIn("effective model: Ornith-1.0-9B-4bit", printed)
+
+    def test_doctor_reports_live_inventory_drift(self):
+        healthy_response = {"reachable": True, "available_models": ["ornith", "qwen"]}
+        with patch("synlynk.local_agent._health_check", return_value=healthy_response), \
+             patch("synlynk.local_agent.shutil.which", return_value="/usr/local/bin/aider"), \
+             patch("synlynk.local_agent._get_db"), \
+             patch("synlynk.local_agent_seed.seed_local_capability_envelope"):
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, "local.json")
+                with open(path, "w") as f:
+                    json.dump({
+                        "endpoint": "http://127.0.0.1:8000",
+                        "models": [{"id": "ornith", "pinned": True, "edit_format": "whole"}],
+                    }, f)
+                with patch("builtins.print") as mock_print:
+                    result = local_agent.cmd_local_doctor(path)
+        printed = " ".join(str(call.args[0]) for call in mock_print.call_args_list)
+        self.assertEqual(result, 0)
+        self.assertIn("model drift [live_but_unapproved]: qwen", printed)
 
 
 class TestLocalDispatchStarterTierGuardrails(unittest.TestCase):
