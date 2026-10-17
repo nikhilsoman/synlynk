@@ -465,6 +465,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [386](./386-pr2391-add-isolated-graduated-pilot.md) | PR #2391 — add isolated graduated pilot | [#2391](https://github.com/nikhilsoman/synlynk/pull/2391) | 2026-10-17 |
 | [387](./387-pr2396-send-pilot-context-as-one-aider-message.md) | PR #2396 — send pilot context as one Aider message | [#2396](https://github.com/nikhilsoman/synlynk/pull/2396) | 2026-10-17 |
 | [388](./388-pr2397-verify-aider-task-receipts-from-answer-o.md) | PR #2397 — verify Aider task receipts from answer output | [#2397](https://github.com/nikhilsoman/synlynk/pull/2397) | 2026-10-17 |
+| [389](./389-pr2398-report-deferred-dispatch-jobs.md) | PR #2398 — report deferred dispatch jobs | [#2398](https://github.com/nikhilsoman/synlynk/pull/2398) | 2026-10-17 |
 
 ## Per-PR Post Template
 

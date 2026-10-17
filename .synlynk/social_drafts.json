@@ -2270,5 +2270,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2397 \u2014 verify Aider task receipts from answer output (PR #2397, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2397.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2397\n- Merged improvements and fixes for PR #2397."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/389-pr2398-report-deferred-dispatch-jobs.md",
+    "title": "PR #2398 \u2014 report deferred dispatch jobs",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2398",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2398."
+    ],
+    "tweet": "\ud83d\ude80 PR #2398 \u2014 report deferred dispatch jobs (PR #2398, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2398.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2398\n- Merged improvements and fixes for PR #2398."
   }
 ]
