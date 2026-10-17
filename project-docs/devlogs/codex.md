@@ -212,6 +212,9 @@ see verification output in the session transcript. [@codex]
   context limits.
 - Verification: local agent/resolver/catalog/adapter/conformance suites
   (109 passed, 3 expected xfails); local dispatch integration (9 passed).
+- Added regression coverage at the jobs reconciliation boundary to verify the
+  LocalAdapter receipt and auth-failure classification are persisted only for
+  local jobs, preserving the #2345 adapter contract.
 - Independent CI caught that the concurrency race test now reached production
   live-inventory validation. Made its model-policy and healthy-inventory
   fixtures deterministic, and skip the on-disk policy assertion only when
