@@ -1877,8 +1877,29 @@ def _render_dispatch_preview(agent: str, task: str, context_mode: str,
                               agent_id: str = None, story_id: str = None,
                               force_agent: bool = False, requires_gh_write: bool = False,
                               static_baseline: bool = False,
-                              task_type: str = None) -> dict:
-    """Compute task/context digest data for dispatch inspection."""
+                              task_type: str = None, role: str = None) -> dict:
+    """Compute task/context digest data for dispatch inspection.
+
+    Runs the same role/task_type policy gate as dispatch_agent() so a
+    --dry-run preview never looks successful for a combination the live
+    dispatch would refuse (gh:#2258).
+    """
+    if task_type:
+        from synlynk.policy import check_authority
+        try:
+            authority = check_authority(
+                f"task_dispatch:{task_type}",
+                role=role or "dev",
+                repo_path=os.getcwd(),
+                enforce_role_compat=role is not None,
+            )
+        except ValueError:
+            authority = None  # unknown task_type action shape — not a policy-covered task_type, skip gate
+        if authority is not None and not authority.allowed:
+            raise RuntimeError(
+                f"Dispatch refused: task_type {task_type!r} is not an authorized task_type "
+                f"for role {role or 'dev'!r} per policy.json (see #423, #569)."
+            )
     requires_gh_write = bool(
         requires_gh_write or _task_requires_gh_write(task, task_type=task_type)
     )

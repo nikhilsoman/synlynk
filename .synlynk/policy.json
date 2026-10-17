@@ -39,6 +39,9 @@
         "review",
         "test"
       ],
+      "architect": [
+        "review"
+      ],
       "pm": [
         "pm",
         "brainstorm",
