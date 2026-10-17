@@ -2116,3 +2116,22 @@ implementation dispatched, external messages sent, or policy changed.
   Next: independent QA review, then run the approved pilot only with the live
   credential/runtime and collect the 30-job gate evidence.
 [@nikhilsoman, Codex]
+
+## 2026-10-17 — Local Pilot prompt-delivery failure and fix
+
+- Started the first eligible 20% read-only `test_summary` pilot from merged
+  commit `8c335b60`. The isolated runner passed model, auth, and Docker checks,
+  but Aider interpreted the multiline context prompt as separate interactive
+  inputs and returned an unrelated answer. Stopped the run; receipt confirms
+  zero changed paths and no source edits. Recorded the Sev2 RCA on #2349.
+- Root cause: the runner piped the context file to Aider stdin without using
+  Aider's single-message `--message-file` mode. Added
+  `--message-file /dev/stdin` plus `--no-show-model-warnings`, preserving the
+  container's relay-only network contract and avoiding Aider's optional
+  public model-catalog lookup.
+- Verification: `pytest -q tests/test_local_pilot.py` — 13 passed; focused
+  pilot/dispatch/fallback suite — 223 passed. A second smoke was stopped
+  immediately after confirming dispatch workers load runner code from the
+  committed base worktree, not uncommitted source changes. No fix-branch live
+  result is claimed yet; merge the reviewed fix, then retry one scoped task.
+[@codex]

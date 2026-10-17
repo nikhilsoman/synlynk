@@ -7,6 +7,13 @@
 - **Directories:** bin, docs, project-docs, synlynk, tests, website
 
 ## Decisions
+- **2026-10-17 Local Pilot prompt delivery:** Aider's ordinary interactive
+  stdin treats the multiline Synlynk context prompt as separate inputs. The
+  isolated runner must use Aider's `--message-file /dev/stdin` mode so the full
+  task context is one request; keep optional model-catalog warnings disabled
+  because pilot containers are relay-only networked. A stopped run with no
+  valid task receipt is failure evidence, never an accepted pilot result.
+  [@codex]
 - **2026-10-17 Local Harness pilot containment:** Local Pilot is additive and
   opt-in per dispatch via an explicit allowlisted class; plain `auto` retains
   its pre-existing health/capability routing. Aider receives a tracked-file-only
