@@ -2094,5 +2094,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2379 \u2014 surface tiering with 8 core verbs and experimental quarantine fence (P0-4) (PR #2379, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2379.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2379\n- Merged improvements and fixes for PR #2379."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/378-pr2382-classify-qualification-failures-safely.md",
+    "title": "PR #2382 \u2014 classify qualification failures safely",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2382",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2382."
+    ],
+    "tweet": "\ud83d\ude80 PR #2382 \u2014 classify qualification failures safely (PR #2382, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2382.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2382\n- Merged improvements and fixes for PR #2382."
   }
 ]
