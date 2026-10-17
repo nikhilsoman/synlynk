@@ -1966,5 +1966,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2371 \u2014 register migration 22 for subscriptions harness rename and clean shards (#1926) (PR #2371, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2371.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2371\n- Merged improvements and fixes for PR #2371."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/370-pr2372-unify-effective-model-resolution.md",
+    "title": "PR #2372 \u2014 unify effective model resolution",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2372",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2372."
+    ],
+    "tweet": "\ud83d\ude80 PR #2372 \u2014 unify effective model resolution (PR #2372, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2372.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2372\n- Merged improvements and fixes for PR #2372."
   }
 ]
