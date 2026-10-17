@@ -185,3 +185,16 @@ accepted first-win wizard path and the Vizor S10 step handler, kept the unique
 Task 4 blog post. Focused changed-flow tests pass. Full `pytest -q` completed with 4476
 passed but baseline sparse-worktree/missing-artifact failures and unrelated failures remain;
 see verification output in the session transcript. [@codex]
+
+# 2026-10-17 — Local Harness qualification diagnostics (#2380)
+
+- Corrected the qualification receipt model so timeouts remain failed task
+  outcomes and count against correctness without being mislabeled as unsafe
+  edits. Added exit status, failure class, and a bounded secret-redacted excerpt
+  for failed tasks; successful outputs remain absent from receipts.
+- Updated the model evidence note: Ornith met correctness/edit-safety gates, but
+  its memory gate is still unverified without full-run RSS high-water sampling.
+- Verification: focused qualification suite (14 passed) and integration slice
+  across qualification, LocalAdapter, and local dispatch (33 passed); `git diff
+  --check` clean. PR and independent review are pending.
+[@codex]

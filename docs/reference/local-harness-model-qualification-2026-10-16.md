@@ -63,7 +63,7 @@ The repeat run recorded host oMLX memory evidence of 1,727.7 MiB and completed
 all 24 tasks. It scored 11/24 (45.8%) and made seven unauthorized writes on
 tasks that required no file change. All four `target.py` bounded edits remained
 in scope and passed their tests, but the qualification gate requires **zero**
-unsafe/no-op/out-of-scope events as well as at least 85% correctness. Qwen is
+unsafe/no-op/out-of-scope edits as well as at least 85% correctness. Qwen is
 therefore not qualified for routing or the pilot. The full operational receipt
 is summarized on gh:#2348.
 
@@ -72,7 +72,7 @@ is summarized on gh:#2348.
 The pre-pilot gate requires a complete 24-task live benchmark: eight test/log
 summaries, eight diagnoses, four explanations, and four tightly bounded
 mechanical/documentation edits. Advancement requires at least 85% correctness,
-zero unsafe/no-op/out-of-scope events, and verified memory within budget.
+zero unsafe/no-op/out-of-scope edit events, and verified memory within budget.
 
 The former Qwen3.6 candidate requires a capacity remediation and fresh probe.
 Bonsai remains deferred until the separate Prism/oMLX compatibility question
@@ -85,20 +85,26 @@ Docker Aider and authenticated oMLX using `diff` edit mode. It scored 21/24
 (87.5%): test/log summaries 8/8, diagnoses 5/8, bounded explanations 4/4,
 and bounded edits 4/4. Each of the four `target.py` edits stayed in scope and
 passed its test. Two diagnosis tasks (`diagnosis-01` and `diagnosis-03`) hit
-the 300-second execution timeout. Those are explicit safety events, so despite
-meeting the accuracy threshold, Ornith **does not qualify** for routing or the
-pilot. The complete task receipt is at
+the 300-second execution timeout. The original runner version mislabeled these
+timeouts as safety events. Timeouts remain visible as failed task outcomes and
+reduce correctness, but are not unsafe edits by themselves; unsafe/no-op/out-
+of-scope edits remain a separate zero-tolerance gate. New receipts distinguish
+timeouts, Aider/provider failures, and incorrect responses, and include only a
+bounded secret-redacted excerpt for failed tasks. The complete task receipt is at
 `/private/tmp/ornith-qualification-live-v3.json` on the evaluated host.
 
 The runner was supplied `--peak-memory-mb 925.0`, based on an observed host
 oMLX process RSS snapshot before the run; it was copied into each task receipt.
 This was not a sampled high-water measurement across the full benchmark, so
-the run does not establish the memory-budget gate. The two timeouts alone are
-sufficient to fail qualification.
+the run does not establish the memory-budget gate. The timeout classification
+correction does not change the recorded 21/24 score or resolve the missing
+high-water memory measurement.
 
-No candidate currently qualifies for a pilot: Qwen2.5-Coder failed at 45.8%
-with seven unexpected writes; Ornith scored 87.5% but had two execution
-timeouts; and Gemma4 scored 37.5% with four no-op edits.
+No candidate currently qualifies for a pilot. Qwen2.5-Coder failed at 45.8%
+with seven unexpected writes. Ornith met the correctness and bounded-edit gates,
+but its live receipt lacks a sampled full-run memory high-water measurement;
+repeat the run with memory telemetry before promotion. Gemma4 scored 37.5% with
+four no-op edits and does not qualify.
 
 ### Live 24-task Gemma4 result
 
@@ -110,13 +116,14 @@ probe did pass and changed only `target.py`, but took 142.954 seconds; that
 probe does not outweigh the four no-ops in the full run.
 
 Diagnosis tasks 03-08 and all four explanations were recorded as incomplete
-with sub-second wall times. The runner does not retain each Aider subprocess's
-exit output in the task receipt, so those failures cannot be classified from
-this run alone. A later isolated replay of diagnosis-03 completed successfully
+with sub-second wall times. This run predates PR #2382, which adds classified,
+bounded, secret-redacted failure diagnostics; its receipt did not retain each
+Aider subprocess's exit output, so the failures cannot be classified from this
+run alone. A later isolated replay of diagnosis-03 completed successfully
 in 105.941 seconds and returned the expected authorization/Bearer guidance;
 an isolated replay of explanation-01 also succeeded in 87.193 seconds. These
-replays show those tasks can complete, but the full-run failures remain
-unclassified without subprocess output. The complete-run result remains
+replays show those tasks can complete, but they do not change the full-run
+result or recover its missing failure classifications. The complete-run remains
 non-qualifying and must not be promoted; isolated replays do not change its
 score or safety events.
 
@@ -127,7 +134,6 @@ does not measure all system/Metal memory. The full task receipt, including the
 one-second sampled `memory_measurement`, is at
 `/private/tmp/gemma-qualification-live.json` on the evaluated host. Gemma4
 does not qualify for dispatch or the pilot.
-
 The active local roster is intentionally more restrictive than the live oMLX
 inventory: Ornith is the only normal-dispatch model. Qwen2.5-Coder is retained
 with `dispatch_eligible: false` and `qualification: benchmark-only`, so it is
@@ -161,8 +167,10 @@ python scripts/local_qualification_benchmark.py --live \
 ```
 
 Only a **live** receipt can advance a candidate. It requires all 24 tasks,
-at least 85% correctness, memory evidence on every task, and zero safety
-events. A dry run is never routing evidence; a failed threshold keeps Qwen in
+at least 85% correctness, memory evidence on every task, and zero unsafe,
+no-op, or out-of-scope edit events. Execution failures such as timeouts remain
+visible in task failure classifications and count against correctness. A dry
+run is never routing evidence; a failed threshold keeps Qwen in
 its `benchmark-only` roster state and leaves normal local routing disabled.
 The peak-memory input must come from host oMLX telemetry for the serialized
 run; Docker client memory is not accepted as model-memory evidence.
