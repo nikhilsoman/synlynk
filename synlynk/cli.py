@@ -2564,6 +2564,11 @@ def main(argv=None) -> None:
                 grants=getattr(args, "grant", []),
                 revokes=getattr(args, "revoke", []),
             )
+            if getattr(args, "local_pilot_class", None) and args.agent == "local":
+                raise ValueError(
+                    "--local-pilot-class requires auto-routing; omit the explicit "
+                    "'local' harness so the 20% cohort and isolated runner are enforced"
+                )
             if (
                 getattr(args, "local_pilot_class", None)
                 and not args.agent
