@@ -1193,11 +1193,71 @@ def _create_pytest_shim() -> Tuple[tempfile.TemporaryDirectory, str]:
     return shim_dir, shim_path
 
 
+def _setup_shim_zdotdir(shim_dir_path: str) -> str:
+    """Create an isolated ZDOTDIR ensuring synlynk shims stay at the front of PATH under zsh -lc."""
+    zdot_dir = os.path.join(shim_dir_path, "zdot")
+    os.makedirs(zdot_dir, mode=0o700, exist_ok=True)
+    header = (
+        'if [ -n "$SYNLYNK_SHIM_DIR" ]; then\n'
+        '  export PATH="$SYNLYNK_SHIM_DIR:$PATH"\n'
+        'fi\n'
+    )
+    zshenv_content = (
+        'if [ -f "$HOME/.zshenv" ]; then\n'
+        '  source "$HOME/.zshenv"\n'
+        'fi\n'
+        + header
+    )
+    zprofile_content = (
+        'if [ -f "$HOME/.zprofile" ]; then\n'
+        '  source "$HOME/.zprofile"\n'
+        'fi\n'
+        + header
+    )
+    zshrc_content = (
+        'if [ -f "$HOME/.zshrc" ]; then\n'
+        '  source "$HOME/.zshrc"\n'
+        'fi\n'
+        + header
+    )
+    with open(os.path.join(zdot_dir, ".zshenv"), "w", encoding="utf-8") as f:
+        f.write(zshenv_content)
+    with open(os.path.join(zdot_dir, ".zprofile"), "w", encoding="utf-8") as f:
+        f.write(zprofile_content)
+    with open(os.path.join(zdot_dir, ".zshrc"), "w", encoding="utf-8") as f:
+        f.write(zshrc_content)
+    return zdot_dir
+
+
+def _create_dispatch_shims() -> Tuple[tempfile.TemporaryDirectory, dict]:
+    """Create short-lived pytest and gh shims with login-shell isolation."""
+    from synlynk.gh_shim import write_shim as write_gh_shim
+    from synlynk.pytest_shim import write_shim as write_pytest_shim
+
+    shim_dir = tempfile.TemporaryDirectory(prefix="synlynk-dispatch-shims-")
+    write_pytest_shim(os.path.join(shim_dir.name, "pytest"))
+    write_gh_shim(os.path.join(shim_dir.name, "gh"))
+    zdot_dir = _setup_shim_zdotdir(shim_dir.name)
+
+    env_vars = {
+        "SYNLYNK_SHIM_DIR": shim_dir.name,
+        "ZDOTDIR": zdot_dir,
+        "BASH_ENV": os.path.join(zdot_dir, ".zshenv"),
+        "ENV": os.path.join(zdot_dir, ".zshenv"),
+    }
+    return shim_dir, env_vars
+
+
 def _exec_child_env() -> Tuple[dict, tempfile.TemporaryDirectory]:
-    """Return the inherited env with the shared GitHub CLI PATH guard."""
+    """Return the inherited env with the shared GitHub CLI PATH guard and shell isolation."""
     shim_dir, _shim_path = _create_exec_gh_shim()
+    zdot_dir = _setup_shim_zdotdir(shim_dir.name)
     env = os.environ.copy()
     env["SYNLYNK_HARNESS"] = "1"
+    env["SYNLYNK_SHIM_DIR"] = shim_dir.name
+    env["ZDOTDIR"] = zdot_dir
+    env["BASH_ENV"] = os.path.join(zdot_dir, ".zshenv")
+    env["ENV"] = os.path.join(zdot_dir, ".zshenv")
     env["PATH"] = shim_dir.name + os.pathsep + env.get("PATH", "")
     return env, shim_dir
 
@@ -1287,9 +1347,17 @@ def _build_subprocess_env(
                 "Or set SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1 to opt into host `gh` auth "
                 "(uses personal keyring — not recommended; see #569)."
             )
-    pytest_shim_dir, _pytest_shim_path = _create_pytest_shim()
-    proc_env["PATH"] = pytest_shim_dir.name + os.pathsep + proc_env.get("PATH", "")
-    return proc_env, pytest_shim_dir
+    shim_dir, shim_env_vars = _create_dispatch_shims()
+    proc_env["SYNLYNK_HARNESS"] = "1"
+    proc_env["SYNLYNK_SHIM_DIR"] = shim_env_vars["SYNLYNK_SHIM_DIR"]
+    proc_env["ZDOTDIR"] = shim_env_vars["ZDOTDIR"]
+    proc_env["BASH_ENV"] = shim_env_vars["BASH_ENV"]
+    proc_env["ENV"] = shim_env_vars["ENV"]
+    proc_env["PATH"] = shim_dir.name + os.pathsep + proc_env.get("PATH", "")
+    resolved_role = agent_role or _role_for_story(story_id)
+    if resolved_role:
+        proc_env["SYNLYNK_GH_ROLE"] = resolved_role
+    return proc_env, shim_dir
 
 
 def _cleanup_shim_after_process(process, shim_dir: tempfile.TemporaryDirectory) -> None:

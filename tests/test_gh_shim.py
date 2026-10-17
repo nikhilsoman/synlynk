@@ -136,3 +136,71 @@ def test_gh_shim_cli_prints_installable_environment(tmp_path, monkeypatch, capsy
     assert gh_shim.install_shim() == str(tmp_path / ".synlynk" / "gh-shim")
     assert (tmp_path / ".synlynk" / "gh-shim" / "gh").exists()
     assert gh_shim.shim_env() == f'export PATH="{tmp_path / ".synlynk" / "gh-shim"}:$PATH"'
+
+
+def test_gh_shim_picks_up_refreshed_daemon_token(monkeypatch):
+    calls = []
+
+    def fake_exec(binary, args, env):
+        calls.append((binary, args, env))
+        raise RuntimeError("exec captured")
+
+    from synlynk import gh_shim
+    monkeypatch.setattr(gh_shim.os, "execvpe", fake_exec)
+    monkeypatch.setattr(
+        "synlynk.dispatch._resolve_dispatch_gh_token",
+        lambda role: "refreshed-daemon-token" if role == "qa" else None,
+    )
+    monkeypatch.setattr(
+        "synlynk.gh_shim._real_gh_path",
+        lambda env, shim_dir: "/usr/bin/gh",
+    )
+    env = {
+        "PATH": "/usr/bin",
+        "SYNLYNK_HARNESS": "1",
+        "SYNLYNK_GH_ROLE": "qa",
+        "GH_TOKEN": "initial-stale-token",
+    }
+    try:
+        gh_shim.run_shim(["pr", "merge", "123"], env=env, shim_dir="/tmp/shim")
+    except RuntimeError as exc:
+        assert str(exc) == "exec captured"
+    assert len(calls) == 1
+    assert calls[0][0] == "/usr/bin/gh"
+    assert calls[0][2]["GH_TOKEN"] == "refreshed-daemon-token"
+
+
+
+def test_gh_shim_engages_under_login_shell(tmp_path):
+    _fake_gh(tmp_path)
+    from synlynk.dispatch import _setup_shim_zdotdir
+    from synlynk.gh_shim import write_shim
+
+    shim_dir = tmp_path / "shim"
+    shim_dir.mkdir()
+    shim_path = shim_dir / "gh"
+    write_shim(str(shim_path))
+    zdot_dir = _setup_shim_zdotdir(str(shim_dir))
+
+    env = {
+        "PATH": f"{tmp_path}{os.pathsep}/usr/bin:/bin",
+        "PYTHONPATH": os.getcwd(),
+        "SYNLYNK_ALLOW_CWD_FALLBACK": "1",
+        "SYNLYNK_SHIM_DIR": str(shim_dir),
+        "ZDOTDIR": zdot_dir,
+        "SYNLYNK_HARNESS": "1",
+        "GH_TOKEN": "my-login-token",
+        "HOME": str(tmp_path / "home"),
+    }
+    (tmp_path / "home").mkdir()
+    (tmp_path / "home" / ".zprofile").write_text(f'export PATH="{tmp_path}:$PATH"\n')
+
+    res = subprocess.run(
+        ["/bin/zsh", "-lc", "gh --version"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert res.returncode == 0
+    assert res.stdout == "gh-ran:my-login-token"
+

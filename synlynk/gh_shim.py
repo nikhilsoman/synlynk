@@ -131,8 +131,23 @@ def run_shim(args: list, env: Optional[Mapping[str, str]] = None, shim_dir: Opti
     child_env = dict(env if env is not None else os.environ)
     current_shim_dir = shim_dir or os.path.dirname(os.path.realpath(sys.argv[0]))
     harness = _is_harness_session(child_env)
-    has_token = bool(child_env.get("GH_TOKEN") or child_env.get("GITHUB_TOKEN"))
     role = child_env.get("SYNLYNK_GH_ROLE", "")
+    current_token = child_env.get("GH_TOKEN") or child_env.get("GITHUB_TOKEN")
+
+    # If role is known and token is present, refresh if the daemon cache has a newer token (Issue #2318)
+    if harness and role in KNOWN_ROLES and current_token:
+        try:
+            from synlynk.dispatch import _isolated_gh_config_dir, _resolve_dispatch_gh_token
+            fresh_token = _resolve_dispatch_gh_token(role)
+            if fresh_token and fresh_token != current_token:
+                child_env["GH_TOKEN"] = fresh_token
+                child_env["GITHUB_TOKEN"] = fresh_token
+                child_env["GH_CONFIG_DIR"] = _isolated_gh_config_dir()
+                current_token = fresh_token
+        except Exception:
+            pass
+
+    has_token = bool(current_token)
     if harness and not has_token and role in KNOWN_ROLES:
         os.execvpe(
             sys.executable,
