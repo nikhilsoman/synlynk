@@ -10,12 +10,14 @@ from synlynk.harness_adapters.agy import AgyAdapter
 from synlynk.harness_adapters.base import FailureKind, HarnessAdapter
 from synlynk.harness_adapters.claude import ClaudeAdapter
 from synlynk.harness_adapters.codex import CodexAdapter
+from synlynk.harness_adapters.generic_api import GenericAPIAdapter
+
 from synlynk.harness_adapters.grok import GrokAdapter
 from synlynk.harness_adapters.local import LocalAdapter
 from synlynk.harness_adapters.muse import MuseAdapter
 from synlynk.jobs import _check_task_receipt
 
-ALL_ADAPTERS = [ClaudeAdapter, CodexAdapter, AgyAdapter, GrokAdapter, LocalAdapter, MuseAdapter]
+ALL_ADAPTERS = [ClaudeAdapter, CodexAdapter, AgyAdapter, GrokAdapter, LocalAdapter, MuseAdapter, GenericAPIAdapter]
 
 _SIGNATURE_DRIFT_XFAIL = pytest.mark.xfail(
     reason="gh:#2078 — signature drift, tracked separately",
@@ -28,6 +30,7 @@ SIGNATURE_ADAPTERS = [
     GrokAdapter,
     LocalAdapter,
     MuseAdapter,
+    GenericAPIAdapter,
 ]
 
 RECEIPT_ADAPTERS = [
@@ -37,7 +40,9 @@ RECEIPT_ADAPTERS = [
     GrokAdapter,
     LocalAdapter,
     MuseAdapter,
+    GenericAPIAdapter,
 ]
+
 
 
 @pytest.mark.parametrize("adapter_cls", ALL_ADAPTERS)
