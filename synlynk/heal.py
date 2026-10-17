@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
+import tempfile
 
 
 def _merged_pr_branch(pr: str) -> str | None:
@@ -152,11 +154,28 @@ def test_magic_module_structure():
     return test_relpath, test_code, verification_cmd
 
 
+def _resolve_agent_trailer(role: str = "dev", harness: str | None = None) -> str:
+    """Resolve dynamic commit trailer for magic heal commits."""
+    from synlynk.attribution import HARNESS_METADATA
+    if not harness:
+        try:
+            from synlynk.capability_roles import _load_capability_roles
+            roles = _load_capability_roles()
+            harness = roles.get(role, {}).get("harness")
+        except Exception:
+            harness = None
+    if not harness or harness not in HARNESS_METADATA:
+        harness = "agy" if role in ("frontend", "css", "content") else "codex"
+    meta = HARNESS_METADATA.get(harness, HARNESS_METADATA["codex"])
+    return f"Co-Authored-By: {meta['name']} <{meta['email']}>"
+
+
 def run_magic_heal(
     repo_root: str = ".",
     dry_run: bool = False,
     auto_pr: bool = True,
     role: str = "dev",
+    harness: str | None = None,
 ) -> dict:
     """Run Magic PR Engine for an instant zero-touch first win in < 5 minutes."""
     root = os.path.abspath(repo_root)
@@ -173,6 +192,7 @@ def run_magic_heal(
     slug = selected_gap.get("slug", "heal")
     branch = f"feat/magic-heal-{slug}"
     test_relpath, test_code, verify_cmd = _generate_magic_test_content(selected_gap, root)
+    trailer = _resolve_agent_trailer(role=role, harness=harness)
 
     pr_title = f"feat(magic-heal): {selected_gap['title']}"
     pr_body = f"""## Magic Heal Auto-Remediation
@@ -184,7 +204,7 @@ def run_magic_heal(
 
 ---
 *Generated autonomously via `synlynk heal --magic`*  
-Co-Authored-By: Codex <noreply@openai.com>
+{trailer}
 """
 
     if dry_run:
@@ -198,40 +218,99 @@ Co-Authored-By: Codex <noreply@openai.com>
             "test_file": test_relpath,
             "test_code_preview": test_code[:300] + "...",
             "verification_command": verify_cmd,
+            "trailer": trailer,
         }
 
-    # 1. Write the test file
-    full_test_path = os.path.join(root, test_relpath)
-    os.makedirs(os.path.dirname(full_test_path), exist_ok=True)
-    with open(full_test_path, "w", encoding="utf-8") as f:
-        f.write(test_code)
+    # Check if root is inside a git repository
+    is_git = False
+    try:
+        git_check = subprocess.run(
+            ["git", "-C", root, "rev-parse", "--is-inside-work-tree"],
+            capture_output=True, text=True, check=False,
+        )
+        is_git = (git_check.returncode == 0 and git_check.stdout.strip() == "true")
+    except Exception:
+        is_git = False
 
-    # 2. Run verification command locally
-    verify_res = subprocess.run(verify_cmd, shell=True, cwd=root, capture_output=True, text=True)
-    passed = (verify_res.returncode == 0)
-
-    # 3. Create branch and commit
+    worktree_dir = None
+    target_dir = root
     committed = False
     pr_url = None
-    if passed:
+    passed = False
+    verify_out = ""
+
+    if is_git:
+        # Create an ephemeral isolated worktree so the user's checked-out branch is never disturbed
+        worktree_dir = tempfile.mkdtemp(prefix="synlynk-magic-heal-")
         try:
-            subprocess.run(["git", "-C", root, "checkout", "-b", branch], capture_output=True, text=True)
-            subprocess.run(["git", "-C", root, "add", test_relpath], capture_output=True, text=True)
-            commit_msg = f"{pr_title}\n\n{selected_gap['description']}\n\nCo-Authored-By: Codex <noreply@openai.com>"
-            subprocess.run(["git", "-C", root, "commit", "-m", commit_msg], capture_output=True, text=True)
-            committed = True
-
-            if auto_pr:
-                pr_res = subprocess.run(
-                    ["gh", "pr", "create", "--title", pr_title, "--body", pr_body, "--head", branch],
-                    cwd=root, capture_output=True, text=True
+            wt_add = subprocess.run(
+                ["git", "-C", root, "worktree", "add", "-b", branch, worktree_dir],
+                capture_output=True, text=True, check=False,
+            )
+            if wt_add.returncode != 0:
+                wt_add = subprocess.run(
+                    ["git", "-C", root, "worktree", "add", worktree_dir, branch],
+                    capture_output=True, text=True, check=False,
                 )
-                if pr_res.returncode == 0 and pr_res.stdout.strip():
-                    pr_url = pr_res.stdout.strip()
+            if wt_add.returncode == 0:
+                target_dir = worktree_dir
         except Exception:
-            pass
+            target_dir = root
 
-    # 4. Record story
+    try:
+        # 1. Write the test file in the isolated target directory
+        full_test_path = os.path.join(target_dir, test_relpath)
+        os.makedirs(os.path.dirname(full_test_path), exist_ok=True)
+        with open(full_test_path, "w", encoding="utf-8") as f:
+            f.write(test_code)
+
+        # 2. Run verification command locally in target directory
+        verify_res = subprocess.run(
+            verify_cmd, shell=True, cwd=target_dir, capture_output=True, text=True
+        )
+        passed = (verify_res.returncode == 0)
+        verify_out = (verify_res.stdout + verify_res.stderr)[-1000:]
+
+        # 3. Commit and PR if passed
+        if passed and is_git:
+            try:
+                subprocess.run(
+                    ["git", "-C", target_dir, "add", test_relpath],
+                    capture_output=True, text=True, check=False,
+                )
+                commit_msg = f"{pr_title}\n\n{selected_gap['description']}\n\n{trailer}"
+                c_res = subprocess.run(
+                    ["git", "-C", target_dir, "commit", "-m", commit_msg],
+                    capture_output=True, text=True, check=False,
+                )
+                committed = (c_res.returncode == 0)
+
+                if auto_pr and committed:
+                    subprocess.run(
+                        ["git", "-C", target_dir, "push", "-u", "origin", branch],
+                        capture_output=True, text=True, check=False,
+                    )
+                    pr_res = subprocess.run(
+                        ["gh", "pr", "create", "--title", pr_title, "--body", pr_body, "--head", branch],
+                        cwd=target_dir, capture_output=True, text=True, check=False,
+                    )
+                    if pr_res.returncode == 0 and pr_res.stdout.strip():
+                        pr_url = pr_res.stdout.strip()
+            except Exception:
+                pass
+    finally:
+        # 4. Clean up ephemeral worktree
+        if worktree_dir and os.path.exists(worktree_dir):
+            try:
+                subprocess.run(
+                    ["git", "-C", root, "worktree", "remove", "--force", worktree_dir],
+                    capture_output=True, text=True, check=False,
+                )
+            except Exception:
+                pass
+            shutil.rmtree(worktree_dir, ignore_errors=True)
+
+    # 5. Record story
     try:
         from synlynk.db import cmd_story_create
         cmd_story_create(title=f"Magic Heal: {selected_gap['title']}")
@@ -246,9 +325,10 @@ Co-Authored-By: Codex <noreply@openai.com>
         "pr_body": pr_body,
         "test_file": test_relpath,
         "verification_passed": passed,
-        "verification_output": (verify_res.stdout + verify_res.stderr)[-1000:],
+        "verification_output": verify_out,
         "committed": committed,
         "pr_url": pr_url,
+        "worktree_isolated": (worktree_dir is not None),
     }
 
 

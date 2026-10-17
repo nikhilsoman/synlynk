@@ -6,6 +6,8 @@
       "id": "Ornith-1.0-9B-4bit",
       "pinned": true,
       "edit_format": "diff",
+      "qualification": "qualified",
+      "qualification_receipt": "docs/reference/local-harness-model-qualification-2026-10-16.md",
       "tier": ["8gb-light", "16gb-default", "32gb-pro", "64gb-fleet"]
     },
     {

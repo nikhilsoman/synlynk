@@ -212,9 +212,14 @@ def _parse_iso(value: str) -> datetime:
 
 
 def effective_age_seconds(row, now: datetime) -> float:
-    captured = _parse_iso(row["captured_at"])
+    if isinstance(row, (tuple, list)):
+        captured_val = row[4]
+        extra = row[6]
+    else:
+        captured_val = row["captured_at"]
+        extra = row["staleness_seconds"]
+    captured = _parse_iso(captured_val)
     age = (now - captured).total_seconds()
-    extra = row["staleness_seconds"]
     if extra is None:
         return max(0.0, age)
     return max(0.0, age, float(extra))
@@ -222,6 +227,9 @@ def effective_age_seconds(row, now: datetime) -> float:
 
 def _latest_snapshot(conn, harness: str, window: str):
     try:
+        if getattr(conn, "row_factory", None) is None:
+            import sqlite3
+            conn.row_factory = sqlite3.Row
         return conn.execute(
             """SELECT harness, window, used_percent, resets_at, captured_at, source, staleness_seconds, job_id
                  FROM quota_snapshots
@@ -236,6 +244,9 @@ def _latest_snapshot(conn, harness: str, window: str):
 
 def _calibrate_percent(conn, harness: str, window: str) -> float | None:
     try:
+        if getattr(conn, "row_factory", None) is None:
+            import sqlite3
+            conn.row_factory = sqlite3.Row
         row = conn.execute(
             """SELECT used_tokens, limit_tokens FROM harness_quotas
                 WHERE lower(harness) = lower(?) AND quota_type = ? AND unit = 'tokens'
@@ -248,7 +259,11 @@ def _calibrate_percent(conn, harness: str, window: str) -> float | None:
         return None
     if row is None:
         return None
-    return (float(row["used_tokens"]) / float(row["limit_tokens"])) * 100.0
+    if isinstance(row, (tuple, list)):
+        used, limit = row[0], row[1]
+    else:
+        used, limit = row["used_tokens"], row["limit_tokens"]
+    return (float(used) / float(limit)) * 100.0
 
 
 def window_status(conn, harness: str, window: str, *, now: datetime, registry: dict | None = None) -> dict:

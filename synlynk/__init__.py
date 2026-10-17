@@ -384,6 +384,30 @@ DB_PATH = os.environ.get("SYNLYNK_STATE_DB_PATH") if _FAST_CLI else _resolve_db_
 ACTIVE_DB_PATH = None
 
 
+def _migrate_db_with_schema_retry(conn: _sqlite3.Connection) -> None:
+    """Retry the one SQLite error caused by a concurrent schema refresh.
+
+    Two short-lived CLI connections can both bootstrap an older state DB.  One
+    connection may commit an additive migration after the other prepared a
+    schema statement, which SQLite reports as ``database schema has changed``.
+    The migration is idempotent; retrying it refreshes that connection's schema
+    cache.  Other operational failures remain fail-closed.
+    """
+    from synlynk.db import _migrate_db
+
+    for attempt in range(3):
+        try:
+            _migrate_db(conn)
+            return
+        except _sqlite3.OperationalError as exc:
+            if "database schema has changed" not in str(exc).lower() or attempt == 2:
+                raise
+            try:
+                conn.rollback()
+            except _sqlite3.Error:
+                pass
+
+
 def _get_db(
     db_path: str = None,
     read_only: bool = False,
@@ -500,7 +524,7 @@ def _get_db(
             from synlynk.wal_ledger import ensure_wal_pragmas
             ensure_wal_pragmas(conn)
             if migrate:
-                _migrate_db(conn)
+                _migrate_db_with_schema_retry(conn)
             if migrate and not _IS_TESTING and os.path.abspath(path) == os.path.abspath(DB_PATH):
                 from synlynk.product_store import identity_slug_from_config
                 from synlynk.state_registry import ensure_registered_product, identity_metadata, product_identity

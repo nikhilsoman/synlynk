@@ -1,0 +1,53 @@
+# Local Harness pilot
+
+The initial production-equivalent cohort is limited to the qualified Ornith
+profile and the explicit task classes `test_summary`, `test_diagnosis`,
+`codepath_summary`, `change_summary`, `documentation_edit`, and
+`mechanical_edit`. Work must be dispatched as `auto` with a class; the router
+keeps unclassified, excluded, and out-of-cohort tasks on the configured
+frontier fallback.
+
+For example:
+
+```sh
+synlynk dispatch auto --local-pilot-class test_summary \
+  --task-type test --story <story-id> \
+  --scope-paths path/to/test.log \
+  --task "Summarize the focused test output and list failures"
+```
+
+Every class needs at least one bounded `--scope-paths` entry; absolute paths,
+parent traversal, `.git`, and `.synlynk` paths are rejected. Summary classes
+are opened read-only to Aider. Edit classes can only be copied back to the job
+worktree when every changed path matches the declared scope.
+
+The cohort assignment is stable for a story/issue key (or task digest when no
+key is supplied). The checked-in workspace policy starts at 20%. Only the
+approved 20%, 35%, and 50% gates are accepted. Promotion is an operator
+decision based on receipts: at least 30 jobs and 90% acceptance before 35%;
+at least 75 jobs, 90% acceptance, stable latency and memory, and a passed
+rollback drill before 50%. A serious incident or failed gate returns the
+recommended share to the frontier (0%).
+
+Pilot Aider runs use `docker/local-pilot.compose.yaml`: Aider is on an
+internal-only Docker network; its sole peer is a relay with a fixed destination
+of host oMLX TCP port 8000. Aider receives a credential-scanned copy of only
+explicitly scoped files in a disposable scratch repository, not the job
+worktree or its Git metadata. Out-of-scope tracked and untracked files are not
+copied into the model's view. Only validated in-scope edits are applied back
+to the disposable job worktree. The Aider container gets only
+`OPENAI_API_KEY`. It does not receive GitHub tokens, SSH credentials, or the
+host home directory. The API base inside Aider is rewritten to
+`http://omlx:8000/v1`. A Docker, Compose, authentication, or isolation setup
+failure never falls back to host Aider execution.
+
+To stop Local Pilot routing immediately, set `local_pilot.enabled` to `false`
+in `.synlynk/workspace.json`. To roll back the cohort without changing the
+feature configuration, set `local_pilot.share` to `0`; the router rejects that
+unapproved share and uses the frontier fallback. Do not raise the share without
+the corresponding evidence review.
+
+This pilot does not authorize production-file changes, refactors, architecture
+or specification work, dependency changes, GitHub writes, reviews, merges,
+secrets work, or broad test execution. Those jobs must not be tagged with a
+Local Pilot class.

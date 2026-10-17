@@ -20,13 +20,31 @@ def test_local_build_cmd_includes_dispatch_flags():
 
 
 def test_local_parse_output_returns_event():
-    parsed = LocalAdapter().parse_output("local output")
-    assert parsed.raw_text == "local output"
-    assert parsed.failure is None
+    parsed = LocalAdapter().parse_output("SYNLYNK_TASK_RECEIVED: abc123\nlocal output")
+    assert parsed.raw_text.endswith("local output")
+    assert parsed.compatibility_evidence["receipt"] == "abc123"
 
 
 def test_local_classify_failure_returns_none():
     assert LocalAdapter().classify_failure(1, "unrelated error", "") is None
+
+
+@pytest.mark.parametrize(
+    ("output", "failure"),
+    [
+        ("401 unauthorized", "auth_expired"),
+        ("model not found", "model_unavailable"),
+        ("connection refused", "inventory_unavailable"),
+        ("request timed out", "timeout"),
+        ("malformed response", "malformed_response"),
+        ("Aider error: failed", "aider_failure"),
+        ("No changes made", "no_op"),
+    ],
+)
+def test_local_classify_failure_is_structured(output, failure):
+    result = LocalAdapter().classify_failure(1, output, "")
+    assert result is not None
+    assert result.value == failure
 
 
 def test_local_resolve_model():
@@ -39,5 +57,5 @@ def test_local_resolve_model_supports_hermes_tier():
 
 def test_local_resolve_model_preserves_existing_local_tiers():
     adapter = LocalAdapter()
-    assert adapter.resolve_model("fast", None) == "qwen2.5"
-    assert adapter.resolve_model("reasoning", None) == "deepseek-r1"
+    assert adapter.resolve_model("fast", None) == "Ornith-1.0-9B-4bit"
+    assert adapter.resolve_model("reasoning", None) == "Ornith-1.0-9B-4bit"
