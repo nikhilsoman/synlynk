@@ -139,6 +139,27 @@ def test_check_task_receipt_late_when_marker_present_but_not_first():
     assert jobs_mod._check_task_receipt(log_text, "abc123") == "late"
 
 
+def test_local_task_receipt_ignores_aider_framing_and_accepts_wrapped_digest():
+    import synlynk.jobs as jobs_mod
+
+    log_text = (
+        "Aider v0.86.2\n► **THINKING**\ninternal planning\n"
+        "────────────────────────────────\n► **ANSWER**\n"
+        "SYNLYNK_TASK_RECEIVED:\nabc123\nsummary\n"
+    )
+    assert jobs_mod._check_task_receipt(log_text, "abc123", agent="local") == "ok"
+
+
+def test_local_task_receipt_still_fails_when_not_first_answer_line():
+    import synlynk.jobs as jobs_mod
+
+    log_text = (
+        "► ANSWER\nI will summarize this first.\n"
+        "SYNLYNK_TASK_RECEIVED: abc123\n"
+    )
+    assert jobs_mod._check_task_receipt(log_text, "abc123", agent="local") == "late"
+
+
 def test_check_task_receipt_mismatch_when_first_line_wrong_digest():
     import synlynk.jobs as jobs_mod
 

@@ -247,11 +247,16 @@ def run_isolated_dispatch(
         for path in expanded_scope:
             scope_flags.extend([flag, path])
         invocation_args = list(aider_args)
-        # Aider otherwise probes the public LiteLLM model-price catalog during
-        # startup. The pilot container is intentionally network-isolated except
-        # for the fixed oMLX relay, so suppress that optional network lookup.
+        # This suppresses optional model warnings; Aider may still attempt its
+        # LiteLLM catalog lookup. The isolated container blocks that traffic.
         if "--no-show-model-warnings" not in invocation_args:
             invocation_args.append("--no-show-model-warnings")
+        # Keep assistant output unwrapped so task receipts remain machine
+        # verifiable, and avoid Aider's shell-command suggestion affordance in
+        # this bounded pilot interface.
+        for option in ("--no-pretty", "--no-suggest-shell-commands"):
+            if option not in invocation_args:
+                invocation_args.append(option)
         # Read the complete stdin stream as one Aider message. Without this,
         # Aider's interactive loop interprets each line of Synlynk's context
         # prompt as a separate message and may answer unrelated fragments.

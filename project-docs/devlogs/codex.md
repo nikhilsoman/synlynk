@@ -233,3 +233,20 @@ see verification output in the session transcript. [@codex]
 - Posted the correction and result to #2348; updating the model qualification
   matrix and roadmap. The next task is the gated #2349 20% isolated pilot.
 [@codex]
+
+## 2026-10-17 — Local Pilot receipt framing remediation (#2349)
+
+- Inspected the full `job-445f3105` log and runner receipt. Aider emitted
+  framework framing and reasoning before the answer; the correct task digest
+  was line-wrapped in the first ANSWER line, so strict global first-line
+  validation rejected a task that had in fact been delivered. The runner
+  receipt independently confirms `completed_read_only` and zero changed paths.
+- Added LocalAdapter-specific receipt parsing for Aider's ANSWER framing while
+  retaining strict first-line validation for all other harnesses. Disabled
+  pretty wrapping and shell-command suggestions in the isolated Aider run.
+  Corrected the misleading note: `--no-show-model-warnings` does not prevent
+  Aider's blocked LiteLLM catalog request.
+- Verification: focused jobs/dispatch/local-adapter/pilot integration suites
+  (431 passed); `git diff --check` clean. Independent review, merge, and a
+  valid live receipt remain required before accepting pilot traffic.
+[@codex]

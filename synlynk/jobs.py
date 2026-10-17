@@ -497,7 +497,9 @@ _TASK_RECEIPT_MARKER_PREFIX = "SYNLYNK_TASK_RECEIVED:"
 _INSTRUCTION_RECEIPT_MARKER_PREFIX = "SYNLYNK_INSTRUCTION_VERSION:"
 
 
-def _check_task_receipt(log_text: str, task_sha256: Optional[str]) -> Optional[str]:
+def _check_task_receipt(
+    log_text: str, task_sha256: Optional[str], agent: Optional[str] = None
+) -> Optional[str]:
     """Classifies task-receipt marker compliance in a job's log.
 
     Returns one of 'ok', 'late', 'mismatch', 'absent', or None when the
@@ -509,6 +511,33 @@ def _check_task_receipt(log_text: str, task_sha256: Optional[str]) -> Optional[s
     if not lines:
         return "absent"
     expected = f"{_TASK_RECEIPT_MARKER_PREFIX} {task_sha256}"
+
+    # Aider emits startup and reasoning sections before its final ANSWER. For
+    # the local adapter, verify the first non-empty line in ANSWER rather than
+    # treating Aider's own UI framing as model output.
+    def is_aider_answer_heading(line: str) -> bool:
+        normalized = line.replace("*", "").replace("_", "").strip()
+        return normalized.endswith("ANSWER") and (
+            normalized == "ANSWER" or normalized.endswith("► ANSWER")
+        )
+
+    if agent == "local" and any(is_aider_answer_heading(line) for line in lines):
+        answer_index = next(
+            index for index, line in enumerate(lines) if is_aider_answer_heading(line)
+        )
+        answer_lines = lines[answer_index + 1 :]
+        if answer_lines and answer_lines[0] == expected:
+            return "ok"
+        if answer_lines and answer_lines[0] == _TASK_RECEIPT_MARKER_PREFIX:
+            if len(answer_lines) > 1 and answer_lines[1] == task_sha256:
+                return "ok"
+            return "mismatch"
+        if expected in answer_lines:
+            return "late"
+        if answer_lines and answer_lines[0].startswith(_TASK_RECEIPT_MARKER_PREFIX):
+            return "mismatch"
+        return "absent"
+
     if lines[0] == expected:
         return "ok"
     if expected in lines[1:]:
@@ -2657,7 +2686,9 @@ def _reconcile_jobs_unlocked() -> None:
                 task_sha256_for_receipt = None
                 if job.get("task"):
                     task_sha256_for_receipt = hashlib.sha256(job["task"].encode("utf-8")).hexdigest()
-                receipt_status = _check_task_receipt(log_text, task_sha256_for_receipt)
+                receipt_status = _check_task_receipt(
+                    log_text, task_sha256_for_receipt, agent=job.get("agent")
+                )
                 has_corroborating_activity = _task_delivery_has_corroborating_activity(job, git_state, log_text=log_text)
                 task_delivery = _classify_task_delivery(receipt_status, has_corroborating_activity)
                 if task_delivery["hard_fail"]:
@@ -2913,7 +2944,9 @@ def _reconcile_jobs_unlocked() -> None:
                     task_sha256_for_receipt = None
                     if job.get("task"):
                         task_sha256_for_receipt = hashlib.sha256(job["task"].encode("utf-8")).hexdigest()
-                    receipt_status = _check_task_receipt(log_text, task_sha256_for_receipt)
+                    receipt_status = _check_task_receipt(
+                        log_text, task_sha256_for_receipt, agent=job.get("agent")
+                    )
                     has_corroborating_activity = _task_delivery_has_corroborating_activity(job, git_state, log_text=log_text)
                     task_delivery = _classify_task_delivery(receipt_status, has_corroborating_activity)
                     if task_delivery["hard_fail"]:
