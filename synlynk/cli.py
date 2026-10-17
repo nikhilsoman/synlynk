@@ -2701,13 +2701,20 @@ def main(argv=None) -> None:
             # This is the baseline metric needed before the surface changes.
             from synlynk.baseline import dispatch_invocation_event
             from synlynk.sentinel import log_telemetry_event
+            job_ref = job.get("id") or job.get("job_id")
             log_telemetry_event(dispatch_invocation_event(
                 cli_tokens,
                 args.agent or known_agents[0],
-                job.get("id") if isinstance(job, dict) else None,
+                job_ref if isinstance(job, dict) else None,
             ))
-            print(f"  {_GREEN}▶{_RESET} [{job['id']}] {job.get('agent', args.agent or known_agents[0])} dispatched  PID {job['pid']}")
-            print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
+            if job.get("deferred"):
+                reason = job.get("reason") or "capacity"
+                print(f"  [{job_ref}] queued for retry (deferred: {reason})")
+                return
+            if not job_ref:
+                raise ValueError("dispatch returned neither a job id nor a job_id")
+            print(f"  {_GREEN}▶{_RESET} [{job_ref}] {job.get('agent', args.agent or known_agents[0])} dispatched  PID {job['pid']}")
+            print(f"  Log:  {_CYAN}synlynk logs --job {job_ref}{_RESET}")
             if job.get("fence"):
                 from synlynk.fencing import render_task_fence
 
