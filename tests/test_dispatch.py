@@ -2808,7 +2808,7 @@ def test_local_pilot_dispatch_uses_isolated_runner_and_records_cohort_receipt(pr
     receipt_payload = {
         "route_local": True, "reason": "eligible_local_cohort",
         "pilot_class": "test_summary", "share": 0.2, "bucket": 137,
-        "dispatch_key_sha256": "receipt-key-hash",
+        "dispatch_key_sha256": hashlib.sha256(b"test-2").hexdigest(),
         "dispatch_key": "test-2", "task_sha256": hashlib.sha256(
             b"summarize focused test output"
         ).hexdigest(),
@@ -2819,7 +2819,7 @@ def test_local_pilot_dispatch_uses_isolated_runner_and_records_cohort_receipt(pr
     }
     receipt = dispatch_mod._seal_local_pilot_receipt(receipt_payload)
     job = dispatch_mod.dispatch_agent(
-        agent="local", task="summarize focused test output", role="dev",
+        agent="local", story_id="test-2", task="summarize focused test output", role="dev",
         skip_preflight=True, context_mode="none", scope_paths=["test.log"],
         local_pilot_receipt=receipt,
     )
@@ -2837,7 +2837,7 @@ def test_local_pilot_dispatch_uses_isolated_runner_and_records_cohort_receipt(pr
     assert job["local_model_receipt"]["pilot"] == expected_receipt
 
 
-def test_local_pilot_rejects_forged_or_replayed_for_different_task_receipts(project_dir):
+def test_local_pilot_rejects_forged_and_cross_story_replayed_receipts(project_dir, monkeypatch):
     import synlynk.dispatch as dispatch_mod
 
     forged = {"route_local": True, "pilot_class": "test_summary"}
@@ -2847,10 +2847,15 @@ def test_local_pilot_rejects_forged_or_replayed_for_different_task_receipts(proj
             local_pilot_receipt=forged,
         )
 
+    monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda root: {
+        "enabled": True, "qualified": True, "isolated": True,
+        "share": 0.2, "qualified_models": ["ornith"],
+    })
     payload = {
         "route_local": True, "reason": "eligible_local_cohort",
-        "pilot_class": "test_summary", "share": 0.2, "bucket": 137,
-        "dispatch_key_sha256": "receipt-key-hash", "dispatch_key": "test-2",
+        "pilot_class": "test_summary", "share": 0.2, "bucket": 688,
+        "dispatch_key_sha256": hashlib.sha256(b"story-8").hexdigest(),
+        "dispatch_key": "story-8",
         "task_sha256": hashlib.sha256(b"original task").hexdigest(),
         "role": "dev", "scope_paths": ["test.log"], "requested_model": None,
         "effective_model": "ornith", "qualified_models": ["ornith"],
@@ -2858,7 +2863,7 @@ def test_local_pilot_rejects_forged_or_replayed_for_different_task_receipts(proj
     signed = dispatch_mod._seal_local_pilot_receipt(payload)
     with pytest.raises(RuntimeError, match="admission no longer matches"):
         dispatch_mod.dispatch_agent(
-            agent="local", task="different task", role="dev",
+            agent="local", story_id="story-9", task="original task", role="dev",
             scope_paths=["test.log"], local_pilot_receipt=signed,
         )
 

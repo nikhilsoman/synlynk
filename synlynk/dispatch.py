@@ -4092,6 +4092,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         receipt_payload = {
             key: value for key, value in local_pilot_receipt.items() if key != "_signature"
         }
+        current_dispatch_key = str(story_id or issue or task)
         runtime = load_pilot_runtime(os.getcwd())
         decision = evaluate_local_pilot(
             enabled=runtime["enabled"],
@@ -4101,7 +4102,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             role=role,
             requires_gh_write=requires_gh_write,
             share=runtime["share"],
-            dispatch_key=receipt_payload.get("dispatch_key"),
+            dispatch_key=current_dispatch_key,
             task=task,
             scope_paths=scope_paths or [],
         )
@@ -4115,6 +4116,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             or receipt_payload.get("role") != role
             or receipt_payload.get("scope_paths") != list(scope_paths or [])
             or receipt_payload.get("requested_model") != model
+            or receipt_payload.get("dispatch_key") != current_dispatch_key
+            or receipt_payload.get("dispatch_key_sha256")
+            != hashlib.sha256(current_dispatch_key.encode("utf-8")).hexdigest()
         ):
             raise RuntimeError("Local Pilot admission no longer matches dispatch request")
         # Drop the signing material and raw cohort key before persisting the
