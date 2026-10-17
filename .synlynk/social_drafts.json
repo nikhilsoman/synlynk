@@ -2014,5 +2014,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2374 \u2014 preserve byte timeout receipts (PR #2374, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2374.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2374\n- Merged improvements and fixes for PR #2374."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/373-pr2375-eliminate-false-negative-status-verdicts.md",
+    "title": "PR #2375 \u2014 eliminate false-negative status verdicts on review and merge dispatches (P0-2)",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2375",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2375."
+    ],
+    "tweet": "\ud83d\ude80 PR #2375 \u2014 eliminate false-negative status verdicts on review and merge dispatches (P0-2) (PR #2375, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2375.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2375\n- Merged improvements and fixes for PR #2375."
   }
 ]
