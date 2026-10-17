@@ -450,6 +450,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [371](./371-pr2373-parameterize-qualification-candidate.md) | PR #2373 — parameterize qualification candidate | [#2373](https://github.com/nikhilsoman/synlynk/pull/2373) | 2026-10-17 |
 | [372](./372-pr2374-preserve-byte-timeout-receipts.md) | PR #2374 — preserve byte timeout receipts | [#2374](https://github.com/nikhilsoman/synlynk/pull/2374) | 2026-10-17 |
 | [373](./373-pr2375-eliminate-false-negative-status-verdicts.md) | PR #2375 — eliminate false-negative status verdicts on review and merge dispatches (P0-2) | [#2375](https://github.com/nikhilsoman/synlynk/pull/2375) | 2026-10-17 |
+| [374](./374-pr2377-blog-test-isolation-sqlite-row-hardening.md) | PR #2377 — blog test isolation, sqlite row hardening, and daemon stale worktree handling (P0-3 PR 2) | [#2377](https://github.com/nikhilsoman/synlynk/pull/2377) | 2026-10-17 |
 
 ## Per-PR Post Template
 
