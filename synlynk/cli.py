@@ -1207,6 +1207,15 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     dispatch_parser.add_argument("--task-type", default=None, dest="task_type",
                                  help="Classify the dispatch task (for example, review) for task-specific handling")
     dispatch_parser.add_argument(
+        "--local-pilot-class",
+        choices=[
+            "test_summary", "test_diagnosis", "codepath_summary",
+            "change_summary", "documentation_edit", "mechanical_edit",
+        ],
+        default=None,
+        help="Explicitly classify a task for the gated 20%% Local Harness pilot",
+    )
+    dispatch_parser.add_argument(
         "--model-tier", choices=["fast", "pro", "reasoning"], default=None,
         dest="model_tier",
         help="Model cost/capability tier; omitted selects from task intent and AST blast radius",
@@ -2555,6 +2564,12 @@ def main(argv=None) -> None:
                 grants=getattr(args, "grant", []),
                 revokes=getattr(args, "revoke", []),
             )
+            if (
+                getattr(args, "local_pilot_class", None)
+                and not args.agent
+                and not resolved_agent_id
+            ):
+                args.agent = "auto"
             if not args.agent and not resolved_agent_id:
                 args.agent = defaults["harness"]
             if not getattr(args, "role", None) and not resolved_agent_id:
@@ -2569,7 +2584,7 @@ def main(argv=None) -> None:
             )
             if args.agent == "auto":
                 from synlynk import _get_db
-                from synlynk.dispatch import _resolve_dispatch_agent
+                from synlynk.dispatch import _resolve_dispatch_agent, take_local_pilot_receipt
 
                 db = _get_db(read_only=True)
                 try:
@@ -2577,9 +2592,22 @@ def main(argv=None) -> None:
                         args.agent,
                         _effective_task_type or "testing",
                         db,
+                        task=args.task,
+                        role=getattr(args, "role", None) or defaults["role"],
+                        requires_gh_write=_effective_requires_gh_write,
+                        pilot_class=getattr(args, "local_pilot_class", None),
+                        dispatch_key=(
+                            getattr(args, "story_id", None)
+                            or getattr(args, "issue", None)
+                            or args.task
+                        ),
+                        scope_paths=getattr(args, "scope_paths", []),
                     )
+                    local_pilot_receipt = take_local_pilot_receipt()
                 finally:
                     db.close()
+            else:
+                local_pilot_receipt = None
             if _effective_task_type == "review" and not getattr(args, "task_type", None):
                 print(
                     "  info: inferred task_type=review from task text "
@@ -2598,6 +2626,8 @@ def main(argv=None) -> None:
             if getattr(args, "dry_run", False):
                 from synlynk.dispatch import take_routing_fallback
                 take_routing_fallback(None)
+                from synlynk.dispatch import take_local_pilot_receipt
+                take_local_pilot_receipt()
                 if not args.task or not args.task.strip():
                     raise ValueError(
                         "--task is empty or whitespace-only; refusing to dispatch (see #720)"
@@ -2658,7 +2688,8 @@ def main(argv=None) -> None:
                                  issue=getattr(args, "issue", None),
                                  scope_paths=getattr(args, "scope_paths", []),
                                  session_id=getattr(args, "session_id", None),
-                                 role=getattr(args, "role", None))
+                                 role=getattr(args, "role", None),
+                                 local_pilot_receipt=local_pilot_receipt)
             if isinstance(job, dict) and job.get("status") == "blocked" and not job.get("pid"):
                 print(f"Error: {job.get('reason')}")
                 remediation = job.get("remediation")

@@ -305,8 +305,9 @@ Zero-cloud offline local model inference harness optimized for Apple Silicon MLX
 
 Status (2026-10-17): authenticated Aider/oMLX proof, LocalAdapter parity, and
 effective-model resolution are merged. Ornith now passes the approved stack
-qualification under #2348; #2349's isolated 20% pilot implementation and
-review are still required before any local production traffic.
+qualification under #2348. #2349's opt-in isolated 20% pilot implementation
+is on `feat/codex/local-pilot`; focused integration checks pass and the
+non-author review/live-runtime gates remain before any pilot traffic.
 
 - [ ] Local oMLX / Aider Harness Integration (#1710) (P0)
   Real subprocess dispatch to local MLX models (Llama-3, Qwen-2.5, DeepSeek)

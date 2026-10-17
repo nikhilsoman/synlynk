@@ -223,6 +223,15 @@ def _read_local_threshold(config_path=".synlynk/workspace.json") -> float:
 # Last auto-routing fallback, consumed by the CLI when it records the job.
 # Overwritten on the next fallback. Never changes the harness that was chosen.
 _pending_routing_fallback: Optional[dict] = None
+_pending_local_pilot_receipt: Optional[dict] = None
+
+
+def take_local_pilot_receipt() -> Optional[dict]:
+    """Consume the Local Pilot cohort decision for the dispatch being started."""
+    global _pending_local_pilot_receipt
+    receipt = _pending_local_pilot_receipt
+    _pending_local_pilot_receipt = None
+    return receipt
 
 
 def _log_routing_fallback(message: str, *, requested: str, actual: str) -> None:
@@ -275,30 +284,101 @@ def _resolve_dispatch_agent(
     task_type: str,
     db,
     config_path: str = ".synlynk/workspace.json",
+    *,
+    task: str = "",
+    role: Optional[str] = None,
+    requires_gh_write: bool = False,
+    pilot_class: Optional[str] = None,
+    dispatch_key: Optional[str] = None,
+    scope_paths: Optional[list[str]] = None,
 ) -> str:
-    """Resolve ``auto`` to local when healthy and sufficiently capable."""
+    """Resolve ``auto`` to the isolated local pilot only for admitted work."""
+    global _pending_local_pilot_receipt
+    _pending_local_pilot_receipt = None
     if requested_agent is not None and requested_agent != "auto":
         return requested_agent
 
     fallback = _read_local_fallback(config_path)
-    threshold = _read_local_threshold(config_path)
-    if not _preflight_local_silent():
-        message = f"Routing to: {fallback} (local oMLX unreachable)"
+    # Preserve established auto-routing for callers that have not explicitly
+    # opted a task into the graduated pilot. The Local Pilot is an additive,
+    # narrow cohort; it must not redefine the legacy `auto` contract.
+    if pilot_class is None:
+        threshold = _read_local_threshold(config_path)
+        if not _preflight_local_silent():
+            message = f"Routing to: {fallback} (local oMLX unreachable)"
+            print(message)
+            _log_routing_fallback(message, requested="local", actual=fallback)
+            return fallback
+        score = _get_local_capability_score(task_type, db)
+        if score >= threshold:
+            print(f"Routing to: local (tier-0, capability score: {score:.2f})")
+            return "local"
+        message = (
+            f"Routing to: {fallback} (local capability score {score:.2f} "
+            f"< threshold {threshold:.2f})"
+        )
         print(message)
         _log_routing_fallback(message, requested="local", actual=fallback)
         return fallback
 
-    score = _get_local_capability_score(task_type, db)
-    if score >= threshold:
-        print(f"Routing to: local (tier-0, capability score: {score:.2f})")
-        return "local"
-    message = (
-        f"Routing to: {fallback} (local capability score {score:.2f} "
-        f"< threshold {threshold:.2f})"
+    from synlynk.local_pilot import evaluate_local_pilot, load_pilot_runtime
+
+    runtime = load_pilot_runtime(os.getcwd())
+    decision = evaluate_local_pilot(
+        enabled=runtime["enabled"],
+        qualified=runtime["qualified"],
+        isolated=runtime["isolated"],
+        pilot_class=pilot_class,
+        role=role,
+        requires_gh_write=requires_gh_write,
+        share=runtime["share"],
+        dispatch_key=dispatch_key or hashlib.sha256(task.encode("utf-8")).hexdigest(),
+        task=task,
+        scope_paths=scope_paths,
     )
-    print(message)
-    _log_routing_fallback(message, requested="local", actual=fallback)
-    return fallback
+    if not decision.route_local:
+        message = f"Routing to: {fallback} (local pilot: {decision.reason})"
+        print(message)
+        _log_routing_fallback(message, requested="local", actual=fallback)
+        return fallback
+    try:
+        from synlynk.local_agent import resolve_effective_local_model
+
+        model_resolution = resolve_effective_local_model(
+            config_path=os.path.join(os.getcwd(), ".agents", "local.json"),
+            require_live_inventory=True,
+        )
+    except Exception as exc:
+        # Resolver diagnostics classify auth/inventory failures and never
+        # include the configured credential. A failed preflight is a frontier
+        # route, not a host-side local attempt.
+        message = f"Routing to: {fallback} (local model preflight failed: {exc})"
+        print(message)
+        _log_routing_fallback(message, requested="local", actual=fallback)
+        return fallback
+    if model_resolution["effective_model"] not in runtime["qualified_models"]:
+        message = f"Routing to: {fallback} (resolved local model is not pilot-qualified)"
+        print(message)
+        _log_routing_fallback(message, requested="local", actual=fallback)
+        return fallback
+    score = _get_local_capability_score(task_type, db)
+    _pending_local_pilot_receipt = {
+        "route_local": True,
+        "reason": decision.reason,
+        "pilot_class": decision.pilot_class,
+        "share": decision.share,
+        "bucket": decision.bucket,
+        "dispatch_key_sha256": hashlib.sha256(
+            str(dispatch_key or task).encode("utf-8")
+        ).hexdigest(),
+        "qualified_models": runtime["qualified_models"],
+        "effective_model": model_resolution["effective_model"],
+        "edit_format": model_resolution["edit_format"],
+        "model_health": model_resolution["health"],
+        "historical_capability_score": score,
+    }
+    print(f"Routing to: local (pilot {decision.share:.0%}; capability score: {score:.2f})")
+    return "local"
 
 
 def ast_blast_radius_score(report: Optional[dict]) -> int:
@@ -3961,11 +4041,21 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    _startup_failover: bool = True,
                    skip_permissions: bool = False,
                    container_image: str | None = None,
-                   routing_fallback: Optional[dict] = None) -> dict:
+                   routing_fallback: Optional[dict] = None,
+                   local_pilot_receipt: Optional[dict] = None) -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
         )
+    if local_pilot_receipt:
+        if agent != "local" or not local_pilot_receipt.get("route_local"):
+            raise RuntimeError("invalid Local Pilot routing receipt; refusing dispatch")
+        if requires_gh_write or _task_requires_gh_write(task, task_type=task_type):
+            raise RuntimeError("Local Pilot cannot execute GitHub-write work")
+        if container_image:
+            raise RuntimeError(
+                "Local Pilot uses its fixed isolated Compose runner; custom container images are refused"
+            )
     if routing_fallback is None:
         routing_fallback = take_routing_fallback(agent)
     if task_type:
@@ -4692,6 +4782,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 pass
 
     format_prompt = _pkg("_format_prompt_for_agent", _format_prompt_for_agent)
+    cwd_hint = (
+        "/workspace (credential-isolated scratch copy)"
+        if local_pilot_receipt
+        else worktree_path
+    )
     try:
         prompt = format_prompt(
             agent,
@@ -4700,7 +4795,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             task,
             file_section,
             verify_section,
-            cwd_hint=worktree_path,
+            cwd_hint=cwd_hint,
             task_sha256=task_sha256_for_receipt,
             instruction_file=instruction_file,
             role=resolved_agent_role,
@@ -4888,7 +4983,32 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     spawn_cwd = worktree_path
     stderr_target = subprocess.DEVNULL
     stderr_handle = None
-    if container_image is not None:
+    isolated_local_pilot = bool(local_pilot_receipt)
+    if isolated_local_pilot:
+        from synlynk.local_pilot import build_isolated_compose_shell
+
+        try:
+            spawn_cmd, spawn_env = build_isolated_compose_shell(
+                repo_root=os.getcwd(),
+                worktree=worktree_path,
+                prompt_file=prompt_file,
+                log_file=log_file,
+                exit_file=log_file + ".exit",
+                job_id=job_id,
+                aider_args=flags,
+                pilot_class=local_pilot_receipt["pilot_class"],
+                scope_paths=scope_paths or [],
+                env=proc_env,
+            )
+        except Exception as exc:
+            if pytest_shim_dir is not None:
+                pytest_shim_dir.cleanup()
+            if local_slot_claimed:
+                dconn.rollback()
+            if owns_dconn and dconn is not None:
+                dconn.close()
+            raise ValueError(f"Local Pilot isolated runner setup failed: {exc}") from exc
+    elif container_image is not None:
         docker_bin = shutil.which("docker")
         if not docker_bin:
             if pytest_shim_dir is not None:
@@ -4947,12 +5067,13 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         startup_exit = proc.poll()
     except (AttributeError, OSError):
         startup_exit = None
-    if container_image is not None and startup_exit is None:
+    isolated_execution = container_image is not None or isolated_local_pilot
+    if isolated_execution and startup_exit is None:
         try:
             startup_exit = proc.wait(timeout=1.0)
         except (AttributeError, OSError, subprocess.TimeoutExpired):
             startup_exit = None
-    container_failed = container_image is not None and startup_exit not in (None, 0)
+    container_failed = isolated_execution and startup_exit not in (None, 0)
     if container_failed:
         exit_path = log_file + ".exit"
         if not os.path.exists(exit_path):
@@ -4983,6 +5104,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 skip_permissions=skip_permissions,
                 routing_fallback=failover_route,
             )
+
+    if local_pilot_receipt:
+        local_pilot_receipt = {
+            **local_pilot_receipt,
+            "result_receipt_file": log_file + ".pilot.json",
+        }
 
     job = {
         "id": job_id,
@@ -5024,10 +5151,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 **model_routing["local_resolution"],
                 "retry_count": 0,
                 "memory_mib": None,
+                "pilot": local_pilot_receipt,
             }
             if model_routing["local_resolution"] is not None
             else None
         ),
+        "local_pilot_receipt": local_pilot_receipt,
         "fence": fence_data,
         "scope_paths": scope_paths or [],
         "requires_gh_write": requires_gh_write,

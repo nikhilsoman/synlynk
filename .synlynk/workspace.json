@@ -1,6 +1,10 @@
 {
   "schema_version": 1,
   "workspace_id": "2a6aa76a-94fb-4a45-9350-9fc71ec3bac8",
+  "local_pilot": {
+    "enabled": true,
+    "share": 0.2
+  },
   "worktree": {
     "mode": "sparse"
   }
