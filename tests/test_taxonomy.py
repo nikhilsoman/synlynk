@@ -6,6 +6,8 @@ synlynk.build_parser = synlynk_cli.build_parser
 from synlynk import build_parser
 from synlynk.taxonomy import (
     COMMAND_TAXONOMY,
+    CORE_COMMANDS,
+    EXPERIMENTAL_COMMANDS,
     entries_for_tier,
     entries_up_to_tier,
     entries_for_help,
@@ -74,9 +76,34 @@ def test_entries_up_to_tier_includes_lower_tiers_only():
 
 def test_tiered_help_uses_core_taxonomy_entries():
     commands = {entry["command"] for entry in entries_for_help()}
-    assert commands == {"init", "quickstart", "dispatch", "status", "jobs", "decide", "pr check", "exec", "doctor"}
+    assert commands == {"init", "scan", "dispatch", "jobs", "status", "doctor", "heal", "probe"}
     assert "workflow" in format_tiered_help("workflow").lower()
     assert "dispatch" not in {entry["command"] for entry in entries_for_help("workflow")}
+
+
+def test_taxonomy_three_tiers_classification():
+    assert CORE_COMMANDS == ("init", "scan", "dispatch", "jobs", "status", "doctor", "heal", "probe")
+    assert "concierge" in EXPERIMENTAL_COMMANDS
+    assert "addon" in EXPERIMENTAL_COMMANDS
+    assert "media" in EXPERIMENTAL_COMMANDS
+    assert "spike" in EXPERIMENTAL_COMMANDS
+    assert "board" in EXPERIMENTAL_COMMANDS
+    assert "gateway" in EXPERIMENTAL_COMMANDS
+    assert "relay" in EXPERIMENTAL_COMMANDS
+    assert "mesh" in EXPERIMENTAL_COMMANDS
+
+    core_entries = entries_for_help("core")
+    core_cmds = {entry["command"] for entry in core_entries}
+    assert core_cmds == set(CORE_COMMANDS)
+
+    op_entries = entries_for_help("operational")
+    op_cmds = {entry["command"] for entry in op_entries}
+    assert any("story" in c for c in op_cmds)
+    assert any("pr" in c for c in op_cmds)
+    for cmd in op_cmds:
+        root = cmd.split()[0]
+        assert root not in CORE_COMMANDS
+        assert root not in EXPERIMENTAL_COMMANDS
 
 
 def test_tiered_help_all_includes_every_taxonomy_entry():

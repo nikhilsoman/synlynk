@@ -3,19 +3,32 @@
 import argparse
 
 
-CORE_HELP_COMMANDS = (
+CORE_COMMANDS = (
     "init",
-    "quickstart",
+    "scan",
     "dispatch",
-    "status",
     "jobs",
-    "decide",
-    "pr check",
-    "exec",
+    "status",
     "doctor",
+    "heal",
+    "probe",
 )
+CORE_HELP_COMMANDS = CORE_COMMANDS
 
-HELP_GROUPS = ("core", "workflow", "advanced", "admin")
+EXPERIMENTAL_COMMANDS = {
+    "concierge",
+    "addon",
+    "media",
+    "spike",
+    "sandbox",
+    "wave6",
+    "board",
+    "gateway",
+    "relay",
+    "mesh",
+}
+
+HELP_GROUPS = ("core", "operational", "workflow", "advanced", "admin")
 
 
 def iter_leaf_commands(parser: argparse.ArgumentParser, prefix: tuple = ()):
@@ -597,6 +610,12 @@ def entries_for_help(group: str = "core", *, include_all: bool = False) -> list:
     group = group or "core"
     if group == "core":
         return [entry for entry in COMMAND_TAXONOMY if entry["command"] in CORE_HELP_COMMANDS]
+    if group == "operational":
+        return [
+            entry for entry in COMMAND_TAXONOMY
+            if entry["command"].split()[0] not in CORE_COMMANDS
+            and entry["command"].split()[0] not in EXPERIMENTAL_COMMANDS
+        ]
     if group == "workflow":
         return [
             entry for entry in COMMAND_TAXONOMY
@@ -627,5 +646,5 @@ def format_tiered_help(group: str = "core", *, include_all: bool = False) -> str
         lines.append(f"  {command:<32}{suffix}")
     lines.append("")
     lines.append("Use `synlynk help --all` for the complete command catalog.")
-    lines.append("Use `synlynk help workflow`, `synlynk help advanced`, or `synlynk help admin` for a tier.")
+    lines.append("Use `synlynk help operational`, `synlynk help workflow`, `synlynk help advanced`, or `synlynk help admin` for a tier.")
     return "\n".join(lines)
