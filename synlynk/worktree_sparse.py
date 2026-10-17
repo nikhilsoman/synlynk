@@ -14,7 +14,17 @@ import subprocess
 from pathlib import Path
 from typing import List, Optional, Sequence, Set
 
-MANDATORY_SPARSE_CONE_DIRS = (".synlynk", "project-docs", "tests", "synlynk")
+MANDATORY_SPARSE_CONE_DIRS = (
+    ".synlynk",
+    "project-docs",
+    "tests",
+    "synlynk",
+    "scripts",
+    "docs",
+    "bin",
+    ".github",
+    "githooks",
+)
 
 
 def is_sparse_worktree(worktree_path: str) -> bool:
@@ -37,7 +47,7 @@ def derive_sparse_cone_paths_from_graph(
     repo_root: str,
     task_text: str = "",
     story_id: Optional[str] = None,
-    max_dirs: int = 8,
+    max_dirs: int = 14,
 ) -> List[str]:
     """Derive minimal required directory cones from the AST knowledge graph."""
     cone_set: Set[str] = set(MANDATORY_SPARSE_CONE_DIRS)
@@ -130,7 +140,10 @@ def derive_sparse_cone_paths_from_graph(
                 if n_segment:
                     cone_set.add(n_segment)
 
-    return sorted(cone_set)[:max_dirs]
+    # Mandatory dirs are always included; max_dirs caps only discovered extras.
+    mandatory = sorted(set(MANDATORY_SPARSE_CONE_DIRS))
+    extras = sorted(cone_set - set(mandatory))
+    return sorted(mandatory + extras[: max(0, max_dirs - len(mandatory))])
 
 
 def create_sparse_cone_worktree(

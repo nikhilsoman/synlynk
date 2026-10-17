@@ -29,12 +29,25 @@ def _setup_fixture_repo(tmp_path):
     (repo / "tests").mkdir()
     (repo / "tests" / "test_app.py").write_text("def test_ok(): pass")
 
-    # Large / extraneous directories that should NOT be in initial cone
-    (repo / "website" / "assets").mkdir(parents=True)
-    (repo / "website" / "assets" / "large.png").write_bytes(b"LARGE_IMAGE_DATA")
+    # Newly mandatory review/CI dirs (gh:#2320) — must be checked out
+    (repo / "scripts").mkdir()
+    (repo / "scripts" / "generate_command_docs.py").write_text("# docs generator")
 
     (repo / "docs" / "archive").mkdir(parents=True)
     (repo / "docs" / "archive" / "old.md").write_text("Old doc")
+
+    (repo / "bin").mkdir()
+    (repo / "bin" / "fixture.sh").write_text("#!/bin/sh\necho hi\n")
+
+    (repo / ".github" / "workflows").mkdir(parents=True)
+    (repo / ".github" / "workflows" / "ci.yml").write_text("name: ci\n")
+
+    (repo / "githooks").mkdir()
+    (repo / "githooks" / "pre-commit").write_text("#!/bin/sh\necho hook\n")
+
+    # Large / extraneous directories that should NOT be in initial cone
+    (repo / "website" / "assets").mkdir(parents=True)
+    (repo / "website" / "assets" / "large.png").write_bytes(b"LARGE_IMAGE_DATA")
 
     subprocess.run(["git", "add", "."], cwd=str(repo), check=True, capture_output=True)
     subprocess.run(["git", "commit", "-m", "initial commit"], cwd=str(repo), check=True, capture_output=True)
@@ -60,9 +73,15 @@ def test_create_sparse_cone_worktree_includes_mandatory_dirs(tmp_path):
     assert os.path.isfile(os.path.join(wt_dir, "project-docs", "roadmap.md"))
     assert os.path.isfile(os.path.join(wt_dir, "synlynk", "app.py"))
 
+    # gh:#2320 — review/CI dirs must be checked out in dispatch worktrees
+    assert os.path.isfile(os.path.join(wt_dir, "scripts", "generate_command_docs.py"))
+    assert os.path.isfile(os.path.join(wt_dir, "docs", "archive", "old.md"))
+    assert os.path.isfile(os.path.join(wt_dir, "bin", "fixture.sh"))
+    assert os.path.isfile(os.path.join(wt_dir, ".github", "workflows", "ci.yml"))
+    assert os.path.isfile(os.path.join(wt_dir, "githooks", "pre-commit"))
+
     # Unscoped paths must NOT be materialized on disk
     assert not os.path.exists(os.path.join(wt_dir, "website", "assets", "large.png"))
-    assert not os.path.exists(os.path.join(wt_dir, "docs", "archive", "old.md"))
 
 
 def test_ensure_path_in_sparse_cone_expands_set(tmp_path):
@@ -102,4 +121,10 @@ def test_dispatch_create_job_worktree_honors_sparse_config(tmp_path, monkeypatch
     assert info["path"]
     assert is_sparse_worktree(info["path"]) is True
     assert os.path.isfile(os.path.join(info["path"], ".synlynk", "config.json"))
+    # gh:#2320 — dispatch worktrees must check out review/CI dirs
+    assert os.path.isfile(os.path.join(info["path"], "scripts", "generate_command_docs.py"))
+    assert os.path.isfile(os.path.join(info["path"], "docs", "archive", "old.md"))
+    assert os.path.isfile(os.path.join(info["path"], "bin", "fixture.sh"))
+    assert os.path.isfile(os.path.join(info["path"], ".github", "workflows", "ci.yml"))
+    assert os.path.isfile(os.path.join(info["path"], "githooks", "pre-commit"))
     assert not os.path.exists(os.path.join(info["path"], "website", "assets", "large.png"))
