@@ -462,6 +462,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [383](./383-pr2385-record-ornith-qualification-memory-evide.md) | PR #2385 — record Ornith qualification memory evidence | [#2385](https://github.com/nikhilsoman/synlynk/pull/2385) | 2026-10-17 |
 | [384](./384-pr2388-local-harness-unify-local-model-resoluti.md) | PR #2388 — [Local Harness] Unify local model resolution and live inventory | [#2388](https://github.com/nikhilsoman/synlynk/pull/2388) | 2026-10-17 |
 | [385](./385-pr2390-pypi-release-workflow-thin-vs-code-clien.md) | PR #2390 — PyPI release workflow, thin VS Code client, and worktree-isolated magic heal (P0-9, P0-7) | [#2390](https://github.com/nikhilsoman/synlynk/pull/2390) | 2026-10-17 |
+| [386](./386-pr2391-add-isolated-graduated-pilot.md) | PR #2391 — add isolated graduated pilot | [#2391](https://github.com/nikhilsoman/synlynk/pull/2391) | 2026-10-17 |
 
 ## Per-PR Post Template
 

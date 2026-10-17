@@ -2222,5 +2222,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2390 \u2014 PyPI release workflow, thin VS Code client, and worktree-isolated magic heal (P0-9, P0-7) (PR #2390, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2390.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2390\n- Merged improvements and fixes for PR #2390."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/386-pr2391-add-isolated-graduated-pilot.md",
+    "title": "PR #2391 \u2014 add isolated graduated pilot",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2391",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2391."
+    ],
+    "tweet": "\ud83d\ude80 PR #2391 \u2014 add isolated graduated pilot (PR #2391, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2391.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2391\n- Merged improvements and fixes for PR #2391."
   }
 ]
