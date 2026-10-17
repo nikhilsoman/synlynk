@@ -96,7 +96,7 @@ def test_dedupe_cost_rows_null_pr_number_falls_back_to_job_id():
 def test_build_buckets_excludes_unmapped_discipline():
     conn = _make_conn()
     conn.execute(
-        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'docs', 2, 4.5)"
+        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'ml', 2, 4.5)"
     )
     conn.execute("INSERT INTO cost_entries VALUES ('s1', 1.23, 100, 'job-1')")
     buckets, skipped = build_buckets(conn)
@@ -349,3 +349,69 @@ def test_capability_report_against_real_db_copy_does_not_mutate_source(tmp_path,
 
     after = hashlib.md5(copy_path.read_bytes()).hexdigest()
     assert before == after, "capability report must not mutate the state.db it reads"
+
+
+def test_build_buckets_maps_expanded_disciplines():
+    conn = _make_conn()
+    conn.execute("INSERT INTO capability_ratings VALUES ('s1', 'agy', 'docs', 1, 4.5)")
+    conn.execute("INSERT INTO cost_entries VALUES ('s1', 1.0, 100, 'job-1')")
+    conn.execute("INSERT INTO capability_ratings VALUES ('s2', 'codex', 'security', 2, 4.5)")
+    conn.execute("INSERT INTO cost_entries VALUES ('s2', 2.0, 101, 'job-2')")
+    conn.execute("INSERT INTO capability_ratings VALUES ('s3', 'codex', 'PROG', 1, 4.5)")
+    conn.execute("INSERT INTO cost_entries VALUES ('s3', 3.0, 102, 'job-3')")
+    conn.execute("INSERT INTO capability_ratings VALUES ('s4', 'grok', 'devops', 1, 4.5)")
+    conn.execute("INSERT INTO cost_entries VALUES ('s4', 4.0, 103, 'job-4')")
+    buckets, skipped = build_buckets(conn)
+    assert skipped == 0
+    assert ("agy", "content") in buckets
+    assert ("codex", "refactor") in buckets
+    assert ("codex", "implement") in buckets
+    assert ("grok", "infra") in buckets
+
+
+def test_fetch_rows_excludes_seed_and_local_records():
+    conn = _make_conn()
+    conn.execute("INSERT INTO capability_ratings VALUES ('real-1', 'codex', 'backend', 2, 4.5)")
+    conn.execute("INSERT INTO cost_entries VALUES ('real-1', 1.0, 100, 'job-1')")
+    # Synthetic seed by quality
+    conn.execute("INSERT INTO capability_ratings VALUES ('seed-qual', 'codex', 'backend', 2, 0.6)")
+    conn.execute("INSERT INTO cost_entries VALUES ('seed-qual', 1.0, 101, 'job-2')")
+    # Local agent
+    conn.execute("INSERT INTO capability_ratings VALUES ('local-1', 'local', 'backend', 2, 4.5)")
+    conn.execute("INSERT INTO cost_entries VALUES ('local-1', 1.0, 102, 'job-3')")
+    # Seed story ID
+    conn.execute("INSERT INTO capability_ratings VALUES ('seed-story-1', 'codex', 'backend', 2, 4.5)")
+    conn.execute("INSERT INTO cost_entries VALUES ('seed-story-1', 1.0, 103, 'job-4')")
+    conn.execute("INSERT INTO capability_ratings VALUES ('local-seed-01', 'codex', 'backend', 2, 4.5)")
+    conn.execute("INSERT INTO cost_entries VALUES ('local-seed-01', 1.0, 104, 'job-5')")
+
+    rows, _ = _fetch_rows(conn)
+    story_ids = [r[0] for r in rows]
+    assert story_ids == ["real-1"]
+
+
+def test_apply_proposals_updates_policy(tmp_path):
+    from synlynk.capability_report import apply_proposals
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text(_json.dumps({
+        "overrides": {
+            "dev_authority": {
+                "task_allocation": {
+                    "content": {"harness": "codex", "fallback": []}
+                }
+            }
+        }
+    }))
+    proposals = [
+        {
+            "task_type": "content",
+            "current_harness": "codex",
+            "proposed_harness": "agy",
+        }
+    ]
+    applied = apply_proposals(proposals, policy_path=str(policy_path))
+    assert applied is True
+    updated = _json.loads(policy_path.read_text())
+    alloc = updated["overrides"]["dev_authority"]["task_allocation"]["content"]
+    assert alloc["harness"] == "agy"
+    assert "codex" in alloc["fallback"]
