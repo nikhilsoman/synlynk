@@ -2174,5 +2174,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2389 \u2014 circuit breaker prompt-cache fix, capability report expansion, and stale goal reconciliation (P0-8, P0-6, P0-10) (PR #2389, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2389.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2389\n- Merged improvements and fixes for PR #2389."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/383-pr2385-record-ornith-qualification-memory-evide.md",
+    "title": "PR #2385 \u2014 record Ornith qualification memory evidence",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2385",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2385."
+    ],
+    "tweet": "\ud83d\ude80 PR #2385 \u2014 record Ornith qualification memory evidence (PR #2385, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2385.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2385\n- Merged improvements and fixes for PR #2385."
   }
 ]
