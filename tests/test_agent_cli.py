@@ -2372,6 +2372,20 @@ def test_cli_dispatch_dry_run_as_agent_without_explicit_harness_shows_resolved_a
     assert "agent:        agy" in captured.out
 
 
+def test_local_pilot_class_with_explicit_local_fails_closed(project_dir, capsys):
+    from synlynk.cli import main
+
+    with pytest.raises(SystemExit) as exc_info:
+        main([
+            "dispatch", "local", "--task", "summarize a focused test",
+            "--task-type", "test", "--local-pilot-class", "test_summary",
+            "--scope-paths", "tests/test_local_pilot.py", "--dry-run",
+        ])
+
+    assert exc_info.value.code == 1
+    assert "--local-pilot-class requires auto-routing" in capsys.readouterr().out
+
+
 def test_cli_dispatch_infers_defaults_and_prints_one_line_preview(project_dir, capsys):
     from synlynk.cli import main
 
