@@ -2062,5 +2062,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2376 \u2014 enforce login-shell shim isolation and dynamic token refresh (P0-3 PR 1) (PR #2376, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2376.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2376\n- Merged improvements and fixes for PR #2376."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/376-pr2378-record-ornith-qualification-result.md",
+    "title": "PR #2378 \u2014 record Ornith qualification result",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2378",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2378."
+    ],
+    "tweet": "\ud83d\ude80 PR #2378 \u2014 record Ornith qualification result (PR #2378, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2378.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2378\n- Merged improvements and fixes for PR #2378."
   }
 ]
