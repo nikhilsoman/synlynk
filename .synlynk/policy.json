@@ -173,6 +173,55 @@
     "host_auth_fallback": {
       "audit_log_required": true,
       "note": "SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH verified 2026-10-04 to require an explicit, manual, per-shell operator opt-in (not in the dispatch subprocess env allowlist, cannot be self-granted by a dispatched job). Every exercise of this fallback must now emit an audit-log event (gh:#1992, not yet built)."
+    },
+    "permission_profiles": {
+      "dev": {
+        "allowed_tools": [
+          "read_file",
+          "write_file",
+          "replace_file_content",
+          "run_command:pytest",
+          "run_command:python",
+          "run_command:git status",
+          "run_command:git add",
+          "run_command:git commit",
+          "run_command:git diff"
+        ],
+        "prohibited": [
+          "network",
+          "modify_git_config",
+          "host_files"
+        ]
+      },
+      "qa": {
+        "allowed_tools": [
+          "read_file",
+          "run_command:pytest",
+          "run_command:python",
+          "run_command:git status",
+          "run_command:git diff",
+          "run_command:synlynk pr check",
+          "run_command:gh pr view",
+          "run_command:gh pr review"
+        ],
+        "prohibited": [
+          "write_file_outside_scratch",
+          "delete_file",
+          "network"
+        ]
+      },
+      "pm": {
+        "allowed_tools": [
+          "read_file",
+          "write_file",
+          "replace_file_content",
+          "run_command:git status",
+          "run_command:git diff"
+        ],
+        "prohibited": [
+          "network"
+        ]
+      }
     }
   }
 }

@@ -4155,19 +4155,6 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             "Register an adapter before dispatching it."
         ) from exc
 
-    if agent in {"grok", "agy"} and not skip_permissions:
-        # Grok's CLI has no working non-bypass headless mode (LIVE-13:
-        # docs/rca/2026-09-22-LIVE-13-grok-headless-dispatch-permission-bypass.md).
-        # Auto-opt-in here (rather than requiring every caller to pass
-        # --dangerously-skip-permissions) so existing Grok dispatch workflows
-        # keep working unchanged after gh:#1925 part 1 made the bypass gated
-        # instead of unconditional. See
-        # docs/superpowers/specs/2026-10-04-grok-failclosed-permission-enforcement-design.md.
-        # Agy's --sandbox mode denies RunCommand outright and still reports
-        # SUCCESS (gh:#2216, job-0d75bb61). Same auto-opt-in so review and
-        # shell dispatches get --dangerously-skip-permissions instead.
-        skip_permissions = True
-
     # A capability gate may reroute the harness (for example, Grok write
     # denial or GitHub-write routing). Re-resolve against the final harness so
     # automatic model defaults never leak across sandbox boundaries.
@@ -4187,6 +4174,26 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if not job_id:
         _job_seed = dispatch_time if dispatch_time is not None else time.time()
         job_id = "job-" + _hashlib_early.md5(f"{agent}{task}{_job_seed}".encode()).hexdigest()[:8]
+
+    if requires_gh_write and agent == "grok" and not skip_permissions:
+        skip_permissions = True
+
+    if skip_permissions:
+        print(
+            "  \033[1;33m⚠ SECURITY WARNING: --dangerously-skip-permissions is enabled. "
+            "Dispatched agent has unconstrained execution permissions.\033[0m",
+            file=sys.stderr,
+        )
+        try:
+            sentinel_path = os.path.join(".synlynk", "sentinel.md")
+            _write_sentinel_alert(
+                "WARNING",
+                "DANGEROUS_PERMISSIONS_BYPASS",
+                f"Job {job_id}: --dangerously-skip-permissions explicitly enabled for agent '{agent}' with role '{resolved_agent_role or 'dev'}'",
+                sentinel_path,
+            )
+        except Exception as e:
+            logger.debug("Sentinel alert write failure: %s", e)
 
     dconn = db_conn
     owns_dconn = False
@@ -4590,6 +4597,19 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         flags = flags + ["-C", worktree_path]
     if agent == "muse" and worktree_path and "--workspace" not in flags:
         flags = flags + ["--workspace", worktree_path]
+    if agent == "claude" and worktree_path:
+        try:
+            from synlynk.policy import get_role_permission_profile
+            perm_profile = get_role_permission_profile(resolved_agent_role or "dev", repo_path=os.getcwd())
+            if perm_profile and "allowed_tools" in perm_profile:
+                claude_dir = os.path.join(worktree_path, ".claude")
+                os.makedirs(claude_dir, exist_ok=True)
+                claude_settings_path = os.path.join(claude_dir, "settings.json")
+                if not os.path.exists(claude_settings_path):
+                    with open(claude_settings_path, "w", encoding="utf-8") as f:
+                        json.dump({"allowedTools": perm_profile["allowed_tools"]}, f, indent=2)
+        except Exception as e:
+            logger.debug("Failed to inject Claude permission profile: %s", e)
     worktree_synlynk_dir = os.path.join(worktree_path, ".synlynk")
     logs_dir = os.path.join(worktree_synlynk_dir, "logs")
     prompts_dir = os.path.join(worktree_synlynk_dir, "prompts")
