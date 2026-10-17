@@ -315,8 +315,8 @@ def cmd_watch(args) -> None:
         sys.stdout.flush()
 
 _TOP_LEVEL_COMMANDS = (
-    "help", "init", "quickstart", "upgrade", "fleet", "uninstall", "join", "start", "home", "testbed", "tool",
-    "pack", "connector", "impact", "mesh", "spike", "team", "decide", "heal",
+    "help", "init", "brainstorm", "brief", "quickstart", "upgrade", "fleet", "uninstall", "join", "start", "home", "testbed", "tool",
+    "pack", "connector", "impact", "mesh", "spike", "team", "gc", "decide", "heal",
     "audit-docs", "goal", "governs", "local", "models", "media", "scan", "workspace",
     "migrate", "rollback", "probe", "doctor", "worktree", "tui", "notify", "exit",
     "repair", "sync", "configure", "identity", "type", "whoami", "events", "session",
