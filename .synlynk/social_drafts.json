@@ -2318,5 +2318,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2399 \u2014 support tuple-backed status projections (PR #2399, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2399.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2399\n- Merged improvements and fixes for PR #2399."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/392-pr2360-fix-gh-2258-synlynk-s-own-docs-agents-md.md",
+    "title": "PR #2360 \u2014 Fix gh:#2258: synlynk's own docs (AGENTS.md / AI_INS (job-4eb12c0e)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-17",
+    "pr": "#2360",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2360."
+    ],
+    "tweet": "\ud83d\ude80 PR #2360 \u2014 Fix gh:#2258: synlynk's own docs (AGENTS.md / AI_INS (job-4eb12c0e) (PR #2360, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2360.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2360\n- Merged improvements and fixes for PR #2360."
   }
 ]

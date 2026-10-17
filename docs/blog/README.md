@@ -468,6 +468,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [389](./389-pr2398-report-deferred-dispatch-jobs.md) | PR #2398 — report deferred dispatch jobs | [#2398](https://github.com/nikhilsoman/synlynk/pull/2398) | 2026-10-17 |
 | [390](./390-pr2359-fix-gh-2254-in-synlynk-synlynk-jobs-json.md) | PR #2359 — Fix gh:#2254: in synlynk, 'synlynk jobs --json' and (job-52b8deb2) | [#2359](https://github.com/nikhilsoman/synlynk/pull/2359) | 2026-10-17 |
 | [391](./391-pr2399-support-tuple-backed-status-projections.md) | PR #2399 — support tuple-backed status projections | [#2399](https://github.com/nikhilsoman/synlynk/pull/2399) | 2026-10-17 |
+| [392](./392-pr2360-fix-gh-2258-synlynk-s-own-docs-agents-md.md) | PR #2360 — Fix gh:#2258: synlynk's own docs (AGENTS.md / AI_INS (job-4eb12c0e) | [#2360](https://github.com/nikhilsoman/synlynk/pull/2360) | 2026-10-17 |
 
 ## Per-PR Post Template
 
