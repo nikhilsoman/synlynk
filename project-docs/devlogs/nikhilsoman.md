@@ -2135,3 +2135,34 @@ implementation dispatched, external messages sent, or policy changed.
   committed base worktree, not uncommitted source changes. No fix-branch live
   result is claimed yet; merge the reviewed fix, then retry one scoped task.
 [@codex]
+
+## 2026-10-17 — LIVE-25 Local Pilot fallback isolation boundary
+
+- Investigated a denied pilot task (`task_text_excluded`) that reached
+  host-side Aider without a signed isolated-runner receipt. Stopped before
+  model output; the worktree remained unchanged; excluded from the 8/12
+  accepted/distinct-sample tally. Root cause: the resolver selected the
+  frontier fallback but later capability routing could replace it with `local`.
+- Declared LIVE-25 in #2405 and recorded the incident/containment on parent
+  #2349. Set `local_pilot.enabled=false` in the user and disposable-pilot
+  workspace configs; `synlynk daemon status` reports no healthy running daemon.
+- Implemented a dedicated fix branch: pilot-intended dispatches bind the
+  selected harness and the post-resolution dispatch boundary rejects local
+  execution without a valid admitted receipt. Added CLI and dispatch regression
+  tests plus the Sev1 RCA at
+  `docs/rca/2026-10-17-LIVE-25-local-pilot-fallback-isolation.md`.
+- Verification: focused pilot/routing suite: 29 passed. Broader CLI/dispatch:
+  353 passed, 1 skipped; its only failure was the callback-server test blocked
+  by sandbox loopback permissions, and that single test passed when rerun with
+  loopback access. No local pilot resumed. Actual session cost is unavailable;
+  generated `project-docs/costs.md` was not hand-edited.
+- PR #2406 CI then exposed a separate xdist race: repair's orphan cleanup
+  removed the active `synlynk-selftest-*` fixture used by a migrate rollback
+  test. Filed LIVE-26 (#2407); isolated that test fixture under `tmp_path` so
+  the Local Harness PR is not dependent on the global cleanup namespace. The
+  test and its repair-cleanup neighbor pass locally; the production cleanup
+  race remains tracked separately.
+- Next: push the isolated-test fixture follow-up to PR #2406, rerun required CI,
+  and request QA approval on the new head. Keep pilot disabled; only resume after
+  QA merge and runtime/evidence review.
+[@codex]

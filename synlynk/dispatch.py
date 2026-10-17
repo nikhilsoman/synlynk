@@ -1877,8 +1877,29 @@ def _render_dispatch_preview(agent: str, task: str, context_mode: str,
                               agent_id: str = None, story_id: str = None,
                               force_agent: bool = False, requires_gh_write: bool = False,
                               static_baseline: bool = False,
-                              task_type: str = None) -> dict:
-    """Compute task/context digest data for dispatch inspection."""
+                              task_type: str = None, role: str = None) -> dict:
+    """Compute task/context digest data for dispatch inspection.
+
+    Runs the same role/task_type policy gate as dispatch_agent() so a
+    --dry-run preview never looks successful for a combination the live
+    dispatch would refuse (gh:#2258).
+    """
+    if task_type:
+        from synlynk.policy import check_authority
+        try:
+            authority = check_authority(
+                f"task_dispatch:{task_type}",
+                role=role or "dev",
+                repo_path=os.getcwd(),
+                enforce_role_compat=role is not None,
+            )
+        except ValueError:
+            authority = None  # unknown task_type action shape — not a policy-covered task_type, skip gate
+        if authority is not None and not authority.allowed:
+            raise RuntimeError(
+                f"Dispatch refused: task_type {task_type!r} is not an authorized task_type "
+                f"for role {role or 'dev'!r} per policy.json (see #423, #569)."
+            )
     requires_gh_write = bool(
         requires_gh_write or _task_requires_gh_write(task, task_type=task_type)
     )
@@ -4069,7 +4090,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    skip_permissions: bool = False,
                    container_image: str | None = None,
                    routing_fallback: Optional[dict] = None,
-                   local_pilot_receipt: Optional[dict] = None) -> dict:
+                   local_pilot_receipt: Optional[dict] = None,
+                   local_pilot_requested: bool = False) -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
@@ -4173,6 +4195,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     probed_agent = take_probed_dispatch_harness()
     initial_agent = agent
     agent = request.agent
+    if local_pilot_requested and agent == "local" and not local_pilot_receipt:
+        raise RuntimeError(
+            "Local Pilot dispatch refused: local execution requires a valid admitted "
+            "isolated-runner receipt. Retry through auto-routing after checking pilot eligibility."
+        )
     if agent != initial_agent and not force_agent:
         print(_capability_reroute_message(initial_agent, agent, probed_agent))
     # Reject unsupported harnesses before model resolution opens state.db.
@@ -4379,7 +4406,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         dconn = dconn()
         owns_dconn = True
 
-    if requested_model_input and dconn is not None:
+    # Local models have already been validated against the authoritative
+    # local policy and authenticated live oMLX inventory above. The global
+    # harness_models catalog is discovery metadata, and may be stale or
+    # polluted by filesystem shard names when an unauthenticated oMLX probe
+    # cannot read /v1/models. It must not override the local resolver.
+    if requested_model_input and dconn is not None and agent != "local":
         from synlynk.db import get_active_harness_models
 
         active_models = get_active_harness_models(dconn, harness=agent)
