@@ -11,6 +11,12 @@ class FailureKind(Enum):
     AUTH_EXPIRED = "auth_expired"
     QUOTA_EXHAUSTED = "quota_exhausted"
     SANDBOX_DENIED = "sandbox_denied"
+    INVENTORY_UNAVAILABLE = "inventory_unavailable"
+    MODEL_UNAVAILABLE = "model_unavailable"
+    TIMEOUT = "timeout"
+    MALFORMED_RESPONSE = "malformed_response"
+    AIDER_FAILURE = "aider_failure"
+    NO_OP = "no_op"
 
 
 class PermissionEnforcementError(RuntimeError):

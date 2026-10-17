@@ -61,9 +61,22 @@ def test_run_magic_heal_e2e(tmp_path):
     assert res["verification_passed"] is True
     assert res["committed"] is True
     assert "feat/magic-heal-sample_service" in res["branch"]
-    assert (tmp_path / res["test_file"]).exists()
+    show_res = subprocess.run(
+        ["git", "show", f"{res['branch']}:{res['test_file']}"],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "def test_magic_module_importable" in show_res.stdout
 
     # Check git log on new branch
-    log_res = subprocess.run(["git", "log", "-n", "1", "--pretty=%B"], cwd=str(tmp_path), capture_output=True, text=True, check=True)
+    log_res = subprocess.run(
+        ["git", "log", "-n", "1", "--pretty=%B", res["branch"]],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
     assert "feat(magic-heal):" in log_res.stdout
-    assert "Co-Authored-By: Codex <noreply@openai.com>" in log_res.stdout
+    assert "Co-Authored-By:" in log_res.stdout

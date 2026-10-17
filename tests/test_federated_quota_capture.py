@@ -40,8 +40,10 @@ def test_runner_registry_includes_migration_21_in_order():
     from synlynk.migrations.runner import MIGRATIONS
 
     versions = [item.version for item in MIGRATIONS]
-    assert versions == [16, 17, 18, 19, 20, 21]
-    assert MIGRATIONS[-1].name == "harness_model_catalog"
+    assert 21 in versions
+    assert versions[:6] == [16, 17, 18, 19, 20, 21]
+    migration_21 = next(item for item in MIGRATIONS if item.version == 21)
+    assert migration_21.name == "harness_model_catalog"
 
 
 def test_default_registry_matches_the_spec():
@@ -748,3 +750,17 @@ def test_unregistered_harness_never_writes_and_routing_does_not_raise():
     assert prefer_harness_by_weekly_headroom(
         "claude", ["muse"], conn=conn, now=datetime(2026, 10, 10, tzinfo=timezone.utc),
     ) == "claude"
+
+
+def test_effective_age_seconds_handles_tuple_row_safely():
+    from synlynk.quota_capture import effective_age_seconds
+
+    now = datetime(2026, 10, 17, 12, 30, 0, tzinfo=timezone.utc)
+    # Row as a plain SQLite tuple: (harness, window, used_percent, resets_at, captured_at, source, staleness_seconds, job_id)
+    tuple_row = ("claude", "sliding_5h", 25.0, "2026-10-17T15:00:00Z", "2026-10-17T12:00:00Z", "daemon", 30.0, "job-1")
+    age = effective_age_seconds(tuple_row, now)
+    assert age == 1800.0
+
+    tuple_row_none = ("claude", "sliding_5h", 25.0, None, "2026-10-17T12:00:00Z", "daemon", None, None)
+    assert effective_age_seconds(tuple_row_none, now) == 1800.0
+

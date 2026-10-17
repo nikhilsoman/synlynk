@@ -269,12 +269,15 @@ def refresh_installation_token(role: str, app_config: dict, apps_dir: Optional[s
     _persist_token_for_redaction(role, token, expires_at)
 
 
-def read_cached_installation_token(role: str, apps_dir: Optional[str] = None) -> Optional[str]:
+def read_cached_installation_token(
+    role: str, apps_dir: Optional[str] = None, min_ttl: int = 60
+) -> Optional[str]:
     """Return the daemon-cached installation token for `role`, or None.
 
     Pure file read — never signs a JWT, never calls the GitHub API. Returns
     None on a missing file, a stale (expired) token, or corrupt JSON.
     ``apps_dir``, when given, overrides the default cwd-relative lookup.
+    ``min_ttl`` requires at least this many seconds before expiration (default 60s).
     """
     cache_path = _role_token_cache_path(role, apps_dir)
     if not os.path.exists(cache_path):
@@ -287,6 +290,6 @@ def read_cached_installation_token(role: str, apps_dir: Optional[str] = None) ->
     if not isinstance(data, dict):
         return None
     expires_at = data.get("expires_at")
-    if not isinstance(expires_at, (int, float)) or expires_at - 60 <= time.time():
+    if not isinstance(expires_at, (int, float)) or expires_at - min_ttl <= time.time():
         return None
     return data.get("token")
