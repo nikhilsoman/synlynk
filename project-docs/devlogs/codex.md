@@ -198,3 +198,14 @@ see verification output in the session transcript. [@codex]
   across qualification, LocalAdapter, and local dispatch (33 passed); `git diff
   --check` clean. PR and independent review are pending.
 [@codex]
+
+## 2026-10-17 — LocalAdapter production evidence contract (#2345)
+
+- Confirmed production dispatch builds local commands through `LocalAdapter`,
+  and job reconciliation uses its output parser and failure classifier to
+  attach receipt evidence. Added focused regression coverage for the production
+  evidence helper, including auth failure classification and non-local isolation.
+- Verification: focused adapter, dispatch, and jobs tests (35 passed).
+- The next planned prerequisite is completing resolver/live-inventory parity
+  before enabling any local pilot routing.
+[@codex]

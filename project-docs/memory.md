@@ -90,3 +90,8 @@
   only unsafe/no-op/out-of-scope edits trigger the edit-safety gate. Never infer
   candidate promotion from accuracy alone: memory high-water evidence and the
   complete authenticated E2E criteria remain mandatory. [@codex]
+- **2026-10-17 LocalAdapter execution boundary:** Local production command
+  construction is owned by `LocalAdapter`; job reconciliation parses its
+  output and classifies failures into persisted adapter evidence. Keep both
+  integration points covered so the adapter does not regress to registry-only
+  status. This parity does not itself open local routing. [@codex]

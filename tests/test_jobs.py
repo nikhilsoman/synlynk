@@ -43,6 +43,32 @@ def test_check_scope_compliance_empty_scope_paths_is_always_compliant():
     assert _check_scope_compliance(["synlynk/jobs.py"], None) is True
 
 
+def test_local_job_result_uses_adapter_receipt_and_failure_classification():
+    from synlynk.jobs import _record_local_adapter_evidence
+
+    job = {"agent": "local", "exit_code": 1}
+    log_text = (
+        "SYNLYNK_TASK_RECEIVED: " + "a" * 64 + "\n"
+        "HTTP 401 Unauthorized\n"
+    )
+
+    _record_local_adapter_evidence(job, log_text)
+
+    assert job["adapter_receipt"]["receipt"] == "a" * 64
+    assert job["adapter_failure_kind"] == "auth_expired"
+
+
+def test_local_job_result_does_not_attach_adapter_evidence_to_other_harnesses():
+    from synlynk.jobs import _record_local_adapter_evidence
+
+    job = {"agent": "codex", "exit_code": 1}
+
+    _record_local_adapter_evidence(job, "401 Unauthorized")
+
+    assert "adapter_receipt" not in job
+    assert "adapter_failure_kind" not in job
+
+
 def test_reconcile_jobs_continues_when_reconciliation_lock_is_unavailable(monkeypatch, capsys):
     import synlynk.jobs as jobs_mod
 
