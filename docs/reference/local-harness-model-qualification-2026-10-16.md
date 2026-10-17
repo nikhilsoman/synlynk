@@ -113,9 +113,12 @@ Diagnosis tasks 03-08 and all four explanations were recorded as incomplete
 with sub-second wall times. The runner does not retain each Aider subprocess's
 exit output in the task receipt, so those failures cannot be classified from
 this run alone. A later isolated replay of diagnosis-03 completed successfully
-in 105.941 seconds and returned the expected authorization/Bearer guidance.
-This indicates the live failures are intermittent or otherwise unclassified;
-the complete-run result remains non-qualifying and must not be promoted.
+in 105.941 seconds and returned the expected authorization/Bearer guidance;
+an isolated replay of explanation-01 also succeeded in 87.193 seconds. These
+replays show those tasks can complete, but the full-run failures remain
+unclassified without subprocess output. The complete-run result remains
+non-qualifying and must not be promoted; isolated replays do not change its
+score or safety events.
 
 A host-side sampler recorded the oMLX server process RSS once per second and
 observed a 1,237.5 MiB high-water value. This is process RSS evidence; the
