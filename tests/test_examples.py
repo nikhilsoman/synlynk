@@ -1,8 +1,12 @@
-from synlynk.examples import active_items, greet
+from synlynk.examples import active_items, calculate_discounted_price, greet
 
 
 def test_greet_returns_a_friendly_message():
     assert greet("Ada") == "Hello, Ada!"
+
+
+def test_calculate_discounted_price_applies_a_percentage_discount():
+    assert calculate_discounted_price(100.0, 15.0) == 85.0
 
 
 def test_write_3_test_cases_for_a_general_scenario_happy_path():
