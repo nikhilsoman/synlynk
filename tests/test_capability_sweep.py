@@ -548,6 +548,62 @@ def test_verify_calibration_result_passes_qa_role_and_non_gh_write(monkeypatch):
     assert captured_kwargs.get("requires_gh_write") is False
 
 
+def test_extract_verifier_meta_handles_json_structured_output():
+    import json
+    from synlynk.costs import extract_verifier_meta
+
+    payload = json.dumps({"result": "Analysis done.\n# synlynk-meta\nquality=9.2\ncorrect=true"})
+    meta = extract_verifier_meta(payload)
+    assert meta is not None
+    assert meta["quality"] == 9.2
+    assert meta["correct"] is True
+
+
+def test_extract_verifier_meta_colon_and_bullets():
+    from synlynk.costs import extract_verifier_meta
+
+    text = """
+    Here is my assessment:
+    # synlynk-meta
+    - quality: 8.7
+    * correct: true
+    """
+    meta = extract_verifier_meta(text)
+    assert meta is not None
+    assert meta["quality"] == 8.7
+    assert meta["correct"] is True
+
+
+def test_extract_log_text_unpacks_json_result():
+    import json
+    from synlynk.capability_sweep import _extract_log_text
+
+    payload = json.dumps({"result": "Hello from model", "cost": 0.05})
+    assert _extract_log_text(payload) == "Hello from model"
+
+
+def test_verify_calibration_prompt_instructs_no_filesystem_check(monkeypatch):
+    from synlynk import capability_sweep
+
+    captured_task = {}
+
+    def fake_dispatch(harness, task, **kwargs):
+        captured_task["task"] = task
+        return {"output": "# synlynk-meta\nquality=9.0\ncorrect=true"}
+
+    monkeypatch.setattr(capability_sweep, "_dispatch_calibration_task", fake_dispatch)
+
+    res = capability_sweep._verify_calibration_result(
+        "claude", "codex", "gpt-5.6-terra", "PROG",
+        {"output": "Some code diff"}
+    )
+    assert res["quality"] == 9.0
+    assert "DO NOT inspect your local filesystem" in captured_task["task"]
+    assert "isolated worktree" in captured_task["task"]
+
+
+
+
 
 
 
