@@ -480,6 +480,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [401](./401-pr2414-await-async-job-completion-and-capture-l.md) | PR #2414 — await async job completion and capture log output (#2350) | [#2414](https://github.com/nikhilsoman/synlynk/pull/2414) | 2026-10-18 |
 | [402](./402-pr2415-support-harness-filtering-forward-model-.md) | PR #2415 — support --harness filtering, forward model, and add release-vscode workflow | [#2415](https://github.com/nikhilsoman/synlynk/pull/2415) | 2026-10-18 |
 | [403](./403-pr2416-discover-active-models-from-state-db-bef.md) | PR #2416 — discover active models from state db before falling back | [#2416](https://github.com/nikhilsoman/synlynk/pull/2416) | 2026-10-18 |
+| [404](./404-pr2417-isolate-calibration-tasks-from-gh-write-.md) | PR #2417 — isolate calibration tasks from gh-write and provide explicit roles | [#2417](https://github.com/nikhilsoman/synlynk/pull/2417) | 2026-10-18 |
 
 ## Per-PR Post Template
 
