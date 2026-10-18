@@ -7,6 +7,13 @@
 - **Directories:** bin, docs, project-docs, synlynk, tests, website
 
 ## Decisions
+- **2026-10-18 Local Pilot prompt contract (approved):** Omit generic pytest
+  verification instructions from all six current pilot classes; preserve the
+  generic verifier for normal implementation dispatch. `test_diagnosis` is
+  analysis of existing results only. Test execution needs a separate explicit
+  capability and approved command/isolation contract. Spec:
+  `docs/superpowers/specs/2026-10-17-local-pilot-prompt-contract-design.md`.
+  [@codex]
 - **2026-10-17 Local Pilot denial is sticky:** Once an explicit local-pilot
   intent is denied or routed to a frontier fallback, capability routing must
   not later select host-side `local`. Bind the selected frontier harness and
