@@ -7,6 +7,13 @@
 - **Directories:** bin, docs, project-docs, synlynk, tests, website
 
 ## Decisions
+- **2026-10-18 [Protected Worktree: Synlynk VS Code Client Reference Checkout]:** The
+  feature worktree at `/Users/nikhilsoman/dev/synlynk/worktrees/feat-agy-vscode-extension-design`
+  (branch `feat/agy/vscode-extension-design`, PR #2410 merged @ `39d84371`) is explicitly
+  marked as **PROTECTED**. It must never be pruned via `synlynk worktree clean` or deleted.
+  It serves as the canonical reference implementation and staging workspace for upcoming
+  Phase 2 Track A VS Code client evolutions. End-to-end retrospective is recorded at
+  `docs/retrospectives/2026-10-18-vscode-extension-design-and-implementation.md`. [@agy, @nikhilsoman]
 - **2026-10-17 Local Pilot denial is sticky:** Once an explicit local-pilot
   intent is denied or routed to a frontier fallback, capability routing must
   not later select host-side `local`. Bind the selected frontier harness and
