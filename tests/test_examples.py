@@ -2,6 +2,7 @@ from synlynk.examples import active_items, greet
 
 
 def test_greet_returns_a_friendly_message():
+    """Minimal example: call a function and assert its expected result."""
     assert greet("Ada") == "Hello, Ada!"
 
 
