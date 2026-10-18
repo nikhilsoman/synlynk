@@ -205,14 +205,65 @@ def _pick_verifier_agent(executor_agent: str, available_agents: list) -> str:
     return candidates[0]
 
 
+def _await_calibration_job(job: dict, timeout_s: int = 120) -> dict:
+    """Wait synchronously for a dispatched calibration job to exit, reconcile
+    it, and populate job['output'] from its log file (gh:#2350).
+    """
+    import os
+    import signal
+    import time
+
+    pid = job.get("pid")
+    if pid:
+        deadline = time.time() + timeout_s
+        timed_out = False
+        while time.time() < deadline:
+            try:
+                os.kill(pid, 0)
+            except (ProcessLookupError, PermissionError):
+                break
+            time.sleep(0.5)
+        else:
+            timed_out = True
+
+        if timed_out:
+            try:
+                os.kill(pid, signal.SIGTERM)
+                time.sleep(0.5)
+                os.kill(pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+            job["status"] = "timeout"
+
+    try:
+        from synlynk.jobs import _reconcile_jobs
+
+        _reconcile_jobs()
+    except Exception:
+        pass
+
+    if "output" not in job or not job["output"]:
+        from synlynk.jobs import _read_job_log
+
+        log_file = job.get("log_file")
+        job["output"] = _read_job_log(log_file) if log_file else ""
+
+    return job
+
+
 def _dispatch_calibration_task(harness: str, task: str, **kwargs) -> dict:
-    """Dispatch one calibration task through dispatch_agent behind a test seam."""
+    """Dispatch one calibration task through dispatch_agent behind a test seam,
+    then await completion and populate job output (gh:#2350).
+    """
     from synlynk.dispatch import dispatch_agent
 
     dispatch_kwargs = dict(kwargs)
+    timeout_s = dispatch_kwargs.pop("timeout_s", 120)
     dispatch_kwargs.setdefault("force_agent", True)
     dispatch_kwargs.setdefault("skip_preflight", True)
-    return dispatch_agent(harness, task, **dispatch_kwargs)
+    job = dispatch_agent(harness, task, **dispatch_kwargs)
+    return _await_calibration_job(job, timeout_s=timeout_s)
+
 
 
 def _verify_calibration_result(
