@@ -4869,7 +4869,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     verify_contract = _pkg("_verify_contract_for_story")
     verify_section = ""
-    if story_id and verify_contract:
+    # The authenticated Local Pilot receipt defines a bounded runner contract;
+    # generic story verification can contradict read-only/edit scope and imply
+    # unrestricted pytest execution. Keep normal dispatch verification intact.
+    if story_id and verify_contract and not local_pilot_receipt:
         try:
             verify_section = verify_contract(story_id, task, job_id=job_id)
         except TypeError:
