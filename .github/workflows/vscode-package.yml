@@ -1,0 +1,61 @@
+name: VS Code Extension Package & Verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "clients/vscode/**"
+      - ".github/workflows/vscode-package.yml"
+  pull_request:
+    paths:
+      - "clients/vscode/**"
+      - ".github/workflows/vscode-package.yml"
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install development dependencies
+        run: npm ci || npm install
+        working-directory: clients/vscode
+
+      - name: Run test suite
+        run: node clients/vscode/test/runTest.js
+
+      - name: Verify zero production dependencies
+        run: |
+          dependency_count=$(node -e "const pkg = require('./clients/vscode/package.json'); console.log(Object.keys(pkg.dependencies || {}).length)")
+          if [ "$dependency_count" -ne 0 ]; then
+            echo "ERROR: Production dependencies must be 0, found $dependency_count"
+            exit 1
+          fi
+
+      - name: Package VSIX bundle
+        run: npx @vscode/vsce package --no-dependencies
+        working-directory: clients/vscode
+
+      - name: Verify package size (under 2 MB)
+        run: |
+          package_path=$(find . -maxdepth 1 -name 'synlynk-vscode-*.vsix' -print -quit)
+          test -n "$package_path"
+          size=$(stat -c%s "$package_path" 2>/dev/null || stat -f%z "$package_path")
+          echo "Package size: $size bytes"
+          if [ "$size" -ge 2097152 ]; then
+            echo "ERROR: Package size must be under 2 MB"
+            exit 1
+          fi
+        working-directory: clients/vscode
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: synlynk-vscode-vsix
+          path: clients/vscode/*.vsix
