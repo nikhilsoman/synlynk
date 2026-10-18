@@ -2446,5 +2446,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2410 \u2014 implement thin zero-dependency VS Code client (#2103, #2384) (PR #2410, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2410.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-18) - PR #2410\n- Merged improvements and fixes for PR #2410."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/400-pr2411-add-end-to-end-retrospective-and-consens.md",
+    "title": "PR #2411 \u2014 add end-to-end retrospective and consensus decision for VS Code client",
+    "author": "nikhilsoman",
+    "date": "2026-10-18",
+    "pr": "#2411",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2411."
+    ],
+    "tweet": "\ud83d\ude80 PR #2411 \u2014 add end-to-end retrospective and consensus decision for VS Code client (PR #2411, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2411.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-18) - PR #2411\n- Merged improvements and fixes for PR #2411."
   }
 ]
