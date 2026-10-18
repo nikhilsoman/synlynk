@@ -477,6 +477,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [398](./398-pr2361-fix-gh-2320-dispatched-job-worktrees-in-.md) | PR #2361 — Fix gh:#2320: dispatched job worktrees in synlynk cu (job-01306c88) | [#2361](https://github.com/nikhilsoman/synlynk/pull/2361) | 2026-10-17 |
 | [399](./399-pr2410-implement-thin-zero-dependency-vs-code-c.md) | PR #2410 — implement thin zero-dependency VS Code client (#2103, #2384) | [#2410](https://github.com/nikhilsoman/synlynk/pull/2410) | 2026-10-18 |
 | [400](./400-pr2411-add-end-to-end-retrospective-and-consens.md) | PR #2411 — add end-to-end retrospective and consensus decision for VS Code client | [#2411](https://github.com/nikhilsoman/synlynk/pull/2411) | 2026-10-18 |
+| [401](./401-pr2414-await-async-job-completion-and-capture-l.md) | PR #2414 — await async job completion and capture log output (#2350) | [#2414](https://github.com/nikhilsoman/synlynk/pull/2414) | 2026-10-18 |
 
 ## Per-PR Post Template
 

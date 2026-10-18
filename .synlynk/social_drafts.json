@@ -2462,5 +2462,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2411 \u2014 add end-to-end retrospective and consensus decision for VS Code client (PR #2411, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2411.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-18) - PR #2411\n- Merged improvements and fixes for PR #2411."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/401-pr2414-await-async-job-completion-and-capture-l.md",
+    "title": "PR #2414 \u2014 await async job completion and capture log output (#2350)",
+    "author": "nikhilsoman",
+    "date": "2026-10-18",
+    "pr": "#2414",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2414."
+    ],
+    "tweet": "\ud83d\ude80 PR #2414 \u2014 await async job completion and capture log output (#2350) (PR #2414, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2414.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-18) - PR #2414\n- Merged improvements and fixes for PR #2414."
   }
 ]
