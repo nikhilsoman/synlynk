@@ -2128,10 +2128,13 @@ def _task_requires_gh_write(task: str, task_type: str = None) -> bool:
     GitHub write actions directly paired with target objects (PRs/issues), preventing
     false positives on file paths, tracking issue mentions, and non-action prose.
     """
+    if task_type in ("calibration", "calibration_verify", "eval"):
+        return False
     text = task or ""
     if _GH_CLI_WRITE_RE.search(text):
         return True
     return bool(_GH_ACTION_TARGET_RE.search(text))
+
 
 
 def _infer_task_type(task: str) -> Optional[str]:
@@ -4063,7 +4066,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    context_mode: str = None,
                    cycle: str = "work",
                    skip_preflight: bool = False,
-                   requires_gh_write: bool = False,
+                   requires_gh_write: Optional[bool] = None,
                    static_baseline: bool = False,
                    task_type: str = None,
                    task_type_explicit: bool = None,
@@ -4167,9 +4170,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             )
     # Keep the explicit flag as an override, but infer the same safety and
     # identity requirements for obvious GitHub-write task shapes (#659).
-    requires_gh_write = bool(
-        requires_gh_write or _task_requires_gh_write(task, task_type=task_type)
-    )
+    if requires_gh_write is None:
+        requires_gh_write = _task_requires_gh_write(task, task_type=task_type)
+    requires_gh_write = bool(requires_gh_write)
     # Keep the public dispatch_agent() contract stable while threading the
     # request through the adapter pipeline.  The remaining body deliberately
     # stays in place until each stage can preserve its existing bookkeeping

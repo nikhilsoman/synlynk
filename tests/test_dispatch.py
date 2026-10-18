@@ -735,6 +735,16 @@ def test_task_requires_gh_write_does_not_false_positive_on_incidental_prose(task
     assert _task_requires_gh_write(task) is False
 
 
+def test_task_requires_gh_write_respects_calibration_task_types():
+    from synlynk.dispatch import _task_requires_gh_write
+
+    task = "Review calibration output containing gh pr review 123"
+    assert _task_requires_gh_write(task, task_type="calibration") is False
+    assert _task_requires_gh_write(task, task_type="calibration_verify") is False
+    assert _task_requires_gh_write(task, task_type="eval") is False
+
+
+
 @pytest.mark.parametrize(
     "task",
     [
