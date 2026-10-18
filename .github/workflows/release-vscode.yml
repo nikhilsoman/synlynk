@@ -1,0 +1,69 @@
+name: Publish VS Code Extension (Marketplace & Open VSX)
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Package and publish extension
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci || npm install
+        working-directory: clients/vscode
+
+      - name: Run test suite
+        run: node clients/vscode/test/runTest.js
+
+      - name: Verify zero production dependencies
+        run: |
+          dependency_count=$(node -e "const pkg = require('./clients/vscode/package.json'); console.log(Object.keys(pkg.dependencies || {}).length)")
+          if [ "$dependency_count" -ne 0 ]; then
+            echo "ERROR: Production dependencies must be 0, found $dependency_count"
+            exit 1
+          fi
+        working-directory: clients/vscode
+
+      - name: Package VSIX bundle
+        run: npx @vscode/vsce package --no-dependencies --skip-license
+        working-directory: clients/vscode
+
+      - name: Publish to Visual Studio Marketplace
+        if: env.VSCE_PAT != ''
+        run: |
+          vsix_file=$(find . -maxdepth 1 -name 'synlynk-vscode-*.vsix' -print -quit)
+          echo "Publishing $vsix_file to Visual Studio Marketplace..."
+          npx @vscode/vsce publish --packagePath "$vsix_file" --skip-license
+        working-directory: clients/vscode
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      - name: Publish to Open VSX Registry
+        if: env.OVSX_PAT != ''
+        run: |
+          vsix_file=$(find . -maxdepth 1 -name 'synlynk-vscode-*.vsix' -print -quit)
+          echo "Publishing $vsix_file to Open VSX Registry..."
+          npx ovsx publish "$vsix_file"
+        working-directory: clients/vscode
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+
+      - name: Upload VSIX release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: synlynk-vscode-release-vsix
+          path: clients/vscode/*.vsix

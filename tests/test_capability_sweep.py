@@ -458,3 +458,53 @@ def test_await_calibration_job_handles_timeout(tmp_path, monkeypatch):
     assert any(sig == signal.SIGTERM for _, sig in killed_signals)
 
 
+def test_run_sweep_passes_model_to_dispatch_calibration_task(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    from synlynk.capability_sweep import _run_sweep
+
+    dispatched_calls = []
+
+    def fake_dispatch(harness, task, **kwargs):
+        dispatched_calls.append((harness, task, kwargs))
+        return {"output": "ok", "status": "completed"}
+
+    monkeypatch.setattr("synlynk.capability_sweep._dispatch_calibration_task", fake_dispatch)
+    monkeypatch.setattr(
+        "synlynk.capability_sweep._verify_calibration_result",
+        lambda *args, **kwargs: {"quality": 9.0, "correct": True, "quality_verified": True},
+    )
+
+    discovered = {"codex": ["gpt-5-codex", "gpt-5.4-mini"]}
+    _run_sweep(discovered, ["PROG"])
+
+    assert len(dispatched_calls) == 2
+    assert dispatched_calls[0][2].get("model") == "gpt-5-codex"
+    assert dispatched_calls[1][2].get("model") == "gpt-5.4-mini"
+
+
+def test_cmd_capability_sweep_filters_by_harness(tmp_path, monkeypatch):
+    from synlynk import capability_sweep
+
+    swept = []
+    monkeypatch.setattr(
+        capability_sweep, "_discover_models",
+        lambda: {"codex": ["gpt-5-codex"], "claude": ["claude-sonnet-5"], "agy": ["gemini-pro"]},
+    )
+    monkeypatch.setattr(
+        capability_sweep, "_run_sweep",
+        lambda discovered, skills: swept.append(discovered),
+    )
+    monkeypatch.setattr(
+        "synlynk.capability_watch.mark_capability_sweep_run",
+        lambda db: None,
+    )
+
+    capability_sweep.cmd_capability_sweep(harness="codex")
+
+    assert len(swept) == 1
+    assert list(swept[0].keys()) == ["codex"]
+
+
+
+
