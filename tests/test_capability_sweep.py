@@ -337,3 +337,124 @@ def test_dispatch_calibration_task_passes_model_to_dispatch_agent(monkeypatch):
             {"model": "gemini-specific", "force_agent": True, "skip_preflight": True},
         )
     ]
+
+
+def test_dispatch_calibration_task_awaits_async_job_and_captures_output(tmp_path, monkeypatch):
+    """Issue #2350: dispatch_agent returns an async job with pid and log_file, but NO 'output' key.
+    _dispatch_calibration_task must await the job and populate 'output' from the log file.
+    """
+    from synlynk import capability_sweep
+
+    log_file = tmp_path / "job-123.log"
+    log_file.write_text("def hello():\n    return 'world'\n", encoding="utf-8")
+
+    # Real dispatch_agent return: status running, pid, log_file, NO 'output'
+    raw_job = {
+        "job_id": "job-123",
+        "agent": "codex",
+        "status": "running",
+        "pid": 11111,
+        "log_file": str(log_file),
+    }
+
+    monkeypatch.setattr("synlynk.dispatch.dispatch_agent", lambda *a, **kw: dict(raw_job))
+    # Mock PID check so process appears immediately finished
+    monkeypatch.setattr("os.kill", lambda pid, sig: None if sig != 0 else (_ for _ in ()).throw(ProcessLookupError()))
+
+    reconciled = []
+    monkeypatch.setattr("synlynk.jobs._reconcile_jobs", lambda: reconciled.append(True))
+
+    result = capability_sweep._dispatch_calibration_task("codex", "write a hello function")
+
+    assert "output" in result, "dispatch_calibration_task must populate 'output' key"
+    assert "def hello():" in result["output"]
+    assert reconciled, "_reconcile_jobs must be called after job process exits"
+
+
+def test_verify_calibration_result_captures_real_verifier_meta_from_log(tmp_path, monkeypatch):
+    """Issue #2350: When executor and verifier run, verifier must receive executor's output,
+    and verifier's '# synlynk-meta' block in log file must be parsed into quality_verified=True.
+    """
+    from synlynk import capability_sweep
+
+    executor_log = tmp_path / "executor.log"
+    executor_log.write_text("def add(a, b):\n    return a + b\n", encoding="utf-8")
+
+    verifier_log = tmp_path / "verifier.log"
+    verifier_log.write_text(
+        "The implementation is correct.\n\n# synlynk-meta\nquality=9.2\ncorrect=true\n",
+        encoding="utf-8",
+    )
+
+    dispatched_tasks = []
+
+    def fake_dispatch_task(harness, task, **kwargs):
+        dispatched_tasks.append((harness, task))
+        if "Review this" in task:
+            return {
+                "job_id": "job-verifier",
+                "output": verifier_log.read_text(encoding="utf-8"),
+                "status": "completed",
+            }
+        return {
+            "job_id": "job-executor",
+            "output": executor_log.read_text(encoding="utf-8"),
+            "status": "completed",
+        }
+
+    monkeypatch.setattr(capability_sweep, "_dispatch_calibration_task", fake_dispatch_task)
+
+    executor_output = {"job_id": "job-executor", "output": executor_log.read_text(encoding="utf-8")}
+    verdict = capability_sweep._verify_calibration_result(
+        verifier_harness="claude",
+        executor_harness="codex",
+        model="gpt-5-codex",
+        skill="PROG",
+        executor_output=executor_output,
+    )
+
+    assert verdict["quality_verified"] is True
+    assert verdict["quality"] == 9.2
+    assert verdict["correct"] is True
+    # Ensure the verifier task prompt actually contained the executor output!
+    assert any("def add(a, b):" in t[1] for t in dispatched_tasks)
+
+
+def test_await_calibration_job_handles_timeout(tmp_path, monkeypatch):
+    import signal
+    from synlynk import capability_sweep
+
+    log_file = tmp_path / "timeout.log"
+    log_file.write_text("partial output before hang", encoding="utf-8")
+
+    job = {
+        "job_id": "job-timeout",
+        "agent": "grok",
+        "status": "running",
+        "pid": 55555,
+        "log_file": str(log_file),
+    }
+
+    killed_signals = []
+
+    def fake_kill(pid, sig):
+        if sig != 0:
+            killed_signals.append((pid, sig))
+        return None
+
+    monkeypatch.setattr("os.kill", fake_kill)
+    cur_time = [100.0]
+    monkeypatch.setattr("time.time", lambda: cur_time[0])
+
+    def fake_sleep(secs):
+        cur_time[0] += 200.0
+
+    monkeypatch.setattr("time.sleep", fake_sleep)
+
+    result = capability_sweep._await_calibration_job(job, timeout_s=10)
+
+    assert result["status"] == "timeout"
+    assert result["output"] == "partial output before hang"
+    assert any(sig == signal.SIGTERM for _, sig in killed_signals)
+
+
