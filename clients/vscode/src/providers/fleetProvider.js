@@ -73,7 +73,7 @@ function formatFleetItems(statusData) {
     label: `Spend (Session): $${sessionDollars.toFixed(2)} | Fleet: $${fleetTotalDollars.toFixed(2)}`,
     tooltip: "**Dual-Ledger Accounting:**\n" +
       "Tracks real subscription-amortized expenditure alongside raw frontier API value.\n" +
-      `Tokens: ${tokensTotal.toLocaleString()}`,
+      `Tokens: ${tokensTotal.toLocaleString("en-US")}`,
   });
 
   return items;
