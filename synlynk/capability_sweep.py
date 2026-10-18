@@ -288,8 +288,36 @@ def _await_calibration_job(job: dict, timeout_s: int = 120) -> dict:
     if "output" not in job or not job["output"]:
         from synlynk.jobs import _read_job_log
 
+        worktree_path = job.get("worktree_path")
+        diff_text = ""
+        if worktree_path and os.path.exists(worktree_path):
+            try:
+                res = subprocess.run(
+                    ["git", "-C", worktree_path, "diff", "origin/main...HEAD"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=5,
+                )
+                diff_text = (res.stdout or "").strip()
+                if not diff_text:
+                    res = subprocess.run(
+                        ["git", "-C", worktree_path, "diff", "HEAD~1"],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=5,
+                    )
+                    diff_text = (res.stdout or "").strip()
+            except Exception:
+                diff_text = ""
+
         log_file = job.get("log_file")
-        job["output"] = _read_job_log(log_file) if log_file else ""
+        log_text = _read_job_log(log_file) if log_file else ""
+        if diff_text:
+            job["output"] = f"### Changes (git diff):\n{diff_text}\n\n### Execution log summary:\n{log_text[:2000]}"
+        else:
+            job["output"] = log_text
 
     return job
 
@@ -330,9 +358,15 @@ def _verify_calibration_result(
         f"Executor harness: {executor_harness}\n"
         f"Executor model: {model}\n"
         f"Verifier harness: {verifier_harness}\n\n"
-        f"Output to review:\n{executor_output.get('output', '')}"
+        f"Output to review:\n```\n{executor_output.get('output', '')}\n```"
     )
-    result = _dispatch_calibration_task(verifier_harness, verify_task)
+    result = _dispatch_calibration_task(
+        verifier_harness,
+        verify_task,
+        role="qa",
+        task_type="review",
+        requires_gh_write=False,
+    )
     from synlynk.costs import extract_verifier_meta
 
     raw_output = result.get("output", "")
@@ -381,7 +415,9 @@ def _run_sweep(discovered: dict, skills: list) -> None:
             for skill in skills:
                 label = SFIA_CODES.get(skill, {}).get("label", skill)
                 task = f"Write a minimal example demonstrating {label} for a small Python function."
-                executor_result = _dispatch_calibration_task(harness, task, model=model)
+                executor_result = _dispatch_calibration_task(
+                    harness, task, model=model, role="dev", task_type="implement", requires_gh_write=False
+                )
 
                 verifier_harness = _pick_verifier_harness(harness, available_harnesses)
                 verdict = _verify_calibration_result(
