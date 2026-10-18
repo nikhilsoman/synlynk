@@ -506,5 +506,26 @@ def test_cmd_capability_sweep_filters_by_harness(tmp_path, monkeypatch):
     assert list(swept[0].keys()) == ["codex"]
 
 
+def test_discover_models_prefers_active_db_models_over_fallback(tmp_path, monkeypatch):
+    import synlynk as sl
+    from synlynk import capability_sweep
+
+    conn = sl._get_db()
+    # Insert an active model for codex
+    conn.execute(
+        "INSERT OR REPLACE INTO harness_models "
+        "(harness_name, model_id, first_seen_at, last_seen_at, status, provider, discovered_at) "
+        "VALUES ('codex', 'gpt-5.6-terra', '2026-10-18', '2026-10-18', 'active', 'native', '2026-10-18')"
+    )
+    conn.commit()
+
+    discovered = capability_sweep._discover_models(conn=conn)
+    assert "codex" in discovered
+    assert "gpt-5.6-terra" in discovered["codex"]
+    # Legacy hardcoded fallback should NOT be chosen when active models exist in DB
+    assert "gpt-5-codex" not in discovered["codex"]
+
+
+
 
 
