@@ -2430,5 +2430,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2361 \u2014 Fix gh:#2320: dispatched job worktrees in synlynk cu (job-01306c88) (PR #2361, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2361.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2361\n- Merged improvements and fixes for PR #2361."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/399-pr2410-implement-thin-zero-dependency-vs-code-c.md",
+    "title": "PR #2410 \u2014 implement thin zero-dependency VS Code client (#2103, #2384)",
+    "author": "nikhilsoman",
+    "date": "2026-10-18",
+    "pr": "#2410",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2410."
+    ],
+    "tweet": "\ud83d\ude80 PR #2410 \u2014 implement thin zero-dependency VS Code client (#2103, #2384) (PR #2410, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2410.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-18) - PR #2410\n- Merged improvements and fixes for PR #2410."
   }
 ]
