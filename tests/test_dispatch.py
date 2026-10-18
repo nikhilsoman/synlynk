@@ -1200,9 +1200,23 @@ def test_dispatch_agent_explicit_story_id_provisions_missing_story(project_dir, 
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    verification_sections = []
+    monkeypatch.setattr(
+        sl, "_verify_contract_for_story",
+        lambda *args, **kwargs: "\n\n## How to Verify\npytest tests/test_example.py",
+        raising=False,
+    )
+    original_format_prompt = sl._format_prompt_for_agent
+
+    def capture_format_prompt(*args, **kwargs):
+        verification_sections.append(args[5])
+        return original_format_prompt(*args, **kwargs)
+
+    monkeypatch.setattr(sl, "_format_prompt_for_agent", capture_format_prompt)
     job = sl.dispatch_agent("claude", "task text with #999", story_id="story-manual-1", context_mode="none")
 
     assert job["story_id"] == "story-manual-1"
+    assert verification_sections == ["\n\n## How to Verify\npytest tests/test_example.py"]
     conn = sl._get_db()
     try:
         assert conn.execute(
@@ -2841,6 +2855,14 @@ def test_local_pilot_dispatch_uses_isolated_runner_and_records_cohort_receipt(pr
         })
 
     monkeypatch.setattr("synlynk.local_pilot.build_isolated_compose_shell", fake_build)
+    verification_calls = []
+    import synlynk as sl
+    monkeypatch.setattr(
+        sl,
+        "_verify_contract_for_story",
+        lambda *args, **kwargs: verification_calls.append((args, kwargs)) or "\n\n## How to Verify\npytest",
+        raising=False,
+    )
     spawned = []
     original_popen = dispatch_mod.subprocess.Popen
 
@@ -2881,6 +2903,7 @@ def test_local_pilot_dispatch_uses_isolated_runner_and_records_cohort_receipt(pr
     }
     assert job["local_pilot_receipt"] == expected_receipt
     assert job["local_model_receipt"]["pilot"] == expected_receipt
+    assert verification_calls == []
 
 
 def test_local_pilot_rejects_forged_and_cross_story_replayed_receipts(project_dir, monkeypatch):

@@ -2136,6 +2136,39 @@ implementation dispatched, external messages sent, or policy changed.
   result is claimed yet; merge the reviewed fix, then retry one scoped task.
 [@codex]
 
+## 2026-10-17 — Local Pilot verification-prompt conflict
+
+- In an isolated `test_summary` dispatch (`job-c1c71753`), the final prompt
+  included the generic `## How to Verify` pytest block despite explicit
+  read-only/no-test instructions. The model added a broad pytest command and
+  claimed it was running; receipt and clean diff show no files changed, and no
+  pytest process remained. The answer was excluded from acceptance.
+- Confirmed dispatch prompt assembly calls `_verify_contract_for_story()` for
+  story-linked dispatches without conditioning on the verified Local Pilot
+  receipt/class. A second sample (`job-9d8b210f`) had the same prompt conflict
+  but happened to answer within the two-bullet task shape.
+- Drafted `docs/superpowers/specs/2026-10-17-local-pilot-prompt-contract-design.md`
+  for PM/Architect review. The approved direction suppresses generic
+  verification for all current pilot classes until an explicit bounded
+  test-execution capability is designed. Confirmed the runner passes four summary/diagnosis
+  classes as `--read`, edit classes as `--file`, and disables auto-tests and
+  shell-command suggestions; none grants general pytest execution. No code or
+  GitHub write was performed. Generated
+  roadmap/cost ledgers were not hand-edited; actual brainstorming cost is
+  unavailable.
+[@codex]
+
+## 2026-10-18 — Local Pilot prompt-contract design approved
+
+- Nikhil approved omitting the generic verification block from all six current
+  Local Pilot classes and keeping test execution as a separate future
+  capability. `test_diagnosis` is limited to analysis of existing logs/results;
+  it does not authorize running tests.
+- Updated the design spec with the approval record. Next: commit the spec, then
+  write and commit its implementation plan before code changes. Pilot remains
+  disabled during this work.
+[@codex]
+
 ## 2026-10-17 — LIVE-25 Local Pilot fallback isolation boundary
 
 - Investigated a denied pilot task (`task_text_excluded`) that reached
