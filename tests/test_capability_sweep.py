@@ -526,6 +526,29 @@ def test_discover_models_prefers_active_db_models_over_fallback(tmp_path, monkey
     assert "gpt-5-codex" not in discovered["codex"]
 
 
+def test_verify_calibration_result_passes_qa_role_and_non_gh_write(monkeypatch):
+    from synlynk import capability_sweep
+
+    captured_kwargs = {}
+
+    def fake_dispatch(harness, task, **kwargs):
+        captured_kwargs.update(kwargs)
+        return {"output": "# synlynk-meta\nquality=8.5\ncorrect=true"}
+
+    monkeypatch.setattr(capability_sweep, "_dispatch_calibration_task", fake_dispatch)
+
+    res = capability_sweep._verify_calibration_result(
+        "claude", "codex", "gpt-5.6-terra", "PROG",
+        {"output": "Output mentioning gh pr review in log text"}
+    )
+
+    assert res["quality"] == 8.5
+    assert res["quality_verified"] is True
+    assert captured_kwargs.get("role") == "qa"
+    assert captured_kwargs.get("requires_gh_write") is False
+
+
+
 
 
 
