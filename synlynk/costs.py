@@ -671,6 +671,7 @@ _HARDCODED_FALLBACK_RATES = {
     "models": {
         "claude-opus-4-8": {"input": 0.015, "output": 0.075, "cache_read": 0.0000015},
         "claude-sonnet-4-6": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+        "gpt-5.6-terra": {"input": 0.00125, "output": 0.01, "cache_read": 0.000000125},
         "gpt-5-codex": {"input": 0.00125, "output": 0.01, "cache_read": 0.000000125},
         "gpt-5.4-mini": {"input": 0.00075, "output": 0.0045, "cache_read": 0.000000075},
         "gemini-2.5-pro": {"input": 0.00125, "output": 0.01, "cache_read": 0.000125},
