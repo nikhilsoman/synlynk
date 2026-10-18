@@ -1,8 +1,12 @@
-from synlynk.examples import active_items, greet
+from synlynk.examples import active_items, add, greet
 
 
 def test_greet_returns_a_friendly_message():
     assert greet("Ada") == "Hello, Ada!"
+
+
+def test_add_returns_the_sum_of_two_integers():
+    assert add(2, 3) == 5
 
 
 def test_write_3_test_cases_for_a_general_scenario_happy_path():

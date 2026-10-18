@@ -8,6 +8,11 @@ def greet(name: str) -> str:
     return f"Hello, {name}!"
 
 
+def add(left: int, right: int) -> int:
+    """Return the sum of two integers."""
+    return left + right
+
+
 def active_items(items: list[dict]) -> list[dict]:
     """Return items whose ``active`` flag is truthy."""
     return [item for item in items if item.get("active")]
