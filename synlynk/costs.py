@@ -640,15 +640,30 @@ def extract_verifier_meta(output_text: str) -> Optional[dict]:
 
     Returns dict with quality, correct, rework_needed, verifier_model — or None if absent.
     """
-    m = re.search(r"#\s*synlynk-meta\s*\n((?:[^\n]+\n?)+)", output_text, re.IGNORECASE)
+    if not output_text:
+        return None
+    text = output_text
+    if text.strip().startswith("{") and text.strip().endswith("}"):
+        try:
+            parsed = json.loads(text.strip())
+            if isinstance(parsed, dict) and "result" in parsed and isinstance(parsed["result"], str):
+                text = parsed["result"]
+        except Exception:
+            pass
+
+    m = re.search(r"#\s*synlynk-meta\s*\n((?:[^\n]+\n?)+)", text, re.IGNORECASE)
+    if not m:
+        m = re.search(r"#\s*synlynk-meta(?:\n|\\n)((?:[^\n\\]+(?:\n|\\n)?)+)", text, re.IGNORECASE)
     if not m:
         return None
-    block = m.group(1)
+    block = m.group(1).replace("\\n", "\n")
     meta = {}
     for line in block.splitlines():
-        if "=" in line:
-            k, _, v = line.partition("=")
-            k, v = k.strip(), v.strip()
+        delim = "=" if "=" in line else (":" if ":" in line else None)
+        if delim:
+            k, _, v = line.partition(delim)
+            k = k.strip(" -*#`").lower()
+            v = v.strip(" -*#`")
             if k == "quality":
                 try:
                     meta["quality"] = float(v)
