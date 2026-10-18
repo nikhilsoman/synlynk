@@ -1,4 +1,8 @@
-from synlynk.examples import active_items, greet
+from synlynk.examples import add, active_items, greet
+
+
+def test_add_returns_the_sum_of_two_integers():
+    assert add(2, 3) == 5
 
 
 def test_greet_returns_a_friendly_message():
