@@ -2526,5 +2526,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2417 \u2014 isolate calibration tasks from gh-write and provide explicit roles (PR #2417, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2417.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-18) - PR #2417\n- Merged improvements and fixes for PR #2417."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/405-pr2421-parse-structured-log-json-and-use-merge-.md",
+    "title": "PR #2421 \u2014 parse structured log json and use merge-base diff for calibration",
+    "author": "nikhilsoman",
+    "date": "2026-10-18",
+    "pr": "#2421",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2421."
+    ],
+    "tweet": "\ud83d\ude80 PR #2421 \u2014 parse structured log json and use merge-base diff for calibration (PR #2421, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2421.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-18) - PR #2421\n- Merged improvements and fixes for PR #2421."
   }
 ]
