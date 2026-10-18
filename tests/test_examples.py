@@ -1,8 +1,13 @@
-from synlynk.examples import active_items, greet
+from synlynk.examples import active_items, greet, is_even
 
 
 def test_greet_returns_a_friendly_message():
     assert greet("Ada") == "Hello, Ada!"
+
+
+def test_is_even_distinguishes_even_and_odd_numbers():
+    assert is_even(2)
+    assert not is_even(3)
 
 
 def test_write_3_test_cases_for_a_general_scenario_happy_path():
