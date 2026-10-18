@@ -1,4 +1,6 @@
-from synlynk.examples import active_items, greet
+import pytest
+
+from synlynk.examples import active_items, greet, normalize_username
 
 
 def test_greet_returns_a_friendly_message():
@@ -112,3 +114,14 @@ def test_greet_handles_an_empty_name():
 
 def test_greet_preserves_punctuation_in_a_name():
     assert greet("O'Connor") == "Hello, O'Connor!"
+
+
+def test_req_001_normalize_username_trims_and_lowercases_input():
+    """REQ-001: usernames are stored without surrounding whitespace in lowercase."""
+    assert normalize_username("  Ada.Lovelace  ") == "ada.lovelace"
+
+
+def test_req_002_normalize_username_rejects_an_empty_username():
+    """REQ-002: a username must contain at least one non-whitespace character."""
+    with pytest.raises(ValueError, match="username must not be empty"):
+        normalize_username("   ")
