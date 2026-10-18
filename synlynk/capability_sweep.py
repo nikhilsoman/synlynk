@@ -16,31 +16,64 @@ _CALIBRATION_SKILLS = [skill for skill in ("PROG", "TEST", "REQM") if skill in S
 _SKILL_TO_DISCIPLINE = {"PROG": "backend", "TEST": "testing", "REQM": "architecture"}
 
 
-def _discover_models() -> dict:
-    """Discover available models per harness CLI, with a hardcoded fallback."""
+def _discover_models(conn=None) -> dict:
+    """Discover available models per harness CLI, consulting the active database catalog first."""
+    if conn is None:
+        try:
+            conn = _get_db()
+        except Exception:
+            conn = None
+
     discovered = {}
     for harness, baseline in HARNESS_CAPABILITY_BASELINES.items():
         if harness == "local":
             continue
-        cli = baseline["cli"]
+
         models = []
-        try:
-            result = subprocess.run(
-                [cli, "--help"],
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=10,
-            )
-            help_text = (result.stdout or "") + (result.stderr or "")
-            if "--model" in help_text:
+        if conn is not None:
+            try:
+                from synlynk.db import get_active_harness_models
+                active = get_active_harness_models(conn, harness=harness)
+                if active:
+                    harness_model_prefixes = {
+                        "claude": ("claude-",),
+                        "codex": ("gpt-",),
+                        "agy": ("gemini-",),
+                        "grok": ("grok-",),
+                    }
+                    prefixes = harness_model_prefixes.get(harness, ())
+                    prefix_models = [
+                        row["model_id"]
+                        for row in active
+                        if any(row["model_id"].startswith(p) for p in prefixes)
+                    ]
+                    chosen = list(dict.fromkeys(prefix_models if prefix_models else [row["model_id"] for row in active]))
+                    models = chosen[:2]
+            except Exception:
+                models = []
+
+        if not models:
+            cli = baseline["cli"]
+            try:
+                result = subprocess.run(
+                    [cli, "--help"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=10,
+                )
+                help_text = (result.stdout or "") + (result.stderr or "")
+                if "--model" in help_text:
+                    models = _fallback_models_for_harness(harness)
+            except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
                 models = _fallback_models_for_harness(harness)
-        except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
-            models = _fallback_models_for_harness(harness)
+
         if not models:
             models = _fallback_models_for_harness(harness)
+
         discovered[harness] = models
     return discovered
+
 
 
 def _fallback_models_for_harness(harness: str) -> list:
