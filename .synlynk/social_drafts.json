@@ -2478,5 +2478,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2414 \u2014 await async job completion and capture log output (#2350) (PR #2414, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2414.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-18) - PR #2414\n- Merged improvements and fixes for PR #2414."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/402-pr2415-support-harness-filtering-forward-model-.md",
+    "title": "PR #2415 \u2014 support --harness filtering, forward model, and add release-vscode workflow",
+    "author": "nikhilsoman",
+    "date": "2026-10-18",
+    "pr": "#2415",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2415."
+    ],
+    "tweet": "\ud83d\ude80 PR #2415 \u2014 support --harness filtering, forward model, and add release-vscode workflow (PR #2415, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2415.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-18) - PR #2415\n- Merged improvements and fixes for PR #2415."
   }
 ]
