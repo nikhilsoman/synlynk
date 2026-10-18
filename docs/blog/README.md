@@ -479,6 +479,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [400](./400-pr2411-add-end-to-end-retrospective-and-consens.md) | PR #2411 — add end-to-end retrospective and consensus decision for VS Code client | [#2411](https://github.com/nikhilsoman/synlynk/pull/2411) | 2026-10-18 |
 | [401](./401-pr2414-await-async-job-completion-and-capture-l.md) | PR #2414 — await async job completion and capture log output (#2350) | [#2414](https://github.com/nikhilsoman/synlynk/pull/2414) | 2026-10-18 |
 | [402](./402-pr2415-support-harness-filtering-forward-model-.md) | PR #2415 — support --harness filtering, forward model, and add release-vscode workflow | [#2415](https://github.com/nikhilsoman/synlynk/pull/2415) | 2026-10-18 |
+| [403](./403-pr2416-discover-active-models-from-state-db-bef.md) | PR #2416 — discover active models from state db before falling back | [#2416](https://github.com/nikhilsoman/synlynk/pull/2416) | 2026-10-18 |
 
 ## Per-PR Post Template
 

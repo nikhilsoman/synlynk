@@ -2494,5 +2494,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2415 \u2014 support --harness filtering, forward model, and add release-vscode workflow (PR #2415, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2415.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-18) - PR #2415\n- Merged improvements and fixes for PR #2415."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/403-pr2416-discover-active-models-from-state-db-bef.md",
+    "title": "PR #2416 \u2014 discover active models from state db before falling back",
+    "author": "nikhilsoman",
+    "date": "2026-10-18",
+    "pr": "#2416",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2416."
+    ],
+    "tweet": "\ud83d\ude80 PR #2416 \u2014 discover active models from state db before falling back (PR #2416, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2416.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-18) - PR #2416\n- Merged improvements and fixes for PR #2416."
   }
 ]
