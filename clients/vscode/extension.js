@@ -1,102 +1,99 @@
-const vscode = require('vscode');
-const { exec } = require('child_process');
+"use strict";
 
-function runInTerminal(command, title = 'Synlynk') {
-    let terminal = vscode.window.terminals.find(t => t.name === title);
-    if (!terminal) {
-        terminal = vscode.window.createTerminal(title);
+const { FleetTreeDataProvider } = require("./src/providers/fleetProvider");
+const { GoalsTreeDataProvider } = require("./src/providers/goalsProvider");
+const { JobsTreeDataProvider } = require("./src/providers/jobsProvider");
+const { StatusBarController } = require("./src/ui/statusBar");
+const { watchEvents } = require("./src/eventWatcher");
+const { registerDispatchCommand } = require("./src/commands/dispatch");
+const { registerDiffCommand } = require("./src/commands/diff");
+const { registerPrCheckCommand } = require("./src/commands/prCheck");
+const { registerDoctorCommand } = require("./src/commands/doctor");
+
+let eventWatcher = null;
+
+function getVscode(injectedVscode) {
+  // Keep the runtime dependency lazy so the Node test suite does not need VS Code.
+  return injectedVscode || require("vscode");
+}
+
+function getWorkspaceRoot(vscode) {
+  const folders = vscode.workspace.workspaceFolders;
+  return folders && folders.length > 0 ? folders[0].uri.fsPath : process.cwd();
+}
+
+function activate(context, injectedVscode) {
+  const vscode = getVscode(injectedVscode);
+  const workspaceRoot = getWorkspaceRoot(vscode);
+  const rawStatusBar = vscode.window.createStatusBarItem(1, 100);
+  const statusBar = new StatusBarController(rawStatusBar);
+
+  statusBar.update({ state: "idle", spend: 0 });
+  context.subscriptions.push(rawStatusBar);
+
+  if (!vscode.workspace.isTrusted) {
+    vscode.window.showWarningMessage(
+      "Synlynk: Running in Untrusted Workspace. Execution and worktree dispatches are disabled.",
+    );
+    return;
+  }
+
+  const fleetProvider = new FleetTreeDataProvider(workspaceRoot);
+  const goalsProvider = new GoalsTreeDataProvider(workspaceRoot);
+  const jobsProvider = new JobsTreeDataProvider(workspaceRoot);
+  const refreshAll = () => {
+    fleetProvider.refresh();
+    goalsProvider.refresh();
+    jobsProvider.refresh();
+  };
+
+  if (typeof vscode.window.registerTreeDataProvider === "function") {
+    context.subscriptions.push(
+      vscode.window.registerTreeDataProvider("synlynk-fleet", fleetProvider),
+      vscode.window.registerTreeDataProvider("synlynk-goals", goalsProvider),
+      vscode.window.registerTreeDataProvider("synlynk-jobs", jobsProvider),
+    );
+  }
+
+  eventWatcher = watchEvents(workspaceRoot, (event) => {
+    refreshAll();
+    if (event.event === "job_started") {
+      statusBar.update({
+        state: "running",
+        jobId: event.job_id || "djob",
+        harness: event.harness || "Agent",
+        elapsedSeconds: 0,
+      });
+    } else if (event.event === "job_finished") {
+      statusBar.update({ state: "idle" });
     }
-    terminal.show();
-    terminal.sendText(command);
+  });
+
+  context.subscriptions.push({
+    dispose: () => {
+      if (eventWatcher) {
+        eventWatcher.dispose();
+        eventWatcher = null;
+      }
+    },
+  });
+
+  if (vscode.commands && typeof vscode.commands.registerCommand === "function") {
+    context.subscriptions.push(
+      registerDispatchCommand(vscode, workspaceRoot),
+      registerDiffCommand(vscode, workspaceRoot),
+      registerPrCheckCommand(vscode, workspaceRoot),
+      registerDoctorCommand(vscode, workspaceRoot),
+      vscode.commands.registerCommand("synlynk.refreshAll", refreshAll),
+    );
+  }
 }
 
-function activate(context) {
-    // 1. synlynk.dispatch
-    const dispatchCmd = vscode.commands.registerCommand('synlynk.dispatch', async () => {
-        const task = await vscode.window.showInputBox({
-            prompt: 'Enter task description for agent execution',
-            placeHolder: 'e.g. Implement unit test for authentication service',
-        });
-        if (!task) return;
-
-        const harness = await vscode.window.showQuickPick(
-            [
-                { label: 'Auto (Recommended)', description: 'Adaptive EV capability routing' },
-                { label: 'Codex', description: 'OpenAI Codex' },
-                { label: 'Claude', description: 'Anthropic Claude' },
-                { label: 'Agy', description: 'Google Gemini (AntiGravity)' },
-                { label: 'Grok', description: 'xAI Grok' },
-            ],
-            { placeHolder: 'Select execution harness' }
-        );
-        if (!harness) return;
-
-        let cmd = `synlynk dispatch --task "${task.replace(/"/g, '\\"')}"`;
-        if (harness.label !== 'Auto (Recommended)') {
-            cmd += ` ${harness.label.toLowerCase()} --force-harness`;
-        }
-        runInTerminal(cmd, 'Synlynk Dispatch');
-    });
-
-    // 2. synlynk.jobs
-    const jobsCmd = vscode.commands.registerCommand('synlynk.jobs', () => {
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        const cwd = workspaceFolders ? workspaceFolders[0].uri.fsPath : process.cwd();
-
-        exec('synlynk jobs --json', { cwd }, (err, stdout) => {
-            if (err) {
-                vscode.window.showErrorMessage(`Failed to fetch jobs: ${err.message}`);
-                return;
-            }
-            try {
-                const jobs = JSON.parse(stdout);
-                if (!jobs || jobs.length === 0) {
-                    vscode.window.showInformationMessage('No active or recent Synlynk jobs.');
-                    return;
-                }
-                const items = jobs.slice(0, 15).map(j => ({
-                    label: `${j.id} [${j.status || 'unknown'}]`,
-                    description: `${j.agent || ''} | ${j.story_id || ''}`,
-                    detail: `Tokens: ${j.tokens || 0} | Cost: $${j.cost_usd || 0} | Exit: ${j.exit_code !== undefined ? j.exit_code : 'running'}`,
-                    jobId: j.id,
-                }));
-                vscode.window.showQuickPick(items, { placeHolder: 'Select a job to view logs' }).then(selected => {
-                    if (selected) {
-                        runInTerminal(`synlynk logs --job ${selected.jobId}`, 'Synlynk Logs');
-                    }
-                });
-            } catch (parseErr) {
-                runInTerminal('synlynk jobs', 'Synlynk Jobs');
-            }
-        });
-    });
-
-    // 3. synlynk.status
-    const statusCmd = vscode.commands.registerCommand('synlynk.status', () => {
-        runInTerminal('synlynk status', 'Synlynk Status');
-    });
-
-    // 4. synlynk.logs
-    const logsCmd = vscode.commands.registerCommand('synlynk.logs', async () => {
-        const jobId = await vscode.window.showInputBox({
-            prompt: 'Enter Job ID to view logs (leave empty for latest job)',
-            placeHolder: 'e.g. job-3bd46aec',
-        });
-        const cmd = jobId ? `synlynk logs --job ${jobId.trim()}` : 'synlynk logs';
-        runInTerminal(cmd, 'Synlynk Logs');
-    });
-
-    // 5. synlynk.doctor
-    const doctorCmd = vscode.commands.registerCommand('synlynk.doctor', () => {
-        runInTerminal('synlynk doctor', 'Synlynk Doctor');
-    });
-
-    context.subscriptions.push(dispatchCmd, jobsCmd, statusCmd, logsCmd, doctorCmd);
+function deactivate() {
+  if (eventWatcher) {
+    eventWatcher.dispose();
+    eventWatcher = null;
+  }
 }
 
-function deactivate() {}
-
-module.exports = {
-    activate,
-    deactivate,
-};
+module.exports = { activate, deactivate };

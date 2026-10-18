@@ -1,53 +1,138 @@
 {
   "name": "synlynk-vscode",
-  "displayName": "Synlynk Autonomous Agent Workspace",
-  "description": "Zero-friction VS Code client for Synlynk multi-agent orchestration across Claude, Codex, Agy, and Grok.",
+  "displayName": "Synlynk Multi-Agent Engineering",
+  "description": "Multi-agent orchestration, leased worktree isolation, adversarial verification, and goal tracking for Synlynk.",
   "version": "0.1.0",
   "publisher": "synlynk",
-  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nikhilsoman/synlynk"
+  },
   "engines": {
-    "vscode": "^1.75.0"
+    "vscode": "^1.85.0"
   },
   "categories": [
-    "Machine Learning",
     "Programming Languages",
+    "Machine Learning",
+    "Testing",
     "Other"
+  ],
+  "keywords": [
+    "synlynk",
+    "multi-agent",
+    "codex",
+    "claude",
+    "grok",
+    "gemini",
+    "worktree"
   ],
   "main": "./extension.js",
   "activationEvents": [
-    "onCommand:synlynk.dispatch",
-    "onCommand:synlynk.jobs",
-    "onCommand:synlynk.status",
-    "onCommand:synlynk.logs",
-    "onCommand:synlynk.doctor"
+    "onStartupFinished"
   ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Read-only fleet and goal inspection is supported in untrusted workspaces. Dispatches and worktree modifications require a trusted workspace."
+    }
+  },
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "synlynk-sidebar",
+          "title": "Synlynk",
+          "icon": "media/synlynk-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "synlynk-sidebar": [
+        {
+          "id": "synlynk-fleet",
+          "name": "Fleet Health & Quotas",
+          "contextualTitle": "Synlynk Fleet"
+        },
+        {
+          "id": "synlynk-goals",
+          "name": "Project Goals & Milestones",
+          "contextualTitle": "Synlynk Goals"
+        },
+        {
+          "id": "synlynk-jobs",
+          "name": "Dispatched Jobs & Reviews",
+          "contextualTitle": "Synlynk Jobs"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "synlynk.dispatch",
-        "title": "Synlynk: Dispatch Task to Agent Fleet",
-        "category": "Synlynk"
-      },
-      {
-        "command": "synlynk.jobs",
-        "title": "Synlynk: Show Dispatched Jobs",
-        "category": "Synlynk"
-      },
-      {
-        "command": "synlynk.status",
-        "title": "Synlynk: Check Platform Health & Burn Rate",
-        "category": "Synlynk"
-      },
-      {
-        "command": "synlynk.logs",
-        "title": "Synlynk: View Job Logs",
+        "title": "Synlynk: Dispatch Task",
         "category": "Synlynk"
       },
       {
         "command": "synlynk.doctor",
-        "title": "Synlynk: Run Workspace Diagnostics (Doctor)",
+        "title": "Synlynk: Run Doctor Diagnostics",
+        "category": "Synlynk"
+      },
+      {
+        "command": "synlynk.diffReview",
+        "title": "Synlynk: Review Worktree Diff",
+        "category": "Synlynk"
+      },
+      {
+        "command": "synlynk.prCheck",
+        "title": "Synlynk: Check PR & Merge Policy",
+        "category": "Synlynk"
+      },
+      {
+        "command": "synlynk.refreshAll",
+        "title": "Synlynk: Refresh Status",
+        "category": "Synlynk",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "synlynk.viewJobLog",
+        "title": "Synlynk: View Job Log",
         "category": "Synlynk"
       }
-    ]
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "synlynk.refreshAll",
+          "when": "view == synlynk-fleet || view == synlynk-goals || view == synlynk-jobs",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "synlynk.diffReview",
+          "when": "view == synlynk-jobs && viewItem == job-complete",
+          "group": "inline@1"
+        },
+        {
+          "command": "synlynk.prCheck",
+          "when": "view == synlynk-jobs && viewItem == job-complete",
+          "group": "inline@2"
+        },
+        {
+          "command": "synlynk.viewJobLog",
+          "when": "view == synlynk-jobs",
+          "group": "inline@3"
+        }
+      ]
+    }
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^18.19.0",
+    "@types/vscode": "^1.85.0",
+    "mocha": "^10.3.0"
+  },
+  "scripts": {
+    "test": "node ./test/runTest.js"
   }
 }
