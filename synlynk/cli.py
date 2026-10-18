@@ -1819,6 +1819,13 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         dest="cost_cap",
         help="Override the configured cost cap (USD) for this sweep run",
     )
+    sweep_parser.add_argument(
+        "--harness", "--agent",
+        default=None,
+        dest="harness",
+        help="Run calibration sweep only for the specified harness (e.g. codex, claude, agy)",
+    )
+
     report_parser = capability_sub.add_parser(
         "report",
         help=(
@@ -3133,8 +3140,12 @@ def main(argv=None) -> None:
             ))
     elif args.command == "capability":
         if args.capability_action == "sweep":
-            cmd_capability_sweep(cost_cap_override=getattr(args, "cost_cap", None))
+            cmd_capability_sweep(
+                cost_cap_override=getattr(args, "cost_cap", None),
+                harness=getattr(args, "harness", None),
+            )
         elif args.capability_action == "report":
+
             from synlynk.capability_report import cmd_capability_report
             cmd_capability_report(
                 as_json=getattr(args, "as_json", False),

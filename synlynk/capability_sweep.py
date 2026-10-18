@@ -73,7 +73,7 @@ def _estimate_sweep_cost(discovered: dict, skills: list) -> float:
     return float(total)
 
 
-def cmd_capability_sweep(cost_cap_override: float = None) -> None:
+def cmd_capability_sweep(cost_cap_override: float = None, harness: str = None) -> None:
     """Run the calibration sweep after enforcing a cost guardrail."""
     from synlynk import load_config
 
@@ -83,6 +83,15 @@ def cmd_capability_sweep(cost_cap_override: float = None) -> None:
         cost_cap = cfg.get("capability_sweep", {}).get("cost_cap_usd", _DEFAULT_SWEEP_COST_CAP_USD)
 
     discovered = _discover_models()
+    if harness:
+        if harness not in discovered:
+            print(
+                f"  Error: harness '{harness}' not found in discovered models ({list(discovered.keys())})",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        discovered = {harness: discovered[harness]}
+
     estimated_cost = _estimate_sweep_cost(discovered, _CALIBRATION_SKILLS)
 
     total_models = sum(len(models) for models in discovered.values())
@@ -104,6 +113,7 @@ def cmd_capability_sweep(cost_cap_override: float = None) -> None:
     _run_sweep(discovered, _CALIBRATION_SKILLS)
     from synlynk.capability_watch import mark_capability_sweep_run
     mark_capability_sweep_run(_get_db())
+
 
 
 def _pick_verifier_harness(executor_harness: str, available_harnesses: list) -> str:
@@ -330,18 +340,21 @@ def _run_sweep(discovered: dict, skills: list) -> None:
     import synlynk as sl
 
     conn_get = sl._get_db
-    available_harnesses = list(discovered.keys())
+    # Independent verifier must be selected from all available configured harnesses,
+    # so single-harness sweeps have an independent verifier available.
+    available_harnesses = [h for h in HARNESS_CAPABILITY_BASELINES if h != "local"]
     for harness, models in discovered.items():
         for model in models:
             for skill in skills:
                 label = SFIA_CODES.get(skill, {}).get("label", skill)
                 task = f"Write a minimal example demonstrating {label} for a small Python function."
-                executor_result = _dispatch_calibration_task(harness, task)
+                executor_result = _dispatch_calibration_task(harness, task, model=model)
 
                 verifier_harness = _pick_verifier_harness(harness, available_harnesses)
                 verdict = _verify_calibration_result(
                     verifier_harness, harness, model, skill, executor_result
                 )
+
 
                 conn = conn_get()
                 # capability_ratings.story_id is a NOT NULL FK to stories.story_id,
