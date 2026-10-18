@@ -248,6 +248,34 @@ def _pick_verifier_agent(executor_agent: str, available_agents: list) -> str:
     return candidates[0]
 
 
+def _extract_log_text(raw_log: str) -> str:
+    """Extract human/LLM readable text from a raw job log."""
+    if not raw_log:
+        return ""
+    trimmed = raw_log.strip()
+    if trimmed.startswith("{") and trimmed.endswith("}"):
+        try:
+            data = json.loads(trimmed)
+            if isinstance(data, dict):
+                if "result" in data and isinstance(data["result"], str):
+                    return data["result"]
+                if "text" in data and isinstance(data["text"], str):
+                    return data["text"]
+        except Exception:
+            pass
+    lines = [line.strip() for line in raw_log.splitlines() if line.strip()]
+    for line in reversed(lines):
+        if line.startswith("{") and line.endswith("}"):
+            try:
+                data = json.loads(line)
+                if isinstance(data, dict):
+                    if "result" in data and isinstance(data["result"], str):
+                        return data["result"]
+            except Exception:
+                pass
+    return raw_log
+
+
 def _await_calibration_job(job: dict, timeout_s: int = 120) -> dict:
     """Wait synchronously for a dispatched calibration job to exit, reconcile
     it, and populate job['output'] from its log file (gh:#2350).
@@ -292,17 +320,37 @@ def _await_calibration_job(job: dict, timeout_s: int = 120) -> dict:
         diff_text = ""
         if worktree_path and os.path.exists(worktree_path):
             try:
-                res = subprocess.run(
-                    ["git", "-C", worktree_path, "diff", "origin/main...HEAD"],
+                base_ref = "origin/main"
+                mb_res = subprocess.run(
+                    ["git", "-C", worktree_path, "merge-base", "HEAD", base_ref],
                     capture_output=True,
                     text=True,
                     check=False,
                     timeout=5,
                 )
-                diff_text = (res.stdout or "").strip()
-                if not diff_text:
+                base_sha = (mb_res.stdout or "").strip()
+                if not base_sha:
+                    mb_res = subprocess.run(
+                        ["git", "-C", worktree_path, "merge-base", "HEAD", "main"],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=5,
+                    )
+                    base_sha = (mb_res.stdout or "").strip()
+
+                if base_sha:
                     res = subprocess.run(
-                        ["git", "-C", worktree_path, "diff", "HEAD~1"],
+                        ["git", "-C", worktree_path, "diff", base_sha],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=5,
+                    )
+                    diff_text = (res.stdout or "").strip()
+                else:
+                    res = subprocess.run(
+                        ["git", "-C", worktree_path, "diff", "HEAD"],
                         capture_output=True,
                         text=True,
                         check=False,
@@ -314,10 +362,11 @@ def _await_calibration_job(job: dict, timeout_s: int = 120) -> dict:
 
         log_file = job.get("log_file")
         log_text = _read_job_log(log_file) if log_file else ""
+        extracted_text = _extract_log_text(log_text)
         if diff_text:
-            job["output"] = f"### Changes (git diff):\n{diff_text}\n\n### Execution log summary:\n{log_text[:2000]}"
+            job["output"] = f"### Changes (git diff):\n{diff_text}\n\n### Execution log summary:\n{extracted_text[:2000]}"
         else:
-            job["output"] = log_text
+            job["output"] = extracted_text
 
     return job
 
@@ -353,6 +402,10 @@ def _verify_calibration_result(
     verify_task = (
         f"Review this {label} calibration task output from another harness and score it "
         "0-10 for quality.\n"
+        "IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below. "
+        "DO NOT inspect your local filesystem or git status — the executor's changes were produced in "
+        "an isolated worktree and are not present in your local environment. "
+        "Evaluate the code design, correctness, and test quality directly from the diff and log below.\n\n"
         "Respond with a line '# synlynk-meta' followed by 'quality=<N>' "
         "and 'correct=<true|false>'.\n\n"
         f"Executor harness: {executor_harness}\n"
