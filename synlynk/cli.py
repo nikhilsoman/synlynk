@@ -382,7 +382,9 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     )
     from synlynk._constants import VERSION, HARNESS_CAPABILITY_BASELINES
 
-    parser.add_argument("--version", action="version", version=f"synlynk {VERSION}")
+    # ``--version`` belongs to several release-facing subcommands.  It is
+    # handled as an exact top-level invocation in ``main()`` so argparse does
+    # not intercept ``roadmap add --version`` or ``release --version``.
     parser.add_argument(
         "--experimental",
         action="store_true",
@@ -2223,6 +2225,11 @@ def main(argv=None) -> None:
     import synlynk as _package
 
     cli_tokens = list(argv) if argv is not None else sys.argv[1:]
+    if cli_tokens == ["--version"]:
+        from synlynk._constants import VERSION
+
+        print(f"synlynk {VERSION}")
+        return
     fast_entrypoint = _package._FAST_CLI
     selected_command = _command_from_argv(cli_tokens)
     if cli_tokens and cli_tokens[0] == "help":
@@ -2235,10 +2242,6 @@ def main(argv=None) -> None:
         # Keep the common metadata/error paths free of the legacy import graph.
         # A real command is parsed lazily after those imports, using only its
         # own registration block.
-        if "--version" in cli_tokens:
-            from synlynk._constants import VERSION
-            print(f"synlynk {VERSION}")
-            raise SystemExit(0)
         if "--help" in cli_tokens or selected_command not in _TOP_LEVEL_COMMANDS:
             parser = build_parser(selected_command=selected_command)
             parser.parse_args(cli_tokens)
