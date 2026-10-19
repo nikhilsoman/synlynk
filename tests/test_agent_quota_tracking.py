@@ -267,14 +267,18 @@ def test_repair_sops_only_injects_synlynks_own_h_repo_specific_config(tmp_path, 
     gemini = (tmp_path / "GEMINI.md").read_text()
     agents = (tmp_path / "AGENTS.md").read_text()
 
-    assert "escalate to Agy." in gemini
-    assert "`feat/agy/<description>`" in gemini
-    assert "| pm / review | Agy | pm, review |" in gemini
-    assert "| implement / test / refactor | Codex | implement, test, refactor |" in gemini
+    # GEMINI.md is a per-turn file: it converges to the lean SOP index
+    # (gh:#2284), while the session-tier AGENTS.md keeps full SOP bodies.
+    assert "## SOP Index (load on demand)" in gemini
+    assert "## PR Review Discipline" in gemini
+    assert "escalate to Agy." not in gemini
+    assert "| pm / review | Agy | pm, review |" not in gemini
+    assert "| implement / test / refactor | Codex | implement, test, refactor |" not in gemini
 
     assert "escalate to Agy." in agents
     assert "`feat/codex/<description>`" in agents
     assert "| pm / review | Agy | pm, review |" in agents
+    assert "| implement / test / refactor | Codex | implement, test, refactor |" in agents
 
 
 def test_repair_sops_only_injects_synlynks_own_h_generic_branch_fallback(tmp_path, monkeypatch):
