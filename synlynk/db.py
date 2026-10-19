@@ -865,6 +865,10 @@ def upsert_harness_model(
     discovered_at: str | None = None,
 ) -> None:
     """Insert or refresh a provider-specific discovered harness model."""
+    from synlynk.models import is_plausible_model_id
+
+    if not is_plausible_model_id(model_id):
+        return
     now = datetime.now(timezone.utc).isoformat()
     first_seen_at = first_seen_at or now
     last_seen_at = last_seen_at or now

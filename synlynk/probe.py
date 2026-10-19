@@ -288,9 +288,13 @@ def _diff_and_queue_new_models(harness_name: str, discovered_model_ids: list, co
             "SELECT model_id FROM harness_models WHERE harness_name=?", (harness_name,)
         ).fetchall()
     }
+    from synlynk.models import is_plausible_model_id
+
     now = _now_iso()
     discovered_new_model = False
     for model_id in discovered_model_ids:
+        if not is_plausible_model_id(model_id):
+            continue
         if model_id in known:
             conn.execute(
                 "UPDATE harness_models SET last_seen_at=? WHERE harness_name=? AND model_id=?",
