@@ -747,7 +747,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
 
     doctor_parser = subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
     doctor_parser.add_argument("--fix", default=None,
-                               help="Apply a targeted remediation for the named harness (agy only)")
+                               help="Apply a targeted remediation (agy or roadmap)")
     doctor_parser.add_argument("--yes", action="store_true",
                                help="Write the proposed remediation without prompting")
     doctor_parser.add_argument("--live-probe", action="store_true",

@@ -3208,17 +3208,54 @@ def _generate_todo_md() -> None:
             return
 
     conn = _get_db()
+    active_arcs = ("v1.0.0-preview", "v1.1.0")
+    active_goals = ("goal-eacab0dc", "goal-20bb3987", "goal-aa48c456")
     rows = conn.execute(
-        "SELECT story_id, title, engg_domain, status FROM stories "
-        "WHERE archived_at IS NULL ORDER BY created_at ASC"
+        """
+        SELECT s.story_id, s.title, s.engg_domain, s.status, s.created_at,
+               CASE
+                 WHEN EXISTS (
+                   SELECT 1 FROM roadmap_phases rp
+                   JOIN roadmap_arcs ra ON ra.version=rp.arc_version
+                   WHERE rp.story_id=s.story_id
+                     AND rp.arc_version IN (?, ?)
+                     AND ra.status IN ('in_progress', 'active', 'ready')
+                     AND s.status IN ('in_progress', 'claimed', 'ready')
+                 ) THEN 0
+                 WHEN s.goal_id IN (?, ?, ?)
+                   OR EXISTS (
+                     SELECT 1 FROM goal_contributions gc
+                     WHERE gc.story_id=s.story_id
+                       AND gc.goal_id IN (?, ?, ?)
+                   ) THEN 1
+                 ELSE 2
+               END AS priority_group
+        FROM stories s
+        WHERE s.archived_at IS NULL
+        ORDER BY priority_group ASC, s.created_at DESC, s.story_id ASC
+        """,
+        (*active_arcs, *active_goals, *active_goals),
     ).fetchall()
     conn.close()
+
+    cutoff = time.time() - (90 * 24 * 60 * 60)
+    active_rows = []
+    legacy_omitted = 0
+    for story_id, title, engg_domain, status, created_at, priority_group in rows:
+        try:
+            created_epoch = time.mktime(time.strptime(str(created_at)[:19], "%Y-%m-%d %H:%M:%S"))
+        except (TypeError, ValueError):
+            created_epoch = cutoff
+        if priority_group == 2 and created_epoch < cutoff:
+            legacy_omitted += 1
+            continue
+        active_rows.append((story_id, title, engg_domain, status))
 
     lines = [
         "# Tasks (generated - source of truth is state.db)\n",
         "# Edit via: synlynk story create/update | Do NOT hand-edit this file\n\n",
     ]
-    for story_id, title, engg_domain, status in rows:
+    for story_id, title, engg_domain, status in active_rows:
         if status == "done":
             check = "x"
         elif status == "deferred":
@@ -3227,6 +3264,8 @@ def _generate_todo_md() -> None:
             check = " "
         domain = f" [{engg_domain}]" if engg_domain and engg_domain != "unknown" else ""
         lines.append(f"- [{check}] {title or story_id}{domain} <!-- id:{story_id} -->\n")
+    if legacy_omitted:
+        lines.append(f"\n> {legacy_omitted} legacy story omitted from the active queue (older than 90 days).\n")
 
     _write_generated_project_doc("todo.md", "".join(lines))
 
@@ -4006,10 +4045,17 @@ def cmd_story_ready(story_id, all_stories: bool = False) -> None:
             ).fetchall()
         ]
         cur = conn.execute("UPDATE stories SET readiness='ready' WHERE readiness='draft'")
+        phase_cur = conn.execute(
+            "UPDATE roadmap_phases SET status='in_progress' "
+            "WHERE story_id IN (SELECT story_id FROM stories WHERE readiness='ready') "
+            "AND status='planned'"
+        )
         conn.commit()
         for sid in ready_ids:
             _record_goal_link_status(conn, sid)
         conn.close()
+        if phase_cur.rowcount:
+            _generate_roadmap_md()
         print(f"  {_GREEN}✓{_RESET} Marked {cur.rowcount} draft stories ready")
         return
     if not story_id:
@@ -4017,9 +4063,15 @@ def cmd_story_ready(story_id, all_stories: bool = False) -> None:
         print("  Error: story_id required unless --all is given")
         return
     conn.execute("UPDATE stories SET readiness='ready' WHERE story_id=?", (story_id,))
+    phase_cur = conn.execute(
+        "UPDATE roadmap_phases SET status='in_progress' WHERE story_id=? AND status='planned'",
+        (story_id,),
+    )
     conn.commit()
     _record_goal_link_status(conn, story_id)
     conn.close()
+    if phase_cur.rowcount:
+        _generate_roadmap_md()
     print(f"  {_GREEN}✓{_RESET} Story {story_id} marked ready")
 
 
@@ -4090,6 +4142,10 @@ def cmd_story_done(story_id: str) -> None:
         "UPDATE stories SET status='done', readiness='done' WHERE story_id=?",
         (story_id,),
     )
+    phase_result = conn.execute(
+        "UPDATE roadmap_phases SET status='done' WHERE story_id=? AND status != 'done'",
+        (story_id,),
+    )
     conn.commit()
     goal_ids = []
     if story[1]:
@@ -4099,6 +4155,8 @@ def cmd_story_done(story_id: str) -> None:
     ).fetchall()
     conn.close()
     goal_ids.extend(g[0] for g in secondary if g[0] not in goal_ids)
+    if phase_result.rowcount:
+        _generate_roadmap_md()
     emit_event(
         "story_done",
         {"story_id": story_id, "goal_ids": goal_ids},

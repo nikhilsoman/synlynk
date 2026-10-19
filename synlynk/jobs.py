@@ -4616,6 +4616,18 @@ def _promote_merged_pr_result(
     return status, exit_code, None
 
 
+def _mark_merged_job_story_done(story_id: Optional[str]) -> None:
+    """Write confirmed merge state through to a linked story and roadmap phase."""
+    if not story_id:
+        return
+    try:
+        from synlynk.db import mark_story_done_after_merge
+        mark_story_done_after_merge(story_id)
+    except Exception:
+        # This idempotent projection is retried by the next reconciliation.
+        return
+
+
 def _reap_zombie_worktree(job_id: str, log_path: Optional[str], conn=None) -> bool:
     """Remove a leaked worktree recorded by a dead daemon job."""
     path = _daemon_job_worktree_path(job_id, log_path)
@@ -4854,6 +4866,8 @@ def _reconcile_daemon_jobs() -> None:
                     status, exit_code, _merged_note = _promote_merged_pr_result(
                         status, exit_code, preferred_branch, started_at
                     )
+                    if _merged_note:
+                        _mark_merged_job_story_done(story_id)
                     if status == STATUS_UNPUSHED_BRANCH and exit_code in (None, 0):
                         exit_code = 1
                     status, gh_write_verified_str = _verify_daemon_terminal_status(
@@ -4972,6 +4986,8 @@ def _reconcile_daemon_jobs() -> None:
                         zombie_status, zombie_exit_code, _merged_note = _promote_merged_pr_result(
                             zombie_status, zombie_exit_code, worktree_branch, started_at
                         )
+                        if _merged_note:
+                            _mark_merged_job_story_done(story_id)
                         if zombie_status == STATUS_UNPUSHED_BRANCH and zombie_exit_code in (None, 0):
                             zombie_exit_code = 1
                         zombie_status, gh_write_verified_str = _verify_daemon_terminal_status(
@@ -5049,6 +5065,7 @@ def _reconcile_daemon_jobs() -> None:
                 )
                 if merged_note:
                     summary_note = merged_note
+                    _mark_merged_job_story_done(story_id)
                 if status == STATUS_UNPUSHED_BRANCH and exit_code in (None, 0):
                     exit_code = 1
                 status, gh_write_verified_str = _verify_daemon_terminal_status(
