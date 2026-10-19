@@ -134,8 +134,14 @@ def sync_harness_models_window(
             old_fs, old_ls = observed[key]
             observed[key] = (min(old_fs, fs), max(old_ls, ls))
 
-    # Insert newly observed models into harness_models
+    # Insert newly observed models into harness_models. Values scraped from
+    # execution logs can be source-code fragments rather than model ids
+    # (gh:#2441); reject anything that is not shaped like a real model id.
+    from synlynk.models import is_plausible_model_id
+
     for (harness, model), (first_seen, last_seen) in observed.items():
+        if not is_plausible_model_id(model):
+            continue
         try:
             conn.execute("""
                 INSERT INTO harness_models (
