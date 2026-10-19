@@ -386,9 +386,7 @@ def test_cli_hub_start_uses_server_broker_and_cleans_up(project_dir, tmp_path, m
             self.httpd = SimpleNamespace(server_close=lambda: observed.update(closed=True))
 
         def start(self, background):
-            assert not background and observed["attached"]
-            if fail:
-                raise KeyboardInterrupt
+            assert background  # server now runs in background; reconnect loop is foreground
 
     class Adapter:
         def __init__(self, broker, client, workspace, **options):
@@ -404,20 +402,24 @@ def test_cli_hub_start_uses_server_broker_and_cleans_up(project_dir, tmp_path, m
     def transport(servers, **options):
         assert servers == ["nats://example:4223"]
         assert options == {"user": cred.device_id, "password": cred.token}
+        if fail:
+            raise KeyboardInterrupt
         return object()
+
+    def fake_sleep(seconds):
+        raise KeyboardInterrupt
 
     monkeypatch.setattr(relay, "RelayServer", Server)
     monkeypatch.setattr(hub, "HubAdapter", Adapter)
     monkeypatch.setattr(hub, "NatsTransport", transport)
+    monkeypatch.setattr(hub.time, "sleep", fake_sleep)
     argv = ["relay", "start", "--hub", "--device-id", cred.device_id,
             "--config-dir", str(tmp_path / "config"), "--port", "8001",
             "--hub-url", "nats://example:4223"]
-    if fail:
-        with pytest.raises(KeyboardInterrupt):
-            main(argv)
-    else:
-        main(argv)
-    assert observed["closed"] and observed["detached"] and observed["port"] == 8001
+    main(argv)  # KeyboardInterrupt is handled internally; function returns normally
+    assert observed["closed"] and observed["port"] == 8001
+    if not fail:
+        assert observed.get("attached") and observed.get("detached")
 
 
 @pytest.mark.parametrize("subcommand", ["hub", "device"])
@@ -1246,3 +1248,184 @@ def test_relay_hub_module_importable_without_nats_installed():
         capture_output=True, text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+# --- Follow-up: reconnect, hub status, managed-service hardening gates ---
+
+
+def test_broker_hub_status_rpc(project_dir):
+    from synlynk.relay import RelayBroker
+    broker = RelayBroker()
+    assert broker.get_hub_status() == {}
+    broker.set_hub_status({"state": "connected"})
+    assert broker.get_hub_status() == {"state": "connected"}
+    result = broker.rpc("relay.hub_status", {})
+    assert result == {"state": "connected"}
+    result2 = broker.rpc("hub_status", {})
+    assert result2 == {"state": "connected"}
+
+
+def test_hub_adapter_sets_broker_status_on_attach_detach(project_dir):
+    broker, client = RelayBroker(), FakeNatsClient()
+    adapter = HubAdapter(broker, client, "ws1")
+    assert broker.get_hub_status() == {}
+    adapter.attach()
+    assert broker.get_hub_status() == {"state": "connected"}
+    adapter.detach()
+    assert broker.get_hub_status() == {"state": "disconnected"}
+
+
+def test_run_hub_relay_reconnects_on_initial_failure(project_dir, tmp_path, monkeypatch):
+    from synlynk.cli import main
+    import synlynk.relay_hub as hub
+    import synlynk.relay as relay
+
+    common = ["--workspace-id", "ws1", "--config-dir", str(tmp_path / "config")]
+    main(["relay", "hub", "init", *common])
+    main(["relay", "device", "add", "mydevice", *common])
+    cred = DeviceCredentialStore("ws1", tmp_path / "config").list_devices()[0]
+
+    attempts = []
+
+    class Server:
+        def __init__(self, port):
+            self.broker = object()
+            self.httpd = SimpleNamespace(server_close=lambda: None)
+
+        def start(self, background):
+            assert background
+
+    class Adapter:
+        def __init__(self, broker, client, workspace, **options):
+            pass
+
+        def attach(self):
+            pass
+
+        def detach(self):
+            pass
+
+    def transport(servers, **options):
+        attempts.append(len(attempts) + 1)
+        if len(attempts) == 1:
+            raise OSError("hub unreachable")
+        # Second attempt succeeds; subsequent time.sleep stops the loop.
+        return object()
+
+    sleep_calls = []
+
+    def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+        if len(sleep_calls) >= 2:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(relay, "RelayServer", Server)
+    monkeypatch.setattr(hub, "HubAdapter", Adapter)
+    monkeypatch.setattr(hub, "NatsTransport", transport)
+    monkeypatch.setattr(hub.time, "sleep", fake_sleep)
+
+    main(["relay", "start", "--hub", "--device-id", cred.device_id,
+          "--config-dir", str(tmp_path / "config"),
+          "--hub-url", "nats://127.0.0.1:4222"])
+
+    assert attempts == [1, 2], f"Expected two transport attempts; got {attempts}"
+    # First sleep is the backoff after failure; second sleep is the connected poll.
+    assert sleep_calls[0] == 1.0  # Initial backoff.
+
+
+def test_run_hub_relay_backoff_caps_at_sixty(project_dir, tmp_path, monkeypatch):
+    from synlynk.cli import main
+    import synlynk.relay_hub as hub
+    import synlynk.relay as relay
+
+    common = ["--workspace-id", "ws1", "--config-dir", str(tmp_path / "config")]
+    main(["relay", "hub", "init", *common])
+    main(["relay", "device", "add", "mydevice", *common])
+    cred = DeviceCredentialStore("ws1", tmp_path / "config").list_devices()[0]
+    call_count = [0]
+
+    class Server:
+        def __init__(self, port):
+            self.broker = object()
+            self.httpd = SimpleNamespace(server_close=lambda: None)
+
+        def start(self, background):
+            pass
+
+    def transport(servers, **options):
+        call_count[0] += 1
+        if call_count[0] < 8:
+            raise OSError("down")
+        raise KeyboardInterrupt
+
+    backoffs = []
+
+    def fake_sleep(seconds):
+        backoffs.append(seconds)
+
+    monkeypatch.setattr(relay, "RelayServer", Server)
+    monkeypatch.setattr(hub, "HubAdapter", SimpleNamespace)
+    monkeypatch.setattr(hub, "NatsTransport", transport)
+    monkeypatch.setattr(hub.time, "sleep", fake_sleep)
+
+    main(["relay", "start", "--hub", "--device-id", cred.device_id,
+          "--config-dir", str(tmp_path / "config"),
+          "--hub-url", "nats://127.0.0.1:4222"])
+
+    # Backoffs: 1, 2, 4, 8, 16, 32, 60 (capped)
+    assert backoffs == [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 60.0]
+
+
+@pytest.mark.parametrize("operation", ["device_add", "device_revoke", "hub_start"])
+def test_managed_mode_operations_give_clear_error(tmp_path, operation):
+    from synlynk.cli import main
+    import json as _json
+
+    common = ["--config-dir", str(tmp_path)]
+    (tmp_path / "hub.json").write_text(_json.dumps(
+        {"workspace_id": "ws1", "mode": "managed", "url": "nats://managed.example.com:4222",
+         "token": "secret"}))
+    (tmp_path / "hub.json").chmod(0o600)
+    (tmp_path / "devices.json").write_text(_json.dumps({"workspace_id": "ws1", "devices": {}}))
+    (tmp_path / "devices.json").chmod(0o600)
+
+    with pytest.raises((ValueError, SystemExit), match="[Mm]anaged"):
+        if operation == "device_add":
+            main(["relay", "device", "add", "mydevice", "--workspace-id", "ws1", *common])
+        elif operation == "device_revoke":
+            main(["relay", "device", "revoke", "dev-abc123", "--workspace-id", "ws1", *common])
+        else:
+            main(["relay", "start", "--hub", "--device-id", "dev-abc",
+                  "--hub-url", "nats://x", *common])
+
+
+def test_relay_status_shows_hub_state(project_dir, capsys):
+    from synlynk.relay import RelayServer, cmd_relay_status
+    from types import SimpleNamespace
+    server = RelayServer()
+    try:
+        server.start(background=True)
+        host, port = server.address
+        server.broker.set_hub_status({"state": "connected"})
+        cmd_relay_status(SimpleNamespace(relay_url=f"http://{host}:{port}"))
+        out = capsys.readouterr().out
+        assert "relay running" in out
+        assert "hub connected" in out
+    finally:
+        server.stop()
+
+
+def test_relay_status_shows_hub_error(project_dir, capsys):
+    from synlynk.relay import RelayServer, cmd_relay_status
+    from types import SimpleNamespace
+    server = RelayServer()
+    try:
+        server.start(background=True)
+        host, port = server.address
+        server.broker.set_hub_status({"state": "reconnecting", "error": "ConnectionRefusedError"})
+        cmd_relay_status(SimpleNamespace(relay_url=f"http://{host}:{port}"))
+        out = capsys.readouterr().out
+        assert "hub reconnecting" in out
+        assert "ConnectionRefusedError" in out
+    finally:
+        server.stop()

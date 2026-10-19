@@ -26,7 +26,7 @@ def test_remote_device_uses_only_exported_credential(tmp_path, monkeypatch):
             self.httpd = SimpleNamespace(server_close=lambda: observed.update(closed=True))
 
         def start(self, background):
-            assert observed["attached"]
+            assert background  # server runs in background; reconnect loop is foreground
 
     class Adapter:
         def __init__(self, broker, client, workspace, **options):
@@ -43,12 +43,16 @@ def test_remote_device_uses_only_exported_credential(tmp_path, monkeypatch):
         assert options == {"user": credential.device_id, "password": credential.token}
         return object()
 
+    def fake_sleep(seconds):
+        raise KeyboardInterrupt
+
     monkeypatch.setattr(relay, "RelayServer", Server)
     monkeypatch.setattr(hub, "HubAdapter", Adapter)
     monkeypatch.setattr(hub, "NatsTransport", transport)
+    monkeypatch.setattr(hub.time, "sleep", fake_sleep)
     main(["relay", "start", "--hub", "--credential-file", str(exported),
           "--workspace-id", "ws1", "--hub-url", "nats://hub:4222"])
-    assert observed["closed"] and observed["detached"]
+    assert observed["closed"] and observed["detached"] and observed.get("attached")
     assert not (remote / "devices.json").exists()
 
 

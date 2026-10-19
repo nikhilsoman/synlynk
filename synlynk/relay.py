@@ -106,6 +106,15 @@ class RelayBroker:
         self._peers: set[str] = set()
         self._seen_events: set[str] = set()
         self._lock = threading.RLock()
+        self._hub_status: dict = {}
+
+    def set_hub_status(self, status: dict) -> None:
+        with self._lock:
+            self._hub_status = dict(status)
+
+    def get_hub_status(self) -> dict:
+        with self._lock:
+            return dict(self._hub_status)
 
     def add_peer(self, peer_url: str) -> bool:
         norm = peer_url.rstrip("/")
@@ -205,6 +214,8 @@ class RelayBroker:
             event_type, payload, recipient = "task_progress", params.get("payload") or {"topic": params.get("topic"), "message": params.get("message", "")}, None
         elif method in ("relay.runner_progress", "runner_progress"):
             event_type, payload, recipient = "runner_progress", params.get("payload") or {}, None
+        elif method in ("relay.hub_status", "hub_status"):
+            return self.get_hub_status()
         else:
             raise ValueError(f"method not found: {method}")
         envelope = EventEnvelope.create(sender, event_type, payload, recipient)
@@ -340,11 +351,29 @@ def relay_url(args=None):
 
 
 def cmd_relay_status(args):
+    url = relay_url(args)
     try:
-        with urllib.request.urlopen(relay_url(args) + "/events", timeout=1) as response:
-            print(f"relay running ({response.status}) at {relay_url(args)}")
+        with urllib.request.urlopen(url + "/events", timeout=1) as response:
+            print(f"relay running ({response.status}) at {url}")
     except Exception:
-        print(f"relay stopped at {relay_url(args)}")
+        print(f"relay stopped at {url}")
+        return
+    try:
+        import json as _json
+        request = urllib.request.Request(
+            url + "/rpc",
+            data=_json.dumps({"jsonrpc": "2.0", "id": 1, "method": "relay.hub_status", "params": {}}).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(request, timeout=2) as response:
+            result = _json.loads(response.read())
+        hub = result.get("result") or {}
+        if hub:
+            state = hub.get("state", "unknown")
+            error_detail = (" (" + hub["error"] + ")") if hub.get("error") else ""
+            print(f"hub {state}{error_detail}")
+    except Exception:
+        pass
 
 
 def cmd_relay_send(args):

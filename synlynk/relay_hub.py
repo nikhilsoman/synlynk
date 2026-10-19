@@ -33,6 +33,7 @@ import shlex
 import stat
 import tempfile
 import threading
+import time
 from types import SimpleNamespace
 import uuid
 
@@ -585,6 +586,8 @@ class HubAdapter:
                     self._closed = True
                     self.client.close()
                 raise
+            if hasattr(self.broker, "set_hub_status"):
+                self.broker.set_hub_status({"state": "connected"})
 
     def detach(self):
         with self._lifecycle_lock:
@@ -593,6 +596,8 @@ class HubAdapter:
             with self._lock:
                 self._active = False
             self._stop.set()
+            if hasattr(self.broker, "set_hub_status"):
+                self.broker.set_hub_status({"state": "disconnected"})
             self.broker.unsubscribe(self._local_subscriber)
             try:
                 self.client.unsubscribe(self._subscription)
@@ -1149,7 +1154,7 @@ def load_device_credential(path, workspace_id):
 
 
 def run_hub_relay(args):
-    """Attach to the exact HTTP server broker; all resources are owned here."""
+    """Local relay server in background; hub adapter reconnects with backoff."""
     from synlynk.relay import RelayServer
     if getattr(args, "credential_file", None):
         if not args.workspace_id or not args.hub_url:
@@ -1172,19 +1177,39 @@ def run_hub_relay(args):
         if cred is None or cred.revoked:
             raise ValueError("Device credential missing or revoked")
     subscriptions = _read_subscriptions()
+    hub_url = args.hub_url or config["url"]
+    workspace_id = config["workspace_id"]
     server = RelayServer(port=args.port)
-    adapter = None
+    server.start(background=True)
+    backoff = 1.0
+    max_backoff = 60.0
     try:
-        client = NatsTransport([args.hub_url or config["url"]], user=cred.device_id,
-                               password=cred.token)
-        adapter = HubAdapter(server.broker, client, config["workspace_id"],
-                             owns_client=True, subscriptions=subscriptions)
-        adapter.attach()
-        server.start(background=False)
+        while True:
+            adapter = None
+            try:
+                client = NatsTransport([hub_url], user=cred.device_id, password=cred.token)
+                adapter = HubAdapter(server.broker, client, workspace_id,
+                                     owns_client=True, subscriptions=subscriptions)
+                adapter.attach()
+                backoff = 1.0
+                while True:
+                    time.sleep(1.0)
+            except KeyboardInterrupt:
+                return
+            except Exception as error:
+                _LOG.warning("Hub connection failed (%s); retrying in %.0fs",
+                             type(error).__name__, backoff)
+                wait = backoff
+                backoff = min(backoff * 2, max_backoff)
+                try:
+                    time.sleep(wait)
+                except KeyboardInterrupt:
+                    return
+            finally:
+                if adapter is not None:
+                    try:
+                        adapter.detach()
+                    except Exception as detach_error:
+                        _LOG.warning("Detach error: %s", type(detach_error).__name__)
     finally:
-        try:
-            if adapter is not None:
-                adapter.detach()
-        finally:
-            # serve_forever has returned (or never started); shutdown would deadlock.
-            server.httpd.server_close()
+        server.httpd.server_close()
