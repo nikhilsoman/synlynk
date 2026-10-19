@@ -1877,6 +1877,23 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         help="Sliding window lookback period in days for active models (default: 30)",
     )
 
+    pack_parser = capability_sub.add_parser(
+        "export-pack",
+        help="Export verifiable capability pack snapshot for edge and preflight routing",
+    )
+    pack_parser.add_argument(
+        "--output",
+        dest="output",
+        help="Target JSON file path for exported capability pack (defaults to stdout)",
+    )
+    pack_parser.add_argument(
+        "--min-sample",
+        type=int,
+        default=5,
+        dest="min_sample",
+        help="Minimum sample size floor before active status is reported (default: 5)",
+    )
+
     instructions_parser = subparsers.add_parser(
         "instructions", help="Manage synlynk instruction files across AI tools"
     )
@@ -3189,6 +3206,15 @@ def main(argv=None) -> None:
                 force=getattr(args, "force", False),
                 min_sample=getattr(args, "min_sample", 5),
                 lookback_days=getattr(args, "lookback_days", 30),
+            )
+        elif args.capability_action == "export-pack":
+            from synlynk.capability_pack import run_capability_pack_export
+            from synlynk import _get_db
+            conn = _get_db()
+            run_capability_pack_export(
+                conn,
+                output_path=getattr(args, "output", None),
+                min_sample=getattr(args, "min_sample", 5),
             )
     elif args.command == "instructions":
         action = getattr(args, "instructions_action", None)

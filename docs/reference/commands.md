@@ -145,6 +145,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `capability sweep` (secondary) — sustain
 - `capability report` (secondary) — sustain
 - `capability backfill` (secondary) — sustain
+- `capability export-pack` (secondary) — sustain
 - `run` (primary) — execute
 - `run --trio` (secondary) — execute
 - `local doctor` (secondary) — sustain
