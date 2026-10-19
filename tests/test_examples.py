@@ -1,4 +1,4 @@
-from synlynk.examples import active_items, greet
+from synlynk.examples import active_items, double, greet
 
 
 def test_greet_returns_a_friendly_message():
@@ -112,3 +112,15 @@ def test_greet_handles_an_empty_name():
 
 def test_greet_preserves_punctuation_in_a_name():
     assert greet("O'Connor") == "Hello, O'Connor!"
+
+
+def test_double_returns_twice_a_positive_integer():
+    assert double(4) == 8
+
+
+def test_double_returns_zero_for_zero():
+    assert double(0) == 0
+
+
+def test_double_returns_twice_a_negative_integer():
+    assert double(-3) == -6
