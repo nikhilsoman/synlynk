@@ -159,6 +159,11 @@ def _pick_verifier_harness(executor_harness: str, available_harnesses: list) -> 
             f"No independent verifier available for executor {executor_harness}; "
             "need at least 2 configured harnesses to run the calibration sweep"
         )
+    override = os.environ.get("SYNLYNK_VERIFIER_HARNESS")
+    if override and override in candidates:
+        return override
+    if executor_harness == "grok" and "codex" in candidates:
+        return "codex"
     return candidates[0]
 
 
@@ -245,6 +250,11 @@ def _pick_verifier_agent(executor_agent: str, available_agents: list) -> str:
             f"No independent verifier available for executor {executor_agent}; "
             "need at least 2 configured agents to run the calibration sweep"
         )
+    override = os.environ.get("SYNLYNK_VERIFIER_HARNESS")
+    if override and override in candidates:
+        return override
+    if executor_agent == "grok" and "codex" in candidates:
+        return "codex"
     return candidates[0]
 
 
@@ -381,6 +391,8 @@ def _dispatch_calibration_task(harness: str, task: str, **kwargs) -> dict:
     timeout_s = dispatch_kwargs.pop("timeout_s", 120)
     dispatch_kwargs.setdefault("force_agent", True)
     dispatch_kwargs.setdefault("skip_preflight", True)
+    if harness == "grok":
+        dispatch_kwargs.setdefault("skip_permissions", True)
     job = dispatch_agent(harness, task, **dispatch_kwargs)
     return _await_calibration_job(job, timeout_s=timeout_s)
 

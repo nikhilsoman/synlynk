@@ -63,3 +63,13 @@ def test_ensure_type_for_identity_init_does_not_skip_after_migration(tmp_path, m
     # unconfigured.
     with pytest.raises(UnknownType):
         ensure_type_for_identity_init("definitely-not-a-real-type")
+
+
+def test_panel_text_handles_bytes():
+    from synlynk.team import _panel_text
+
+    raw_bytes = b"hello from stderr bytes"
+    assert _panel_text(raw_bytes) == "hello from stderr bytes"
+    long_bytes = b"x" * 2000
+    assert len(_panel_text(long_bytes, limit=100)) == 103
+
