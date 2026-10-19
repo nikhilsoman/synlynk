@@ -1,3 +1,10 @@
+## 2026-10-19 Phase 2A Historical Capability Backfill & SFIA Taxonomy Expansion (`goal-aa48c456`, PR #2430) [@agy, @nikhilsoman]
+
+- **Open SFIA 8/9 Taxonomy Classifier (`synlynk/sfia.py`):** Implemented deterministic classifier and canonical dictionary across 15 skills disciplines (`PROG`, `TEST`, `REQM`, `DBDS`, `VISU`, `ANIM`, `GRAP`, `MUDI`, `SNDD`, `ICDV`, `BUSA`, `MKTG`, `COMM`, `PROD`, `UNAN`). Supported conventional commit prefixes and domain-specific vocabulary.
+- **Dynamic 1% Attribution Gate & Multi-Model Window (`synlynk/capability_window.py`):** Implemented `calculate_sfia_volume_distribution()`, `get_active_sfia_disciplines()`, and `sync_harness_models_window()` enforcing 30-day sliding model retention and dynamic >= 1% attribution threshold before disciplines enter active capability reporting.
+- **Historical Backfill Engine & CLI (`synlynk capability backfill`):** Built idempotent backfill command scanning all completed tasks in `state.db`. Successfully re-classified 3,170 ratings into authentic SFIA codes (1,722 `PROG`, 607 `TEST`, 425 `REQM`, 233 `COMM`, 95 `PROD`, 54 `DBDS`, 27 `VISU`, 16 `MKTG`, 3 `UNAN`), mapped 102 models across the fleet, and updated `capability_report.py` task type mappings.
+- **Full Verification Suite:** 175/175 tests in capability & SFIA test suite passed in 19.57s. Verified dry-run and live database execution without data loss or WAL corruption.
+
 ## 2026-10-13 Personal Hosted Relay final integration [@nikhilsoman]
 
 - Task 10 worker 468b3cb8 completed full regression: 4419 passed, one known

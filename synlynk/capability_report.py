@@ -20,6 +20,12 @@ DISCIPLINE_TO_TASK_TYPE = {
     "security": "refactor",
     "ml": None,
     "PROG": "implement",
+    "TEST": "test",
+    "REQM": "brainstorm",
+    "COMM": "content",
+    "PROD": "pm",
+    "DBDS": "infra",
+    "VISU": "css",
 }
 
 
