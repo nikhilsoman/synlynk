@@ -192,6 +192,7 @@ CONTEXT: You just changed `_s [testing] <!-- id:story-adhoc-1785505415 -->
 - [ ] Fix two verified bugs found during final code review of the just-merged harness-capability-drift-regression-classification stack. Both are small, targeted fixes in already-implemented code.
 
 BUG 1 — c [testing] <!-- id:story-adhoc-1785519808 -->
+- [ ] test task <!-- id:story-adhoc-1785523144 -->
 - [ ] fix: Run the 'Harness compatibility & capability' GOVERNS (job-a7eb31f5) [backend] <!-- id:story-issue-587 -->
 - [ ] Agent parity gap: role-based permission/grants system is a no-op for Agy, Grok, and Local dispatches [testing] <!-- id:story-issue-338 -->
 - [ ] Dispatched agent subprocess inherits full parent environment — no secret redaction anywhere [backend] <!-- id:story-issue-348 -->
@@ -1413,7 +1414,6 @@ Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backe
 - [ ] [R11] ROADMAP: fix roadmap.md ordering and the three colliding 1.0.0 entries [docs] <!-- id:story-08f5e280 -->
 - [ ] [R13] TESTS: break the ~85s single-worker floor from test_platform_ops.py under --dist loadfile [testing] <!-- id:story-a5032986 -->
 - [ ] [R3] LIVE-17: reconcile CI with local — macOS vs ubuntu-latest and populated ~/.synlynk divergence [devops] <!-- id:story-089c524e -->
-- [ ] [R6] PERF-P1: reclaim 89.7% freelist in state.db via VACUUM plus auto_vacuum policy (287MB to 28.8MB, 8.4x read connect) [data] <!-- id:story-4fcba356 -->
 - [ ] [R7] PERF-P2: lazy argparse subparser registration to cut ~0.25s from every invocation including --version [backend] <!-- id:story-6e5795cf -->
 - [ ] [R8] ONBOARD: give synlynk init a --yes/--non-interactive path so it cannot block on stdin [backend] <!-- id:story-5019a85b -->
 - [ ] [R14] DEBT: consolidate the 6 ad-hoc lazy migration helpers in dispatch.py and retire the vestigial schema_version table [data] <!-- id:story-8814681b -->
@@ -1799,9 +1799,6 @@ Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backe
 - [ ] dispatch.py:_preflight_local_silent() falls back silently instead of failing closed [security] <!-- id:story-issue-2064 -->
 - [ ] P1-1: JSON Schema validation for .synlynk/config.json and policy.json via synlynk doctor [security] <!-- id:story-issue-2065 -->
 - [ ] P1-5: Adapter conformance test suite + retire incomplete strangler path [testing] <!-- id:story-issue-2062 -->
-- [ ] gh#1926: migrations framework (synlynk/migrations/ + db.py wrapper) [backend] <!-- id:story-0a8483c6 -->
-- [ ] gh#1926: legacy shard cleanup script (gh#1831) [backend] <!-- id:story-788b5588 -->
-- [ ] gh:#1926 — state.db migrations framework + legacy shard cleanup [backend] <!-- id:story-issue-2085 -->
 - [ ] fix(docs): restore todo.md story lines truncated by PR #2026 (LIVE-23b, gh:#2088) [testing] <!-- id:story-issue-2089 -->
 - [ ] fix: un-suspend empirical routing with a sample-size fallback (#2063) [testing] <!-- id:story-issue-2082 -->
 - [ ] docs(blog): fix post-number frontmatter mismatch on PR #2083's post [testing] <!-- id:story-issue-2093 -->
@@ -1840,8 +1837,6 @@ Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backe
 - [ ] gh:#2101 Config decomposition: split config.json into workspace.json/billing.json/policy.json [backend] <!-- id:story-b04fdd2c -->
 - [ ] docs(plans): refresh five-track status against live gh issue state [testing] <!-- id:story-issue-2084 -->
 - [ ] [P1] Decompose workspace configuration into workspace, billing, and policy files [docs] <!-- id:story-issue-2101 -->
-- [ ] gh#1831: state shard reconciliation (project_root hardening, inventory, reconcile CLI) [backend] <!-- id:story-a266b194 -->
-- [ ] Cleanup: 11,384 legacy state.db shards under ~/.synlynk/projects/ (6.1GB, no active writes since 2026-09-15) [backend] <!-- id:story-issue-1831 -->
 - [ ] Brainstorm + arch-council design session: Herdr as bundled dependency and standard UX/UI layer [architecture] <!-- id:story-272f0252 -->
 - [ ] Federated subscription-quota capture [backend] <!-- id:story-d84372cd -->
 - [ ] SuperAgents Post-training/Distillation phase: Kaggle Gemma 4 Developer Agent Competition as near-term vehicle [ml] <!-- id:story-9442caf8 -->
@@ -1926,7 +1921,6 @@ Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backe
 - [ ] Fix missing YAML frontmatter blocking pr check repo-wide (gh:#2161) [backend] <!-- id:story-e4566473 -->
 - [ ] Investigate marketing-sync merge conflicts on generated files (gh:#2146) [backend] <!-- id:story-7348371d -->
 - [ ] Stop pricing Codex cache-replay input as fresh tokens [backend] <!-- id:story-f336c1c5 -->
-- [ ] TPM daemon autonomy fix: wire SYNLYNK_AUTONOMOUS into installers + gh:1133 regression test [devops] <!-- id:story-71c4ed60 -->
 - [ ] feat(cli): add 'synlynk goal update' subcommand (gh:#2182) [backend] <!-- id:story-574f68cb -->
 - [ ] feat(cli): add 'synlynk goal update' subcommand (gh:#2182) [testing] <!-- id:story-issue-2183 -->
 - [ ] fix(daemon): enable autonomous ticks in installed services [testing] <!-- id:story-issue-2181 -->
@@ -1940,7 +1934,6 @@ Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backe
 - [ ] chore(deps-dev): bump liquidjs from 10.27.1 to 10.30.0 in /website [frontend] <!-- id:story-issue-2176 -->
 - [ ] chore(deps-dev): bump markdown-it from 14.2.0 to 14.3.2 in /website [frontend] <!-- id:story-issue-1900 -->
 - [ ] Backfill Blog Post Protocol posts for #2180/#2171/#2181/#2179/#2183 [docs] <!-- id:story-156924d6 -->
-- [ ] synlynk story done does not clear readiness, causing done stories to be re-swept [testing] <!-- id:story-issue-1133 -->
 - [ ] Muse harness CLI config drift blocks dispatch [testing] <!-- id:story-issue-2187 -->
 - [ ] PR number 2156, the daemon config fix, is already reviewed and approved by qa. Branch was just updated against main. Confirm merge authority for the qa role, then merge PR 2156 with squash. If rejecte [security] <!-- id:story-adhoc-1791694902 -->
 - [ ] PR number 2190, Muse harness config fix task 4, is already reviewed and approved by qa, and all CI checks are passing (mergeStateStatus is CLEAN). Confirm merge authority for the qa role, then merge P [testing] <!-- id:story-adhoc-1791694958 -->
@@ -1966,7 +1959,6 @@ Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backe
 - [ ] docs(costs): backfill 3 cost entries dropped by regeneration bug [testing] <!-- id:story-issue-2153 -->
 - [ ] docs: Muse harness config fix design + implementation plan (gh:#2187) [testing] <!-- id:story-issue-2226 -->
 - [ ] Investigate cost anomaly on job-2a16259d / PR #2232 (TOKEN_BLOAT+COST_INFLATION) [backend] <!-- id:story-e8936675 -->
-- [ ] Investigate cost anomaly on job-2a16259d / PR #2232 (TOKEN_BLOAT+COST_INFLATION) [backend] <!-- id:story-b81f2806 -->
 - [ ] fix: _generate_todo_md() leaks project-wide snapshot into dispatch job worktrees via cwd-relative path [backend] <!-- id:story-a7b5674c -->
 - [ ] gh:#2163 fix sha_match false-negative on squash-merge for expect=merged verification [backend] <!-- id:story-3522e331 -->
 - [ ] Context-window optimization design spec + decide-panel R1/R2 [backend] <!-- id:story-c04f64b1 -->
@@ -2012,12 +2004,415 @@ Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backe
 - [ ] fix: quiet pytest in dispatched jobs [testing] <!-- id:story-issue-2303 -->
 - [ ] Run pytest -v on tests/test_pytest_shim.py only, and report the exact command's full stdout back in your response (do not scope it down yourself, do not add -q, run exactly 'pytest -v tests/test_pytes [testing] <!-- id:story-adhoc-1791992804 -->
 - [ ] docs(spec): charter superpowers-skill binding design for gh:#2305 [testing] <!-- id:story-issue-2306 -->
-- [x] Bind superpowers skills into dispatched-agent charters (gh:#2305) [backend] <!-- id:story-0f622462 -->
-- [x] Wire onboarding-engine dead modules into live commands (gh:#2310, PR #2311) [backend] <!-- id:story-2f03edea -->
-- [x] Task 1: synlynk probe --deps (wires probe_binding.py) (gh:#2310) [backend] <!-- id:story-7aabc39e -->
-- [x] Task 2: synlynk fleet list/apply (wires fleet_templates.py) (gh:#2310) [backend] <!-- id:story-e9439716 -->
-- [x] Task 3: synlynk upgrade --all (wires version_policy.py) (gh:#2310) [backend] <!-- id:story-4918bcdb -->
-- [x] Task 5: topology_discovery.py integration into onboarding_state.py (gh:#2310) [backend] <!-- id:story-44a2fe03 -->
 - [ ] Task 4: first_win_loop.py fate decision (gh:#2310) [backend] <!-- id:story-5551aa7e -->
 - [ ] Fix daemon health: dormant re-exec bug (gh:#2261) + crash on stale worktree cwd (gh:#2288) [devops] <!-- id:story-e73fac9e -->
 - [ ] Wire daemon poll loop to call _autonomy_pass() on its own interval (Task 4, gh:#2262) [devops] <!-- id:story-f67acd86 -->
+- [ ] docs(roadmap): track daemon health & autonomy-wiring initiative (v0.25.2) [testing] <!-- id:story-issue-2322 -->
+- [ ] docs: spec + plan for daemon cwd health fix (gh:#2261, gh:#2288) [testing] <!-- id:story-issue-2323 -->
+- [ ] fix(daemon): unconditionally resolve repo root in child-main entry points [testing] <!-- id:story-issue-2324 -->
+- [ ] Parity/probe SOP-fence injection ignores per-harness reload tier (gh:#2243 follow-up) <!-- id:story-0fbbc62a -->
+- [ ] Codex 'model at capacity' failures are not auto-retried (missing pattern in QUOTA_PATTERNS) <!-- id:story-11df8762 -->
+- [ ] daemon start() reports false-negative failure when stale worktree path blocks touched-file collection <!-- id:story-b8589bda -->
+- [ ] qa role GH token expires mid-dispatch on long-running review jobs (observed gh:#2310 Task 3, jobs job-7feeb0e3 and job-9367da08) <!-- id:story-bd9d019c -->
+- [ ] quota_capture.effective_age_seconds crashes on plain tuple row (non-fatal, swallowed by logger.exception) <!-- id:story-185f6e32 -->
+- [ ] Dispatch job status label / oracle verdict repeatedly false-negatives on genuinely successful review+merge jobs <!-- id:story-898de1a5 -->
+- [ ] Dispatched review job merged PR via raw host gh, bypassing synlynk gh shim and personal-token policy <!-- id:story-474f9594 -->
+- [ ] Cost overrun: job-63a4b857 cost $20.76 vs ~$0.09 estimate (6.8M input tokens, 230x) on PR #2272 <!-- id:story-9b721508 -->
+- [ ] Dispatch rerouting retains incompatible provider-specific model identifier <!-- id:story-f6f745b4 -->
+- [ ] Recurring cost-inflation on review/rework dispatch jobs (6th+ occurrence since #1937) <!-- id:story-3325aae6 -->
+- [ ] Agy model-catalog version skew: gemini-3.1-pro-high no longer valid <!-- id:story-c4b9eb00 -->
+- [ ] Grok rerouted 3/3 by capability-probed gate on dev/implement dispatch (invariants 2/3/5) <!-- id:story-2c9fe974 -->
+- [ ] Dispatch worktree/branch collision: stale job-<id> artifacts block new dispatches 3x in one session <!-- id:story-9cc11123 -->
+- [ ] BS-15: Harness independence — home/away paradigm, OpenRouter direct API, 3rd-party IDE plugins <!-- id:story-ec2802d6 -->
+- [ ] [P2] Develop a two-minute routing demo and seat/fleet pricing narrative <!-- id:story-480030e8 -->
+- [ ] [P2] Explore a standalone cost and capability ledger product <!-- id:story-58b575fb -->
+- [ ] [P2] Add role-based access control for merge authority <!-- id:story-c968ea6f -->
+- [ ] [P2] Wire external benchmark evaluations into testbed identities <!-- id:story-684ea691 -->
+- [ ] cost_entries auto-capture fails: OperationalError no column named pr_number (job-110968a4) <!-- id:story-e8243c9d -->
+- [ ] [LIVE-24] synlynk pr check fails with PermissionError on .synlynk/jobs.json.reconcile.lock under concurrent dispatch <!-- id:story-dd9d34b9 -->
+- [ ] [LIVE-23] cost_entries missing pr_number column breaks pr check cross-harness gate for native/task-named-branch PRs <!-- id:story-0012ec11 -->
+- [ ] Gap: make #1921 GC a complete local-state growth bound <!-- id:story-01d03b39 -->
+- [ ] [Epic] Track 5: Go-to-Market <!-- id:story-0025da10 -->
+- [ ] [Epic] Track 3: Data/Display Layer <!-- id:story-70b6bb99 -->
+- [ ] Unidentified fork() call crashes daemon on macOS (Objective-C fork-safety abort), cascades into .pem lookup failures <!-- id:story-9decaec5 -->
+- [ ] [Epic] Productize the local and sovereign harness path beyond Hermes roster <!-- id:story-fea8c2d0 -->
+- [ ] Dispatch worktrees' default sparse-checkout is too narrow, causes false review blockers <!-- id:story-64ed04fa -->
+- [ ] Some test has a side effect of writing stray lines to docs/blog/README.md <!-- id:story-c7078484 -->
+- [ ] pytest quiet-shim (PR #2303) bypassed by login-shell PATH re-prepend <!-- id:story-c555bda5 -->
+- [ ] docs(blog): blog post #268 numbering collision between PR #2246 and PR #2277 <!-- id:story-0061882f -->
+- [ ] Stitch MCP server unconfigured on Grok; unconfirmed on Muse <!-- id:story-7052e4c1 -->
+- [ ] Superpowers has no equivalent loading mechanism on Codex/Grok/Agy as home harness <!-- id:story-ed709389 -->
+- [ ] Test-isolation gap: test_goals.py tests overwrite worktree's real project-docs/todo.md <!-- id:story-80efc0fd -->
+- [ ] Align architect PR-review instructions with enforced role policy and dry-run checks <!-- id:story-70544865 -->
+- [ ] jobs projection/reconcile crashes on positional SQLite rows, leaving completed jobs stale <!-- id:story-407a36f0 -->
+- [ ] Future scope: agent marketplace, tool-provider ecosystem, token-bidding (goal-a222b393 next review round) <!-- id:story-47a8c7f3 -->
+- [ ] synlynk decide: add quorum (majority/minority) mode instead of all-or-nothing panel response <!-- id:story-ba1d465d -->
+- [ ] JetBrains IDE plugin — synlynk dispatch/jobs/logs client <!-- id:story-7c358d1c -->
+- [ ] Cursor IDE plugin — synlynk dispatch/jobs/logs client <!-- id:story-0805279d -->
+- [ ] Dispatch preflight: digit+'file' text in task prompt falsely inflates target-diff-size estimate, blocking legitimate dispatches <!-- id:story-cd53413e -->
+- [ ] Missing dispatch.py integration test for --force-harness openrouter path <!-- id:story-8998f381 -->
+- [ ] todo.md state drift causes redundant re-dispatch of already-merged invariant work (PRs #1809, #1813) <!-- id:story-a7ae37ea -->
+- [ ] Dispatch sparse-checkout omits docs/ and .github/, so jobs can't read their own plan and suite-green is unprovable <!-- id:story-ab3f76cd -->
+- [ ] Worktree self-cleanup: extend to dirty capability-sweep worktrees <!-- id:story-550741f2 -->
+- [ ] Adopted repos have no non-destructive pathway onto the latest synlynk release <!-- id:story-2fffc5f9 -->
+- [ ] Track 1: auto-mode classifier scope miscalibrated for already-authorized PM/role actions <!-- id:story-b67a49c9 -->
+- [ ] Consolidate duplicated harness/role capability mapping (3 sources of truth) <!-- id:story-53c6f4a6 -->
+- [ ] [Epic] 2026-10-07 handoff execution tracker <!-- id:story-cf01f782 -->
+- [ ] [Exploratory brainstorm] Managed execution nodes and swarms operated by Synlynk <!-- id:story-80935d71 -->
+- [ ] Investigate role-scoped GitHub access failing in restricted interactive sandbox <!-- id:story-b5ac5958 -->
+- [ ] Review-type dispatch sandbox blocks all synlynk CLI commands (read-only sandbox vs. unconditional _reconcile_jobs lock write) <!-- id:story-72473649 -->
+- [ ] pipx/release-docs version-freshness check + opt-in auto-upgrade notice <!-- id:story-ba1dac06 -->
+- [ ] Per-workspace autonomy/discretion slider for GOVERNS, review strictness, and charter settings <!-- id:story-9f0e569b -->
+- [ ] [Epic] Track 4: Trust & Positioning Copy <!-- id:story-7b3c7ad1 -->
+- [ ] [Epic] Track 2: CLI Surface & Taxonomy <!-- id:story-e00c8d29 -->
+- [ ] Broader: partnership moves — OpenClaw skill, OpenRouter fallback, anonymized-outcomes schema (broader #6, narrowed) <!-- id:story-9092fd0b -->
+- [ ] Broader: publish competitive matrix + agent-authorship launch framing (broader #5) <!-- id:story-b034334c -->
+- [ ] Broader: 90-day design-partner program, 10–20 weekly-active teams (broader #4) <!-- id:story-7db35c65 -->
+- [ ] Dispatch job wiped project-docs/todo.md locally during unrelated investigation (job-2571fb9d) <!-- id:story-792dc8b8 -->
+- [ ] goal: rethink synlynk's end-to-end FTUE / onboarding experience (post-R12) <!-- id:story-ed39ae8f -->
+- [ ] feat(pack): Graph-backed context packager for sub-3k token agent task dispatch <!-- id:story-24219f0f -->
+- [ ] Review: dual-tracking drift between project-docs/*.md (roadmap, todo, blog) and state.db — evaluate collapsing to state.db-only <!-- id:story-04734534 -->
+- [ ] [LIVE-25] synlynk daemon dies silently (zero log output) minutes after synlynk daemon start, undermining autonomy-pass wiring <!-- id:story-57e459b6 -->
+- [ ] [LIVE-25] synlynk daemon dies silently (zero log output) minutes after synlynk daemon start, undermining autonomy-pass wiring [backend] <!-- id:story-issue-2329 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792061497 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1792061508 -->
+- [ ] synlynk capability sweep crashes: quality_verified column missing (version-gated migration no-op) [backend] <!-- id:story-issue-2332 -->
+- [ ] goal: durable Platform Health & Performance maintenance loop [backend] <!-- id:story-issue-1510 -->
+- [ ] daemon/watch start() reports false 'Failed to start' from racy 2s timeout + stale log tail [testing] <!-- id:story-issue-2333 -->
+- [ ] dispatch preflight capacity gate ignores --task-type, derives estimate from prompt substrings <!-- id:story-71a5b9e9 -->
+- [ ] fix: block commits from shared main worktree [testing] <!-- id:story-issue-1887 -->
+- [ ] chore(deps-dev): bump brace-expansion from 1.1.16 to 1.1.21 in /website [security] <!-- id:story-issue-1899 -->
+- [ ] Daemon dormant since 2026-10-03: detached child re-exec'd from a dispatch worktree that was later cleaned up [devops] <!-- id:story-issue-2261 -->
+- [ ] Test-isolation gap: test_goals.py tests overwrite worktree's real project-docs/todo.md [backend] <!-- id:story-issue-2263 -->
+- [ ] docs(blog): post 243 for PR #1967 — Claude/local adapter port, gh:#1924 close [testing] <!-- id:story-issue-1970 -->
+- [ ] Review: dual-tracking drift between project-docs/*.md (roadmap, todo, blog) and state.db — evaluate collapsing to state.db-only [backend] <!-- id:story-issue-2328 -->
+- [ ] fix(tests): mock webbrowser.open in test_role_add_identity_prompt and stub globally (#2339) [testing] <!-- id:story-issue-2340 -->
+- [ ] docs: add frontier-lab architecture review [testing] <!-- id:story-issue-2341 -->
+- [ ] [Local Harness] Brainstorm and design: operational adapter and model lifecycle [ml] <!-- id:story-issue-2343 -->
+- [ ] [Local Harness] P1: qualify Ornith, Qwen 3.6, Bonsai, and Gemma 4 profiles <!-- id:story-64e94554 -->
+- [ ] [Local Harness] P1: add per-dispatch model selection and safe switching <!-- id:story-dcecc83d -->
+- [ ] [Local Harness] P0: unify local model resolution, invocation, and telemetry <!-- id:story-a75b5871 -->
+- [ ] [Local Harness] P0: move production local execution behind HarnessAdapter <!-- id:story-f5dbda53 -->
+- [ ] [Local Harness] P0: authenticate and prove an end-to-end Aider + oMLX edit <!-- id:story-92a50bfd -->
+- [ ] [Epic] Local Harness Operationalization: adapter parity and hot-swappable models <!-- id:story-9a29872b -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792154478 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1792154501 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792154528 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1792154555 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1792154556 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792154590 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1792154618 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1792154619 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792154650 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792154666 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1792154674 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1792154694 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792154702 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792154725 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1792154727 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1792154758 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792154767 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792154786 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1792154795 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1792154814 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792154850 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792154851 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1792154885 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1792154886 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792154923 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792154924 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1792154963 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1792154964 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792155001 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792155002 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1792155036 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1792155037 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792155069 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1792155096 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792155136 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1792155169 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1792155170 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792155202 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1792155234 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792155264 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792155265 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1792155297 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1792155300 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792155327 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1792155353 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792155387 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1792155417 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1792155418 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792155449 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792155450 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1792155488 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792155520 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792155521 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1792155566 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1792155568 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792155614 -->
+- [ ] [Local Harness] P1: graduated local-routing pilot and isolated Aider evaluation boundary <!-- id:story-4ba2b5c8 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792155638 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1792155648 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792155699 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1792155700 -->
+- [ ] docs(blog): blog post #268 numbering collision between PR #2246 and PR #2277 [docs] <!-- id:story-issue-2302 -->
+- [ ] Some test has a side effect of writing stray lines to docs/blog/README.md [testing] <!-- id:story-issue-2319 -->
+- [ ] daemon start() reports false-negative failure when stale worktree path blocks touched-file collection [backend] <!-- id:story-issue-2325 -->
+- [ ] pytest quiet-shim (PR #2303) bypassed by login-shell PATH re-prepend [testing] <!-- id:story-issue-2304 -->
+- [ ] Dispatch rerouting retains incompatible provider-specific model identifier [security] <!-- id:story-issue-2255 -->
+- [ ] jobs projection/reconcile crashes on positional SQLite rows, leaving completed jobs stale [backend] <!-- id:story-issue-2254 -->
+- [ ] Align architect PR-review instructions with enforced role policy and dry-run checks [security] <!-- id:story-issue-2258 -->
+- [ ] pr check reports green when dispatch branch has no resolvable PR [testing] <!-- id:story-issue-2260 -->
+- [ ] Parity/probe SOP-fence injection ignores per-harness reload tier (gh:#2243 follow-up) [backend] <!-- id:story-issue-2284 -->
+- [ ] Dispatch worktrees' default sparse-checkout is too narrow, causes false review blockers [backend] <!-- id:story-issue-2320 -->
+- [ ] [Local Harness] P1: graduated local-routing pilot and isolated Aider evaluation boundary [testing] <!-- id:story-issue-2349 -->
+- [ ] [Local Harness] P1: qualify Ornith, Qwen 3.6, Bonsai, and Gemma 4 profiles [testing] <!-- id:story-issue-2348 -->
+- [ ] translate_permissions signature drift: claude/codex/agy adapters missing skip_permissions param present in base.py Protocol <!-- id:story-7e74e91a -->
+- [ ] Add GenericAPIAdapter for OpenRouter/LiteLLM-proxy/direct OpenAI-compatible endpoints <!-- id:story-2f636d2e -->
+- [x] capability sweep: dispatch_agent() return has no 'output' key — verifier always falls back, quality never real <!-- id:story-74f2cd95 -->
+- [ ] capability sweep: verifier quality score silently defaults to 5.0 on unparseable output, producing undifferentiated ratings <!-- id:story-0194f1a3 -->
+- [ ] Cost/token anomaly: job-cd62e187 cost $7.47 / 2.4M tokens against ~$0.16 dispatch estimate <!-- id:story-f56aa356 -->
+- [ ] Empirically test per-harness interactive "home" guardrail interference on deploy/merge actions <!-- id:story-2e1734ea -->
+- [ ] LocalAdapter.parse_output omits compatibility_evidence / receipt SHA <!-- id:story-c99a38ff -->
+- [ ] synlynk pr check: cross-harness review gate misattributes fix jobs whose task text mentions a prior review <!-- id:story-fa4da945 -->
+- [ ] State DB cost ledger is missing turn_usage_json on existing workspaces <!-- id:story-c79c1d77 -->
+- [ ] [Epic] Track 1: Dispatch/Harness Layer <!-- id:story-94982826 -->
+- [ ] job-d7090bf8: $7.82/2.5M-token cost inflation (49x estimate) on successful PR #2157 <!-- id:story-78a70eec -->
+- [ ] Replace bare except Exception: pass around graph-extraction/pack-synthesis with a logged/sentinel-visible signal <!-- id:story-2341a70c -->
+- [ ] Log and surface count when _reconcile_terminal_jobs_json no-ops on an already-terminal daemon_jobs row <!-- id:story-7db80c68 -->
+- [ ] synlynk jobs --all should flag unverified gh-write status instead of surfacing a best-guess failure <!-- id:story-d03b244e -->
+- [ ] Cost inflation: job-611f8968 hit $24.46 (272x estimate) and tripped circuit breaker before completing dispatch task <!-- id:story-0d182afd -->
+- [ ] Investigate Codex home-conductor friction: pm-role gh network error, stale main, stopped watch <!-- id:story-84b12633 -->
+- [ ] [LIVE-23b] PR #2026 truncated project-docs/todo.md, breaks pr check hand-edit gate on every branch <!-- id:story-25c5ae81 -->
+- [ ] pr check / cost log crash: cost_entries has no pr_number column <!-- id:story-1b1674d8 -->
+- [ ] fix(db): tolerate concurrent quality repair [backend] <!-- id:story-issue-2358 -->
+- [ ] docs: record local model qualification evidence [security] <!-- id:story-issue-2356 -->
+- [ ] feat(local): isolate Aider qualification network [testing] <!-- id:story-issue-2355 -->
+- [ ] Intermittent SQLite schema-change error in concurrent local dispatch test <!-- id:story-8209d9a7 -->
+- [ ] GOVERNS-for-everything: charters have no superpowers-skill binding/enforcement <!-- id:story-0f938871 -->
+- [ ] Personal relay follow-up: reconnect, hub status, and managed-service hardening gates <!-- id:story-44a0e38e -->
+- [ ] test: modernize authenticated local hardware checks [backend] <!-- id:story-issue-2351 -->
+- [ ] fix(db): retry concurrent schema refresh [backend] <!-- id:story-issue-2364 -->
+- [ ] feat(local): add isolated qualification benchmark [testing] <!-- id:story-issue-2363 -->
+- [ ] fix(local): isolate qualification runner artifacts [testing] <!-- id:story-issue-2365 -->
+- [ ] docs(local): record Qwen qualification result [testing] <!-- id:story-issue-2366 -->
+- [ ] perf(status): parallelize worktree git probes [testing] <!-- id:story-issue-2368 -->
+- [ ] [Local Harness] P0: move production local execution behind HarnessAdapter [architecture] <!-- id:story-issue-2345 -->
+- [ ] [Local Harness] P0: unify local model resolution, invocation, and telemetry [backend] <!-- id:story-issue-2346 -->
+- [ ] Agy review-dispatch RunCommand denied: missing skip_permissions auto-opt-in (like Grok has) <!-- id:story-cffe3a5a -->
+- [ ] Dispatch: cold-start tiebreak silently substitutes 'local' before capability gate; reroute message blames wrong harness <!-- id:story-916f1e77 -->
+- [ ] [Local Harness] Unify local model resolution and live inventory [testing] <!-- id:story-issue-2388 -->
+- [ ] feat(engine): circuit breaker prompt-cache fix, capability report expansion, and stale goal reconciliation (P0-8, P0-6, P0-10) [testing] <!-- id:story-issue-2389 -->
+- [ ] test(local): cover production adapter result evidence [testing] <!-- id:story-issue-2386 -->
+- [ ] docs(local): record Ornith qualification memory evidence [security] <!-- id:story-issue-2385 -->
+- [ ] feat(distribution): PyPI release workflow, thin VS Code client, and worktree-isolated magic heal (P0-9, P0-7) [testing] <!-- id:story-issue-2390 -->
+- [ ] feat(local): add isolated graduated pilot [testing] <!-- id:story-issue-2391 -->
+- [ ] fix(local): send pilot context as one Aider message [testing] <!-- id:story-issue-2396 -->
+- [ ] fix(local): verify Aider task receipts from answer output [testing] <!-- id:story-issue-2397 -->
+- [ ] fix(cli): report deferred dispatch jobs [testing] <!-- id:story-issue-2398 -->
+- [ ] fix(jobs): support tuple-backed status projections [backend] <!-- id:story-issue-2399 -->
+- [ ] fix(local): trust live inventory over stale model catalog [testing] <!-- id:story-issue-2402 -->
+- [ ] fix(local): fail closed on explicit pilot bypass [backend] <!-- id:story-issue-2404 -->
+- [ ] fix(local): prevent Local Pilot fallback isolation bypass [backend] <!-- id:story-issue-2406 -->
+- [ ] Implement Task 1 of docs/superpowers/plans/2026-10-18-vscode-extension.md: Extension Scaffolding, Manifest & Zero-Dependency Validation. Read your task brief first: /Users/nikhilsoman/dev/synlynk/.sup [testing] <!-- id:story-adhoc-1792270551 -->
+- [ ] Review Task 1 of docs/superpowers/plans/2026-10-18-vscode-extension.md on branch dispatch/codex/job-1dab6d18. Diff file: /Users/nikhilsoman/dev/synlynk/.superpowers/sdd/2026-10-18-vscode-extension/rev [docs] <!-- id:story-adhoc-1792270880 -->
+- [ ] Fix round 1 for Task 1: 1. In clients/vscode/package.json, add devDependencies per plan: @types/mocha (^10.0.6), @types/node (^18.19.0), @types/vscode (^1.85.0), mocha (^10.3.0). 2. In clients/vscode/ [testing] <!-- id:story-adhoc-1792271058 -->
+- [ ] Implement Task 2 of docs/superpowers/plans/2026-10-18-vscode-extension.md: Host RPC Bridge, Version Handshake & Error Boundaries. Read your task brief first: /Users/nikhilsoman/dev/synlynk/.superpower [testing] <!-- id:story-adhoc-1792272281 -->
+- [ ] Review the Task 2 implementation in commit 9d36dca4 against docs/superpowers/plans/2026-10-18-vscode-extension.md. Run 'node clients/vscode/test/runTest.js' to verify tests. Check zero dependencies, e [testing] <!-- id:story-adhoc-1792285938 -->
+- [ ] Implement Task 3 of docs/superpowers/plans/2026-10-18-vscode-extension.md: Reactive Event-Tailing Substrate.
+
+Files to create:
+- clients/vscode/src/eventWatcher.js
+- clients/vscode/test/suite/eventWat [frontend] <!-- id:story-adhoc-1792286781 -->
+- [ ] Review Task 3 implementation in commit ff7d435a against docs/superpowers/plans/2026-10-18-vscode-extension.md.
+Run 'node clients/vscode/test/runTest.js' to verify tests.
+Check:
+1. Zero runtime depende [testing] <!-- id:story-adhoc-1792287192 -->
+- [ ] Implement Task 4 of docs/superpowers/plans/2026-10-18-vscode-extension.md: Fleet Health TreeDataProvider.
+
+Files to create:
+- clients/vscode/src/providers/fleetProvider.js
+- clients/vscode/test/suite/ [testing] <!-- id:story-adhoc-1792287339 -->
+- [ ] Fix the test failure in clients/vscode/test/suite/fleetProvider.test.js:
+tokensTotal.toLocaleString() in clients/vscode/src/providers/fleetProvider.js produces '1,42,000' on en-IN systems instead of ' [testing] <!-- id:story-adhoc-1792289095 -->
+- [ ] Review Task 4 implementation in commit dabc6e16 against docs/superpowers/plans/2026-10-18-vscode-extension.md.
+Run 'node clients/vscode/test/runTest.js' to verify tests.
+Check:
+1. Zero runtime depende [testing] <!-- id:story-adhoc-1792289169 -->
+- [ ] Implement Task 5 of docs/superpowers/plans/2026-10-18-vscode-extension.md: Goals & Milestones (GOVERNS) TreeDataProvider.
+
+Files to create:
+- clients/vscode/src/providers/goalsProvider.js
+- clients/vs [testing] <!-- id:story-adhoc-1792289586 -->
+- [ ] Review Task 5 implementation in commit f188950f against docs/superpowers/plans/2026-10-18-vscode-extension.md.
+Run 'node clients/vscode/test/runTest.js' to verify tests.
+Check:
+1. Zero runtime depende [testing] <!-- id:story-adhoc-1792289672 -->
+- [ ] Implement Task 6 of docs/superpowers/plans/2026-10-18-vscode-extension.md: Dispatched Jobs TreeDataProvider.
+
+Files to create:
+- clients/vscode/src/providers/jobsProvider.js
+- clients/vscode/test/suit [testing] <!-- id:story-adhoc-1792289924 -->
+- [ ] Review Task 6 implementation in commit 92556075 against docs/superpowers/plans/2026-10-18-vscode-extension.md.
+Run 'node clients/vscode/test/runTest.js' to verify tests.
+Check:
+1. Zero runtime depende [testing] <!-- id:story-adhoc-1792290061 -->
+- [ ] Implement Task 7 of docs/superpowers/plans/2026-10-18-vscode-extension.md: Status Bar Controller.
+
+Files to create:
+- clients/vscode/src/ui/statusBar.js
+- clients/vscode/test/suite/statusBar.test.js
+
+ [testing] <!-- id:story-adhoc-1792290233 -->
+- [ ] Review commit 30bd3205 implementing Task 7 (StatusBarController in clients/vscode/src/ui/statusBar.js). Verify spec compliance with docs/superpowers/plans/2026-10-18-vscode-extension.md Task 7 and cod [testing] <!-- id:story-adhoc-1792290376 -->
+- [ ] Implement Task 8 of docs/superpowers/plans/2026-10-18-vscode-extension.md: Goal-Linked Dispatch Command. Files to create: - clients/vscode/src/commands/dispatch.js - clients/vscode/test/suite/dispatch [testing] <!-- id:story-adhoc-1792290505 -->
+- [ ] Review commit db68e2c0 implementing Task 8 (Goal-Linked Dispatch Command in clients/vscode/src/commands/dispatch.js). Verify spec compliance with docs/superpowers/plans/2026-10-18-vscode-extension.md  [testing] <!-- id:story-adhoc-1792290629 -->
+- [ ] Implement Task 9 of docs/superpowers/plans/2026-10-18-vscode-extension.md: Native Worktree Diff Review and PR Policy Check. Files to create: - clients/vscode/src/commands/diff.js - clients/vscode/src/ [testing] <!-- id:story-adhoc-1792290750 -->
+- [ ] Review commit e4818abc implementing Task 9 (Native Worktree Diff Review and PR Policy Check in clients/vscode/src/commands/diff.js and prCheck.js). Verify spec compliance with docs/superpowers/plans/2 [testing] <!-- id:story-adhoc-1792290850 -->
+- [ ] synlynk roadmap add / release --version silently no-op: global --version flag shadows subcommand's own --version <!-- id:story-71786d0d -->
+- [ ] [LIVE-26] Repair cleanup can delete active live-selftest scratch workspaces <!-- id:story-93d35758 -->
+- [ ] Cost-inflation recurrence: Codex implement dispatches burn ~65x estimated tokens despite correct, successful output (PR #2215 fix cycle) <!-- id:story-3e1f1e78 -->
+- [ ] Broader: routing-proof artifact — route --report + 5-way benchmark kit (broader #3) <!-- id:story-511e98ca -->
+- [ ] Roadmap: CLI core/packs split — ~15-command core, rest become optional packs (architecture #8) <!-- id:story-76a5fe03 -->
+- [ ] fix: preserve Local Pilot prompt contract [testing] <!-- id:story-issue-2408 -->
+- [ ] Implement Task 10 of docs/superpowers/plans/2026-10-18-vscode-extension.md: Doctor Diagnostics and Bootstrap Guidance. Files to create: - clients/vscode/src/commands/doctor.js - clients/vscode/test/su [testing] <!-- id:story-adhoc-1792293190 -->
+- [ ] Review commit d2b9ffe2 implementing Task 10 (Doctor Diagnostics and Bootstrap Guidance in clients/vscode/src/commands/doctor.js). Verify spec compliance with docs/superpowers/plans/2026-10-18-vscode-e [testing] <!-- id:story-adhoc-1792293305 -->
+- [ ] Implement Task 11 of docs/superpowers/plans/2026-10-18-vscode-extension.md: Main Extension Activation, Workspace Trust Handling and Event Wiring. Files: - clients/vscode/extension.js - clients/vscode/ [testing] <!-- id:story-adhoc-1792293430 -->
+- [ ] Review commit 958f0e07 implementing Task 11 (Main Extension Activation, Workspace Trust Handling and Event Wiring in clients/vscode/extension.js). Verify spec compliance with docs/superpowers/plans/20 [testing] <!-- id:story-adhoc-1792293568 -->
+- [ ] Implement Task 12 of docs/superpowers/plans/2026-10-18-vscode-extension.md: Automated VSIX Packaging and CI Verification Workflow. Files to create/update: - .github/workflows/vscode-package.yml - clie [ml] <!-- id:story-adhoc-1792293759 -->
+- [ ] Review commit 6ffd612a implementing Task 12 (Automated VSIX Packaging and CI Verification Workflow in .github/workflows/vscode-package.yml and clients/vscode/README.md). Verify spec compliance with do [ml] <!-- id:story-adhoc-1792293858 -->
+- [ ] Perform comprehensive whole-branch Final Code Review for feat/agy/vscode-extension-design (range 28789667..6ffd612a). Spec: docs/superpowers/specs/2026-10-18-vscode-extension-design.md. Plan: docs/sup [frontend] <!-- id:story-adhoc-1792294053 -->
+- [ ] Operationalize autonomous GOVERNS SDLC: governance, agent ownership, and cost provenance [architecture] <!-- id:story-ee4529d9 -->
+- [ ] Remediate roadmap and task status drift across state.db, project-docs, and PR merges [architecture] <!-- id:story-ada9a71f -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792343898 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792345697 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [testing] <!-- id:story-adhoc-1792345774 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792345921 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [backend] <!-- id:story-adhoc-1792345992 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792346066 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1792346159 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792348322 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  [backend] <!-- id:story-adhoc-1792348371 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792348426 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below. DO NOT inspect your local [testing] <!-- id:story-adhoc-1792348544 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792348593 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text b [testing] <!-- id:story-adhoc-1792348661 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792348857 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  [testing] <!-- id:story-adhoc-1792348947 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792348995 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below. DO NOT inspect your local [testing] <!-- id:story-adhoc-1792349129 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792349163 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text b [testing] <!-- id:story-adhoc-1792349263 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792349305 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  [testing] <!-- id:story-adhoc-1792349378 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792349410 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below. DO NOT inspect your local [testing] <!-- id:story-adhoc-1792349545 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792349573 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text b [testing] <!-- id:story-adhoc-1792349708 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792349762 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  [testing] <!-- id:story-adhoc-1792349790 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792349820 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below. DO NOT inspect your local [testing] <!-- id:story-adhoc-1792349911 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792349933 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text b [testing] <!-- id:story-adhoc-1792350038 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792350060 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  [testing] <!-- id:story-adhoc-1792350196 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792350229 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below. DO NOT inspect your local [testing] <!-- id:story-adhoc-1792350363 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792350385 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text b [testing] <!-- id:story-adhoc-1792350519 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792374994 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792375041 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  [testing] <!-- id:story-adhoc-1792375104 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792375127 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below. DO NOT inspect your local [testing] <!-- id:story-adhoc-1792375198 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792375227 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text b [testing] <!-- id:story-adhoc-1792375331 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792375367 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  [testing] <!-- id:story-adhoc-1792375461 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792375486 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below. DO NOT inspect your local [testing] <!-- id:story-adhoc-1792375576 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792375621 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text b [testing] <!-- id:story-adhoc-1792375756 -->
+- [ ] GTM: Synaptic AI Capability Index standalone web service & pre-flight routing skill [architecture] <!-- id:story-5eecdf01 -->

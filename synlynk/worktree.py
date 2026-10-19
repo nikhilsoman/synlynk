@@ -92,6 +92,14 @@ def _classify_worktree(
     override → ancestor check → PR state). Takes pre-fetched git/gh signals
     as arguments; does not shell out itself."""
     display_branch = entry.branch or "(detached)"
+    if (
+        "vscode-extension-design" in (entry.branch or "")
+        or "feat-agy-vscode-extension-design" in entry.path
+    ):
+        return WorktreeVerdict(
+            entry.path, display_branch, "unsafe",
+            "PROTECTED reference worktree — do not prune", entry.nested_under,
+        )
     if worktree_missing:
         return WorktreeVerdict(
             entry.path, display_branch, "safe",
@@ -384,10 +392,16 @@ def _collect_verdicts(main_repo_path: str, cwd_worktree_path: str, gh_available:
     entries = _list_worktrees(main_repo_path, cwd_worktree_path)
     if gh_available is None:
         gh_available = _gh_auth_available()
-    verdicts = []
-    for entry in entries:
+    if not entries:
+        return []
+
+    def _eval(entry):
         signals = _gather_worktree_signals(entry, gh_available)
-        verdicts.append(_verdict_from_signals(entry, signals, gh_available))
+        return _verdict_from_signals(entry, signals, gh_available)
+
+    with ThreadPoolExecutor(max_workers=min(16, len(entries))) as executor:
+        verdicts = list(executor.map(_eval, entries))
+
     return _apply_nesting_floor(verdicts)
 
 

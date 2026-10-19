@@ -153,6 +153,24 @@ def test_pick_verifier_harness_is_not_executor(tmp_path, monkeypatch):
     assert verifier in ("agy", "grok")
 
 
+def test_pick_verifier_harness_grok_selects_codex():
+    from synlynk.capability_sweep import _pick_verifier_harness
+
+    available = ["claude", "codex", "agy", "grok"]
+    verifier = _pick_verifier_harness("grok", available)
+    assert verifier == "codex"
+
+
+def test_pick_verifier_harness_respects_env_override(monkeypatch):
+    from synlynk.capability_sweep import _pick_verifier_harness
+
+    available = ["claude", "codex", "agy", "grok"]
+    monkeypatch.setenv("SYNLYNK_VERIFIER_HARNESS", "agy")
+    verifier = _pick_verifier_harness("codex", available)
+    assert verifier == "agy"
+
+
+
 def test_verify_calibration_result_marks_verified_on_valid_meta(monkeypatch):
     from synlynk import capability_sweep
 
@@ -524,6 +542,85 @@ def test_discover_models_prefers_active_db_models_over_fallback(tmp_path, monkey
     assert "gpt-5.6-terra" in discovered["codex"]
     # Legacy hardcoded fallback should NOT be chosen when active models exist in DB
     assert "gpt-5-codex" not in discovered["codex"]
+
+
+def test_verify_calibration_result_passes_qa_role_and_non_gh_write(monkeypatch):
+    from synlynk import capability_sweep
+
+    captured_kwargs = {}
+
+    def fake_dispatch(harness, task, **kwargs):
+        captured_kwargs.update(kwargs)
+        return {"output": "# synlynk-meta\nquality=8.5\ncorrect=true"}
+
+    monkeypatch.setattr(capability_sweep, "_dispatch_calibration_task", fake_dispatch)
+
+    res = capability_sweep._verify_calibration_result(
+        "claude", "codex", "gpt-5.6-terra", "PROG",
+        {"output": "Output mentioning gh pr review in log text"}
+    )
+
+    assert res["quality"] == 8.5
+    assert res["quality_verified"] is True
+    assert captured_kwargs.get("role") == "qa"
+    assert captured_kwargs.get("requires_gh_write") is False
+
+
+def test_extract_verifier_meta_handles_json_structured_output():
+    import json
+    from synlynk.costs import extract_verifier_meta
+
+    payload = json.dumps({"result": "Analysis done.\n# synlynk-meta\nquality=9.2\ncorrect=true"})
+    meta = extract_verifier_meta(payload)
+    assert meta is not None
+    assert meta["quality"] == 9.2
+    assert meta["correct"] is True
+
+
+def test_extract_verifier_meta_colon_and_bullets():
+    from synlynk.costs import extract_verifier_meta
+
+    text = """
+    Here is my assessment:
+    # synlynk-meta
+    - quality: 8.7
+    * correct: true
+    """
+    meta = extract_verifier_meta(text)
+    assert meta is not None
+    assert meta["quality"] == 8.7
+    assert meta["correct"] is True
+
+
+def test_extract_log_text_unpacks_json_result():
+    import json
+    from synlynk.capability_sweep import _extract_log_text
+
+    payload = json.dumps({"result": "Hello from model", "cost": 0.05})
+    assert _extract_log_text(payload) == "Hello from model"
+
+
+def test_verify_calibration_prompt_instructs_no_filesystem_check(monkeypatch):
+    from synlynk import capability_sweep
+
+    captured_task = {}
+
+    def fake_dispatch(harness, task, **kwargs):
+        captured_task["task"] = task
+        return {"output": "# synlynk-meta\nquality=9.0\ncorrect=true"}
+
+    monkeypatch.setattr(capability_sweep, "_dispatch_calibration_task", fake_dispatch)
+
+    res = capability_sweep._verify_calibration_result(
+        "claude", "codex", "gpt-5.6-terra", "PROG",
+        {"output": "Some code diff"}
+    )
+    assert res["quality"] == 9.0
+    assert "DO NOT inspect your local filesystem" in captured_task["task"]
+    assert "isolated worktree" in captured_task["task"]
+
+
+
 
 
 

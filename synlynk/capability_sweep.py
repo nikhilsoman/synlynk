@@ -159,6 +159,11 @@ def _pick_verifier_harness(executor_harness: str, available_harnesses: list) -> 
             f"No independent verifier available for executor {executor_harness}; "
             "need at least 2 configured harnesses to run the calibration sweep"
         )
+    override = os.environ.get("SYNLYNK_VERIFIER_HARNESS")
+    if override and override in candidates:
+        return override
+    if executor_harness == "grok" and "codex" in candidates:
+        return "codex"
     return candidates[0]
 
 
@@ -245,7 +250,40 @@ def _pick_verifier_agent(executor_agent: str, available_agents: list) -> str:
             f"No independent verifier available for executor {executor_agent}; "
             "need at least 2 configured agents to run the calibration sweep"
         )
+    override = os.environ.get("SYNLYNK_VERIFIER_HARNESS")
+    if override and override in candidates:
+        return override
+    if executor_agent == "grok" and "codex" in candidates:
+        return "codex"
     return candidates[0]
+
+
+def _extract_log_text(raw_log: str) -> str:
+    """Extract human/LLM readable text from a raw job log."""
+    if not raw_log:
+        return ""
+    trimmed = raw_log.strip()
+    if trimmed.startswith("{") and trimmed.endswith("}"):
+        try:
+            data = json.loads(trimmed)
+            if isinstance(data, dict):
+                if "result" in data and isinstance(data["result"], str):
+                    return data["result"]
+                if "text" in data and isinstance(data["text"], str):
+                    return data["text"]
+        except Exception:
+            pass
+    lines = [line.strip() for line in raw_log.splitlines() if line.strip()]
+    for line in reversed(lines):
+        if line.startswith("{") and line.endswith("}"):
+            try:
+                data = json.loads(line)
+                if isinstance(data, dict):
+                    if "result" in data and isinstance(data["result"], str):
+                        return data["result"]
+            except Exception:
+                pass
+    return raw_log
 
 
 def _await_calibration_job(job: dict, timeout_s: int = 120) -> dict:
@@ -288,8 +326,57 @@ def _await_calibration_job(job: dict, timeout_s: int = 120) -> dict:
     if "output" not in job or not job["output"]:
         from synlynk.jobs import _read_job_log
 
+        worktree_path = job.get("worktree_path")
+        diff_text = ""
+        if worktree_path and os.path.exists(worktree_path):
+            try:
+                base_ref = "origin/main"
+                mb_res = subprocess.run(
+                    ["git", "-C", worktree_path, "merge-base", "HEAD", base_ref],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=5,
+                )
+                base_sha = (mb_res.stdout or "").strip()
+                if not base_sha:
+                    mb_res = subprocess.run(
+                        ["git", "-C", worktree_path, "merge-base", "HEAD", "main"],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=5,
+                    )
+                    base_sha = (mb_res.stdout or "").strip()
+
+                if base_sha:
+                    res = subprocess.run(
+                        ["git", "-C", worktree_path, "diff", base_sha],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=5,
+                    )
+                    diff_text = (res.stdout or "").strip()
+                else:
+                    res = subprocess.run(
+                        ["git", "-C", worktree_path, "diff", "HEAD"],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=5,
+                    )
+                    diff_text = (res.stdout or "").strip()
+            except Exception:
+                diff_text = ""
+
         log_file = job.get("log_file")
-        job["output"] = _read_job_log(log_file) if log_file else ""
+        log_text = _read_job_log(log_file) if log_file else ""
+        extracted_text = _extract_log_text(log_text)
+        if diff_text:
+            job["output"] = f"### Changes (git diff):\n{diff_text}\n\n### Execution log summary:\n{extracted_text[:2000]}"
+        else:
+            job["output"] = extracted_text
 
     return job
 
@@ -304,6 +391,8 @@ def _dispatch_calibration_task(harness: str, task: str, **kwargs) -> dict:
     timeout_s = dispatch_kwargs.pop("timeout_s", 120)
     dispatch_kwargs.setdefault("force_agent", True)
     dispatch_kwargs.setdefault("skip_preflight", True)
+    if harness == "grok":
+        dispatch_kwargs.setdefault("skip_permissions", True)
     job = dispatch_agent(harness, task, **dispatch_kwargs)
     return _await_calibration_job(job, timeout_s=timeout_s)
 
@@ -325,14 +414,24 @@ def _verify_calibration_result(
     verify_task = (
         f"Review this {label} calibration task output from another harness and score it "
         "0-10 for quality.\n"
+        "IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below. "
+        "DO NOT inspect your local filesystem or git status — the executor's changes were produced in "
+        "an isolated worktree and are not present in your local environment. "
+        "Evaluate the code design, correctness, and test quality directly from the diff and log below.\n\n"
         "Respond with a line '# synlynk-meta' followed by 'quality=<N>' "
         "and 'correct=<true|false>'.\n\n"
         f"Executor harness: {executor_harness}\n"
         f"Executor model: {model}\n"
         f"Verifier harness: {verifier_harness}\n\n"
-        f"Output to review:\n{executor_output.get('output', '')}"
+        f"Output to review:\n```\n{executor_output.get('output', '')}\n```"
     )
-    result = _dispatch_calibration_task(verifier_harness, verify_task)
+    result = _dispatch_calibration_task(
+        verifier_harness,
+        verify_task,
+        role="qa",
+        task_type="review",
+        requires_gh_write=False,
+    )
     from synlynk.costs import extract_verifier_meta
 
     raw_output = result.get("output", "")
@@ -381,7 +480,9 @@ def _run_sweep(discovered: dict, skills: list) -> None:
             for skill in skills:
                 label = SFIA_CODES.get(skill, {}).get("label", skill)
                 task = f"Write a minimal example demonstrating {label} for a small Python function."
-                executor_result = _dispatch_calibration_task(harness, task, model=model)
+                executor_result = _dispatch_calibration_task(
+                    harness, task, model=model, role="dev", task_type="implement", requires_gh_write=False
+                )
 
                 verifier_harness = _pick_verifier_harness(harness, available_harnesses)
                 verdict = _verify_calibration_result(

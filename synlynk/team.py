@@ -62,7 +62,9 @@ def _panel_execution_identity(agent: str, cli: str) -> dict:
     }
 
 
-def _panel_text(value: str, limit: int = 1200) -> str:
+def _panel_text(value: str | bytes, limit: int = 1200) -> str:
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", errors="replace")
     value = (value or "").strip()
     return value if len(value) <= limit else value[:limit] + "..."
 
