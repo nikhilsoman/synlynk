@@ -70,6 +70,7 @@ def run_capability_backfill(
 
     total_ratings = len(rows)
     updated_records: list[dict[str, Any]] = []
+    evaluated_rows: list = []
 
     for r_id, story_id, title, old_disc, agent, quality, verified, cycles, model in rows:
         target_code = old_disc
@@ -85,6 +86,8 @@ def run_capability_backfill(
                 target_code = LEGACY_TO_SFIA_FALLBACK[old_disc]
             else:
                 target_code = "UNAN"
+
+        evaluated_rows.append((r_id, story_id, title, old_disc, agent, quality, verified, cycles, model, target_code))
 
         if target_code != old_disc:
             updated_records.append({
@@ -109,27 +112,35 @@ def run_capability_backfill(
     # Calculate active disciplines meeting >= 1% attribution
     active_disciplines = get_active_sfia_disciplines(conn, threshold=0.01)
 
-    # Compute aggregate summary grouped by (agent, discipline)
-    summary_query = """
-        SELECT agent, discipline, COUNT(*), SUM(CASE WHEN quality_verified = 1 OR quality > 0 THEN 1 ELSE 0 END),
-               AVG(quality), AVG(pr_review_cycles)
-        FROM capability_ratings
-        GROUP BY agent, discipline
-        ORDER BY agent, COUNT(*) DESC
-    """
-    summary_rows = conn.execute(summary_query).fetchall()
+    # Compute aggregate summary grouped by (agent, target_discipline)
+    agg: dict[tuple[str, str], dict[str, Any]] = {}
+    for r_id, story_id, title, old_disc, agent, quality, verified, cycles, model, target_code in evaluated_rows:
+        key = (agent, target_code)
+        if key not in agg:
+            agg[key] = {
+                "count": 0,
+                "verified_count": 0,
+                "total_quality": 0.0,
+                "total_cycles": 0,
+            }
+        agg[key]["count"] += 1
+        if verified == 1 or (quality is not None and quality > 0):
+            agg[key]["verified_count"] += 1
+        agg[key]["total_quality"] += (quality or 0.0)
+        agg[key]["total_cycles"] += (cycles or 0)
 
     summary: list[dict[str, Any]] = []
-    for ag, disc, count, ver_cnt, avg_q, avg_cyc in summary_rows:
+    for (ag, disc), stats in sorted(agg.items(), key=lambda item: (item[0][0], -item[1]["count"])):
+        cnt = stats["count"]
         summary.append({
             "agent": ag,
             "discipline": disc,
             "discipline_name": get_sfia_name(disc),
-            "task_count": count,
-            "verified_count": ver_cnt or 0,
-            "avg_quality": round(avg_q or 0.0, 2),
-            "avg_review_cycles": round(avg_cyc or 0.0, 2),
-            "sample_floor_met": count >= min_sample,
+            "task_count": cnt,
+            "verified_count": stats["verified_count"],
+            "avg_quality": round(stats["total_quality"] / cnt, 2) if cnt > 0 else 0.0,
+            "avg_review_cycles": round(stats["total_cycles"] / cnt, 2) if cnt > 0 else 0.0,
+            "sample_floor_met": cnt >= min_sample,
             "qualifies_attribution": disc in active_disciplines,
         })
 
