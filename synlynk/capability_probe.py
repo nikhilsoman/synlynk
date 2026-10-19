@@ -61,6 +61,19 @@ HARNESS_CAPABILITY_PROFILES: Dict[str, Dict[str, bool]] = {
         CAP_NET: True,
         CAP_REVIEW: True,
     },
+    # Muse (Meta AI): 7 merged implement-task jobs this cycle (gh:#2254, #2258,
+    # #2260, #2320, #2284, #2441, #2442) clear the >=5-sample bar for implement.
+    # CAP_GH_WRITE and CAP_REVIEW are set True provisionally -- the goal is to
+    # allow a live TC-9 probe and real calibration dispatches to run, matching
+    # the precedent of grok's flip in gh:#2034. Actual routing decisions will be
+    # driven by measured capability_ratings rows, not this static gate.
+    "muse": {
+        CAP_SHELL: True,
+        CAP_WORKSPACE_WRITE: True,
+        CAP_GH_WRITE: True,
+        CAP_NET: True,
+        CAP_REVIEW: True,
+    },
     "local": {
         CAP_SHELL: True,
         CAP_WORKSPACE_WRITE: True,

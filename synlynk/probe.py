@@ -1214,6 +1214,48 @@ def _run_tc9(
                 "mechanism": "direct_cli",
                 "error": "",
             })
+    elif harness_name == "muse":
+        # Muse CLI: `muse exec <prompt>` (non_interactive_flags=["exec"], prompt_via_arg=True)
+        if live:
+            try:
+                proc = subprocess.run(
+                    [cli_bin, "exec", cmd_str],
+                    **run_kwargs,
+                )
+                output = ((proc.stdout or "") + (proc.stderr or "")).strip()
+                if proc.returncode == 0:
+                    res.update({
+                        "passed": True,
+                        "can_gh_write": True,
+                        "mechanism": "direct_cli",
+                        "output": output,
+                    })
+                else:
+                    res.update({
+                        "passed": False,
+                        "can_gh_write": False,
+                        "mechanism": "execution_failed",
+                        "error": output or f"Muse exited with code {proc.returncode}",
+                        "output": output,
+                    })
+            except Exception as exc:
+                res.update({
+                    "passed": False,
+                    "can_gh_write": False,
+                    "mechanism": "execution_failed",
+                    "error": str(exc),
+                })
+        else:
+            res.update({
+                "passed": True,
+                "can_gh_write": True,
+                "mechanism": "not_live_tested",
+                "note": (
+                    "Non-live probe; capability gate opened provisionally (gh:#2445). "
+                    "Run with live=True for an authoritative result."
+                ),
+                "error": "",
+            })
     else:
         res.update({
             "passed": False,
