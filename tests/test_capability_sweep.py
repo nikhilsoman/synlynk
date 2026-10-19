@@ -153,6 +153,24 @@ def test_pick_verifier_harness_is_not_executor(tmp_path, monkeypatch):
     assert verifier in ("agy", "grok")
 
 
+def test_pick_verifier_harness_grok_selects_codex():
+    from synlynk.capability_sweep import _pick_verifier_harness
+
+    available = ["claude", "codex", "agy", "grok"]
+    verifier = _pick_verifier_harness("grok", available)
+    assert verifier == "codex"
+
+
+def test_pick_verifier_harness_respects_env_override(monkeypatch):
+    from synlynk.capability_sweep import _pick_verifier_harness
+
+    available = ["claude", "codex", "agy", "grok"]
+    monkeypatch.setenv("SYNLYNK_VERIFIER_HARNESS", "agy")
+    verifier = _pick_verifier_harness("codex", available)
+    assert verifier == "agy"
+
+
+
 def test_verify_calibration_result_marks_verified_on_valid_meta(monkeypatch):
     from synlynk import capability_sweep
 
