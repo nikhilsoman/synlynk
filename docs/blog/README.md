@@ -498,6 +498,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [419](./419-pr2452-implement-gh-2448-live-27-fix-part-1-of-.md) | PR #2452 — Implement gh:#2448 (LIVE-27 fix, part 1 of 2). Root (job-3eb04cc0) | [#2452](https://github.com/nikhilsoman/synlynk/pull/2452) | 2026-10-19 |
 | [420](./420-pr2453-implement-gh-2449-live-27-fix-part-2-of-.md) | PR #2453 — Implement gh:#2449 (LIVE-27 fix, part 2 of 2, depend (job-8e07e51b) | [#2453](https://github.com/nikhilsoman/synlynk/pull/2453) | 2026-10-19 |
 | [421](./421-pr2455-implement-gh-2447-live-27-fix-db-cleanse.md) | PR #2455 — Implement gh:#2447 (LIVE-27 fix, DB cleanse layer). (job-66e27536) | [#2455](https://github.com/nikhilsoman/synlynk/pull/2455) | 2026-10-19 |
+| [422](./422-pr2456-add-live-27-fleet-wide-catalog-invariant.md) | PR #2456 — add LIVE-27 fleet-wide catalog invariant test suite (gh:#2450) | [#2456](https://github.com/nikhilsoman/synlynk/pull/2456) | 2026-10-19 |
 
 ## Per-PR Post Template
 

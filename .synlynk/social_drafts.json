@@ -2798,5 +2798,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2455 \u2014 Implement gh:#2447 (LIVE-27 fix, DB cleanse layer). (job-66e27536) (PR #2455, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2455.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-19) - PR #2455\n- Merged improvements and fixes for PR #2455."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/422-pr2456-add-live-27-fleet-wide-catalog-invariant.md",
+    "title": "PR #2456 \u2014 add LIVE-27 fleet-wide catalog invariant test suite (gh:#2450)",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-19",
+    "pr": "#2456",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2456."
+    ],
+    "tweet": "\ud83d\ude80 PR #2456 \u2014 add LIVE-27 fleet-wide catalog invariant test suite (gh:#2450) (PR #2456, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2456.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-19) - PR #2456\n- Merged improvements and fixes for PR #2456."
   }
 ]
