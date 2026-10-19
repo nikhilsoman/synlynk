@@ -108,6 +108,17 @@ def _daemon_lock_path(pidfile: str) -> str:
     return pidfile + ".lock"
 
 
+def _daemon_start_lock_path(pidfile: str) -> str:
+    """Return the lock path used to serialize concurrent ``start()`` calls.
+
+    This is deliberately distinct from ``_daemon_lock_path``.  The starter
+    waits for its re-exec child to publish a pidfile, while the child needs the
+    lifetime lock before it can publish that pidfile.  Sharing the lock creates
+    a parent/child flock deadlock (gh:#2262).
+    """
+    return pidfile.replace(".pid", ".start.lock")
+
+
 def _try_acquire_daemon_lock(lock_path: str, *, blocking: bool = False):
     """Acquire an exclusive flock on *lock_path*.
 
@@ -248,7 +259,10 @@ class WatchDaemon:
                 "refusing to start the daemon with a disposable worktree as its "
                 f"workspace root: {self.workspace_root}"
             )
-        lock_path = _daemon_lock_path(self.pidfile)
+        # Hold only the short-lived starter lock while waiting for re-exec
+        # readiness.  The child independently holds daemon.pid.lock for its
+        # entire lifetime, so it can publish its pidfile immediately.
+        lock_path = _daemon_start_lock_path(self.pidfile)
         lock_fh = _try_acquire_daemon_lock(lock_path, blocking=False)
         if lock_fh is None:
             owner_pid = _daemon_lock_owner_pid(lock_path)
@@ -262,6 +276,16 @@ class WatchDaemon:
                 print(self._already_running_message)
                 return
         try:
+            # A starter lock only serializes start() calls.  Preserve the
+            # lifetime lock check so a live daemon (including one whose
+            # pidfile has not been observed yet) is never replaced.
+            lifetime_lock_fh = _try_acquire_daemon_lock(
+                _daemon_lock_path(self.pidfile), blocking=False
+            )
+            if lifetime_lock_fh is None:
+                print(self._already_running_message)
+                return
+            _release_daemon_lock(lifetime_lock_fh)
             if self._is_running():
                 print(self._already_running_message)
                 return
@@ -524,11 +548,14 @@ class WatchDaemon:
 def _watch_daemon_child_main() -> None:
     os.chdir(_repo_common_dir(strict=True))
     d = WatchDaemon()
-    # Publish pidfile before taking the lifetime lock so the parent start()
-    # waiter can observe readiness and release its start-time lock (#349).
+    d._lock_fh = _try_acquire_daemon_lock(_daemon_lock_path(d.pidfile), blocking=True)
+    if d._lock_fh is None:
+        print("  synlynk watch is already running.", file=sys.stderr)
+        return
+    # The starter holds *.start.lock, not this lifetime lock, so this can be
+    # acquired before publishing readiness without a parent/child deadlock.
     with open(d.pidfile, "w") as f:
         f.write(str(os.getpid()))
-    d._lock_fh = _try_acquire_daemon_lock(_daemon_lock_path(d.pidfile), blocking=True)
     _pkg("set_state")("watching")
     d._run_loop()
 
@@ -866,6 +893,15 @@ def _daemon_install_service(daemon_instance) -> None:
             """)
             with open(plist_path, "w", encoding="utf-8") as f:
                 f.write(plist)
+            # launchctl refuses to load a label that remains registered after
+            # a prior failed/exited instance.  Best-effort unload makes every
+            # install a clean reload; a first install naturally has nothing to
+            # unload and its non-zero result is intentionally ignored.
+            subprocess.run(
+                ["launchctl", "unload", plist_path],
+                check=False,
+                capture_output=True,
+            )
             _run_checked(["launchctl", "load", "-w", plist_path])
             print(f"  ✓ installed launchd service: {plist_path}")
             return
