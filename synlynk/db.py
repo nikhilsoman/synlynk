@@ -921,7 +921,12 @@ def get_active_harness_models(
     try:
         cursor = conn.execute(
             f"SELECT * FROM harness_models WHERE {' AND '.join(clauses)} "
-            "ORDER BY discovered_at DESC",
+            "ORDER BY CASE "
+            "WHEN discovery_source IN ('curated', 'curated_fallback') THEN 0 "
+            "WHEN discovery_source = 'config_file' THEN 1 "
+            "WHEN discovery_source LIKE 'cli:%' THEN 2 "
+            "WHEN discovery_source = 'execution_log' THEN 3 "
+            "ELSE 4 END ASC, discovered_at DESC",
             params,
         )
     except sqlite3.ProgrammingError:
