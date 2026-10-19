@@ -7,6 +7,59 @@
 - **Directories:** bin, docs, project-docs, synlynk, tests, website
 
 ## Decisions
+- **2026-10-19 [Autonomous Capability Crawler & Index Distribution: Dedicated Budget, AWS Spot Docker Swarm Driver, and Signed AV-Style Definition Packs]:**
+  Decide Panel (Codex, Grok, AGY) unanimously approved operational extensions linked to `goal-aa48c456`:
+  (1) Dedicated budget ledger (`crawler_budget_usd`) and isolated API keys entirely decoupling continuous crawl execution from local user development and interactive subscription quotas;
+  (2) Public cloud offloading packaging the crawler as `synlynk-crawler:latest` container operating as an official `SwarmRunnerDriver` (`DockerSpotRunnerDriver`) on AWS EC2 Spot instances with graceful SIGTERM checkpointing;
+  (3) Antivirus-style definition pack distribution (`capability-pack-YYYY-MM-DD.json.gz`) via CDN edge mirrors and `synlynk capability update` with Ed25519 cryptographic signature verification, eliminating client-side crawler or DB sync burdens;
+  (4) Designating the Capability Crawler as the inaugural production workload for Synlynk Swarm;
+  (5) Incremental 3-phase roadmap prioritizing immediate v0.24 sprint goals (Historical Backfill & SFIA expansion) before cloud crawler deployment. [@codex, @grok, @agy, @nikhilsoman]
+- **2026-10-19 [Real Capability & Cost Metrics: Dynamic Model Catalog Window, Open SFIA (>1% Attribution) Taxonomy, and Public Repo Capability Crawler]:**
+  Decide Panel (Codex, Grok, AGY) established consensus and approved 4-pillar architectural strategy linked to `goal-aa48c456`:
+  (1) Dynamic model catalog sliding window tracking all discoverable models via `/model` calls across commercial frontiers (OpenAI, Anthropic, Google, xAI, Meta Muse) and on-device Local oMLX, with active 30-day retention;
+  (2) Open SFIA 8/9 taxonomy expansion beyond core software coding to adjacent creative, multimedia, design, and business operations disciplines (`ANIM`, `GRAP`, `MUDI`, `SNDD`, `ICDV`, `BUSA`, `MKTG`, `COMM`, `PROD`, `UNAN`);
+  (3) Dynamic sliding window inclusion threshold: any SFIA discipline accounting for >=1% of task volume/attribution dynamically enters the capability matrix and benchmark reporting;
+  (4) Real Work Public Repo Contribution Crawler & Ranker: cyclic background execution program striping tasks across diverse open-source repositories to benchmark real token consumption, real dollars, and authentic CI/PR friction. [@codex, @grok, @agy, @nikhilsoman]
+- **2026-10-19 [Empirical Multi-Vendor Capability Calibration & Developer Preview Benchmark Report]:**
+  Executed live empirical calibration sweep across the 4 commercial giants (Codex, Grok, Claude, AGY) mapped to SFIA engineering disciplines (`PROG`, `TEST`, `REQM`).
+  Resolved Grok headless dispatch under LIVE-13 via auto-opt-in `skip_permissions=True` and configured independent verification via Codex verifier to maintain calibration throughput during Claude weekly rate limit cooldowns.
+  Decoded `bytes` output safely in `_panel_text` (PR #2428 merged @ `559e9c01`).
+  Authored and published the canonical Developer Preview benchmark report `docs/benchmarks/2026-10-empirical-capability-report.md` (PR #2429), synthesizing multi-vendor empirical calibration matrices, cost-per-verified-fix and token efficiency ratios from 2,700+ production dispatches in `state.db`, Subscription ROI advisory tiers ($40/mo Solo, $150/mo Team, $300+/mo Autonomous Fleet), dynamic quota failover architecture, and phased roadmap for historical backfill and crowdsourced public telemetry. [@agy, @nikhilsoman]
+- **2026-10-18 [VS Code Extension Marketplace Publishing Runbook & Tickets Updated]:**
+  Documented durable operational runbook `docs/runbooks/vscode-extension-marketplace-publishing.md` (PR #2424)
+  covering step-by-step account creation, PAT generation (Azure DevOps Marketplace Manage scope), Open VSX namespace `synlynk` claim,
+  GitHub secrets configuration (`VSCE_PAT`, `OVSX_PAT`), automated workflow triggers (`.github/workflows/release-vscode.yml`),
+  and local packaging/testing drills. Logged comprehensive setup guides to Issue #2103 and parent Epic #2384. [@agy, @nikhilsoman]
+- **2026-10-18 [Issue #2350 Fixed: Capability Sweep Async Output Capture Contract]:**
+  Resolved GitHub Issue [#2350](https://github.com/nikhilsoman/synlynk/issues/2350) (P0 blocker for Phase 2 empirical capability reports).
+  Implemented `_await_calibration_job()` in `synlynk/capability_sweep.py` to poll job PID, trigger `_reconcile_jobs()`,
+  and read `log_file` via `_read_job_log()` into `job['output']`.
+  Eliminated the empty-output bug that caused 100% of calibration tasks to fall back to unverified 5.0 quality scores.
+  Verified with 19/19 tests in `tests/test_capability_sweep.py` and 240/240 tests across the capability & dispatch suite.
+  Created PR #2414. Recorded formal retrospective in `docs/retrospectives/2026-10-18-capability-sweep-async-output-and-verification-fix.md`. [@agy, @nikhilsoman]
+- **2026-10-18 [Roadmap status drift ticket & Phase 1 Hygiene complete]:** Created
+  story `story-ada9a71f` and linked to `goal-eacab0dc`. Created GitHub issue
+  [#2413](https://github.com/nikhilsoman/synlynk/issues/2413) documenting the 5
+  root causes of canonical status drift, and cross-referenced with [#2412](https://github.com/nikhilsoman/synlynk/issues/2412).
+  Added protected reference worktree guard and ThreadPoolExecutor parallelization to `synlynk/worktree.py`.
+  Pruned 22 safe worktrees via `synlynk worktree clean --apply` (dropping from 309 to 285)
+  while strictly preserving `worktrees/feat-agy-vscode-extension-design`.
+  Compacted canonical SQLite DB via `VACUUM`.
+  Archived 360 stale sentinel alerts (>7d) to `.synlynk/archive/sentinel-pre-triage-2026-10-18.md`
+  and trimmed `.synlynk/sentinel.md` (146KB -> 44KB).
+  Marked `Phase 1: Substrate Hardening & Hygiene` as `done` in canonical `state.db` and regenerated `project-docs/roadmap.md`. [@agy, @nikhilsoman]
+- **2026-10-18 [GOVERNS autonomy synthesis issue]:** Created story `story-ee4529d9`
+  and linked it as a primary work item to `goal-eacab0dc`. GitHub issue
+  [#2412](https://github.com/nikhilsoman/synlynk/issues/2412) is the detailed
+  tracking record, including the new “Autonomy & GOVERNS SDLC recommendations
+  synthesized from periodic reviews” section and acceptance criteria across
+  GOVERNS adherence, autonomous stage association/progression, workspace-agent
+  assignment and charters, cost attribution, and review/merge authorization
+  provenance. #2409 remains a Local Harness reproduction/cross-reference, not
+  the parent for this systemic work. The connected GitHub integration created
+  #2412 as `nikhilsoman`; this records execution identity, not a workspace-agent
+  authorization. State-DB story creation/linking used one-time elevated
+  execution. [@codex]
 - **2026-10-18 [Protected Worktree: Synlynk VS Code Client Reference Checkout]:** The
   feature worktree at `/Users/nikhilsoman/dev/synlynk/worktrees/feat-agy-vscode-extension-design`
   (branch `feat/agy/vscode-extension-design`, PR #2410 merged @ `39d84371`) is explicitly

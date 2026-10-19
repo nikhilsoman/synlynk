@@ -1,0 +1,38 @@
+<!-- generated - source of truth is state.db -->
+---
+decision_id: dec-026ffa30
+topic: "Real Capability & Cost Metrics: Dynamic Model Catalog Window, Open SFIA (>1% Attribution) Taxonomy, and Public Repo Capability Crawler"
+date: 2026-10-19
+panel: [codex, grok, agy]
+status: approved
+---
+
+## Topic
+Real Capability & Cost Metrics: Dynamic Model Catalog Window, Open SFIA (>1% Attribution) Taxonomy, and Public Repo Capability Crawler
+
+## Panel Inputs
+
+### codex
+I recommend treating SFIA as an open, versioned competency taxonomy with transparent task definitions, provenance, and licensing—not as a hidden scoring layer. Use the 1% sliding window as a continuously refreshed, stratified benchmark sample (with fixed seeds and published inclusion rules), while the public-repo crawler should honor licenses, robots/rate limits, privacy filtering, deduplication, and reproducible dataset snapshots so results remain auditable and comparable over time.
+
+### grok
+Open taxonomy plus empirical capability rating is the right allocation model: new task types and harnesses should enter on measured quality and cost once the sample is large enough, so routing stays evidence-based as the work changes.
+
+### agy
+The expansion beyond conventional backend programming into adjacent creative and tech-enabled disciplines (multimedia, design systems, audio/video scripting, VR/interactive content, product management, and regulatory compliance) is essential for modern product teams. Grounding this in a continuous empirical contribution loop (Capability Crawler & Ranker) striped across real public repositories bridges the gap between synthetic benchmark leaderboards and production autonomous engineering. The sliding-window model catalog ensures zero-risk tracking of emerging and deprecated models across commercial frontiers (OpenAI, Anthropic, Google, xAI, Meta) and sovereign on-device inference (oMLX).
+
+## Synthesis
+The panel unreservedly agrees on expanding the capability and cost evaluation framework from synthetic prompts into an authentic, continuously updated empirical ground truth. 
+
+1. Dynamic Model Catalog Sliding Window: Synlynk must maintain a sliding window of currently accessible models across all harnesses (public commercial giants: OpenAI Codex, Anthropic Claude, Google AGY, xAI Grok, + Meta Muse when fully onboarded, alongside on-device Local oMLX inference). Discovery via /model calls and runtime probes will maintain first_seen_at/last_seen_at timestamps; active models within a 30-day window remain visible in the reference capability report, while superseded tiers gracefully roll off.
+
+2. Open SFIA Taxonomy Beyond Software: SFIA 8/9 covers 121+ professional skills across 6 domains. The taxonomy must be opened beyond core backend coding to include adjacent creative, multimedia, and tech-enabled disciplines (ANIM, GRAP, MUDI, SNDD, ICDV, BUSA, MKTG, COMM, PROD, UNAN).
+
+3. 1% Task Attribution Sliding Window: Instead of hardcoded subsets, any SFIA discipline accounting for >= 1% of task volume/attribution within the active workspace window dynamically enters the active capability rating matrix and benchmark report.
+
+4. Public Repo Contribution Program (Capability Crawler & Ranker): To ensure calibration metrics reflect messy real-world engineering (large repos, dependency graphs, real CI runs, authentic git merge conflicts, and actual dollar/token costs), Synlynk will implement a cyclic background crawler that stripes contribution tasks across diverse public repositories and models, providing an auditable, continuously refreshed empirical capability ranking.
+
+## Decision
+Decision: Adopt the 4-pillar architectural strategy for keeping capability and cost metrics real: (1) Sliding-window dynamic model catalog covering public frontiers (Big 4 + Muse) and local oMLX; (2) Expanded open SFIA 8/9 taxonomy spanning software, multimedia, design, and business disciplines; (3) Dynamic >=1% task attribution inclusion window; and (4) Cyclic Public Repo Contribution Crawler & Ranker. Link to goal-aa48c456.
+
+> Signatures: see 2026-10-19-real-capability-cost-metrics-dynamic-mod.json
