@@ -317,6 +317,87 @@ def _hc_todo_drift() -> HealthCheck:
     return HealthCheck("todo_drift", "ok", "todo.md is synchronized")
 
 
+def _merged_pr_numbers_from_origin_main() -> set[int] | None:
+    """Return PR numbers recorded in local ``origin/main`` commit messages."""
+    try:
+        result = subprocess.run(
+            ["git", "log", "origin/main", "--format=%B"],
+            capture_output=True, text=True, check=False, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    import re
+    return {int(number) for number in re.findall(r"(?<!\w)#(\d+)\b", result.stdout or "")}
+
+
+def _roadmap_merge_drift_rows(conn, merged_prs: set[int]) -> list[tuple[int, int]]:
+    """Return ``(phase_id, pr_number)`` for merged PRs with incomplete phases."""
+    if not merged_prs:
+        return []
+    rows = conn.execute(
+        "SELECT rp.id, rp.status, rp.phase_title, COALESCE(rp.notes, ''), "
+        "COALESCE(s.title, '') FROM roadmap_phases rp "
+        "LEFT JOIN stories s ON s.story_id=rp.story_id"
+    ).fetchall()
+    stale = []
+    for phase_id, status, title, notes, story_title in rows:
+        if status == "done":
+            continue
+        haystack = " ".join((title or "", notes or "", story_title or ""))
+        for pr_number in merged_prs:
+            if f"#{pr_number}" in haystack:
+                stale.append((phase_id, pr_number))
+    return stale
+
+
+def _hc_roadmap_merge_parity() -> HealthCheck:
+    """Warn when a merged PR still has an unfinished linked roadmap phase."""
+    merged_prs = _merged_pr_numbers_from_origin_main()
+    if merged_prs is None:
+        return HealthCheck(
+            "roadmap_merge_parity", "warn", "origin/main is unavailable; merge parity was not checked",
+            fix="Fetch origin/main, then run: synlynk doctor --fix roadmap",
+        )
+    try:
+        conn = _pkg("_get_db")()
+        try:
+            stale = _roadmap_merge_drift_rows(conn, merged_prs)
+        finally:
+            conn.close()
+    except Exception as exc:
+        return HealthCheck("roadmap_merge_parity", "warn", f"merge parity check unavailable: {exc}")
+    if not stale:
+        return HealthCheck("roadmap_merge_parity", "ok", "merged PRs and linked roadmap phases are synchronized")
+    prs = ", ".join(f"#{pr}" for _, pr in stale)
+    return HealthCheck(
+        "roadmap_merge_parity", "warn", f"merged PRs have unfinished roadmap phases: {prs}",
+        fix="Run: synlynk doctor --fix roadmap",
+    )
+
+
+def repair_roadmap_merge_parity() -> int:
+    """Mark stale phase rows done when their referenced PR is merged on origin/main."""
+    merged_prs = _merged_pr_numbers_from_origin_main()
+    if merged_prs is None:
+        print("  origin/main is unavailable; no roadmap phases were changed")
+        return 0
+    conn = _pkg("_get_db")()
+    try:
+        stale = _roadmap_merge_drift_rows(conn, merged_prs)
+        for phase_id, _ in stale:
+            conn.execute("UPDATE roadmap_phases SET status='done' WHERE id=?", (phase_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    if stale:
+        from synlynk.db import _generate_roadmap_md
+        _generate_roadmap_md()
+    print(f"  repaired {len(stale)} roadmap phase(s) from merged PR evidence")
+    return len(stale)
+
+
 def _hc_identity_key() -> HealthCheck:
     key_path = os.path.join(os.path.expanduser("~/.synlynk"), "identity.key")
     if os.path.exists(key_path):
@@ -1120,6 +1201,7 @@ HEALTH_CHECKS = [
     _hc_codex_model_catalog,
     _hc_docs_dir,
     _hc_todo_drift,
+    _hc_roadmap_merge_parity,
     _hc_identity_key,
     _hc_identity_roles,
     _hc_identity_file_perms,
@@ -1172,6 +1254,9 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
 
     Returns exit code: 0 if all checks ok/warn, 1 if any check fails.
     """
+    if args is not None and getattr(args, "fix", None) == "roadmap":
+        repair_roadmap_merge_parity()
+        return 0
     if args is not None and getattr(args, "fix", None):
         return cmd_doctor_fix(getattr(args, "fix"), args=args)
     if args is not None and getattr(args, "readiness", False) is True:
