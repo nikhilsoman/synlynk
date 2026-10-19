@@ -1,4 +1,16 @@
-from synlynk.examples import active_items, greet
+from synlynk.examples import active_items, clamp, greet
+
+
+def test_clamp_keeps_value_inside_bounds():
+    assert clamp(5, 0, 10) == 5
+
+
+def test_clamp_raises_low_values_to_minimum():
+    assert clamp(-3, 0, 10) == 0
+
+
+def test_clamp_lowers_high_values_to_maximum():
+    assert clamp(15, 0, 10) == 10
 
 
 def test_greet_returns_a_friendly_message():
