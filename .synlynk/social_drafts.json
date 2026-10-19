@@ -2766,5 +2766,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2452 \u2014 Implement gh:#2448 (LIVE-27 fix, part 1 of 2). Root (job-3eb04cc0) (PR #2452, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2452.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-19) - PR #2452\n- Merged improvements and fixes for PR #2452."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/420-pr2453-implement-gh-2449-live-27-fix-part-2-of-.md",
+    "title": "PR #2453 \u2014 Implement gh:#2449 (LIVE-27 fix, part 2 of 2, depend (job-8e07e51b)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-19",
+    "pr": "#2453",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2453."
+    ],
+    "tweet": "\ud83d\ude80 PR #2453 \u2014 Implement gh:#2449 (LIVE-27 fix, part 2 of 2, depend (job-8e07e51b) (PR #2453, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2453.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-19) - PR #2453\n- Merged improvements and fixes for PR #2453."
   }
 ]
