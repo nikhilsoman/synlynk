@@ -2193,3 +2193,18 @@ implementation dispatched, external messages sent, or policy changed.
 - Created P0 action tickets #2447, #2448, #2449, #2450 and appended them to `project-docs/todo.md`.
 [@agy]
 
+## 2026-10-19 — LIVE-27 canonical harness-model cleanse (#2447)
+
+- Added migration 23, `cleanse_execution_log_models`, which reuses
+  `is_plausible_model_id()` and `_curated_model_ids()` to mark malformed or
+  retired `execution_log` discoveries as `deprecated` while preserving rows
+  for auditability. The migration is registered and idempotent.
+- Added regression coverage for `None,`, the multiline source fragment,
+  `grok-3`, and `gemini-1.5-pro`; valid execution-log and authoritative
+  curated/config/CLI rows remain active and untouched.
+- Applied migration 23 to the canonical `/Users/nikhilsoman/.synlynk/workspaces/synlynk/state.db`:
+  73 of 75 execution-log rows were deprecated; the two remaining active rows
+  are allowlisted (`Ornith-1.0-9B-4bit` and `muse-spark-1.3`). Focused tests:
+  11 passed.
+[@codex]
+
