@@ -94,7 +94,7 @@ SFIA_TAXONOMY: dict[str, dict[str, str]] = {
 # Each pattern associates a regex with a target SFIA code and a confidence contribution
 _CLASSIFICATION_RULES: list[tuple[re.Pattern, str, float]] = [
     # Testing & Verification (high priority patterns)
-    (re.compile(r"\b(test|tests|pytest|unittest|testbed|mock|fixture|assertions|regression|qa\b|coverage)\b", re.IGNORECASE), "TEST", 0.85),
+    (re.compile(r"\b(test|tests|pytest|unittest|testbed|mock|fixture|assertions|regression|qa\b|coverage|pr check|repro|audit|lint)\b", re.IGNORECASE), "TEST", 0.85),
     (re.compile(r"\b(verify|verification|validat|assert|reproduce)\b", re.IGNORECASE), "TEST", 0.65),
 
     # Database Design
@@ -114,10 +114,10 @@ _CLASSIFICATION_RULES: list[tuple[re.Pattern, str, float]] = [
 
     # Graphic & Visual Design
     (re.compile(r"\b(svg|vector|icon|icons|illustration|infographic|typography|font)\b", re.IGNORECASE), "GRAP", 0.85),
-    (re.compile(r"\b(css|styling|theme|dark mode|glassmorphic|glassmorphism|layout|tailwind|html|ui\b|frontend|template|dialog|modal)\b", re.IGNORECASE), "VISU", 0.80),
+    (re.compile(r"\b(css|styling|theme|dark mode|glassmorphic|glassmorphism|layout|tailwind|html|ui\b|frontend|template|dialog|modal|website|landing page)\b", re.IGNORECASE), "VISU", 0.80),
 
     # Requirements, Architecture & Specifications
-    (re.compile(r"\b(spec|specs|specification|architecture|architect|design doc|rfc\b|acceptance criteria|requirements?|system design)\b", re.IGNORECASE), "REQM", 0.85),
+    (re.compile(r"\b(spec|specs|specification|architecture|architect|design doc|rfc\b|acceptance criteria|requirements?|system design|brainstorm|spike|poc\b|benchmark|benchmarks)\b", re.IGNORECASE), "REQM", 0.85),
 
     # Marketing & Positioning
     (re.compile(r"\b(marketing|press release|social media|pitch|positioning|gtm\b|campaign|outreach|launch post)\b", re.IGNORECASE), "MKTG", 0.85),
@@ -126,14 +126,14 @@ _CLASSIFICATION_RULES: list[tuple[re.Pattern, str, float]] = [
     (re.compile(r"\b(docs|documentation|readme|guide|runbook|retrospective|tutorial|handbook)\b", re.IGNORECASE), "COMM", 0.80),
 
     # Product Management
-    (re.compile(r"\b(product|roadmap|milestone|backlog|epic|kpi|okr|prioritiz|sprint goal)\b", re.IGNORECASE), "PROD", 0.85),
+    (re.compile(r"\b(product|roadmap|milestone|backlog|epic|kpi|okr|prioritiz|sprint goal|release|version|bump|changelog)\b", re.IGNORECASE), "PROD", 0.85),
 
     # Business Analysis
     (re.compile(r"\b(business analysis|feasibility|stakeholder|roi\b|cost benefit|workflow analysis)\b", re.IGNORECASE), "BUSA", 0.80),
 
     # Core Software Programming / Development
-    (re.compile(r"\b(fix|bug|refactor|implement|code|coding|function|class|method|algorithm|concurrency|thread|async|mutex|race condition|parse|parser|compiler|cli\b|backend|api\b|endpoint|module|subsystem|dispatch)\b", re.IGNORECASE), "PROG", 0.75),
-    (re.compile(r"\b(feat\(|fix\(|chore\(|def |async def |class |import )\b", re.IGNORECASE), "PROG", 0.70),
+    (re.compile(r"\b(fix|bug|refactor|implement|code|coding|function|class|method|algorithm|concurrency|thread|async|mutex|race condition|parse|parser|compiler|cli\b|backend|api\b|endpoint|module|subsystem|dispatch|migrate|remediation)\b", re.IGNORECASE), "PROG", 0.75),
+    (re.compile(r"\b(feat|fix|chore|refactor|perf|build|ci)[:(]|\b(def|async def|class|import)\b", re.IGNORECASE), "PROG", 0.70),
 ]
 
 
