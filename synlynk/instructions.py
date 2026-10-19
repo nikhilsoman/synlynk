@@ -90,6 +90,91 @@ def render_lifecycle_checkpoint_section() -> str:
     )
 
 
+# Reload-tier model for generated instruction bodies (gh:#2284).
+#
+# Session-tier harnesses (Claude/Codex) load instructions once per session, so
+# they get the full SOP bodies inlined. Per-turn harnesses (Agy/Grok) reload
+# instructions every turn, so they get a lean core plus a load-on-demand SOP
+# index pointing at AI_INSTRUCTIONS.md instead of every inlined SOP body.
+# run_parity_remediation() (parity.py) and the SOP-fence repair path
+# (probe._repair_sops_only, behind `synlynk roles --fix`) must resolve through
+# this same logic so they never re-inflate a deliberately lean file.
+
+RELOAD_TIER_SESSION = "session"
+RELOAD_TIER_PER_TURN = "per-turn"
+
+RELOAD_TIER_BY_HARNESS = {
+    "claude": RELOAD_TIER_SESSION,
+    "codex": RELOAD_TIER_SESSION,
+    "agy": RELOAD_TIER_PER_TURN,
+    "grok": RELOAD_TIER_PER_TURN,
+}
+
+RELOAD_TIER_BY_FILE = {
+    "CLAUDE.md": RELOAD_TIER_SESSION,
+    "AGENTS.md": RELOAD_TIER_SESSION,
+    "GEMINI.md": RELOAD_TIER_PER_TURN,
+    "GROK.md": RELOAD_TIER_PER_TURN,
+}
+
+
+def resolve_file_reload_tier(name: str) -> str:
+    """Return the reload tier ("session" or "per-turn") for a target file or harness.
+
+    Accepts directive file names ("GEMINI.md"), harness names ("agy"), or
+    paths. Unknown names default to the session tier (full bodies), which
+    preserves the pre-tiering behaviour for future harnesses/files.
+    """
+    key = (name or "").strip()
+    base = os.path.basename(key)
+    if base in RELOAD_TIER_BY_FILE:
+        return RELOAD_TIER_BY_FILE[base]
+    lowered = base.lower()
+    for fname, tier in RELOAD_TIER_BY_FILE.items():
+        if fname.lower() == lowered:
+            return tier
+    if lowered in RELOAD_TIER_BY_HARNESS:
+        return RELOAD_TIER_BY_HARNESS[lowered]
+    return RELOAD_TIER_SESSION
+
+
+def _sop_index_headers() -> list:
+    """Return the SOP section headers, derived from SOP_BLOCKS to stay in sync."""
+    headers = []
+    for block in SOP_BLOCKS:
+        lines = (block.strip().splitlines() or [""])
+        if lines[0].strip().startswith("## ") and lines[0].strip() not in headers:
+            headers.append(lines[0].strip())
+    return headers
+
+
+def sop_body_for_reload_tier(tier: str) -> str:
+    """Return the SOP fence body for a reload tier.
+
+    Session tier returns the full untiered SOP bodies. Per-turn tier returns
+    the lean load-on-demand index (headers only, full text stays in
+    AI_INSTRUCTIONS.md).
+    """
+    if tier == RELOAD_TIER_PER_TURN:
+        lines = [
+            "## SOP Index (load on demand)",
+            "",
+            "This harness reloads instructions every turn: keep this file lean. "
+            "Do not inline the full SOP bodies here — they live in `AI_INSTRUCTIONS.md`. "
+            "Load a section only when its trigger applies:",
+            "",
+        ]
+        for header in _sop_index_headers():
+            lines.append(f"- {header}")
+        return "\n".join(lines) + "\n"
+    return "\n\n".join(SOP_BLOCKS)
+
+
+def sop_body_for_file(name: str) -> str:
+    """Return the correctly-tiered SOP fence body for a target file or harness."""
+    return sop_body_for_reload_tier(resolve_file_reload_tier(name))
+
+
 def _generate_ai_context_files(arch_context: str, git_summary: str) -> None:
     """Appends a context snapshot section to CLAUDE.md, GEMINI.md, AGENTS.md.
     Creates files if absent. Never overwrites existing content."""
