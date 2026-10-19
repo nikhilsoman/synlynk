@@ -2654,5 +2654,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2434 \u2014 Phase 2A Historical Capability Backfill & SFIA Taxonomy Expansion (PR #2434, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2434.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-19) - PR #2434\n- Merged improvements and fixes for PR #2434."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/413-pr2435-synaptic-ai-capability-index-standalone-.md",
+    "title": "PR #2435 \u2014 Synaptic AI Capability Index standalone web service & preflight routing skill",
+    "author": "nikhilsoman",
+    "date": "2026-10-19",
+    "pr": "#2435",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2435."
+    ],
+    "tweet": "\ud83d\ude80 PR #2435 \u2014 Synaptic AI Capability Index standalone web service & preflight routing skill (PR #2435, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2435.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-19) - PR #2435\n- Merged improvements and fixes for PR #2435."
   }
 ]
