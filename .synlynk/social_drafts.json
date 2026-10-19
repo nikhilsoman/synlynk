@@ -2670,5 +2670,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2435 \u2014 Synaptic AI Capability Index standalone web service & preflight routing skill (PR #2435, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2435.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-19) - PR #2435\n- Merged improvements and fixes for PR #2435."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/414-pr2437-remediate-roadmap-state-drift.md",
+    "title": "PR #2437 \u2014 remediate roadmap state drift",
+    "author": "nikhilsoman",
+    "date": "2026-10-19",
+    "pr": "#2437",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2437."
+    ],
+    "tweet": "\ud83d\ude80 PR #2437 \u2014 remediate roadmap state drift (PR #2437, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2437.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-19) - PR #2437\n- Merged improvements and fixes for PR #2437."
   }
 ]

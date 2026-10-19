@@ -490,6 +490,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [411](./411-pr2433-add-autonomy-control-plane-design.md) | PR #2433 — add autonomy control-plane design | [#2433](https://github.com/nikhilsoman/synlynk/pull/2433) | 2026-10-19 |
 | [412](./412-pr2434-phase-2a-historical-capability-backfill-.md) | PR #2434 — Phase 2A Historical Capability Backfill & SFIA Taxonomy Expansion | [#2434](https://github.com/nikhilsoman/synlynk/pull/2434) | 2026-10-19 |
 | [413](./413-pr2435-synaptic-ai-capability-index-standalone-.md) | PR #2435 — Synaptic AI Capability Index standalone web service & preflight routing skill | [#2435](https://github.com/nikhilsoman/synlynk/pull/2435) | 2026-10-19 |
+| [414](./414-pr2437-remediate-roadmap-state-drift.md) | PR #2437 — remediate roadmap state drift | [#2437](https://github.com/nikhilsoman/synlynk/pull/2437) | 2026-10-19 |
 
 ## Per-PR Post Template
 
