@@ -2558,5 +2558,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2424 \u2014 add VS Code extension marketplace publishing and account setup guide (PR #2424, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2424.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-19) - PR #2424\n- Merged improvements and fixes for PR #2424."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/407-pr2428-support-grok-headless-dispatch-codex-ver.md",
+    "title": "PR #2428 \u2014 support grok headless dispatch, codex verifier preference, and panel bytes handling",
+    "author": "nikhilsoman",
+    "date": "2026-10-19",
+    "pr": "#2428",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2428."
+    ],
+    "tweet": "\ud83d\ude80 PR #2428 \u2014 support grok headless dispatch, codex verifier preference, and panel bytes handling (PR #2428, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2428.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-19) - PR #2428\n- Merged improvements and fixes for PR #2428."
   }
 ]
