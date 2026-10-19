@@ -32,7 +32,7 @@
   - `classify_task_sfia(text: str) -> tuple[str, str, float]` returning `(code, domain, confidence)`.
   - `get_sfia_name(code: str) -> str`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_sfia.py
@@ -78,10 +78,10 @@ def test_classify_unknown_fallback():
     assert conf <= 0.3
 ```
 
-- [ ] **Step 2: Run pytest to ensure test fails**
-- [ ] **Step 3: Implement `synlynk/sfia.py`**
-- [ ] **Step 4: Run pytest and confirm 100% pass**
-- [ ] **Step 5: Commit task with `feat(sfia): add SFIA 8/9 taxonomy classifier module`**
+- [x] **Step 2: Run pytest to ensure test fails**
+- [x] **Step 3: Implement `synlynk/sfia.py`**
+- [x] **Step 4: Run pytest and confirm 100% pass**
+- [x] **Step 5: Commit task with `feat(sfia): add SFIA 8/9 taxonomy classifier module`**
 
 ---
 
@@ -98,7 +98,7 @@ def test_classify_unknown_fallback():
   - `get_active_sfia_disciplines(conn: sqlite3.Connection, threshold: float = 0.01) -> list[str]`
   - `sync_harness_models_window(conn: sqlite3.Connection, lookback_days: int = 30) -> list[dict]`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_capability_window.py
@@ -164,10 +164,10 @@ def test_sync_harness_models_window(test_db):
     assert any(m["model"] == "claude-fable-5" for m in deprecated_models)
 ```
 
-- [ ] **Step 2: Run pytest to ensure test fails**
-- [ ] **Step 3: Implement `synlynk/capability_window.py`**
-- [ ] **Step 4: Run pytest and confirm 100% pass**
-- [ ] **Step 5: Commit task with `feat(capability): add dynamic 1% attribution filter and model window tracking`**
+- [x] **Step 2: Run pytest to ensure test fails**
+- [x] **Step 3: Implement `synlynk/capability_window.py`**
+- [x] **Step 4: Run pytest and confirm 100% pass**
+- [x] **Step 5: Commit task with `feat(capability): add dynamic 1% attribution filter and model window tracking`**
 
 ---
 
@@ -185,7 +185,7 @@ def test_sync_harness_models_window(test_db):
   - Updates `capability_ratings` table with organic multi-vendor quality, review cycle, and cost-per-verified-fix metrics.
   - Prints formatted summary report of backfilled disciplines and models.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_capability_backfill.py
@@ -201,10 +201,10 @@ def test_backfill_upserts_capability_ratings(tmp_path):
     pass
 ```
 
-- [ ] **Step 2: Run pytest to ensure test fails**
-- [ ] **Step 3: Implement `synlynk/capability_backfill.py` and register in `synlynk/cli.py`**
-- [ ] **Step 4: Run pytest and confirm 100% pass**
-- [ ] **Step 5: Commit task with `feat(cli): add synlynk capability backfill command`**
+- [x] **Step 2: Run pytest to ensure test fails**
+- [x] **Step 3: Implement `synlynk/capability_backfill.py` and register in `synlynk/cli.py`**
+- [x] **Step 4: Run pytest and confirm 100% pass**
+- [x] **Step 5: Commit task with `feat(cli): add synlynk capability backfill command`**
 
 ---
 
@@ -214,7 +214,7 @@ def test_backfill_upserts_capability_ratings(tmp_path):
 - Test: `tests/test_capability_e2e.py`
 - Run live dry-run command: `synlynk capability backfill --dry-run`
 
-- [ ] **Step 1: Run comprehensive capability test suite (`pytest tests/test_capability*.py tests/test_sfia.py`)**
-- [ ] **Step 2: Execute `synlynk capability backfill --dry-run` against production `state.db`**
-- [ ] **Step 3: Verify that all disciplines with $\ge 1\%$ volume and models active within 30 days are reported**
-- [ ] **Step 4: Record verification evidence in devlog**
+- [x] **Step 1: Run comprehensive capability test suite (`pytest tests/test_capability*.py tests/test_sfia.py`)**
+- [x] **Step 2: Execute `synlynk capability backfill --dry-run` against production `state.db`**
+- [x] **Step 3: Verify that all disciplines with $\ge 1\%$ volume and models active within 30 days are reported**
+- [x] **Step 4: Record verification evidence in devlog**
