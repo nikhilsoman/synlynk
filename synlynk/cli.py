@@ -1846,6 +1846,37 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         help="Apply proposed routing changes to .synlynk/policy.json",
     )
 
+    backfill_parser = capability_sub.add_parser(
+        "backfill",
+        help="Classify historical tasks into Open SFIA taxonomy and sync multi-model window",
+    )
+    backfill_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        dest="dry_run",
+        help="Preview SFIA mappings, attribution, and model status without modifying database",
+    )
+    backfill_parser.add_argument(
+        "--force",
+        action="store_true",
+        dest="force",
+        help="Re-classify ratings even if already assigned an SFIA code",
+    )
+    backfill_parser.add_argument(
+        "--min-sample",
+        type=int,
+        default=5,
+        dest="min_sample",
+        help="Minimum sample size floor before active status is reported (default: 5)",
+    )
+    backfill_parser.add_argument(
+        "--lookback-days",
+        type=int,
+        default=30,
+        dest="lookback_days",
+        help="Sliding window lookback period in days for active models (default: 30)",
+    )
+
     instructions_parser = subparsers.add_parser(
         "instructions", help="Manage synlynk instruction files across AI tools"
     )
@@ -3150,6 +3181,14 @@ def main(argv=None) -> None:
             cmd_capability_report(
                 as_json=getattr(args, "as_json", False),
                 apply=getattr(args, "apply", False),
+            )
+        elif args.capability_action == "backfill":
+            from synlynk.capability_backfill import cmd_capability_backfill
+            cmd_capability_backfill(
+                dry_run=getattr(args, "dry_run", False),
+                force=getattr(args, "force", False),
+                min_sample=getattr(args, "min_sample", 5),
+                lookback_days=getattr(args, "lookback_days", 30),
             )
     elif args.command == "instructions":
         action = getattr(args, "instructions_action", None)
