@@ -1877,6 +1877,47 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         help="Sliding window lookback period in days for active models (default: 30)",
     )
 
+    pack_parser = capability_sub.add_parser(
+        "export-pack",
+        help="Export verifiable capability pack snapshot for edge and preflight routing",
+    )
+    pack_parser.add_argument(
+        "--output",
+        dest="output",
+        help="Target JSON file path for exported capability pack (defaults to stdout)",
+    )
+    pack_parser.add_argument(
+        "--min-sample",
+        type=int,
+        default=5,
+        dest="min_sample",
+        help="Minimum sample size floor before active status is reported (default: 5)",
+    )
+
+    preflight_parser = subparsers.add_parser(
+        "preflight",
+        help="Evaluate task prompt and recommend optimal harness/model with empirical trade-offs",
+    )
+    preflight_parser.add_argument("prompt", help="Natural language prompt or task description")
+    preflight_parser.add_argument(
+        "--optimize-for",
+        choices=["balanced", "quality", "cost", "quota"],
+        default="balanced",
+        dest="optimize_for",
+        help="Optimization preference (balanced, quality, cost, quota)",
+    )
+    preflight_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="Output raw pre-flight recommendation JSON",
+    )
+    preflight_parser.add_argument(
+        "--pack",
+        dest="pack_path",
+        help="Path to custom capability pack snapshot JSON file",
+    )
+
     instructions_parser = subparsers.add_parser(
         "instructions", help="Manage synlynk instruction files across AI tools"
     )
@@ -3190,6 +3231,23 @@ def main(argv=None) -> None:
                 min_sample=getattr(args, "min_sample", 5),
                 lookback_days=getattr(args, "lookback_days", 30),
             )
+        elif args.capability_action == "export-pack":
+            from synlynk.capability_pack import run_capability_pack_export
+            from synlynk import _get_db
+            conn = _get_db()
+            run_capability_pack_export(
+                conn,
+                output_path=getattr(args, "output", None),
+                min_sample=getattr(args, "min_sample", 5),
+            )
+    elif args.command == "preflight":
+        from synlynk.preflight import cmd_preflight
+        cmd_preflight(
+            prompt=args.prompt,
+            optimize_for=getattr(args, "optimize_for", "balanced"),
+            as_json=getattr(args, "as_json", False),
+            pack_path=getattr(args, "pack_path", None),
+        )
     elif args.command == "instructions":
         action = getattr(args, "instructions_action", None)
         if action == "status" or action is None:
