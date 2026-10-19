@@ -493,6 +493,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [414](./414-pr2437-remediate-roadmap-state-drift.md) | PR #2437 — remediate roadmap state drift | [#2437](https://github.com/nikhilsoman/synlynk/pull/2437) | 2026-10-19 |
 | [415](./415-pr2439-eliminate-daemon-starter-lock-deadlock.md) | PR #2439 — eliminate daemon starter lock deadlock | [#2439](https://github.com/nikhilsoman/synlynk/pull/2439) | 2026-10-19 |
 | [416](./416-pr2440-fix-gh-2284-synlynk-instructions-py-tier.md) | PR #2440 — Fix gh:#2284: synlynk/instructions.py tiers its gene (job-277c2bf3) | [#2440](https://github.com/nikhilsoman/synlynk/pull/2440) | 2026-10-19 |
+| [417](./417-pr2443-fix-gh-2441-harness-models-catalog-corru.md) | PR #2443 — Fix gh:#2441: harness_models catalog corruption caus (job-8d2eb713) | [#2443](https://github.com/nikhilsoman/synlynk/pull/2443) | 2026-10-19 |
 
 ## Per-PR Post Template
 

@@ -2718,5 +2718,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2440 \u2014 Fix gh:#2284: synlynk/instructions.py tiers its gene (job-277c2bf3) (PR #2440, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2440.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-19) - PR #2440\n- Merged improvements and fixes for PR #2440."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/417-pr2443-fix-gh-2441-harness-models-catalog-corru.md",
+    "title": "PR #2443 \u2014 Fix gh:#2441: harness_models catalog corruption caus (job-8d2eb713)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-19",
+    "pr": "#2443",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2443."
+    ],
+    "tweet": "\ud83d\ude80 PR #2443 \u2014 Fix gh:#2441: harness_models catalog corruption caus (job-8d2eb713) (PR #2443, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2443.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-19) - PR #2443\n- Merged improvements and fixes for PR #2443."
   }
 ]
