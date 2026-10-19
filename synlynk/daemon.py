@@ -276,6 +276,16 @@ class WatchDaemon:
                 print(self._already_running_message)
                 return
         try:
+            # A starter lock only serializes start() calls.  Preserve the
+            # lifetime lock check so a live daemon (including one whose
+            # pidfile has not been observed yet) is never replaced.
+            lifetime_lock_fh = _try_acquire_daemon_lock(
+                _daemon_lock_path(self.pidfile), blocking=False
+            )
+            if lifetime_lock_fh is None:
+                print(self._already_running_message)
+                return
+            _release_daemon_lock(lifetime_lock_fh)
             if self._is_running():
                 print(self._already_running_message)
                 return
