@@ -495,6 +495,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [416](./416-pr2440-fix-gh-2284-synlynk-instructions-py-tier.md) | PR #2440 — Fix gh:#2284: synlynk/instructions.py tiers its gene (job-277c2bf3) | [#2440](https://github.com/nikhilsoman/synlynk/pull/2440) | 2026-10-19 |
 | [417](./417-pr2443-fix-gh-2441-harness-models-catalog-corru.md) | PR #2443 — Fix gh:#2441: harness_models catalog corruption caus (job-8d2eb713) | [#2443](https://github.com/nikhilsoman/synlynk/pull/2443) | 2026-10-19 |
 | [418](./418-pr2451-formal-sev1-rca-for-live-27-harness-mode.md) | PR #2451 — Formal Sev1 RCA for LIVE-27 harness_models corruption (#2441) | [#2451](https://github.com/nikhilsoman/synlynk/pull/2451) | 2026-10-19 |
+| [419](./419-pr2452-implement-gh-2448-live-27-fix-part-1-of-.md) | PR #2452 — Implement gh:#2448 (LIVE-27 fix, part 1 of 2). Root (job-3eb04cc0) | [#2452](https://github.com/nikhilsoman/synlynk/pull/2452) | 2026-10-19 |
 
 ## Per-PR Post Template
 

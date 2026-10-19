@@ -2750,5 +2750,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2451 \u2014 Formal Sev1 RCA for LIVE-27 harness_models corruption (#2441) (PR #2451, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2451.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-19) - PR #2451\n- Merged improvements and fixes for PR #2451."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/419-pr2452-implement-gh-2448-live-27-fix-part-1-of-.md",
+    "title": "PR #2452 \u2014 Implement gh:#2448 (LIVE-27 fix, part 1 of 2). Root (job-3eb04cc0)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-19",
+    "pr": "#2452",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2452."
+    ],
+    "tweet": "\ud83d\ude80 PR #2452 \u2014 Implement gh:#2448 (LIVE-27 fix, part 1 of 2). Root (job-3eb04cc0) (PR #2452, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2452.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-19) - PR #2452\n- Merged improvements and fixes for PR #2452."
   }
 ]
