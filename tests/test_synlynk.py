@@ -7893,7 +7893,10 @@ def test_install_service_macos(project_dir, monkeypatch):
     assert plistlib.loads(plist.encode())["KeepAlive"] is True
     assert plistlib.loads(plist.encode())["ThrottleInterval"] == 30
     assert plistlib.loads(plist.encode())["EnvironmentVariables"]["SYNLYNK_AUTONOMOUS"] == "1"
-    assert calls[0][0] == ["launchctl", "load", "-w", str(plist_path)]
+    assert calls == [
+        (["launchctl", "unload", str(plist_path)], {"check": False, "capture_output": True}),
+        (["launchctl", "load", "-w", str(plist_path)], {"check": False}),
+    ]
 
 
 def test_install_service_linux(project_dir, monkeypatch):
