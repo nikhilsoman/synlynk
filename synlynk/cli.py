@@ -1894,6 +1894,30 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         help="Minimum sample size floor before active status is reported (default: 5)",
     )
 
+    preflight_parser = subparsers.add_parser(
+        "preflight",
+        help="Evaluate task prompt and recommend optimal harness/model with empirical trade-offs",
+    )
+    preflight_parser.add_argument("prompt", help="Natural language prompt or task description")
+    preflight_parser.add_argument(
+        "--optimize-for",
+        choices=["balanced", "quality", "cost", "quota"],
+        default="balanced",
+        dest="optimize_for",
+        help="Optimization preference (balanced, quality, cost, quota)",
+    )
+    preflight_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="Output raw pre-flight recommendation JSON",
+    )
+    preflight_parser.add_argument(
+        "--pack",
+        dest="pack_path",
+        help="Path to custom capability pack snapshot JSON file",
+    )
+
     instructions_parser = subparsers.add_parser(
         "instructions", help="Manage synlynk instruction files across AI tools"
     )
@@ -3216,6 +3240,14 @@ def main(argv=None) -> None:
                 output_path=getattr(args, "output", None),
                 min_sample=getattr(args, "min_sample", 5),
             )
+    elif args.command == "preflight":
+        from synlynk.preflight import cmd_preflight
+        cmd_preflight(
+            prompt=args.prompt,
+            optimize_for=getattr(args, "optimize_for", "balanced"),
+            as_json=getattr(args, "as_json", False),
+            pack_path=getattr(args, "pack_path", None),
+        )
     elif args.command == "instructions":
         action = getattr(args, "instructions_action", None)
         if action == "status" or action is None:
