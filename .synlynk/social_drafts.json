@@ -2782,5 +2782,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2453 \u2014 Implement gh:#2449 (LIVE-27 fix, part 2 of 2, depend (job-8e07e51b) (PR #2453, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2453.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-19) - PR #2453\n- Merged improvements and fixes for PR #2453."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/421-pr2455-implement-gh-2447-live-27-fix-db-cleanse.md",
+    "title": "PR #2455 \u2014 Implement gh:#2447 (LIVE-27 fix, DB cleanse layer). (job-66e27536)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-19",
+    "pr": "#2455",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2455."
+    ],
+    "tweet": "\ud83d\ude80 PR #2455 \u2014 Implement gh:#2447 (LIVE-27 fix, DB cleanse layer). (job-66e27536) (PR #2455, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2455.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-19) - PR #2455\n- Merged improvements and fixes for PR #2455."
   }
 ]
