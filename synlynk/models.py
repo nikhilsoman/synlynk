@@ -278,6 +278,23 @@ def is_plausible_model_id(model_id: Any) -> bool:
     return True
 
 
+def _curated_model_ids(harness: str, repo_path: Optional[str] = None) -> set[str]:
+    """Return the maintained model allowlist for a harness."""
+    catalog = load_model_catalog(repo_path)
+    allowed = {
+        str(model.get("model_id"))
+        for model in catalog.get("models", [])
+        if model.get("harness", model.get("harness_binding")) == harness
+        and model.get("model_id")
+    }
+    # Tier mappings are also curated catalog entries. This covers harnesses
+    # such as Muse that have a static tier mapping but no model metadata row.
+    for tier_map in catalog.get("tiers", {}).values():
+        if isinstance(tier_map, dict) and tier_map.get(harness):
+            allowed.add(str(tier_map[harness]))
+    return allowed
+
+
 def resolve_tier_model(tier: str, harness: str, repo_path: Optional[str] = None) -> str:
     """Resolve a tier from the persisted discovery catalog, with a fresh-DB seed."""
     from synlynk import _get_db
@@ -285,8 +302,11 @@ def resolve_tier_model(tier: str, harness: str, repo_path: Optional[str] = None)
 
     conn = _get_db()
     active = get_active_harness_models(conn, harness=harness, tier=tier)
-    if active:
-        return active[0]["model_id"]
+    allowlisted = _curated_model_ids(harness, repo_path)
+    for row in active:
+        model_id = row.get("model_id")
+        if is_plausible_model_id(model_id) and model_id in allowlisted:
+            return model_id
 
     # The static catalog is a bootstrap seed only. Once discovery has ever
     # populated this harness, do not resurrect a retired catalog id.
@@ -304,10 +324,11 @@ def resolve_tier_model(tier: str, harness: str, repo_path: Optional[str] = None)
     if discovered:
         harness_rows = get_active_harness_models(conn, harness=harness)
         for row in harness_rows:
-            if is_plausible_model_id(row.get("model_id")):
-                return row["model_id"]
-        # No well-shaped discovery row: fall through to the curated static
-        # fallback below instead of returning a scraped fragment (gh:#2441).
+            model_id = row.get("model_id")
+            if is_plausible_model_id(model_id) and model_id in allowlisted:
+                return model_id
+        # No allowlisted discovery row: fall through to the curated static
+        # fallback below instead of returning a scraped or retired model.
 
     configured = _static_tier_model(tier, harness, repo_path)
     if harness == "agy":
