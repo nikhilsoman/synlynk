@@ -31,7 +31,7 @@
 - Consumes: `synlynk/capability_window.py` (`get_active_sfia_disciplines`, `sync_harness_models_window`), `synlynk/sfia.py` (`SFIA_DISCIPLINES`, `get_sfia_name`).
 - Produces: `export_capability_pack(conn, output_path=None) -> dict` returning complete capability pack JSON matching Spec Section 3.2.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_capability_pack.py
@@ -87,21 +87,21 @@ def test_export_capability_pack_structure(tmp_path):
     assert pack["snapshot_metadata"]["sha256"] is not None
 ```
 
-- [ ] **Step 2: Run pytest to verify failure**
+- [x] **Step 2: Run pytest to verify failure**
 
 Run: `pytest tests/test_capability_pack.py -v`  
 Expected: FAIL with `ModuleNotFoundError: No module named 'synlynk.capability_pack'`
 
-- [ ] **Step 3: Implement `synlynk/capability_pack.py`**
+- [x] **Step 3: Implement `synlynk/capability_pack.py`**
 
 Implement `export_capability_pack`, `generate_pack_metadata`, and wire into `synlynk capability export-pack` CLI.
 
-- [ ] **Step 4: Run pytest and confirm 100% pass**
+- [x] **Step 4: Run pytest and confirm 100% pass**
 
 Run: `pytest tests/test_capability_pack.py -v`  
 Expected: PASS
 
-- [ ] **Step 5: Commit task**
+- [x] **Step 5: Commit task**
 
 `feat(capability): add capability pack snapshot exporter and CLI command`
 
@@ -120,7 +120,7 @@ Expected: PASS
 - Consumes: `synlynk/sfia.py` (`classify_task_sfia`, `get_sfia_name`), `synlynk/capability_pack.py` (`export_capability_pack`).
 - Produces: `evaluate_preflight(prompt, pack, preferences=None) -> dict` returning routing decision (`task_classification`, `recommendations: {primary, failover, budget}`, `quota_advisory`, `cta`).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_preflight.py
@@ -146,22 +146,22 @@ def test_evaluate_preflight_balanced(sample_pack):
     assert res["cta"]["install_cmd"] == "brew install synlynk"
 ```
 
-- [ ] **Step 2: Run pytest to verify failure**
+- [x] **Step 2: Run pytest to verify failure**
 
 Run: `pytest tests/test_preflight.py -v`  
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Implement `synlynk/preflight.py` & register CLI**
+- [x] **Step 3: Implement `synlynk/preflight.py` & register CLI**
 
 Implement `estimate_task_complexity`, `evaluate_preflight`, and `cmd_preflight` in `synlynk/cli.py`.
 Register in `synlynk/taxonomy.py` and run `python3 scripts/generate_command_docs.py`.
 
-- [ ] **Step 4: Run pytest and confirm 100% pass**
+- [x] **Step 4: Run pytest and confirm 100% pass**
 
 Run: `pytest tests/test_preflight.py tests/test_docs_sync.py -v`  
 Expected: PASS
 
-- [ ] **Step 5: Commit task**
+- [x] **Step 5: Commit task**
 
 `feat(preflight): implement universal preflight routing engine and CLI command`
 
@@ -180,7 +180,7 @@ Expected: PASS
 - Consumes: `capability-pack-latest.json` schema.
 - Produces: Standalone responsive web application featuring instant client-side keyword classification, trade-off slider, 4-tier recommendation cards, quota warnings, and conversion CTAs.
 
-- [ ] **Step 1: Write verification test for static assets & contracts**
+- [x] **Step 1: Write verification test for static assets & contracts**
 
 ```python
 # tests/test_oracle_ui.py
@@ -203,21 +203,21 @@ def test_oracle_html_contains_core_elements():
     assert 'brew install synlynk' in html
 ```
 
-- [ ] **Step 2: Run pytest to verify failure**
+- [x] **Step 2: Run pytest to verify failure**
 
 Run: `pytest tests/test_oracle_ui.py -v`  
 Expected: FAIL (files missing)
 
-- [ ] **Step 3: Build `index.html`, `style.css`, and `app.js`**
+- [x] **Step 3: Build `index.html`, `style.css`, and `app.js`**
 
 Implement glassmorphic dark-mode UI with high-contrast accessibility, live prompt classification, instant recommendation cards, responsive layout, and copyable terminal command. Generate `pack-latest.json` from `synlynk capability export-pack`.
 
-- [ ] **Step 4: Run test to verify passes**
+- [x] **Step 4: Run test to verify passes**
 
 Run: `pytest tests/test_oracle_ui.py -v`  
 Expected: PASS
 
-- [ ] **Step 5: Commit task**
+- [x] **Step 5: Commit task**
 
 `feat(web): build standalone interactive Prompt Oracle single-page UI`
 
@@ -236,7 +236,7 @@ Expected: PASS
 - Consumes: Standard Model Context Protocol (MCP) JSON-RPC protocol over `stdio`.
 - Produces: Tools `synlynk_preflight(prompt, optimize_for, available_harnesses)` callable by Cursor, Claude Desktop, and Cline.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_preflight_mcp.py
@@ -252,21 +252,21 @@ def test_preflight_mcp_package_manifest():
     assert "bin" in data
 ```
 
-- [ ] **Step 2: Run pytest to verify failure**
+- [x] **Step 2: Run pytest to verify failure**
 
 Run: `pytest tests/test_preflight_mcp.py -v`  
 Expected: FAIL
 
-- [ ] **Step 3: Implement MCP package and CLI**
+- [x] **Step 3: Implement MCP package and CLI**
 
 Implement lightweight Node.js MCP server exposing tool `synlynk_preflight` with embedded offline fallback pack.
 
-- [ ] **Step 4: Run pytest and confirm pass**
+- [x] **Step 4: Run pytest and confirm pass**
 
 Run: `pytest tests/test_preflight_mcp.py -v`  
 Expected: PASS
 
-- [ ] **Step 5: Commit task**
+- [x] **Step 5: Commit task**
 
 `feat(mcp): create universal @synlynk/preflight-mcp server and CLI runner`
 
@@ -279,22 +279,22 @@ Expected: PASS
 - Modify: `project-docs/devlogs/nikhilsoman.md`
 - Modify: `project-docs/roadmap.md`
 
-- [ ] **Step 1: Run comprehensive capability, preflight, and MCP test suites**
+- [x] **Step 1: Run comprehensive capability, preflight, and MCP test suites**
 
 Run: `pytest tests/test_capability*.py tests/test_sfia.py tests/test_preflight*.py tests/test_oracle_ui.py -v`  
 Expected: 100% PASS
 
-- [ ] **Step 2: Test live CLI command `synlynk preflight` on real task prompts**
+- [x] **Step 2: Test live CLI command `synlynk preflight` on real task prompts**
 
 Run: `synlynk preflight "Refactor database pool to handle async reconnection bursts"`  
 Verify formatted terminal output with SFIA classification, primary, failover, and budget picks.
 
-- [ ] **Step 3: Export production `website/index-oracle/pack-latest.json` from live `state.db`**
+- [x] **Step 3: Export production `website/index-oracle/pack-latest.json` from live `state.db`**
 
 Run: `synlynk capability export-pack --output website/index-oracle/pack-latest.json`
 
-- [ ] **Step 4: Document in devlog and update roadmap**
+- [x] **Step 4: Document in devlog and update roadmap**
 
-- [ ] **Step 5: Commit task**
+- [x] **Step 5: Commit task**
 
 `chore(release): complete Phase 2B/2C Synaptic AI Capability Index verification`

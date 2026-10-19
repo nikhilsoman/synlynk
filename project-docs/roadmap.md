@@ -351,8 +351,8 @@ Developer Preview Launch: empirical capability routing, thin VS Code client, PyP
 
 - [ ] Phase 1: Substrate Hardening & Hygiene (P0)
   Worktree fleet pruning, state.db vacuum, sentinel 7-day TTL cleanup, and GenericAPIAdapter
-- [ ] Phase 2: Distribution Wedge & Capability Demonstration (P0)
-  VS Code client packaging, empirical capability report multi-model benchmarks, and 3-agent swarm trial
+- [x] Phase 2: Distribution Wedge & Capability Demonstration (P0)
+  VS Code client packaging, empirical capability report multi-model benchmarks, Synaptic AI Capability Index standalone public service (Prompt Oracle, Pre-Flight API, MCP skill), and 3-agent swarm trial.
 - [ ] Phase 3: Release Gate & Launch (P0)
   v1.0.0-rc1 tagging, 4,500+ test suite pass, PyPI release, and milestone synthesis blog
 

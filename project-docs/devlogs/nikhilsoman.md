@@ -1,3 +1,11 @@
+## 2026-10-19 Synaptic AI Capability Index Standalone Public Service & Preflight Skill (`goal-20bb3987`, `story-5eecdf01`, PR #2435) [@agy, @nikhilsoman]
+
+- **Capability Pack Snapshot Generator & CLI Exporter (`synlynk/capability_pack.py`):** Implemented `export_capability_pack()` and `synlynk capability export-pack` CLI. Serializes empirical capability matrix, SFIA 8/9 skill taxonomy, active multi-model catalog window, and quota advisories into a verifiable JSON pack snapshot with SHA-256 integrity hash.
+- **Universal Pre-Flight Routing Engine & CLI (`synlynk/preflight.py`):** Built `evaluate_preflight()`, `estimate_task_complexity()`, and `synlynk preflight "<task>"` CLI. Evaluates free-form task descriptions, identifies SFIA engineering disciplines, and recommends primary, failover, and budget models based on empirical trade-off preferences (`balanced`, `quality`, `cost`, `quota`).
+- **Interactive Prompt Oracle Web App (`website/index-oracle/`):** Created standalone, zero-dependency, glassmorphic single-page application (`index.html`, `style.css`, `app.js`, `pack-latest.json`) featuring instant client-side keyword classification, 4-tier interactive trade-off slider, live recommendation cards, quota alerts, and copyable CLI install CTA.
+- **Universal Pre-Flight MCP Skill (`packages/preflight-mcp/`):** Authored zero-dependency Node.js MCP server exposing tool `synlynk_preflight` for Cursor, Claude Desktop, and Cline, as well as an interactive executable CLI runner `npx @synlynk/preflight-mcp`.
+- **End-to-End Verification Suite:** 188/188 tests passing across capability, SFIA, preflight, UI, and MCP test suites (`tests/test_preflight*.py`, `tests/test_oracle_ui.py`, `tests/test_capability_pack.py`).
+
 ## 2026-10-19 Phase 2A Historical Capability Backfill & SFIA Taxonomy Expansion (`goal-aa48c456`, PR #2430) [@agy, @nikhilsoman]
 
 - **Open SFIA 8/9 Taxonomy Classifier (`synlynk/sfia.py`):** Implemented deterministic classifier and canonical dictionary across 15 skills disciplines (`PROG`, `TEST`, `REQM`, `DBDS`, `VISU`, `ANIM`, `GRAP`, `MUDI`, `SNDD`, `ICDV`, `BUSA`, `MKTG`, `COMM`, `PROD`, `UNAN`). Supported conventional commit prefixes and domain-specific vocabulary.
