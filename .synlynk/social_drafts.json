@@ -2638,5 +2638,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2433 \u2014 add autonomy control-plane design (PR #2433, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2433.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-19) - PR #2433\n- Merged improvements and fixes for PR #2433."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/412-pr2434-phase-2a-historical-capability-backfill-.md",
+    "title": "PR #2434 \u2014 Phase 2A Historical Capability Backfill & SFIA Taxonomy Expansion",
+    "author": "nikhilsoman",
+    "date": "2026-10-19",
+    "pr": "#2434",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2434."
+    ],
+    "tweet": "\ud83d\ude80 PR #2434 \u2014 Phase 2A Historical Capability Backfill & SFIA Taxonomy Expansion (PR #2434, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2434.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-19) - PR #2434\n- Merged improvements and fixes for PR #2434."
   }
 ]

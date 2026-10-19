@@ -488,6 +488,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [409](./409-pr2430-add-real-capability-cost-metrics-archite.md) | PR #2430 — add real capability & cost metrics architectural design and decide panel record | [#2430](https://github.com/nikhilsoman/synlynk/pull/2430) | 2026-10-19 |
 | [410](./410-pr2432-add-synaptic-ai-capability-index-gtm-des.md) | PR #2432 — add Synaptic AI Capability Index GTM design spec and decide record | [#2432](https://github.com/nikhilsoman/synlynk/pull/2432) | 2026-10-19 |
 | [411](./411-pr2433-add-autonomy-control-plane-design.md) | PR #2433 — add autonomy control-plane design | [#2433](https://github.com/nikhilsoman/synlynk/pull/2433) | 2026-10-19 |
+| [412](./412-pr2434-phase-2a-historical-capability-backfill-.md) | PR #2434 — Phase 2A Historical Capability Backfill & SFIA Taxonomy Expansion | [#2434](https://github.com/nikhilsoman/synlynk/pull/2434) | 2026-10-19 |
 
 ## Per-PR Post Template
 
