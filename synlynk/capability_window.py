@@ -135,21 +135,88 @@ def sync_harness_models_window(
             observed[key] = (min(old_fs, fs), max(old_ls, ls))
 
     # Insert newly observed models into harness_models. Values scraped from
-    # execution logs can be source-code fragments rather than model ids
-    # (gh:#2441); reject anything that is not shaped like a real model id.
-    from synlynk.models import is_plausible_model_id
+    # execution logs can be source-code fragments or retired model ids. The
+    # catalog is the authority for which ids may be learned from historical
+    # execution data (gh:#2448).
+    from synlynk.models import is_plausible_model_id, load_model_catalog
+
+    catalog = load_model_catalog()
+    catalog_models: dict[str, set[str]] = {}
+    for model in catalog.get("models", []):
+        if not isinstance(model, dict):
+            continue
+        harness_name = model.get("harness", model.get("harness_binding"))
+        model_id = model.get("model_id")
+        if isinstance(harness_name, str) and isinstance(model_id, str):
+            catalog_models.setdefault(harness_name, set()).add(model_id)
+    for tier in catalog.get("tiers", {}).values():
+        if not isinstance(tier, dict):
+            continue
+        for harness_name, model_id in tier.items():
+            if isinstance(harness_name, str) and isinstance(model_id, str):
+                catalog_models.setdefault(harness_name, set()).add(model_id)
+
+    def parse_timestamp(value: Any) -> datetime.datetime:
+        if isinstance(value, datetime.datetime):
+            parsed = value
+        else:
+            text = str(value or "")
+            if text.endswith("Z"):
+                text = text[:-1] + "+00:00"
+            try:
+                parsed = datetime.datetime.fromisoformat(text)
+            except ValueError:
+                parsed = datetime.datetime.now(datetime.timezone.utc)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+        return parsed.astimezone(datetime.timezone.utc)
+
+    # Keep execution-log discoveries behind authoritative catalog/config/CLI
+    # discoveries in the timestamp-based ordering used by older readers. The
+    # explicit set also prevents a batch from receiving identical timestamps.
+    existing_timestamps = {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT discovered_at FROM harness_models WHERE discovered_at IS NOT NULL"
+        ).fetchall()
+    }
+    authoritative_timestamps = [
+        parse_timestamp(row[0])
+        for row in conn.execute(
+            """
+            SELECT discovered_at
+            FROM harness_models
+            WHERE discovered_at IS NOT NULL
+              AND (
+                discovery_source IN ('curated', 'curated_fallback', 'config_file')
+                OR discovery_source LIKE 'cli:%'
+              )
+            """
+        ).fetchall()
+    ]
+    authoritative_floor = min(authoritative_timestamps, default=None)
+    timestamp_step = datetime.timedelta(microseconds=1)
 
     for (harness, model), (first_seen, last_seen) in observed.items():
-        if not is_plausible_model_id(model):
+        if not is_plausible_model_id(model) or model not in catalog_models.get(harness, set()):
             continue
+        discovered_at = parse_timestamp(first_seen)
+        if authoritative_floor is not None and discovered_at >= authoritative_floor:
+            discovered_at = authoritative_floor - timestamp_step
+        discovered_at_text = discovered_at.isoformat(timespec="microseconds")
+        while discovered_at_text in existing_timestamps:
+            discovered_at -= timestamp_step
+            discovered_at_text = discovered_at.isoformat(timespec="microseconds")
+        existing_timestamps.add(discovered_at_text)
         try:
             conn.execute("""
                 INSERT INTO harness_models (
-                    harness_name, model_id, first_seen_at, last_seen_at, status, discovery_source
-                ) VALUES (?, ?, ?, ?, 'active', 'execution_log')
+                    harness_name, model_id, first_seen_at, last_seen_at, status,
+                    discovery_source, discovered_at
+                ) VALUES (?, ?, ?, ?, 'active', 'execution_log', ?)
                 ON CONFLICT(harness_name, model_id, provider) DO UPDATE SET
                     last_seen_at = MAX(harness_models.last_seen_at, excluded.last_seen_at)
-            """, (harness, model, first_seen, last_seen))
+            """, (harness, model, first_seen, last_seen, discovered_at_text))
         except sqlite3.OperationalError:
             pass
 
