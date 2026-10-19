@@ -125,6 +125,9 @@ Public commercial launch, P2P Agent Compute Rental, Tokq Decentralized Intellige
 
 Relay → community server · cross-workgroup epics · agent entitlements
 
+- [ ] Fast follow: GOVERNS autonomy control plane & evidence-gated swarm scale (P1) <!-- story:story-ee4529d9 -->
+  Start after synthesized strategic roadmap epic #2384 completes and v1.0.0-preview Phase 3 release gate resolves. This is post-preview, not launch-blocking. Design: docs/superpowers/specs/2026-10-18-governs-autonomy-control-plane-design.md; tracking: #2412, substrate dependency #2413.
+
 
 ## v1.2.0 — Enterprise Workspace [planned] (target: Q1 2027)
 
