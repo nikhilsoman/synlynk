@@ -322,7 +322,7 @@ def resolve_tier_model(tier: str, harness: str, repo_path: Optional[str] = None)
             if "no such table: harness_models" not in str(exc):
                 raise
     if discovered:
-        harness_rows = get_active_harness_models(conn, harness=harness)
+        harness_rows = get_active_harness_models(conn, harness=harness, tier=tier)
         for row in harness_rows:
             model_id = row.get("model_id")
             if is_plausible_model_id(model_id) and model_id in allowlisted:
