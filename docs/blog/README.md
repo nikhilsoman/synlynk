@@ -492,6 +492,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [413](./413-pr2435-synaptic-ai-capability-index-standalone-.md) | PR #2435 — Synaptic AI Capability Index standalone web service & preflight routing skill | [#2435](https://github.com/nikhilsoman/synlynk/pull/2435) | 2026-10-19 |
 | [414](./414-pr2437-remediate-roadmap-state-drift.md) | PR #2437 — remediate roadmap state drift | [#2437](https://github.com/nikhilsoman/synlynk/pull/2437) | 2026-10-19 |
 | [415](./415-pr2439-eliminate-daemon-starter-lock-deadlock.md) | PR #2439 — eliminate daemon starter lock deadlock | [#2439](https://github.com/nikhilsoman/synlynk/pull/2439) | 2026-10-19 |
+| [416](./416-pr2440-fix-gh-2284-synlynk-instructions-py-tier.md) | PR #2440 — Fix gh:#2284: synlynk/instructions.py tiers its gene (job-277c2bf3) | [#2440](https://github.com/nikhilsoman/synlynk/pull/2440) | 2026-10-19 |
 
 ## Per-PR Post Template
 

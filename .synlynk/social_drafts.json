@@ -2702,5 +2702,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2439 \u2014 eliminate daemon starter lock deadlock (PR #2439, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2439.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-19) - PR #2439\n- Merged improvements and fixes for PR #2439."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/416-pr2440-fix-gh-2284-synlynk-instructions-py-tier.md",
+    "title": "PR #2440 \u2014 Fix gh:#2284: synlynk/instructions.py tiers its gene (job-277c2bf3)",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-19",
+    "pr": "#2440",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2440."
+    ],
+    "tweet": "\ud83d\ude80 PR #2440 \u2014 Fix gh:#2284: synlynk/instructions.py tiers its gene (job-277c2bf3) (PR #2440, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2440.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-19) - PR #2440\n- Merged improvements and fixes for PR #2440."
   }
 ]
