@@ -2734,5 +2734,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2443 \u2014 Fix gh:#2441: harness_models catalog corruption caus (job-8d2eb713) (PR #2443, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2443.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-19) - PR #2443\n- Merged improvements and fixes for PR #2443."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/418-pr2451-formal-sev1-rca-for-live-27-harness-mode.md",
+    "title": "PR #2451 \u2014 Formal Sev1 RCA for LIVE-27 harness_models corruption (#2441)",
+    "author": "nikhilsoman",
+    "date": "2026-10-19",
+    "pr": "#2451",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2451."
+    ],
+    "tweet": "\ud83d\ude80 PR #2451 \u2014 Formal Sev1 RCA for LIVE-27 harness_models corruption (#2441) (PR #2451, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2451.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-19) - PR #2451\n- Merged improvements and fixes for PR #2451."
   }
 ]
