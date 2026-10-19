@@ -1,9 +1,9 @@
-# Real Capability & Cost Metrics: Dynamic Model Catalog Window, Open SFIA (>1% Attribution) Taxonomy, and Public Repo Capability Crawler
+# Real Capability & Cost Metrics: Dynamic Model Catalog Window, Open SFIA (>1% Attribution) Taxonomy, Public Repo Crawler, and AV-Style Definition Packs
 
 **Design Specification · GOVERNS Goal: `goal-aa48c456`**  
 **Authors:** Synlynk Architecture Working Group & Fleet Engineering  
 **Date:** 2026-10-19  
-**Status:** Approved by Decide Panel (`dec-026ffa30`)
+**Status:** Approved by Decide Panels (`dec-026ffa30` & `dec-26ffa31`)
 
 ---
 
@@ -15,13 +15,15 @@ Current software engineering benchmarks (SWE-bench, HumanEval, BigCode) test mod
 2. **Catalog Stagnation:** Models evolve continuously. Hardcoded lists of 1–2 flagship models hide the cost-efficiency of fast-tier models (`o4-mini`, `gemini-3.8-flash`, `grok-code-fast`) and zero-cost on-device inference (`local` oMLX).
 3. **Zero Economic Signal:** Synthetic benchmarks do not meter real token in/out consumption, real API dollar spend, real git merge conflicts, real CI execution time, or real review iterations.
 4. **Self-Attestation Inflation:** Models grading their own output inflate quality scores by up to +45%.
+5. **Local Machine & Personal Quota Contention:** Continuous background calibration running locally starves developer hardware and consumes personal interactive subscription rate limits (e.g. Claude weekly limits).
 
 ### Architectural Solution
-This specification establishes a permanent architectural subsystem to **"keep the capability & cost metric real"**, driven by four core pillars:
+This specification establishes an autonomous, cloud-offloaded subsystem to **"keep the capability & cost metric real"**, driven by five core architectural pillars:
 1. **Dynamic Model Catalog Sliding Window:** Track all models discoverable via `/model` calls across public frontiers (OpenAI Codex, Anthropic Claude, Google AGY, xAI Grok, Meta Muse) and local oMLX, with active 30-day retention.
 2. **Open SFIA 8/9 Taxonomy:** Expand beyond core software coding into adjacent creative, multimedia, audio/video, VR, and business operations disciplines.
 3. **$\ge 1\%$ Task Attribution Sliding Window:** Any SFIA discipline accounting for at least 1% of task volume dynamically enters the active capability rating matrix.
-4. **Public Repo Contribution Program (Capability Crawler & Ranker):** Cyclic background execution engine striping tasks across real public repositories to measure authentic tokens, costs, and CI/git friction.
+4. **Swarm-Driven Public Repo Crawler & Ranker:** Standalone Docker container running off AWS EC2 Spot instances with a dedicated budget, acting as the inaugural workload for Synlynk Swarm execution mode.
+5. **Antivirus-Style Definition Pack Distribution:** Immutable, cryptographically signed index update packs (`capability-pack-YYYY-MM-DD.json.gz`) distributed via CDN edge mirrors for zero-friction client updates (`synlynk capability update`).
 
 ---
 
@@ -102,53 +104,112 @@ $$\text{Attribution Share}(S_i) = \frac{\text{Dispatched Tasks with Skill } S_i 
 
 ---
 
-## 5. Pillar 4: Public Repo Contribution Program (Capability Crawler & Ranker)
+## 5. Pillar 4: Swarm-Driven Public Repo Crawler (AWS Spot Docker Deployment)
 
-### 5.1 The Engine: Moving from Synthetic Prompts to Real Work
-Rather than prompting models with "Write a small Python function demonstrating X", Synlynk deploys a **Capability Crawler & Ranker**:
-- **Capability Crawler:** An autonomous background daemon that pulls open-source tasks from a curated registry of real public repositories (libraries, web apps, tools, documentation).
-- **Task Striping:** Tasks are cloned into isolated temporary worktrees and striped across candidate models:
-  - Task $T_1$ on Repo $R_A$ $\rightarrow$ Dispatched to Model $M_1$ (e.g. `grok-4.5`).
-  - Task $T_1$ on Repo $R_A$ $\rightarrow$ Dispatched to Model $M_2$ (e.g. `gpt-5.6-terra`).
-  - Review & Verification $\rightarrow$ Dispatched to Model $M_3$ (e.g. `claude-fable-5`).
-- **Authentic Telemetry Capture:**
-  - Real token consumption (prompt AST expansion vs. generated code).
-  - Real financial costs (metered down to the fraction of a cent).
-  - Real test execution results (`pytest`, `npm test`, `cargo test`).
-  - Real git friction (merge base diff cleanliness, merge conflicts, rework cycles).
-- **Capability Ranker:** Aggregates empirical task receipts using Bayesian updating into `capability_ratings` in `state.db`.
+### 5.1 Dedicated Cloud Infrastructure & Budget Isolation
+To prevent background calibration loops from competing with user dev machines or exhausting personal subscription quotas:
+- **Dedicated Budget Ledger:** Calibrations are billed against a dedicated corporate/project API allocation (`crawler_budget_usd`), tracked separately from personal developer quotas.
+- **Offloaded Cloud Execution:** The crawler executes exclusively on remote ephemeral compute, freeing local CPU, RAM, and network bandwidth.
+- **AWS Spot Docker Packaging:** The crawler is containerized (`synlynk-crawler:latest`) and runs on AWS EC2 Spot instances (70–90% cost reduction).
+
+### 5.2 Flagship Inaugural Workload for Synlynk Swarm
+The Capability Crawler is designated as the **first official workload operated by Synlynk Swarm execution mode**:
+- **Why Swarm Fits:** Swarm runners (`synlynk swarm dispatch`, `SwarmRunnerDriver`) are designed for fanned-out, embarrassingly parallel, disposable jobs.
+- **Zero State Sharing:** Tasks on Repo A, Repo B, and Repo C operate in orthogonal ephemeral containers with zero shared filesystem state.
+- **Spot Preemption Resilience:** When AWS emits a two-minute spot interruption notice (`SIGTERM`), the driver flushes in-flight task receipts to the central queue, tears down cleanly, and resumes on a fresh spot instance.
 
 ```mermaid
-flowchart LR
-    RepoRegistry["Public Repo Registry\n(Curated Open Source)"] --> Crawler["Synlynk Capability Crawler\n(Cyclic Background Engine)"]
-    Crawler --> Striping["Task Striping Engine\n(Same task across Models)"]
-    Striping --> ModelA["Model A (Codex)"]
-    Striping --> ModelB["Model B (Grok)"]
-    Striping --> ModelC["Model C (AGY)"]
-    ModelA --> IsolatedWT["Isolated Worktree Execution\n(Real Tests, Real Git Diffs)"]
-    ModelB --> IsolatedWT
-    ModelC --> IsolatedWT
-    IsolatedWT --> Verifier["Cross-Vendor Blind Verifier"]
-    Verifier --> Ranker["Synlynk Capability Ranker\n(Bayesian Empirical Updater)"]
-    Ranker --> StateDB[("state.db\n(capability_ratings & costs)")]
-    StateDB --> Report["Public Benchmark Report\n& Dynamic Router"]
+flowchart TD
+    subgraph CloudInfra["AWS Cloud Infrastructure (Dedicated $250/mo Budget)"]
+        SpotMgr["AWS Spot Fleet / ECS"] --> C1["Docker Worker 1\n(Repo A / Codex)"]
+        SpotMgr --> C2["Docker Worker 2\n(Repo A / Grok)"]
+        SpotMgr --> C3["Docker Worker 3\n(Repo B / AGY)"]
+    end
+
+    subgraph SwarmControl["Synlynk Swarm Engine"]
+        SwarmDispatch["synlynk swarm dispatch\n--driver spot-docker"] --> SpotMgr
+        SpotMgr -- "SIGTERM / Heartbeat" --> SwarmStatus["synlynk swarm status"]
+    end
+
+    C1 & C2 & C3 --> Verifier["Cross-Vendor Blind Verifier"]
+    Verifier --> Ranker["Capability Ranker\n(Bayesian Aggregator)"]
+    Ranker --> MasterIndex[("Master Benchmark Index\n(state.db)")]
 ```
 
 ---
 
-## 6. Architecture & Implementation Roadmap
+## 6. Pillar 5: Antivirus-Style Definition Pack Distribution
 
-### 6.1 Database Schema Additions (`state.db`)
-1. `model_sliding_window`: Tracks first seen, last seen, active window status, and complexity tier.
-2. `public_repo_registry`: Registry of target calibration repositories, primary SFIA classifications, and task generators.
-3. `crawler_runs`: Ledger of cyclic crawler task runs, striped model assignments, execution durations, and test suite outcomes.
+### 6.1 The "AV Signature Pack" Distribution Model
+Rather than forcing every Synlynk user to run background crawlers or maintain real-time database replication:
+- **Index Definition Packs:** The master benchmark index is compiled into a compressed, immutable definition pack: `capability-pack-YYYY-MM-DD.json.gz` (typically < 150 KB).
+- **Public CDN Distribution:** Uploaded to high-availability public infrastructure: `https://synlynk.com/api/v1/capability/index` and mirrored as a GitHub Release asset.
+- **Cryptographic Attestation:** Each pack is signed with Synlynk's canonical Ed25519 root release key.
+- **Atomic Local Ingestion:** The client runs `synlynk capability update` (or an ambient background check) to verify the signature, validate the version, and replace the reference matrices atomically without touching local user task history.
 
-### 6.2 CLI Tooling Surface
-- `synlynk capability sweep --sliding-window`: Sweep all models active within the 30-day window.
-- `synlynk capability backfill`: Ingest and reclassify historical `state.db` task completions into the open SFIA taxonomy.
-- `synlynk capability crawl --repos <config>`: Run cyclic contribution crawls against public repos.
-- `synlynk capability rank`: Recompute empirical capability rankings and publish updated matrix.
+```mermaid
+sequenceDiagram
+    participant Cloud as AWS Spot Crawler & Ranker
+    participant CDN as synlynk.com / CDN Edge
+    participant Client as Developer Workstation (synlynk CLI)
+    participant LocalDB as Local state.db
 
-### 6.3 GOVERNS Alignment
-- Parent Goal: `goal-aa48c456` (`Keep the capability & cost metric real`).
-- Decision Record: `dec-026ffa30` (`project-docs/decisions/2026-10-19-real-capability-cost-metrics-dynamic-mod.md`).
+    Cloud->>Cloud: Aggregate Multi-Vendor Tasks
+    Cloud->>Cloud: Build Signed Definition Pack (capability-pack-2026-10-19.json.gz)
+    Cloud->>CDN: Publish to CDN & GitHub Releases
+    Client->>CDN: GET /api/v1/capability/head (ETag Check)
+    CDN-->>Client: New Version Available (ETag: 7f8a9b)
+    Client->>CDN: Download capability-pack-2026-10-19.json.gz
+    Client->>Client: Verify Ed25519 Cryptographic Signature
+    Client->>LocalDB: Atomic Ingest into capability_ratings (signal_source='public_index')
+    Client-->>Client: Dynamic Router Updated (Zero Local API Spend)
+```
+
+---
+
+## 7. Phased Implementation Roadmap
+
+To preserve project velocity and prioritize immediate goals defined by the strategic synthesized roadmap, execution is strictly incremental:
+
+```mermaid
+timeline
+    title Incremental Capability Evolution Roadmap
+    Phase 1 (Shipped) : Big 4 Empirical Sweep : Developer Preview Report : Initial Seeding
+    Phase 2A (Current Sprint) : Historical state.db Backfill : Open SFIA Taxonomy Ingest : 1% Attribution Window
+    Phase 2B (Next Sprint) : Signed AV Definition Pack : CDN Distribution Endpoint : synlynk capability update
+    Phase 3 (Milestone v0.25) : Swarm Spot-Docker Driver : AWS Spot Containerization : Dedicated Cloud Crawl Fleet
+```
+
+### Phase 1: Developer Preview Release (Shipped)
+- Delivered multi-vendor empirical calibration matrix across Codex, Claude, AGY, and Grok.
+- Published canonical report `docs/benchmarks/2026-10-empirical-capability-report.md` (PR #2429).
+- Established baseline calibration data in `state.db`.
+
+### Phase 2A: Historical Organic Backfill & SFIA Expansion (Current Sprint)
+- Implement `synlynk capability backfill` CLI command.
+- Ingest and reclassify 2,700+ historical `state.db` task completions across the open SFIA taxonomy (`PROG`, `TEST`, `REQM`, `ARCH`, `REFN`, `SECR`, `DEPL`, `MUDI`, `GRAP`, `COMM`).
+- Enforce the dynamic 1% task attribution sliding window.
+
+### Phase 2B: Signed Index Distribution Engine (Sprint Follow-up)
+- Implement definition pack builder (`synlynk capability pack-build`).
+- Implement client update command (`synlynk capability update`) with Ed25519 signature verification.
+- Deploy public distribution mirror on `synlynk.com/update` and GitHub Releases.
+
+### Phase 3: Swarm-Operated Cloud Crawler on AWS Spot (Milestone v0.25)
+- Package `synlynk-crawler` Docker container.
+- Implement `DockerSpotRunnerDriver` in `synlynk/runners/` with preemption signal handling.
+- Provision dedicated cloud budget and autonomous cyclic public repo contribution loops.
+
+---
+
+## 8. Governance & Verification Attestation
+
+- **Parent Goal:** [`goal-aa48c456`](file:///Users/nikhilsoman/.synlynk/workspaces/synlynk/state.db) (*Keep the capability & cost metric real*).
+- **Formal Decisions:**
+  - [`dec-026ffa30`](file:///Users/nikhilsoman/dev/synlynk/project-docs/decisions/2026-10-19-real-capability-cost-metrics-dynamic-mod.md) (Core 4 Pillars).
+  - [`dec-26ffa31`](file:///Users/nikhilsoman/dev/synlynk/project-docs/decisions/2026-10-19-autonomous-capability-crawler-index-dist.md) (Cloud Spot Swarm, Dedicated Budget & AV Pack Distribution).
+- **Verification Commands:**
+  ```bash
+  synlynk goal list | grep goal-aa48c456
+  synlynk decide --audit
+  ```

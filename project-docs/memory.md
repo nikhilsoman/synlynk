@@ -7,6 +7,13 @@
 - **Directories:** bin, docs, project-docs, synlynk, tests, website
 
 ## Decisions
+- **2026-10-19 [Autonomous Capability Crawler & Index Distribution: Dedicated Budget, AWS Spot Docker Swarm Driver, and Signed AV-Style Definition Packs]:**
+  Decide Panel (Codex, Grok, AGY) unanimously approved operational extensions linked to `goal-aa48c456`:
+  (1) Dedicated budget ledger (`crawler_budget_usd`) and isolated API keys entirely decoupling continuous crawl execution from local user development and interactive subscription quotas;
+  (2) Public cloud offloading packaging the crawler as `synlynk-crawler:latest` container operating as an official `SwarmRunnerDriver` (`DockerSpotRunnerDriver`) on AWS EC2 Spot instances with graceful SIGTERM checkpointing;
+  (3) Antivirus-style definition pack distribution (`capability-pack-YYYY-MM-DD.json.gz`) via CDN edge mirrors and `synlynk capability update` with Ed25519 cryptographic signature verification, eliminating client-side crawler or DB sync burdens;
+  (4) Designating the Capability Crawler as the inaugural production workload for Synlynk Swarm;
+  (5) Incremental 3-phase roadmap prioritizing immediate v0.24 sprint goals (Historical Backfill & SFIA expansion) before cloud crawler deployment. [@codex, @grok, @agy, @nikhilsoman]
 - **2026-10-19 [Real Capability & Cost Metrics: Dynamic Model Catalog Window, Open SFIA (>1% Attribution) Taxonomy, and Public Repo Capability Crawler]:**
   Decide Panel (Codex, Grok, AGY) established consensus and approved 4-pillar architectural strategy linked to `goal-aa48c456`:
   (1) Dynamic model catalog sliding window tracking all discoverable models via `/model` calls across commercial frontiers (OpenAI, Anthropic, Google, xAI, Meta Muse) and on-device Local oMLX, with active 30-day retention;
