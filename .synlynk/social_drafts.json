@@ -2622,5 +2622,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2432 \u2014 add Synaptic AI Capability Index GTM design spec and decide record (PR #2432, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2432.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-19) - PR #2432\n- Merged improvements and fixes for PR #2432."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/411-pr2433-add-autonomy-control-plane-design.md",
+    "title": "PR #2433 \u2014 add autonomy control-plane design",
+    "author": "nikhilsoman",
+    "date": "2026-10-19",
+    "pr": "#2433",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2433."
+    ],
+    "tweet": "\ud83d\ude80 PR #2433 \u2014 add autonomy control-plane design (PR #2433, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2433.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-19) - PR #2433\n- Merged improvements and fixes for PR #2433."
   }
 ]
