@@ -1523,9 +1523,30 @@ def _repair_sops_only(
     }
     cfg_agents = _repair_config_agents(cfg)
     agent_names = [harness_name] if harness_name else cfg_agents
+    # Shared reload-tier resolution lives in instructions.py (lazy import:
+    # instructions imports this module at top level). Per-turn harnesses get
+    # the lean SOP index, never the full inlined bodies (gh:#2284).
+    from synlynk.instructions import (
+        RELOAD_TIER_PER_TURN,
+        resolve_file_reload_tier,
+        sop_body_for_reload_tier,
+    )
     for agent in agent_names:
         fpath = directive_files.get(agent)
         if not fpath or not os.path.exists(fpath):
+            continue
+        if resolve_file_reload_tier(agent) == RELOAD_TIER_PER_TURN:
+            expected_body = sop_body_for_reload_tier(RELOAD_TIER_PER_TURN)
+            current_body = (_read_harness_fence_body(fpath) or "").strip()
+            if dry_run:
+                if current_body != expected_body.strip():
+                    print(f"    → converge lean SOP index in {fpath}")
+                continue
+            if current_body != expected_body.strip():
+                _upsert_harness_fence(
+                    fpath, harness_version=REPAIR_HARNESS_VERSION, body=expected_body
+                )
+                print(f"    ✓ converge lean SOP index in {fpath}")
             continue
         try:
             full_content = open(fpath, encoding="utf-8").read()
