@@ -7,6 +7,13 @@
 - **Directories:** bin, docs, project-docs, synlynk, tests, website
 
 ## Decisions
+- **2026-10-19 [GTM Strategy: Pre-launching the Synaptic AI Capability Index as a Standalone Public Service, Interactive Prompt Oracle, and Universal Pre-Flight Routing API]:**
+  Decide Panel (Codex, Grok, AGY) unanimously approved pre-launching the Synaptic AI Capability Index as an independent public web service (`index.synlynk.com`), interactive Prompt Oracle, and universal pre-flight routing API (`goal-20bb3987`, `story-5eecdf01`, GitHub #2431):
+  (1) Standalone Product Positioning: Decoupled pre-flight routing solves the developer dilemma on Day 0 with zero repo permissions, zero API keys, and zero setup friction, acting as a high-conversion Trojan Horse for Synlynk orchestration and VS Code extension adoption;
+  (2) Pre-Flight Architecture & Shared JSON Contract: Cloudflare/Fastly edge worker evaluates prompt classification against open SFIA taxonomy in <20ms using daily signed definition packs (`capability-pack-YYYY-MM-DD.json.gz`), powering web UI, REST API (`POST /v1/preflight`), and universal agent skill (Cursor, Claude Desktop, Cline, Windsurf, LangChain);
+  (3) Benchmark Integrity: Strictly preserves empirical PR verification ground truth with transparent cell sample floors ($n \ge 5$ threshold; unmeasured cells labeled explicitly);
+  (4) Privacy-First: Deterministic feature vectors and prompt hashes only; zero raw prompt retention and zero training usage;
+  (5) High-Fidelity Signal Harvesting: Developer interactions capture real-time taxonomy demand distributions, price vs. quality elasticity curves, missing model demand, and crowd-reported quota failover patterns. [@codex, @grok, @agy, @nikhilsoman]
 - **2026-10-19 [Autonomous Capability Crawler & Index Distribution: Dedicated Budget, AWS Spot Docker Swarm Driver, and Signed AV-Style Definition Packs]:**
   Decide Panel (Codex, Grok, AGY) unanimously approved operational extensions linked to `goal-aa48c456`:
   (1) Dedicated budget ledger (`crawler_budget_usd`) and isolated API keys entirely decoupling continuous crawl execution from local user development and interactive subscription quotas;
