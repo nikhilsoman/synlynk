@@ -1,0 +1,21 @@
+{
+  "name": "@synlynk/preflight-mcp",
+  "version": "0.1.0",
+  "description": "Universal Pre-Flight Multi-Agent Routing MCP Server and CLI",
+  "main": "index.js",
+  "bin": {
+    "synlynk-preflight": "./bin/cli.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "synlynk",
+    "preflight",
+    "routing",
+    "ai-agents",
+    "sfia"
+  ],
+  "author": "Synlynk Architecture Working Group <dev@synlynk.com>",
+  "license": "Apache-2.0",
+  "type": "commonjs"
+}
