@@ -2574,5 +2574,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2428 \u2014 support grok headless dispatch, codex verifier preference, and panel bytes handling (PR #2428, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2428.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-19) - PR #2428\n- Merged improvements and fixes for PR #2428."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/408-pr2429-add-developer-preview-multi-vendor-empir.md",
+    "title": "PR #2429 \u2014 add developer preview multi-vendor empirical capability & ROI benchmark report",
+    "author": "nikhilsoman",
+    "date": "2026-10-19",
+    "pr": "#2429",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2429."
+    ],
+    "tweet": "\ud83d\ude80 PR #2429 \u2014 add developer preview multi-vendor empirical capability & ROI benchmark report (PR #2429, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2429.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-19) - PR #2429\n- Merged improvements and fixes for PR #2429."
   }
 ]
