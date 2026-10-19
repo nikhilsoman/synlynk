@@ -1,4 +1,4 @@
-from synlynk.examples import active_items, greet
+from synlynk.examples import active_items, clamp, greet
 
 
 def test_greet_returns_a_friendly_message():
@@ -112,3 +112,15 @@ def test_greet_handles_an_empty_name():
 
 def test_greet_preserves_punctuation_in_a_name():
     assert greet("O'Connor") == "Hello, O'Connor!"
+
+
+def test_clamp_returns_value_when_inside_range():
+    assert clamp(5, 0, 10) == 5
+
+
+def test_clamp_raises_lower_bound_when_value_is_below():
+    assert clamp(-3, 0, 10) == 0
+
+
+def test_clamp_raises_upper_bound_when_value_is_above():
+    assert clamp(42, 0, 10) == 10
