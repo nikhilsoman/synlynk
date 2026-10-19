@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Synaptic AI Capability Index — Interactive Prompt Oracle</title>
+  <meta name="description" content="Instant multi-agent model router based on empirical data from 2,700+ verified production pull requests. Zero friction, zero setup.">
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="blob-bg"></div>
+  
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-icon">⚡</span>
+        <div class="brand-text">
+          <h1>Synaptic AI Capability Index</h1>
+          <span class="badge live-badge">Live Empirical Telemetry</span>
+        </div>
+      </div>
+      <nav class="header-nav">
+        <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noreferrer" class="nav-link">GitHub</a>
+        <a href="https://marketplace.visualstudio.com/items?itemName=synlynk.synlynk-vscode" target="_blank" rel="noreferrer" class="nav-link">VS Code</a>
+        <a href="#install" class="btn btn-sm btn-outline">Install CLI</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <section class="hero-section">
+      <h2 class="hero-title">Which AI Model & Harness Should Run Your Task?</h2>
+      <p class="hero-sub">Instant empirical routing calibrated across 2,700+ real verified software engineering tasks, SFIA 8/9 skill taxonomy, and live quota cliffs.</p>
+    </section>
+
+    <!-- Interactive Prompt Oracle Container -->
+    <section class="oracle-card glass-panel">
+      <div class="input-header">
+        <label for="prompt-input" class="input-label">Enter Task, Prompt, or GitHub Issue Body:</label>
+        <div class="example-chips">
+          <span class="chip-label">Try:</span>
+          <button type="button" class="chip" data-prompt="Refactor database connection pool with async retry and circuit breaker">Async DB Pool</button>
+          <button type="button" class="chip" data-prompt="Write unit tests for user authentication and jwt signature verification">Auth Tests</button>
+          <button type="button" class="chip" data-prompt="Design glassmorphic CSS card layout with accessible high contrast">Glassmorphic CSS</button>
+        </div>
+      </div>
+
+      <div class="textarea-wrapper">
+        <textarea id="prompt-input" rows="3" placeholder="Describe the programming, testing, database, or architectural task you want to execute..."></textarea>
+      </div>
+
+      <div class="classification-strip">
+        <div class="meta-col">
+          <span class="meta-label">SFIA 8/9 Discipline</span>
+          <div id="classification-badge" class="tag tag-discipline">PROG — Software Development</div>
+        </div>
+        <div class="meta-col">
+          <span class="meta-label">Task Complexity</span>
+          <div id="complexity-badge" class="tag tag-complexity">MEDIUM</div>
+        </div>
+        <div class="meta-col slider-col">
+          <div class="slider-header">
+            <span class="meta-label">Optimization Priority:</span>
+            <span id="slider-label" class="slider-value">Balanced (ROI)</span>
+          </div>
+          <input type="range" id="preference-slider" min="0" max="3" value="0" step="1" aria-label="Optimization Preference">
+          <div class="slider-marks">
+            <span>Balanced</span>
+            <span>Max Quality</span>
+            <span>Lowest Cost</span>
+            <span>Quota Safe</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recommendation Cards Container -->
+      <div id="recommendations-container" class="recs-grid">
+        <!-- Rendered dynamically by app.js -->
+        <div class="loading-state">Analyzing prompt telemetry...</div>
+      </div>
+
+      <!-- Live Quota Notice Strip -->
+      <div id="quota-strip" class="quota-strip hidden">
+        <span class="quota-icon">⚠</span>
+        <span id="quota-text" class="quota-text"></span>
+      </div>
+    </section>
+
+    <!-- Bottom Conversion CTA -->
+    <section id="install" class="conversion-section glass-panel">
+      <div class="cta-content">
+        <h3>Route & Verify Automatically in Your Repository</h3>
+        <p>Synlynk coordinates Claude, Codex, Grok, and Gemini directly in your terminal, executing multi-vendor tasks, verifying test suites, and handling quota failovers without manual intervention.</p>
+        <div class="terminal-install-box">
+          <code>brew install synlynk</code>
+          <button id="copy-btn" class="btn btn-copy" title="Copy to clipboard">Copy</button>
+        </div>
+      </div>
+      <div class="cta-actions">
+        <a href="https://marketplace.visualstudio.com/items?itemName=synlynk.synlynk-vscode" target="_blank" rel="noreferrer" class="btn btn-primary">
+          Install VS Code Client
+        </a>
+        <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noreferrer" class="btn btn-outline">
+          Star on GitHub
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <p>Synaptic AI Capability Index · Calibrated on real CI-verified task receipts · Zero prompt retention.</p>
+      <p id="snapshot-indicator" class="footer-meta">Snapshot: loading...</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
