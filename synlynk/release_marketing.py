@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
@@ -168,19 +169,22 @@ def compile_html_to_pdf(
     abs_html = os.path.abspath(html_path)
     abs_pdf = os.path.abspath(pdf_path)
     os.makedirs(os.path.dirname(abs_pdf), exist_ok=True)
-    cmd = [
-        binary,
-        "--headless",
-        "--disable-gpu",
-        "--no-pdf-header-footer",
-        f"--print-to-pdf={abs_pdf}",
-        f"file://{abs_html}",
-    ]
-    try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        return proc.returncode == 0 and os.path.isfile(abs_pdf) and os.path.getsize(abs_pdf) > 0
-    except (OSError, subprocess.TimeoutExpired):
-        return False
+    with tempfile.TemporaryDirectory() as tmp_user_dir:
+        cmd = [
+            binary,
+            "--headless=new",
+            "--no-sandbox",
+            "--disable-gpu",
+            f"--user-data-dir={tmp_user_dir}",
+            "--no-pdf-header-footer",
+            f"--print-to-pdf={abs_pdf}",
+            f"file://{abs_html}",
+        ]
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            return proc.returncode == 0 and os.path.isfile(abs_pdf) and os.path.getsize(abs_pdf) > 0
+        except (OSError, subprocess.TimeoutExpired):
+            return False
 
 
 def compile_docs_pdfs(
