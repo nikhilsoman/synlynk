@@ -2878,5 +2878,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2462 \u2014 enforce version authority release gate (PR #2462, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2462.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-20) - PR #2462\n- Merged improvements and fixes for PR #2462."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/427-pr2478-exclude-worktrees-from-ast-workspace-sca.md",
+    "title": "PR #2478 \u2014 exclude worktrees from AST workspace scan and isolate headless Chrome (LIVE-29 #2477, LIVE-28 #2463)",
+    "author": "nikhilsoman",
+    "date": "2026-10-20",
+    "pr": "#2478",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2478."
+    ],
+    "tweet": "\ud83d\ude80 PR #2478 \u2014 exclude worktrees from AST workspace scan and isolate headless Chrome (LIVE-29 #2477, LIVE-28 #2463) (PR #2478, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2478.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-20) - PR #2478\n- Merged improvements and fixes for PR #2478."
   }
 ]

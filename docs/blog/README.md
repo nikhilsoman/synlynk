@@ -503,6 +503,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [424](./424-pr2461-resolve-tier-model-discovered-row-fallba.md) | PR #2461 — resolve_tier_model() discovered-row fallback now respects requested tier (gh:#2454) | [#2461](https://github.com/nikhilsoman/synlynk/pull/2461) | 2026-10-20 |
 | [425](./425-pr2459-correct-codex-and-local-catalog.md) | PR #2459 — correct Codex and local catalog | [#2459](https://github.com/nikhilsoman/synlynk/pull/2459) | 2026-10-20 |
 | [426](./426-pr2462-enforce-version-authority-release-gate.md) | PR #2462 — enforce version authority release gate | [#2462](https://github.com/nikhilsoman/synlynk/pull/2462) | 2026-10-20 |
+| [427](./427-pr2478-exclude-worktrees-from-ast-workspace-sca.md) | PR #2478 — exclude worktrees from AST workspace scan and isolate headless Chrome (LIVE-29 #2477, LIVE-28 #2463) | [#2478](https://github.com/nikhilsoman/synlynk/pull/2478) | 2026-10-20 |
 
 ## Per-PR Post Template
 
