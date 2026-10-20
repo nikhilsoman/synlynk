@@ -114,15 +114,23 @@ The following evidence-preserving changes have been applied to canonical state.
   carry that deterministic GitHub ticket number.
 - `goal-51c4be3f` owns v0.29.0 backlog consolidation.
 
-After these changes, the active ledger is 1,056 stories, with zero stories
+After the initial changes, the active ledger was 1,056 stories, with zero stories
 without a goal and 281 still without a ticket. The final six ungoaled records
 were explicit placeholders and were archived. The 31 issue-backed records
 were assigned by theme to trust contracts, state integrity, daemon reliability,
 onboarding, or v0.29 consolidation; the three R12 task records now point to
 #1868 and v0.29.
 
-The remaining ticketless cohort is dominated by historical, source-less ledger
-records: 103 under the universal GOVERNS loop and 31 under the architectural
-review goal. It must be individually classified as delivery work or evidence;
-opening a speculative issue for each record would recreate the drift this
-reconciliation is intended to remove.
+The next evidence disposition was protected by snapshot
+`pre-ticketless-evidence-disposition-2026-10-20-20261020T032740Z.db`
+(SHA-256 `5feb648c7f6d2066c768eaa19078b19057837e1228d60903ff87957a974ca315`).
+It archived 118 explicitly identifiable execution-evidence records--task,
+review, merge, seeding, and plan-step prompts--as
+`execution-evidence-archive-2026-10-20`. These remain in the ledger with their
+source text and are not deleted. Seventeen genuine delivery stories whose
+titles unambiguously contained `gh:#<number>` now link to that existing ticket.
+
+The active ledger is now 939 stories, with zero stories without a goal and 147
+without a ticket. That remaining cohort requires individual delivery versus
+evidence classification. Opening a speculative issue for each record would
+recreate the drift this reconciliation is intended to remove.
