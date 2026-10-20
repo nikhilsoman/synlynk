@@ -249,6 +249,23 @@ def test_lazy_parser_unknown_command_keeps_the_complete_choice_list():
     assert "sentinel" in choices
 
 
+def test_fast_version_does_not_build_argparse_parser(monkeypatch, capsys):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "_FAST_CLI", True)
+
+    def unexpected_parser_build(*args, **kwargs):
+        raise AssertionError("--version should exit before parser construction")
+
+    monkeypatch.setattr(cli_mod, "build_parser", unexpected_parser_build)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_mod.main(["--version"])
+
+    assert exc_info.value.code == 0
+    assert capsys.readouterr().out.startswith("synlynk ")
+
+
 def test_state_restore_cli_prints_json_result(tmp_path, monkeypatch, capsys):
     source = tmp_path / "snapshot.db"
     sqlite3.connect(source).close()
