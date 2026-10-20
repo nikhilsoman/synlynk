@@ -75,3 +75,27 @@ Create one GitHub parent issue per canonical release, associate its named goals,
 and create only ticketed delivery phases. The migration then supersedes the
 three competing Preview arcs and quarantines non-delivery artifacts without
 silently deleting their evidence.
+
+## Migration Checkpoint
+
+The release-epic and release-header portion of the next mutation is complete.
+
+| Release | Parent issue |
+| --- | --- |
+| v0.25.2 | #2465 |
+| v0.25.3 | #2466 |
+| v0.25.4 | #2467 |
+| v0.26.0 | #2468 |
+| v0.26.1 | #2469 |
+| v0.26.2 | #2470 |
+| v0.27.0 | #2471 |
+| v0.27.1 | #2472 |
+| v0.27.2 | #2473 |
+| v0.28.0 | #2474 |
+| v0.28.1 | #2475 |
+| v0.29.0 | #2476 |
+
+All 12 headers are `planned` and explicitly non-ready. Their notes name the
+parent issue and associated goals. This is intentionally not a release claim:
+the next checkpoint links verified delivery stories to existing or newly
+created GitHub tickets, then creates the release phases.
