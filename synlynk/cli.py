@@ -758,6 +758,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
                                help="Evaluate and display the consolidated 4-point fleet readiness matrix")
     doctor_parser.add_argument("--provision", action="store_true",
                                help="Provision recommended ecosystem tools if missing")
+    doctor_parser.add_argument("--version", action="store_true",
+                               help="Report read-only version-authority status")
 
     worktree_parser = subparsers.add_parser(
         "worktree", help="Audit and clean up stale git worktrees/branches"
