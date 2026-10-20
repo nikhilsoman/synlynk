@@ -2814,5 +2814,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2456 \u2014 add LIVE-27 fleet-wide catalog invariant test suite (gh:#2450) (PR #2456, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2456.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-19) - PR #2456\n- Merged improvements and fixes for PR #2456."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/423-pr2460-reconcile-roadmap-release-sequence.md",
+    "title": "PR #2460 \u2014 reconcile roadmap release sequence",
+    "author": "nikhilsoman",
+    "date": "2026-10-20",
+    "pr": "#2460",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2460."
+    ],
+    "tweet": "\ud83d\ude80 PR #2460 \u2014 reconcile roadmap release sequence (PR #2460, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2460.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-20) - PR #2460\n- Merged improvements and fixes for PR #2460."
   }
 ]
