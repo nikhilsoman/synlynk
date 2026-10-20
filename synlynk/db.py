@@ -865,6 +865,10 @@ def upsert_harness_model(
     discovered_at: str | None = None,
 ) -> None:
     """Insert or refresh a provider-specific discovered harness model."""
+    from synlynk.models import is_plausible_model_id
+
+    if not is_plausible_model_id(model_id):
+        return
     now = datetime.now(timezone.utc).isoformat()
     first_seen_at = first_seen_at or now
     last_seen_at = last_seen_at or now
@@ -917,7 +921,12 @@ def get_active_harness_models(
     try:
         cursor = conn.execute(
             f"SELECT * FROM harness_models WHERE {' AND '.join(clauses)} "
-            "ORDER BY discovered_at DESC",
+            "ORDER BY CASE "
+            "WHEN discovery_source IN ('curated', 'curated_fallback') THEN 0 "
+            "WHEN discovery_source = 'config_file' THEN 1 "
+            "WHEN discovery_source LIKE 'cli:%' THEN 2 "
+            "WHEN discovery_source = 'execution_log' THEN 3 "
+            "ELSE 4 END ASC, discovered_at DESC",
             params,
         )
     except sqlite3.ProgrammingError:

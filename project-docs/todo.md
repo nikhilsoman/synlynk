@@ -1,6 +1,10 @@
 # Tasks (generated - source of truth is state.db)
 # Edit via: synlynk story create/update | Do NOT hand-edit this file
 
+- [ ] [LIVE-27] Cleanse corrupted execution_log rows from harness_models in canonical state.db [live-issue sev1 priority:p0] <!-- id:story-issue-2447 -->
+- [ ] [LIVE-27] Harden sync_harness_models_window() candidate ingestion and timestamp handling [live-issue sev1 priority:p0] <!-- id:story-issue-2448 -->
+- [ ] [LIVE-27] Prioritize authoritative discovery sources and enforce allowlist in resolve_tier_model() [live-issue sev1 priority:p0] <!-- id:story-issue-2449 -->
+- [ ] [LIVE-27] Add fleet-wide model resolution and catalog invariant test suite [live-issue sev1 priority:p0] <!-- id:story-issue-2450 -->
 - [ ] BS-7: brainstorm — skill pack interoperability + benchmarks (Superpowers/GStack/GSD) [platform] <!-- id:story-bs7-interop -->
 - [ ] BS-8: synlynk probe — ambient harness capability drift detection + publish pipeline [tooling] <!-- id:story-bs8-probe -->
 - [ ] BS-8: dispatch_loop() — composite termination + /goal objective injection + job chain tracking [dispatch] <!-- id:story-bs8-loop -->
