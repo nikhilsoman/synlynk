@@ -2910,5 +2910,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2482 \u2014 guard release ceremony asset compilation and isolate test-time Chrome (LIVE-28 #2463) (PR #2482, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2482.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-20) - PR #2482\n- Merged improvements and fixes for PR #2482."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/429-pr2480-sync-accumulated-local-cost-log-entries-.md",
+    "title": "PR #2480 \u2014 sync accumulated local cost-log entries and roadmap state drift",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-20",
+    "pr": "#2480",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2480."
+    ],
+    "tweet": "\ud83d\ude80 PR #2480 \u2014 sync accumulated local cost-log entries and roadmap state drift (PR #2480, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2480.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-20) - PR #2480\n- Merged improvements and fixes for PR #2480."
   }
 ]

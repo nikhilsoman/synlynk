@@ -505,6 +505,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [426](./426-pr2462-enforce-version-authority-release-gate.md) | PR #2462 — enforce version authority release gate | [#2462](https://github.com/nikhilsoman/synlynk/pull/2462) | 2026-10-20 |
 | [427](./427-pr2478-exclude-worktrees-from-ast-workspace-sca.md) | PR #2478 — exclude worktrees from AST workspace scan and isolate headless Chrome (LIVE-29 #2477, LIVE-28 #2463) | [#2478](https://github.com/nikhilsoman/synlynk/pull/2478) | 2026-10-20 |
 | [428](./428-pr2482-guard-release-ceremony-asset-compilation.md) | PR #2482 — guard release ceremony asset compilation and isolate test-time Chrome (LIVE-28 #2463) | [#2482](https://github.com/nikhilsoman/synlynk/pull/2482) | 2026-10-20 |
+| [429](./429-pr2480-sync-accumulated-local-cost-log-entries-.md) | PR #2480 — sync accumulated local cost-log entries and roadmap state drift | [#2480](https://github.com/nikhilsoman/synlynk/pull/2480) | 2026-10-20 |
 
 ## Per-PR Post Template
 
