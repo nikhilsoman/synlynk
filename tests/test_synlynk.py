@@ -1353,6 +1353,33 @@ def test_cli_roadmap_add_dispatches_without_nameerror(monkeypatch):
     assert captured["kwargs"]["title"] == "State Engine Tier 1"
 
 
+def test_cli_version_flags_reach_release_facing_subcommands(monkeypatch):
+    import synlynk.cli as cli_mod
+
+    roadmap = {}
+    release = {}
+
+    monkeypatch.setattr(
+        synlynk,
+        "cmd_roadmap_add",
+        lambda version, **kwargs: roadmap.update(version=version, **kwargs),
+    )
+    monkeypatch.setattr(
+        synlynk,
+        "cmd_release",
+        lambda **kwargs: release.update(kwargs),
+    )
+
+    cli_mod.main([
+        "roadmap", "add", "--version", "v0.25.2", "--title", "Model recovery"
+    ])
+    cli_mod.main(["release", "--version", "0.25.2", "--dry-run"])
+
+    assert roadmap["version"] == "v0.25.2"
+    assert release == {"dry_run": True, "version": "0.25.2", "minor": False,
+                       "role": "dev", "check_docs": False, "waive": []}
+
+
 def test_cli_configure_agent_accepts_bare_flag(monkeypatch):
     import synlynk.cli as cli_mod
 
