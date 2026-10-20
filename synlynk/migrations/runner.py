@@ -16,11 +16,12 @@ from synlynk.migrations.m0021_harness_model_catalog import MIGRATION as M0021
 from synlynk.migrations.m0022_subscriptions_harness_name import MIGRATION as M0022
 from synlynk.migrations.m0023_cleanse_execution_log_models import MIGRATION as M0023
 from synlynk.migrations.m0024_local_pilot_ledger import MIGRATION as M0024
+from synlynk.migrations.m0025_local_pilot_review_selection import MIGRATION as M0025
 from synlynk.wal_ledger import write_transaction
 
 # Static, explicitly-imported registry. Append future Migration entries here
 # in ascending version order — no dynamic directory scanning.
-MIGRATIONS: list[Migration] = [M0016, M0017, M0018, M0019, M0020, M0021, M0022, M0023, M0024]
+MIGRATIONS: list[Migration] = [M0016, M0017, M0018, M0019, M0020, M0021, M0022, M0023, M0024, M0025]
 
 
 def _ensure_migration_history_table(conn: sqlite3.Connection) -> None:

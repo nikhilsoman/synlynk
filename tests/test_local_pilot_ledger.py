@@ -190,3 +190,97 @@ def test_ensure_uses_migration_history_and_rolls_back_a_failed_migration(ledger_
         "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'local_pilot_atomicity_probe'"
     ).fetchone() is None
     assert ledger_conn.execute("SELECT COUNT(*) FROM migration_history").fetchone()[0] == 0
+
+
+def test_local_pilot_reviewer_selection_uses_frontier_order_and_excludes_local_and_author(ledger_conn):
+    """Selecting Local or the author would defeat independent factual review."""
+    from synlynk.local_pilot_ledger import select_local_pilot_reviewer
+
+    selection = select_local_pilot_reviewer(
+        ledger_conn,
+        author_harness="codex",
+        eligible=["local", "claude", "codex", "agy", "grok"],
+    )
+
+    assert selection.candidates == ("grok", "claude", "agy")
+    assert selection.reviewer == "grok"
+    assert selection.reason == "selected grok as highest-ranked eligible frontier reviewer"
+
+
+def test_local_pilot_review_requires_safety_and_persists_a_secret_free_factual_brief(ledger_conn):
+    """A safety-pending job must not produce a reviewer brief or reveal credentials."""
+    from synlynk.local_pilot_ledger import (
+        ensure_local_pilot_ledger,
+        record_admission,
+        record_safety_outcome,
+        start_local_pilot_review,
+    )
+
+    ensure_local_pilot_ledger(ledger_conn)
+    sample = _sample("review-job")
+    sample["receipt"] = {
+        **sample["receipt"],
+        "author_harness": "codex",
+        "task_intent": "Summarize the selected tests",
+        "expected_factual_claims": ["lists failures", "names affected paths"],
+        "answer_log_reference": "logs/review-job.log",
+        "OPENAI_API_KEY": "must-not-appear",
+    }
+    record_admission(ledger_conn, sample)
+
+    with pytest.raises(ValueError, match="passed safety receipt"):
+        start_local_pilot_review(ledger_conn, "review-job")
+
+    record_safety_outcome(ledger_conn, "review-job", "passed", "contained", {"safe": True})
+    brief = start_local_pilot_review(ledger_conn, "review-job")
+
+    assert brief == {
+        "job_id": "review-job",
+        "reviewer": "grok",
+        "selection_reason": "selected grok as highest-ranked eligible frontier reviewer",
+        "task_intent": "Summarize the selected tests",
+        "expected_factual_claims": ["lists failures", "names affected paths"],
+        "local_answer_log_reference": "logs/review-job.log",
+        "automated_receipt_result": "passed",
+    }
+    stored = ledger_conn.execute(
+        "SELECT candidate_json, selected_harness, selection_reason FROM local_pilot_review_selections "
+        "WHERE job_id = 'review-job'"
+    ).fetchone()
+    assert stored == (
+        '["grok","claude","agy"]',
+        "grok",
+        "selected grok as highest-ranked eligible frontier reviewer",
+    )
+
+
+def test_record_local_pilot_review_only_changes_quality_once_for_the_selected_reviewer(ledger_conn):
+    """Wrong/duplicate reviews must not mutate safety or operational pilot settings."""
+    from synlynk.local_pilot_ledger import (
+        ensure_local_pilot_ledger,
+        record_admission,
+        record_local_pilot_review,
+        record_safety_outcome,
+        start_local_pilot_review,
+    )
+
+    ensure_local_pilot_ledger(ledger_conn)
+    sample = _sample("verdict-job")
+    sample["receipt"] = {**sample["receipt"], "author_harness": "codex"}
+    record_admission(ledger_conn, sample)
+    record_safety_outcome(ledger_conn, "verdict-job", "passed", "contained", {"safe": True})
+    start_local_pilot_review(ledger_conn, "verdict-job")
+
+    with pytest.raises(ValueError, match="selected reviewer"):
+        record_local_pilot_review(ledger_conn, "verdict-job", "claude", "accept", "looks right")
+    with pytest.raises(ValueError, match="rationale is required"):
+        record_local_pilot_review(ledger_conn, "verdict-job", "grok", "accept", "  ")
+    with pytest.raises(ValueError, match="unknown review verdict"):
+        record_local_pilot_review(ledger_conn, "verdict-job", "grok", "maybe", "unclear")
+
+    result = record_local_pilot_review(ledger_conn, "verdict-job", "grok", "accept", "claims checked")
+
+    assert result["quality_verdict"] == "accepted"
+    assert result["safety_verdict"] == "passed"
+    with pytest.raises(ValueError, match="already recorded"):
+        record_local_pilot_review(ledger_conn, "verdict-job", "grok", "reject", "changed mind")

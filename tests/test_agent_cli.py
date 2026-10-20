@@ -2418,6 +2418,26 @@ def test_local_pilot_dispatch_binds_frontier_fallback_and_marks_pilot_intent(
     assert seen["local_pilot_receipt"] is None
 
 
+def test_local_pilot_review_commands_parse_their_factual_review_inputs():
+    """Removing the command surface would make review controls unavailable to operators."""
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    status = parser.parse_args(["local", "pilot", "status", "--json"])
+    start = parser.parse_args(["local", "pilot", "review-start", "job-1"])
+    record = parser.parse_args(
+        ["local", "pilot", "record-review", "job-1", "--reviewer", "grok", "--verdict", "accept", "--rationale", "verified"]
+    )
+
+    assert (status.command, status.local_action, status.local_pilot_action, status.json_output) == (
+        "local", "pilot", "status", True,
+    )
+    assert (start.local_pilot_action, start.job_id) == ("review-start", "job-1")
+    assert (record.local_pilot_action, record.reviewer, record.verdict, record.rationale) == (
+        "record-review", "grok", "accept", "verified",
+    )
+
+
 def test_cli_dispatch_infers_defaults_and_prints_one_line_preview(project_dir, capsys):
     from synlynk.cli import main
 

@@ -372,6 +372,51 @@ def _local_dispatch_model_flags(
     ] + _STARTER_TIER_GUARDRAIL_FLAGS
 
 
+def local_pilot_status() -> dict:
+    """Return read-only operator state for the disabled-by-default pilot."""
+    from synlynk.local_pilot import REBASELINE_SHARE, evaluate_rebaseline, load_pilot_runtime
+    from synlynk.local_pilot_ledger import ensure_local_pilot_ledger, load_pilot_status
+
+    conn = _get_db()
+    try:
+        ensure_local_pilot_ledger(conn)
+        cohorts = load_pilot_status(conn)
+    finally:
+        conn.close()
+    runtime = load_pilot_runtime(os.getcwd())
+    decision = evaluate_rebaseline(cohorts)
+    return {
+        "cohorts": cohorts,
+        "boundaries": {"share": REBASELINE_SHARE, "max_concurrent": 1},
+        "enabled": runtime["enabled"],
+        "paused": not runtime["enabled"],
+        "model": runtime["qualified_models"][0] if runtime["qualified_models"] else None,
+        "proposal_35_eligible": decision.proposal_35_eligible,
+    }
+
+
+def start_local_pilot_review(job_id: str) -> dict:
+    """Create one independently selected, factual-only Local pilot review brief."""
+    from synlynk.local_pilot_ledger import start_local_pilot_review as _start
+
+    conn = _get_db()
+    try:
+        return _start(conn, job_id)
+    finally:
+        conn.close()
+
+
+def record_local_pilot_review(job_id: str, reviewer: str, verdict: str, rationale: str) -> dict:
+    """Record one selected reviewer verdict without changing operational controls."""
+    from synlynk.local_pilot_ledger import record_local_pilot_review as _record
+
+    conn = _get_db()
+    try:
+        return _record(conn, job_id, reviewer, verdict, rationale)
+    finally:
+        conn.close()
+
+
 def cmd_local_doctor(config_path: str = None, init: bool = False) -> int:
     """Print oMLX reachability, roster status, and hardware recommendation.
 

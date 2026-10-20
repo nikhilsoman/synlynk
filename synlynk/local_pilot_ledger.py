@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
@@ -15,6 +16,18 @@ from synlynk.wal_ledger import write_transaction
 _COHORTS = frozenset({"validation", "expansion"})
 _SAFETY_VERDICTS = frozenset({"passed", "failed"})
 _QUALITY_VERDICTS = frozenset({"accepted", "rejected"})
+_REVIEW_VERDICTS = {"accept": "accepted", "reject": "rejected"}
+# Keep this aligned with dispatch._GH_WRITE_HARNESS_PRIORITY: it is the
+# current measured frontier routing order, used here as a read-only ranking
+# input. Review selection grants no GitHub or operational authority.
+_FRONTIER_REVIEWER_ORDER = ("codex", "grok", "claude", "agy")
+
+
+@dataclass(frozen=True)
+class ReviewerSelection:
+    candidates: tuple[str, ...]
+    reviewer: str
+    reason: str
 
 
 def _utc_now() -> str:
@@ -117,6 +130,103 @@ def record_quality_verdict(
             _row_as_dict(conn, job_id)
             raise ValueError(f"quality verdict already recorded for job_id: {job_id}")
         return _row_as_dict(conn, job_id)
+
+
+def select_local_pilot_reviewer(
+    conn: sqlite3.Connection, *, author_harness: str, eligible: list[str]
+) -> ReviewerSelection:
+    """Select one independent frontier reviewer in deterministic capability order."""
+    del conn  # Selection is derived only from current routing inputs.
+    author = str(author_harness or "").strip().casefold()
+    available = {str(name).strip().casefold() for name in eligible if str(name).strip()}
+    candidates = tuple(
+        harness for harness in _FRONTIER_REVIEWER_ORDER
+        if harness in available and harness not in {"local", author}
+    )
+    if not candidates:
+        raise ValueError("no independent eligible frontier reviewer")
+    reviewer = candidates[0]
+    return ReviewerSelection(
+        candidates=candidates,
+        reviewer=reviewer,
+        reason=f"selected {reviewer} as highest-ranked eligible frontier reviewer",
+    )
+
+
+def _review_brief(row: dict, selection: ReviewerSelection) -> dict:
+    """Project only factual, allowlisted evidence into a reviewer brief."""
+    receipt = json.loads(row["receipt_json"])
+    claims = receipt.get("expected_factual_claims", [])
+    if not isinstance(claims, list) or not all(isinstance(claim, str) for claim in claims):
+        claims = []
+    return {
+        "job_id": row["job_id"],
+        "reviewer": selection.reviewer,
+        "selection_reason": selection.reason,
+        "task_intent": str(receipt.get("task_intent") or row["task_class"]),
+        "expected_factual_claims": claims,
+        "local_answer_log_reference": str(
+            receipt.get("answer_log_reference") or receipt.get("result_receipt_file") or ""
+        ),
+        "automated_receipt_result": row["safety_verdict"],
+    }
+
+
+def start_local_pilot_review(conn: sqlite3.Connection, job_id: str) -> dict:
+    """Persist selection before returning the safety-gated factual review brief."""
+    ensure_local_pilot_ledger(conn)
+    row = _row_as_dict(conn, job_id)
+    if row["safety_verdict"] != "passed":
+        raise ValueError("Local pilot review requires a passed safety receipt")
+    receipt = json.loads(row["receipt_json"])
+    author = str(receipt.get("author_harness") or "local")
+    selection = select_local_pilot_reviewer(
+        conn,
+        author_harness=author,
+        eligible=list(_FRONTIER_REVIEWER_ORDER),
+    )
+    with write_transaction(conn):
+        existing = conn.execute(
+            "SELECT candidate_json, selected_harness, selection_reason "
+            "FROM local_pilot_review_selections WHERE job_id = ?",
+            (job_id,),
+        ).fetchone()
+        if existing is None:
+            conn.execute(
+                "INSERT INTO local_pilot_review_selections "
+                "(job_id, candidate_json, selected_harness, selection_reason, selected_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (job_id, json.dumps(selection.candidates, separators=(",", ":")), selection.reviewer,
+                 selection.reason, _utc_now()),
+            )
+        else:
+            selection = ReviewerSelection(
+                candidates=tuple(json.loads(existing[0])), reviewer=existing[1], reason=existing[2]
+            )
+    return _review_brief(row, selection)
+
+
+def record_local_pilot_review(
+    conn: sqlite3.Connection, job_id: str, reviewer: str, verdict: str, rationale: str
+) -> dict:
+    """Record exactly one selected review verdict, affecting quality evidence only."""
+    mapped_verdict = _REVIEW_VERDICTS.get(str(verdict).strip().casefold())
+    if mapped_verdict is None:
+        raise ValueError(f"unknown review verdict: {verdict}")
+    rationale = str(rationale).strip()
+    if not rationale:
+        raise ValueError("rationale is required")
+    selected = conn.execute(
+        "SELECT selected_harness, selection_reason FROM local_pilot_review_selections WHERE job_id = ?",
+        (job_id,),
+    ).fetchone()
+    if selected is None:
+        raise ValueError("review has not been started")
+    if str(reviewer).strip().casefold() != selected[0]:
+        raise ValueError("reviewer is not the selected reviewer")
+    return record_quality_verdict(
+        conn, job_id, selected[0], mapped_verdict, rationale, selected[1]
+    )
 
 
 def pause_local_pilot(reason: str) -> None:
