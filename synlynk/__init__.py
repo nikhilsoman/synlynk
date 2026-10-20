@@ -2845,6 +2845,17 @@ def cmd_release(dry_run: bool = False, version: Optional[str] = None, bump: bool
         findings, expected_readme_version, waivers=waivers
     )
     print(report)
+    if check_docs:
+        from synlynk.release_authority import (
+            format_version_authority_report,
+            validate_release_authority,
+        )
+
+        authority_version, authority_findings = validate_release_authority(
+            root, expected_version=expected_readme_version
+        )
+        print(format_version_authority_report(authority_version, authority_findings))
+        findings.extend(authority_findings)
     if findings:
         if check_docs:
             sys.exit(1)

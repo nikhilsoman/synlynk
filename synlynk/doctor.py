@@ -1257,6 +1257,15 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
     if args is not None and getattr(args, "fix", None) == "roadmap":
         repair_roadmap_merge_parity()
         return 0
+    if args is not None and getattr(args, "version", False) is True:
+        from synlynk.release_authority import (
+            format_version_authority_report,
+            validate_release_authority,
+        )
+
+        version, findings = validate_release_authority(os.getcwd())
+        print(format_version_authority_report(version, findings))
+        return 1 if findings else 0
     if args is not None and getattr(args, "fix", None):
         return cmd_doctor_fix(getattr(args, "fix"), args=args)
     if args is not None and getattr(args, "readiness", False) is True:
