@@ -439,6 +439,30 @@ def test_dispatch_ready_jobs_stays_queued_when_all_exhausted(project_dir, monkey
     assert status == "queued"
 
 
+def test_deferred_dispatch_records_context_when_job_is_enqueued(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    conn = sl._get_db()
+    monkeypatch.setattr(dispatch_mod, "_dispatch_context", lambda: "headless")
+
+    result = dispatch_mod._defer_local_concurrency(
+        conn,
+        job_id="job-deferred-context",
+        agent="local",
+        task="deferred task",
+        story_id=None,
+        reason="local_concurrency",
+    )
+
+    row = conn.execute(
+        "SELECT status, dispatch_context FROM daemon_jobs WHERE job_id=?",
+        (result["job_id"],),
+    ).fetchone()
+    conn.close()
+    assert row == ("queued", "headless")
+
+
 def test_write_job_summary_creates_file(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     import synlynk
