@@ -6,6 +6,7 @@ import subprocess
 import sys
 
 import synlynk.cli as cli_mod
+from synlynk._constants import VERSION
 
 
 def test_build_parser_exposes_dispatch_tree_without_running_main():
@@ -194,6 +195,23 @@ def test_fast_cli_import_defers_command_graph():
     )
 
     assert result.stdout.strip() == "False"
+
+
+def test_fast_cli_version_does_not_import_argparse_command_graph():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; from synlynk import main; main(['--version']); "
+            "print('synlynk.cli' in sys.modules)",
+        ],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "SYNLYNK_CLI_ENTRYPOINT": "1"},
+        check=True,
+    )
+
+    assert result.stdout.splitlines() == [f"synlynk {VERSION}", "False"]
 
 
 def test_fast_cli_preserves_help_and_invalid_command_paths():

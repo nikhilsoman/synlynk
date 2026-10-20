@@ -101,6 +101,14 @@ def _load_legacy_imports():
 def main(argv=None):
     """Lazy compatibility entry point for installed console scripts."""
     cli_tokens = list(argv) if argv is not None else sys.argv[1:]
+    # ``--version`` is intentionally handled before importing the argparse
+    # command graph.  Version probes are issued by package managers and
+    # harness discovery on every invocation; importing ``synlynk.cli`` here
+    # would pay the cost of registering every subparser just to print one
+    # constant.
+    if _FAST_CLI and "--version" in cli_tokens:
+        print(f"synlynk {VERSION}")
+        return None
     if _FAST_CLI and cli_tokens and cli_tokens[0] in {"jobs", "status"}:
         from synlynk._fast_cli import run_fast_command
 
