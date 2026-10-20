@@ -105,6 +105,8 @@ def test_execute_release_ceremony_live(tmp_path):
     assert res.readme_updated is True
     assert res.website_updated is True
     assert len(res.docs_updated) == 3
+    assert res.pdfs_compiled == []
+    assert res.epub_compiled is None
     readme = open(os.path.join(root, "README.md")).read()
     assert "version-0.20.0" in readme
     assert "2750%20collected" in readme
@@ -222,5 +224,53 @@ def test_compile_html_to_pdf_headless_flags(monkeypatch, tmp_path):
     assert "--no-sandbox" in cmd
     assert "--disable-gpu" in cmd
     assert any(arg.startswith("--user-data-dir=") for arg in cmd)
+
+
+def test_execute_release_ceremony_respects_skip_build(monkeypatch, tmp_path):
+    import synlynk.release_marketing as rm
+    root = _setup_fixture_repo(tmp_path)
+
+    pdf_called = []
+    epub_called = []
+    mirror_called = []
+
+    monkeypatch.setattr(rm, "compile_docs_pdfs", lambda **kw: pdf_called.append(kw) or ["mock.pdf"])
+    monkeypatch.setattr(rm, "compile_book_epub", lambda **kw: epub_called.append(kw) or "mock.epub")
+    monkeypatch.setattr(rm, "mirror_docs_pdfs_to_website", lambda **kw: mirror_called.append(kw))
+    monkeypatch.setattr(rm, "verify_website_build", lambda **kw: (True, "Mock website build ok"))
+
+    # When skip_build=True, none of these should be called
+    res_skip = execute_release_ceremony(root, version="0.21.0", dry_run=False, skip_build=True)
+    assert res_skip.ok is True
+    assert len(pdf_called) == 0
+    assert len(epub_called) == 0
+    assert len(mirror_called) == 0
+    assert res_skip.pdfs_compiled == []
+    assert res_skip.epub_compiled is None
+
+    # When skip_build=False, all build steps should be called
+    res_build = execute_release_ceremony(root, version="0.21.0", dry_run=False, skip_build=False)
+    assert res_build.ok is True
+    assert len(pdf_called) == 1
+    assert len(epub_called) == 1
+    assert len(mirror_called) == 1
+    assert res_build.pdfs_compiled == ["mock.pdf"]
+    assert res_build.epub_compiled == "mock.epub"
+
+
+def test_compile_html_to_pdf_unmocked_under_pytest_is_safely_blocked(tmp_path):
+    html_file = tmp_path / "test.html"
+    html_file.write_text("<html><body>Test</body></html>")
+    pdf_file = tmp_path / "test.pdf"
+
+    # Under pytest with unmocked subprocess.run, it must refuse to spawn real host Chrome
+    success = compile_html_to_pdf(
+        str(html_file),
+        str(pdf_file),
+        chrome_bin="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    )
+    assert success is False
+    assert not pdf_file.exists()
+
 
 
