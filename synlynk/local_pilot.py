@@ -31,6 +31,7 @@ PILOT_CLASSES = frozenset(
 EXCLUDED_ROLES = frozenset({"architect", "pm", "tpm", "qa", "review"})
 APPROVED_SHARES = frozenset({0.20, 0.35, 0.50})
 MAX_SHARE = 0.50
+REBASELINE_SHARE = 0.20
 REBASELINE_PILOT_CLASSES = frozenset({"test_summary", "codepath_summary"})
 LOCAL_PILOT_COMPOSE = "docker/local-pilot.compose.yaml"
 _EXCLUDED_TASK_PATTERN = re.compile(
@@ -371,6 +372,7 @@ def load_pilot_runtime(repo_root: str) -> dict:
             and model.get("id")
             and model.get("qualification") == "qualified"
             and model.get("dispatch_eligible", True)
+            and str(model.get("id")).casefold().startswith("ornith")
         }
     except (OSError, json.JSONDecodeError, AttributeError):
         pass
@@ -378,6 +380,9 @@ def load_pilot_runtime(repo_root: str) -> dict:
     compose_path = os.path.join(repo_root, LOCAL_PILOT_COMPOSE)
     return {
         "enabled": settings.get("enabled") is True,
+        # The re-baseline never widens the historical pilot allocation.  A
+        # malformed or broader runtime value is returned for dispatch to
+        # reject, rather than normalized into an accidental admission.
         "share": settings.get("share", 0.0),
         "qualified": bool(qualified_models),
         "qualified_models": sorted(qualified_models),

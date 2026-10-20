@@ -342,21 +342,39 @@ def _resolve_dispatch_agent(
         _log_routing_fallback(message, requested="local", actual=fallback)
         return fallback
 
-    from synlynk.local_pilot import evaluate_local_pilot, load_pilot_runtime
-
-    runtime = load_pilot_runtime(os.getcwd())
-    decision = evaluate_local_pilot(
-        enabled=runtime["enabled"],
-        qualified=runtime["qualified"],
-        isolated=runtime["isolated"],
-        pilot_class=pilot_class,
-        role=role,
-        requires_gh_write=requires_gh_write,
-        share=runtime["share"],
-        dispatch_key=dispatch_key or hashlib.sha256(task.encode("utf-8")).hexdigest(),
-        task=task,
-        scope_paths=scope_paths,
+    from synlynk.local_pilot import (
+        REBASELINE_SHARE,
+        evaluate_local_pilot,
+        evaluate_rebaseline,
+        load_pilot_runtime,
     )
+    from synlynk.local_pilot_ledger import load_pilot_status
+
+    try:
+        runtime = load_pilot_runtime(os.getcwd())
+        rebaseline = evaluate_rebaseline(load_pilot_status(db))
+        if runtime["share"] != REBASELINE_SHARE or rebaseline.share != REBASELINE_SHARE:
+            raise ValueError("runtime_share_disagrees_with_rebaseline_cap")
+        decision = evaluate_local_pilot(
+            enabled=runtime["enabled"],
+            qualified=runtime["qualified"],
+            isolated=runtime["isolated"],
+            pilot_class=pilot_class,
+            role=role,
+            requires_gh_write=requires_gh_write,
+            share=rebaseline.share,
+            dispatch_key=dispatch_key or hashlib.sha256(task.encode("utf-8")).hexdigest(),
+            task=task,
+            scope_paths=scope_paths,
+            rebaseline=True,
+        )
+        if not rebaseline.allow_admission:
+            decision = type(decision)(False, rebaseline.reason, pilot_class=pilot_class)
+    except Exception as exc:
+        message = f"Routing to: {fallback} (local pilot: rebaseline ledger unavailable: {exc})"
+        print(message)
+        _log_routing_fallback(message, requested="local", actual=fallback)
+        return fallback
     if not decision.route_local:
         message = f"Routing to: {fallback} (local pilot: {decision.reason})"
         print(message)
@@ -387,6 +405,7 @@ def _resolve_dispatch_agent(
     _pending_local_pilot_receipt = _seal_local_pilot_receipt({
         "route_local": True,
         "reason": decision.reason,
+        "cohort": rebaseline.cohort,
         "pilot_class": decision.pilot_class,
         "share": decision.share,
         "bucket": decision.bucket,
@@ -403,6 +422,7 @@ def _resolve_dispatch_agent(
         "edit_format": model_resolution["edit_format"],
         "model_health": model_resolution["health"],
         "historical_capability_score": score,
+        "frontier_fallback": fallback,
     })
     print(f"Routing to: local (pilot {decision.share:.0%}; capability score: {score:.2f})")
     return "local"
@@ -4099,6 +4119,30 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
         )
+
+    def frontier_fallback(reason: str, receipt: Optional[dict] = None) -> dict:
+        """Refuse Local and continue only on the frontier selected for this task."""
+        fallback = (receipt or {}).get("frontier_fallback") or _read_local_fallback()
+        if fallback == "local":
+            raise RuntimeError("Local Pilot fallback cannot resolve to local")
+        message = f"Routing to: {fallback} (local pilot: {reason})"
+        print(message)
+        _log_routing_fallback(message, requested="local", actual=fallback)
+        return dispatch_agent(
+            fallback, task, story_id=story_id, agent_id=agent_id,
+            force_agent=True, context_mode=context_mode, cycle=cycle,
+            skip_preflight=skip_preflight, requires_gh_write=requires_gh_write,
+            static_baseline=static_baseline, task_type=task_type,
+            task_type_explicit=task_type_explicit, requires=requires, grants=grants,
+            revokes=revokes, job_id=job_id, issue=issue, base=base,
+            scope_paths=scope_paths, session_id=session_id,
+            gh_write_target_kind=gh_write_target_kind, gh_write_expect=gh_write_expect,
+            model=None, effort=effort, model_tier=model_tier, role=role,
+            task_domain=task_domain, criticality=criticality, lambda_=lambda_,
+            db_conn=None, _startup_failover=_startup_failover,
+            skip_permissions=skip_permissions, container_image=None,
+            local_pilot_requested=False,
+        )
     if local_pilot_receipt:
         if (
             agent != "local"
@@ -4112,13 +4156,23 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             raise RuntimeError(
                 "Local Pilot uses its fixed isolated Compose runner; custom container images are refused"
             )
-        from synlynk.local_pilot import evaluate_local_pilot, load_pilot_runtime
+        from synlynk.local_pilot import (
+            REBASELINE_SHARE,
+            evaluate_local_pilot,
+            evaluate_rebaseline,
+            load_pilot_runtime,
+        )
+        from synlynk.local_pilot_ledger import load_pilot_status
 
         receipt_payload = {
             key: value for key, value in local_pilot_receipt.items() if key != "_signature"
         }
         current_dispatch_key = str(story_id or issue or task)
         runtime = load_pilot_runtime(os.getcwd())
+        try:
+            rebaseline = evaluate_rebaseline(load_pilot_status(db_conn or _pkg("_get_db")()))
+        except Exception:
+            return frontier_fallback("rebaseline ledger unavailable", local_pilot_receipt)
         decision = evaluate_local_pilot(
             enabled=runtime["enabled"],
             qualified=runtime["qualified"],
@@ -4126,13 +4180,17 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             pilot_class=receipt_payload.get("pilot_class"),
             role=role,
             requires_gh_write=requires_gh_write,
-            share=runtime["share"],
+            share=rebaseline.share,
             dispatch_key=current_dispatch_key,
             task=task,
             scope_paths=scope_paths or [],
+            rebaseline=True,
         )
         if (
             not decision.route_local
+            or not rebaseline.allow_admission
+            or runtime["share"] != REBASELINE_SHARE
+            or rebaseline.share != REBASELINE_SHARE
             or decision.share != receipt_payload.get("share")
             or decision.bucket != receipt_payload.get("bucket")
             or decision.pilot_class != receipt_payload.get("pilot_class")
@@ -4145,7 +4203,14 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             or receipt_payload.get("dispatch_key_sha256")
             != hashlib.sha256(current_dispatch_key.encode("utf-8")).hexdigest()
         ):
+            if local_pilot_requested:
+                return frontier_fallback("admission receipt no longer matches", local_pilot_receipt)
             raise RuntimeError("Local Pilot admission no longer matches dispatch request")
+        if receipt_payload.get("cohort") not in (None, rebaseline.cohort):
+            if local_pilot_requested:
+                return frontier_fallback("admission cohort no longer matches", local_pilot_receipt)
+            raise RuntimeError("Local Pilot admission cohort no longer matches dispatch request")
+        receipt_payload["cohort"] = rebaseline.cohort
         # Drop the signing material and raw cohort key before persisting the
         # receipt; task identity remains auditable via its one-way digest.
         local_pilot_receipt = {
@@ -5042,6 +5107,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         dconn.execute("BEGIN IMMEDIATE")
         if _local_concurrency_exceeded(dconn, max_concurrent=_local_max_concurrent()):
             dconn.rollback()
+            if local_pilot_receipt:
+                if pytest_shim_dir is not None:
+                    pytest_shim_dir.cleanup()
+                if owns_dconn:
+                    dconn.close()
+                return frontier_fallback("Local reservation unavailable", local_pilot_receipt)
             result = _defer_local_concurrency(
                 dconn, job_id=job_id, agent=agent, task=task, story_id=story_id,
                 reason="local_concurrency",
@@ -5120,7 +5191,30 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn.rollback()
             if owns_dconn and dconn is not None:
                 dconn.close()
-            raise ValueError(f"Local Pilot isolated runner setup failed: {exc}") from exc
+            return frontier_fallback("isolated runner setup failed", local_pilot_receipt)
+        try:
+            from synlynk.local_pilot_ledger import record_admission
+
+            sample = record_admission(dconn, {
+                "job_id": job_id,
+                "cohort": local_pilot_receipt["cohort"],
+                "task_class": local_pilot_receipt["pilot_class"],
+                "task_digest": local_pilot_receipt["task_sha256"],
+                "receipt": local_pilot_receipt,
+            })
+            local_pilot_receipt = {
+                **local_pilot_receipt,
+                "admission_id": sample["job_id"],
+                "receipt_digest": sample["receipt_digest"],
+            }
+        except Exception as exc:
+            if pytest_shim_dir is not None:
+                pytest_shim_dir.cleanup()
+            if local_slot_claimed:
+                dconn.rollback()
+            if owns_dconn and dconn is not None:
+                dconn.close()
+            return frontier_fallback("ledger admission failed", local_pilot_receipt)
     elif container_image is not None:
         docker_bin = shutil.which("docker")
         if not docker_bin:

@@ -51,7 +51,7 @@ def record_admission(conn: sqlite3.Connection, sample: dict) -> dict:
     if not task_class or not task_digest:
         raise ValueError("task_class and task_digest are required")
     receipt_json, receipt_digest = _canonical_receipt(sample.get("receipt"))
-    with write_transaction(conn):
+    def insert() -> dict:
         if conn.execute("SELECT 1 FROM local_pilot_evidence WHERE job_id = ?", (job_id,)).fetchone():
             raise ValueError(f"duplicate job_id: {job_id}")
         conn.execute(
@@ -61,6 +61,14 @@ def record_admission(conn: sqlite3.Connection, sample: dict) -> dict:
             (job_id, cohort, task_class, task_digest, receipt_json, receipt_digest, _utc_now()),
         )
         return _row_as_dict(conn, job_id)
+
+    # Dispatch reserves the Local slot and calls us inside that transaction.
+    # Keeping this write in the reservation transaction means either both the
+    # reservation and immutable admission exist, or neither does.
+    if conn.in_transaction:
+        return insert()
+    with write_transaction(conn):
+        return insert()
 
 
 def record_safety_outcome(

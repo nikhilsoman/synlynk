@@ -2887,10 +2887,51 @@ def test_local_pilot_dispatch_uses_isolated_runner_and_records_cohort_receipt(pr
     assert "GH_TOKEN" not in spawned[0][1]["env"]
     expected_receipt = {
         **{key: value for key, value in receipt_payload.items() if key != "dispatch_key"},
+        "cohort": "validation",
+        "admission_id": job["id"],
+        "receipt_digest": job["local_pilot_receipt"]["receipt_digest"],
         "result_receipt_file": job["log_file"] + ".pilot.json",
     }
     assert job["local_pilot_receipt"] == expected_receipt
     assert job["local_model_receipt"]["pilot"] == expected_receipt
+    from synlynk import _get_db
+
+    conn = _get_db()
+    try:
+        evidence = conn.execute(
+            "SELECT cohort, task_class, safety_verdict, quality_verdict "
+            "FROM local_pilot_evidence WHERE job_id = ?",
+            (job["id"],),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert evidence == ("validation", "test_summary", "pending", "pending")
+
+
+def test_disabled_local_pilot_uses_frontier_without_creating_ledger_evidence(project_dir, monkeypatch):
+    """A disabled runtime must not consume a re-baseline sample."""
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import _get_db
+
+    conn = _get_db()
+    try:
+        monkeypatch.setattr(dispatch_mod, "_read_local_fallback", lambda _path: "codex")
+        monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda _root: {
+            "enabled": False, "qualified": True, "isolated": True,
+            "share": 0.2, "qualified_models": ["ornith"],
+        })
+
+        routed = dispatch_mod._resolve_dispatch_agent(
+            "auto", "test", conn, task="summarize focused test output", role="dev",
+            pilot_class="test_summary", dispatch_key="disabled-pilot", scope_paths=["test.log"],
+        )
+        evidence_count = conn.execute("SELECT COUNT(*) FROM local_pilot_evidence").fetchone()[0]
+    finally:
+        conn.close()
+
+    assert routed == "codex"
+    assert evidence_count == 0
 
 
 def test_local_pilot_rejects_forged_and_cross_story_replayed_receipts(project_dir, monkeypatch):

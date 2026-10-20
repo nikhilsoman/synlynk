@@ -41,6 +41,11 @@ class TestResolveDispatchAgent(unittest.TestCase):
                 patch.object(dispatch_mod, "_read_local_fallback", return_value="agy"), \
                 patch.object(dispatch_mod, "_read_local_threshold", return_value=0.5), \
                 patch("synlynk.local_agent.resolve_effective_local_model", side_effect=resolve_model), \
+                patch("synlynk.local_pilot_ledger.load_pilot_status", return_value={
+                    "historical": {"cohort": "historical", "accepted": 8, "eligible": 12},
+                    "validation": {"accepted": 0, "rejected": 0, "safety_failed": 0},
+                    "expansion": {"accepted": 0, "rejected": 0, "safety_failed": 0, "consecutive_accepted": 0},
+                }), \
                 patch("synlynk.local_pilot.load_pilot_runtime", return_value={
                     "enabled": True, "qualified": True, "isolated": True,
                     "share": 0.2, "qualified_models": ["Ornith-1.0-9B-4bit"],
