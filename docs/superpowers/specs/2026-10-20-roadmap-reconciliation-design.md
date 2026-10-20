@@ -1,7 +1,7 @@
 # Roadmap Reconciliation and Release Sequencing Design
 
 Date: 2026-10-20  
-Status: Approved by Nikhil Soman, 2026-10-20  
+Status: Approved by Nikhil Soman, 2026-10-20; amended by Nikhil Soman, 2026-10-20
 Decision: `dec-f8835ba3` (`project-docs/decisions/2026-10-20-roadmap-reconciliation-decision-assess-a.md`)
 
 ---
@@ -36,21 +36,36 @@ No record is deleted merely to simplify the display. Each supersession must refe
 
 ## 4. Canonical Release Sequence
 
-### v0.25.2 -- Model Catalog Recovery
+### v0.25.2 -- Fleet Capacity Recovery and Model Catalog
 
 **Primary goals:** `goal-3ef62232`, `goal-005ea87d`.
 
-**Scope:** LIVE-27 parent #2441 and children #2447--#2450, plus #2454.
+**Scope:** LIVE-27 parent #2441 and children #2447--#2450, plus #2454;
+Local operationalization parent #2342 and graduated pilot #2349; and Muse
+model-roster/capability onboarding #2457 and the low-privilege portion of
+#2445. Local is limited to the qualified Ornith model, isolated worktree and
+container boundary, one concurrent dispatch, and a 20% implementation cohort.
+Muse is limited to authenticated, model-allowlisted low-privilege execution.
+Neither gains review, deploy, or GitHub-write authority in this release.
 
-**Exit evidence:** each supported harness resolves an allowlisted active model at every requested tier; dirty historical rows cannot re-enter the catalog; fleet-wide invariants and real dispatch compatibility tests pass.
+**Exit evidence:** each supported harness resolves an allowlisted active model
+at every requested tier; Local's live endpoint, pilot configuration, and
+reservation state agree and pass preflight; Muse has an authenticated model
+roster and explicit capability state; dirty historical rows cannot re-enter
+the catalog; fleet-wide invariants and real dispatch compatibility tests pass.
 
 ### v0.25.3 -- Trust Contracts: Authority, Completion, Attribution, and Cost
 
 **Primary goals:** `goal-adb60ccc`, `goal-079e2f37`, `goal-eacab0dc`.
 
-**Scope:** task-bound human approval, role and credential enforcement, one-terminal-outcome contract, receipt-to-commit/PR linkage, failed-retry accounting, provider-compatible rerouting, and bounded spend reservation/cancellation.
+**Scope:** task-bound human approval, role and credential enforcement,
+one-terminal-outcome contract, receipt-to-commit/PR linkage, failed-retry
+accounting, provider-compatible rerouting, bounded spend reservation and
+cancellation, and operational federated quota/capacity reconciliation.
 
-**Exit evidence:** no unresolved Sev1/Sev2 truth defect; a multi-harness test matrix proves authorization, completion, model/provider attribution, and cost reconciliation; an unverified outcome never reports success.
+**Exit evidence:** no unresolved Sev1/Sev2 truth defect; a multi-harness test
+matrix proves authorization, completion, model/provider attribution, and
+cost/quota reconciliation; an unverified outcome never reports success.
 
 ### v0.25.4 -- Canonical State and Release Integrity
 
@@ -122,7 +137,7 @@ No record is deleted merely to simplify the display. Each supersession must refe
 |---|---|---|
 | Supervised safety and authority | v0.25.3--v0.26.0 | Denied paths, approval provenance, role/credential checks |
 | Completion and job truth | v0.25.3 | Receipts bind to commits/PRs; no false success |
-| Capability attribution and cost/budgets | v0.25.2--v0.25.3 | Valid catalog, attributable attempts, bounded cost |
+| Capacity enlistment, attribution, and cost/budgets | v0.25.2--v0.25.3 | Safe Local/Muse pilot eligibility, valid catalog, attributable attempts, bounded and reconciled cost/quota |
 | State and document truth | v0.25.4 | One DB, deterministic projections, release provenance |
 | Containment | v0.26.2 gate | Explicit egress/credential boundary evidence |
 | Surface tiering | v0.27.0 | Thin client; CLI remains reference substrate |
