@@ -1710,6 +1710,11 @@ _GH_CLI_WRITE_RE = re.compile(
     re.IGNORECASE,
 )
 
+_GH_MCP_WRITE_RE = re.compile(
+    r"\b(?:add_review_to_pr|add_comment_to_issue)\b",
+    re.IGNORECASE,
+)
+
 _GH_ACTION_TARGET_RE = re.compile(
     r"(?:"
     r"\b(?:review|approv(?:e|ing))\s+(?:(?:the|this)\s+)?(?:github\s+)?(?:pr|pull\s+request)\s*#?\d+\b|"
@@ -1901,7 +1906,7 @@ def _task_requires_gh_write(task: str, task_type: str = None) -> bool:
     false positives on file paths, tracking issue mentions, and non-action prose.
     """
     text = task or ""
-    if _GH_CLI_WRITE_RE.search(text):
+    if _GH_CLI_WRITE_RE.search(text) or _GH_MCP_WRITE_RE.search(text):
         return True
     return bool(_GH_ACTION_TARGET_RE.search(text))
 

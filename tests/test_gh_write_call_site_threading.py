@@ -93,3 +93,28 @@ def test_apply_gh_write_verification_defaults_expect_to_closed(monkeypatch):
     assert captured["expect"] == "closed"
     assert status == "done"
     assert verified_str == "true"
+
+
+def test_cancelled_mcp_write_cannot_remain_successful():
+    status, exit_code = jobs_mod._apply_github_mcp_cancellation_status(
+        "done", 0,
+        '{"error":{"message":"user cancelled MCP tool call"}}',
+        True, "unknown",
+    )
+
+    assert status == "succeeded_gh_write_failed"
+    assert exit_code == 1
+    assert jobs_mod._terminal_status_after_verification(
+        status, exit_code, "unknown", True
+    ) == ("succeeded_gh_write_failed", 1)
+
+
+def test_cancelled_mcp_write_stays_successful_when_effect_was_verified():
+    status, exit_code = jobs_mod._apply_github_mcp_cancellation_status(
+        "done", 0,
+        '{"error":{"message":"user cancelled MCP tool call"}}',
+        True, "true",
+    )
+
+    assert status == "done"
+    assert exit_code == 0

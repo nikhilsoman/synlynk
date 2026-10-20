@@ -335,6 +335,13 @@ def test_format_job_summary_does_not_double_flag_failed_job():
     assert "GH WRITE CANCELLED" not in summary
 
 
+@pytest.mark.parametrize("tool_name", ["add_review_to_pr", "add_comment_to_issue"])
+def test_task_requires_gh_write_detects_cancelled_mcp_write_tools(tool_name):
+    from synlynk.dispatch import _task_requires_gh_write
+
+    assert _task_requires_gh_write(f"Use {tool_name} for the GitHub write") is True
+
+
 def test_grok_shell_denial_is_detected_even_when_wrapper_exits_zero():
     from synlynk.costs import _log_has_permission_denied_signature
 
