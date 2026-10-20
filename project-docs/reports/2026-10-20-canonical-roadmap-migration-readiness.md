@@ -99,3 +99,22 @@ All 12 headers are `planned` and explicitly non-ready. Their notes name the
 parent issue and associated goals. This is intentionally not a release claim:
 the next checkpoint links verified delivery stories to existing or newly
 created GitHub tickets, then creates the release phases.
+
+## Reconciliation Progress
+
+The following evidence-preserving changes have been applied to canonical state.
+
+- Five v0.25.2 phases now link model-recovery delivery stories to goals and
+  tickets #2291 and #2447--#2450.
+- Five model-catalog subtask stories with an encoded, existing issue reference
+  are linked to #2291.
+- 691 open `story-adhoc-*` implementation/review records are now archived as
+  `artifact-quarantine-2026-10-20`; no evidence was deleted.
+- 645 active `story-issue-<number>` records with an all-numeric suffix now
+  carry that deterministic GitHub ticket number.
+- `goal-51c4be3f` owns v0.29.0 backlog consolidation.
+
+After these changes, the active ledger is 1,062 stories, with 40 still
+without a goal and 290 still without a ticket. Those remaining records require
+individual thematic disposition; they are not eligible for an automatic
+release-ready transition.
