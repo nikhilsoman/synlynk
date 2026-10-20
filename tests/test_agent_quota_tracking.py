@@ -156,6 +156,24 @@ def test_open_reservation_with_scope_id_and_job_id(project_dir):
     assert row == ("plan", "run-abc123", "job-xyz")
 
 
+def test_open_reservation_reuses_connection_transaction(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    conn.execute("BEGIN")
+    rid = sl._open_reservation(conn, "codex", 1500, scope="adhoc")
+
+    assert conn.in_transaction
+    assert conn.execute(
+        "SELECT status FROM harness_reservations WHERE id=?", (rid,)
+    ).fetchone() == ("open",)
+
+    conn.rollback()
+    assert conn.execute(
+        "SELECT 1 FROM harness_reservations WHERE id=?", (rid,)
+    ).fetchone() is None
+
+
 def test_quota_status_subtracts_open_reservations(project_dir):
     import synlynk as sl
 
