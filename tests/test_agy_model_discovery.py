@@ -88,11 +88,11 @@ def test_resolve_tier_model_replaces_stale_agy_catalog_id(tmp_path, monkeypatch)
 
     monkeypatch.setenv("SYNLYNK_FORCE_MODEL_DISCOVERY", "1")
     monkeypatch.setattr(
-        "synlynk.models.probe_cli_harness",
-        lambda harness, executable=None, timeout=5.0: [
+        "synlynk.models.discover_models",
+        lambda: [
             ModelSpec(model_id, "discovered", "agy", discovered=True)
             for model_id in _parse_agy_models_listing(AGY_MODELS_OUTPUT)
-        ] if harness == "agy" else [],
+        ],
     )
     from synlynk.models import _DISCOVERY_CACHE
     _DISCOVERY_CACHE.clear()
