@@ -217,12 +217,24 @@ def restore_state_db(
     destination_path = Path(destination).expanduser().resolve()
     if not source.is_file():
         raise FileNotFoundError(source)
+    registered = registered_canonical_path(slug)
+    if registered is not None and registered != destination_path:
+        raise StateRegistryError(
+            "refusing to restore outside the registry-selected canonical DB: "
+            f"registry={registered} destination={destination_path}"
+        )
     with sqlite3.connect(f"file:{source}?mode=ro", uri=True) as conn:
         if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
             raise sqlite3.DatabaseError(f"restore snapshot failed integrity check: {source}")
     archive_dir = Path(archive_root or Path.home() / ".synlynk" / "backups").expanduser().resolve()
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
-    archive_path = archive_dir / f"restore-{slug}-{stamp}" / destination_path.name
+    # Restores can run concurrently or repeatedly within one second. Never
+    # reuse an archive path: os.replace would otherwise destroy a rollback
+    # point from an earlier restore.
+    archive_parent = archive_dir / f"restore-{slug}-{stamp}-{time.time_ns() % 1_000_000_000:09d}"
+    while (archive_parent / destination_path.name).exists():
+        archive_parent = archive_dir / f"restore-{slug}-{stamp}-{time.time_ns() % 1_000_000_000:09d}"
+    archive_path = archive_parent / destination_path.name
     result = {
         "disposition": "planned",
         "snapshot": str(source),
@@ -236,6 +248,12 @@ def restore_state_db(
     archive_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = destination_path.with_name(f".{destination_path.name}.restore.lock")
     with registry_lock(lock_path):
+        registered = registered_canonical_path(slug)
+        if registered is not None and registered != destination_path:
+            raise StateRegistryError(
+                "refusing to restore outside the registry-selected canonical DB: "
+                f"registry={registered} destination={destination_path}"
+            )
         temporary = _normalized_copy(source, destination_path.parent)
         try:
             if destination_path.exists():

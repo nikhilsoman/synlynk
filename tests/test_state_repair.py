@@ -1,5 +1,7 @@
 import json
 import sqlite3
+import time
+from pathlib import Path
 
 import pytest
 
@@ -89,6 +91,37 @@ def test_restore_is_dry_run_by_default_and_assigns_new_lineage(tmp_path, monkeyp
     assert conn.execute("SELECT value FROM facts").fetchone()[0] == "restored"
     conn.close()
     assert list((tmp_path / "archive").rglob("state.db"))
+
+
+def test_restore_rejects_destination_outside_registered_canonical_path(tmp_path, monkeypatch):
+    monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(tmp_path / "registry.json"))
+    source = tmp_path / "source.db"
+    canonical = tmp_path / "canonical" / "state.db"
+    wrong_destination = tmp_path / "wrong" / "state.db"
+    _db(source)
+    promote_state_db(source, canonical, slug="demo", product_id="product-demo")
+
+    with pytest.raises(StateRegistryError, match="outside the registry-selected"):
+        restore_state_db(source, wrong_destination, slug="demo", product_id="product-demo", apply=True)
+    assert not wrong_destination.exists()
+
+
+def test_restore_uses_distinct_archive_for_repeated_same_second_restores(tmp_path, monkeypatch):
+    monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(tmp_path / "registry.json"))
+    source = tmp_path / "source.db"
+    destination = tmp_path / "workspace" / "state.db"
+    archive_root = tmp_path / "archive"
+    _db(source, "restored")
+    destination.parent.mkdir()
+    _db(destination, "first")
+
+    monkeypatch.setattr(time, "time", lambda: 1234567890.0)
+    first = restore_state_db(source, destination, slug="demo", product_id="product-demo", archive_root=archive_root, apply=True)
+    second = restore_state_db(source, destination, slug="demo", product_id="product-demo", archive_root=archive_root, apply=True)
+
+    assert first["archive"] != second["archive"]
+    assert Path(first["archive"]).exists()
+    assert Path(second["archive"]).exists()
 
 
 def test_register_existing_state_validates_and_registers(tmp_path, monkeypatch):
