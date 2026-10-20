@@ -631,7 +631,7 @@ def _scan_stage_source(root: str, results: dict) -> None:
     """Stage 2: AST-parse Python files and collect per-file source metrics."""
     import ast as _ast
 
-    skip_names = {".git", "__pycache__", "node_modules", ".venv", "venv", ".tox"}
+    skip_names = {".git", "__pycache__", "node_modules", ".venv", "venv", ".tox", "worktrees", ".worktrees", ".synlynk"}
 
     def _should_skip(dirpath: str) -> bool:
         parts = set(dirpath.split(os.sep))
@@ -642,7 +642,8 @@ def _scan_stage_source(root: str, results: dict) -> None:
         results["source"] = file_results
         return
 
-    for dirpath, _, filenames in os.walk(root):
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in skip_names]
         if _should_skip(dirpath):
             continue
         for fn in filenames:
@@ -716,7 +717,7 @@ def _scan_stage_complexity(root: str, results: dict) -> None:
     """Stage 3: detect function/file hotspots and count TODO-style markers."""
     import ast as _ast
 
-    skip_names = {".git", "__pycache__", "node_modules", ".venv", "venv", ".tox"}
+    skip_names = {".git", "__pycache__", "node_modules", ".venv", "venv", ".tox", "worktrees", ".worktrees", ".synlynk"}
 
     def _should_skip(dirpath: str) -> bool:
         parts = set(dirpath.split(os.sep))
@@ -730,7 +731,8 @@ def _scan_stage_complexity(root: str, results: dict) -> None:
 
     marker_pattern = re.compile(r"\b(TODO|FIXME|HACK|XXX)\b")
 
-    for dirpath, _, filenames in os.walk(root):
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in skip_names]
         if _should_skip(dirpath):
             continue
         for fn in filenames:
@@ -781,7 +783,7 @@ def _scan_stage_tests(root: str, results: dict) -> None:
     """Stage 4: structural name matching for public-function test gaps."""
     import ast as _ast
 
-    skip_names = {".git", "__pycache__", "node_modules", ".venv", "venv", ".tox"}
+    skip_names = {".git", "__pycache__", "node_modules", ".venv", "venv", ".tox", "worktrees", ".worktrees", ".synlynk"}
 
     def _should_skip(dirpath: str) -> bool:
         parts = set(dirpath.split(os.sep))
@@ -798,7 +800,8 @@ def _scan_stage_tests(root: str, results: dict) -> None:
         }
         return
 
-    for dirpath, _, filenames in os.walk(root):
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in skip_names]
         if _should_skip(dirpath):
             continue
         for fn in filenames:
@@ -914,7 +917,7 @@ def _scan_stage_arch(root: str, results: dict) -> None:
     """Stage 6: scan entry points, local imports, dead candidates, and pattern."""
     import ast as _ast
 
-    skip_names = {".git", "__pycache__", "node_modules", ".venv", "venv", ".tox"}
+    skip_names = {".git", "__pycache__", "node_modules", ".venv", "venv", ".tox", "worktrees", ".worktrees", ".synlynk"}
     pkg_name = os.path.basename(os.path.abspath(root)) or ""
 
     def _should_skip(dirpath: str) -> bool:
@@ -937,7 +940,8 @@ def _scan_stage_arch(root: str, results: dict) -> None:
         }
         return
 
-    for dirpath, _, filenames in os.walk(root):
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in skip_names]
         if _should_skip(dirpath):
             continue
         for fn in filenames:
@@ -1032,7 +1036,7 @@ def _scan_stage_stack(root: str, results: dict) -> None:
     import fnmatch as _fnmatch
     import json as _json
 
-    skip_names = {".git", "__pycache__", "node_modules", ".venv", "venv", ".tox"}
+    skip_names = {".git", "__pycache__", "node_modules", ".venv", "venv", ".tox", "worktrees", ".worktrees", ".synlynk"}
 
     def _should_skip(dirpath: str) -> bool:
         parts = set(dirpath.split(os.sep))
@@ -1049,7 +1053,8 @@ def _scan_stage_stack(root: str, results: dict) -> None:
         elif os.path.exists(os.path.join(root, "Gemfile")):
             language = "ruby"
         else:
-            for dirpath, _, filenames in os.walk(root):
+            for dirpath, dirnames, filenames in os.walk(root):
+                dirnames[:] = [d for d in dirnames if d not in skip_names]
                 if _should_skip(dirpath):
                     continue
                 if any(_fnmatch.fnmatch(fn, "*.py") for fn in filenames):
@@ -1288,8 +1293,10 @@ def run_workspace_scan(roots: list = None, workspace_name: str = None,
     def _count_files(root, patterns):
         import fnmatch as _fnmatch
         count = 0
-        for dirpath, _, filenames in os.walk(root):
-            if any(p in dirpath for p in (".git", "__pycache__", "node_modules", ".venv", "venv")):
+        skip_scan = (".git", "__pycache__", "node_modules", ".venv", "venv", ".tox", "worktrees", ".worktrees", ".synlynk")
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [d for d in dirnames if d not in skip_scan]
+            if any(p in dirpath for p in skip_scan):
                 continue
             for fn in filenames:
                 if any(_fnmatch.fnmatch(fn, p) for p in patterns):
@@ -1498,6 +1505,11 @@ def generate_structured_context(scan_result: dict,
 _PROJECT_DOC_NAMES = {"roadmap.md", "todo.md", "memory.md", "costs.md", "devlog.md"}
 
 _AGENT_FILE_NAMES = {"CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md", "AI_INSTRUCTIONS.md"}
+
+_SCAN_SKIP_NAMES = {
+    ".git", "__pycache__", "node_modules", ".venv", "venv", ".tox",
+    "worktrees", ".worktrees", ".synlynk",
+}
 
 _SCAN_SKIP_DIRS = {
     ".git", "node_modules", ".synlynk", "project-docs",

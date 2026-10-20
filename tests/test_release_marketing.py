@@ -191,3 +191,36 @@ def test_find_binaries():
     pandoc = find_pandoc_binary()
     assert pandoc is None or os.path.exists(pandoc)
 
+
+def test_compile_html_to_pdf_headless_flags(monkeypatch, tmp_path):
+    html_file = tmp_path / "test.html"
+    html_file.write_text("<html><body>Test</body></html>")
+    pdf_file = tmp_path / "test.pdf"
+
+    captured_cmds = []
+
+    def mock_run(cmd, *args, **kwargs):
+        captured_cmds.append(cmd)
+        # Create dummy pdf file so compile_html_to_pdf sees success
+        pdf_file.write_bytes(b"%PDF-1.4 dummy content")
+        class MockProc:
+            returncode = 0
+        return MockProc()
+
+    monkeypatch.setattr("subprocess.run", mock_run)
+
+    success = compile_html_to_pdf(
+        str(html_file),
+        str(pdf_file),
+        chrome_bin="/usr/bin/fake-chrome",
+    )
+    assert success is True
+    assert len(captured_cmds) == 1
+    cmd = captured_cmds[0]
+    assert cmd[0] == "/usr/bin/fake-chrome"
+    assert "--headless=new" in cmd
+    assert "--no-sandbox" in cmd
+    assert "--disable-gpu" in cmd
+    assert any(arg.startswith("--user-data-dir=") for arg in cmd)
+
+
