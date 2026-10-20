@@ -134,3 +134,24 @@ The active ledger is now 939 stories, with zero stories without a goal and 147
 without a ticket. That remaining cohort requires individual delivery versus
 evidence classification. Opening a speculative issue for each record would
 recreate the drift this reconciliation is intended to remove.
+
+## Reference Resolution Checkpoint
+
+Snapshot `pre-reference-resolution-2026-10-20-20261020T032915Z.db`
+(SHA-256 `418dc7d2a6543c87639201285c2f4b64dee29b9c557056904ba1d15b0c64929d`)
+preceded resolution of 45 additional title references. Five resolved to live
+GitHub issues and were linked. The other 40 resolved to closed issues or closed
+pull requests and were archived as `closed-reference-evidence-archive-2026-10-20`;
+their original source references remain queryable.
+
+A final snapshot, `pre-final-placeholder-disposition-2026-10-20-20261020T032941Z.db`
+(SHA-256 `697cd20d8aed030d5317cf4cfa2754c291f3cbdd8f55cbc210cbf7aae4faa971`),
+preceded the archival of eight explicit test, dogfood, retry, duplicate, or
+addendum remnants. The addendum and duplicate retain `superseded_by` links to
+their canonical stories.
+
+The active ledger is now 891 stories, all goal-linked; 94 lack a current issue
+ticket. They are real candidate backlog rather than mechanically classifiable
+artifacts, so they remain visible for deliberate placement under a named
+release or v0.29.0 consolidation. No Developer Preview date or ready state has
+been asserted.
