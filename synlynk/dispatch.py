@@ -925,6 +925,7 @@ def _defer_local_concurrency(conn, *, job_id: str, agent: str, task: str,
                              story_id: str, reason: str) -> dict:
     """Keep an at-capacity local dispatch queued for a later scheduler tick."""
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    dispatch_context = _dispatch_context()
     try:
         cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
         if "blocked_reason" not in cols:
@@ -941,8 +942,9 @@ def _defer_local_concurrency(conn, *, job_id: str, agent: str, task: str,
             conn.execute(
                 "INSERT INTO daemon_jobs "
                 "(job_id, agent, task, story_id, status, priority, depends_on, "
-                "enqueued_at, blocked_reason) VALUES (?, ?, ?, ?, 'queued', 5, '[]', ?, ?)",
-                (job_id, agent, task, story_id, now, reason),
+                "enqueued_at, blocked_reason, dispatch_context) "
+                "VALUES (?, ?, ?, ?, 'queued', 5, '[]', ?, ?, ?)",
+                (job_id, agent, task, story_id, now, reason, dispatch_context),
             )
         conn.commit()
     except Exception:
@@ -4171,6 +4173,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         reset_at = _r["reset_at"]
                         break
             now_iso = time.strftime("%Y-%m-%dT%H:%M:%S")
+            dispatch_context = _dispatch_context()
             existing_job = dconn.execute(
                 "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
             ).fetchone()
@@ -4183,10 +4186,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             else:
                 dconn.execute(
                     "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, "
-                    "priority, depends_on, enqueued_at, blocked_reason) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "priority, depends_on, enqueued_at, blocked_reason, dispatch_context) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (job_id, agent, task, story_id, "queued", 5, "[]", now_iso,
-                     "quota_exhausted"),
+                     "quota_exhausted", dispatch_context),
                 )
             dconn.commit()
             if owns_dconn and dconn is not None:
@@ -4728,9 +4731,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         })
         dconn.execute(
             "INSERT OR IGNORE INTO daemon_jobs "
-            "(job_id, agent, task, story_id, status, priority, depends_on, enqueued_at) "
-            "VALUES (?, ?, ?, ?, 'running', 5, '[]', ?)",
-            (job_id, agent, task, story_id, time.strftime("%Y-%m-%dT%H:%M:%S")),
+            "(job_id, agent, task, story_id, status, priority, depends_on, enqueued_at, dispatch_context) "
+            "VALUES (?, ?, ?, ?, 'running', 5, '[]', ?, ?)",
+            (job_id, agent, task, story_id, time.strftime("%Y-%m-%dT%H:%M:%S"), _dispatch_context()),
         )
         local_slot_claimed = True
 
