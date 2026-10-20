@@ -7,6 +7,11 @@
 - **Directories:** bin, docs, project-docs, synlynk, tests, website
 
 ## Decisions
+- **2026-10-20 [Sev1 LIVE-29 & LIVE-28 Remediation: AST Scanner Worktree Exclusion & Headless Chrome Isolation]:**
+  Resolved Sev1 issue #2477 (LIVE-29) and headless Chrome aborts in issue #2463 (LIVE-28):
+  (1) Workspace AST Scans Must Never Walk Git Worktrees: Updated `synlynk/scan.py` stages (`_scan_stage_source`, `_scan_stage_complexity`, `_scan_stage_tests`, `_scan_stage_arch`, `_scan_stage_stack`) and `_count_files` to explicitly skip `"worktrees"`, `".worktrees"`, and `".synlynk"`.
+  (2) In-Place os.walk Pruning: Mutated `dirnames[:]` in-place in `os.walk` to prevent directory traversal into worktrees, resolving 386x file inflation and stopping non-stop 100% CPU lockup and swap thrashing in autonomous healing loops (`cmd_heal()`).
+  (3) Headless Chrome Isolation: Modernized `synlynk/release_marketing.py:compile_html_to_pdf` to pass `--headless=new`, `--no-sandbox`, `--disable-gpu`, and isolated ephemeral `--user-data-dir`, preventing macOS `TransformProcessType` SIGABRT aborts in headless execution contexts. [@agy, @nikhilsoman]
 - **2026-10-19 [GTM Strategy: Pre-launching the Synaptic AI Capability Index as a Standalone Public Service, Interactive Prompt Oracle, and Universal Pre-Flight Routing API]:**
   Decide Panel (Codex, Grok, AGY) unanimously approved pre-launching the Synaptic AI Capability Index as an independent public web service (`index.synlynk.com`), interactive Prompt Oracle, and universal pre-flight routing API (`goal-20bb3987`, `story-5eecdf01`, GitHub #2431):
   (1) Standalone Product Positioning: Decoupled pre-flight routing solves the developer dilemma on Day 0 with zero repo permissions, zero API keys, and zero setup friction, acting as a high-conversion Trojan Horse for Synlynk orchestration and VS Code extension adoption;
