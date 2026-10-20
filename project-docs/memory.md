@@ -7,6 +7,10 @@
 - **Directories:** bin, docs, project-docs, synlynk, tests, website
 
 ## Decisions
+- **2026-10-20 [ncurses Signal Handler Re-entrancy Crash & conftest.py Signal Isolation (Issue #2486)]:**
+  Resolved intermittent macOS daemon and test runner crash `BUG IN CLIENT OF LIBPLATFORM: Trying to recursively lock an os_unfair_lock (Abort Cause 259)` during `fork()`:
+  (1) Diagnosis: `curses.initscr()` invoked in `conftest.py` installs C-level `sigaction` signal handlers for `SIGWINCH` (28), `SIGTSTP` (18), and `SIGTERM` (15). When an asynchronous signal arrived while Thread 0 was inside `fork()`, `libncurses`'s signal handler invoked `endwin()` -> `sprintf()` -> `localeconv_l()`, which attempted to re-entrantly acquire a non-recursive `os_unfair_lock`, triggering a fatal `_os_unfair_lock_recursive_abort`.
+  (2) Remediation: Updated `ensure_curses_initialized()` in `conftest.py` to snapshot pre-initialization signal handlers for `SIGWINCH`, `SIGTSTP`, `SIGTERM`, and `SIGINT` and immediately restore them via `signal.signal()` after `curses.initscr()`. Added regression suite in `tests/test_conftest_curses.py`. [@agy, @nikhilsoman]
 - **2026-10-20 [Sev1 LIVE-29 & LIVE-28 Remediation: AST Scanner Worktree Exclusion & Headless Chrome Isolation]:**
   Resolved Sev1 issue #2477 (LIVE-29) and headless Chrome aborts in issue #2463 (LIVE-28):
   (1) Workspace AST Scans Must Never Walk Git Worktrees: Updated `synlynk/scan.py` stages (`_scan_stage_source`, `_scan_stage_complexity`, `_scan_stage_tests`, `_scan_stage_arch`, `_scan_stage_stack`) and `_count_files` to explicitly skip `"worktrees"`, `".worktrees"`, and `".synlynk"`.
