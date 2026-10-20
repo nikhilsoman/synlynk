@@ -2862,5 +2862,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2459 \u2014 correct Codex and local catalog (PR #2459, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2459.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-20) - PR #2459\n- Merged improvements and fixes for PR #2459."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/426-pr2462-enforce-version-authority-release-gate.md",
+    "title": "PR #2462 \u2014 enforce version authority release gate",
+    "author": "nikhilsoman",
+    "date": "2026-10-20",
+    "pr": "#2462",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2462."
+    ],
+    "tweet": "\ud83d\ude80 PR #2462 \u2014 enforce version authority release gate (PR #2462, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2462.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-20) - PR #2462\n- Merged improvements and fixes for PR #2462."
   }
 ]
