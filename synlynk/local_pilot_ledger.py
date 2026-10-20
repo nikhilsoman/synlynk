@@ -8,7 +8,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
-from synlynk.migrations.m0024_local_pilot_ledger import MIGRATION
+from synlynk.migrations.runner import run_pending_migrations
 from synlynk.wal_ledger import write_transaction
 
 
@@ -34,9 +34,8 @@ def _row_as_dict(conn: sqlite3.Connection, job_id: str) -> dict:
 
 
 def ensure_local_pilot_ledger(conn: sqlite3.Connection) -> None:
-    """Create the ledger schema and seed the immutable historical summary."""
-    with write_transaction(conn):
-        MIGRATION.up(conn)
+    """Install the ledger through the canonical versioned migration runner."""
+    run_pending_migrations(conn)
 
 
 def record_admission(conn: sqlite3.Connection, sample: dict) -> dict:
@@ -121,10 +120,22 @@ def load_pilot_status(conn: sqlite3.Connection) -> dict:
         raise RuntimeError("Local pilot ledger has not been initialized")
     status = {"historical": dict(zip(("cohort", "accepted", "eligible"), historical))}
     for cohort in ("validation", "expansion"):
-        eligible, accepted = conn.execute(
-            "SELECT COUNT(*), COUNT(*) FILTER (WHERE quality_verdict = 'accepted') "
+        accepted, pending, rejected, safety_failed = conn.execute(
+            "SELECT "
+            "COUNT(*) FILTER (WHERE safety_verdict = 'passed' AND quality_verdict = 'accepted'), "
+            "COUNT(*) FILTER (WHERE safety_verdict != 'failed' AND quality_verdict != 'rejected' "
+            "AND (safety_verdict = 'pending' OR quality_verdict = 'pending')), "
+            "COUNT(*) FILTER (WHERE safety_verdict != 'failed' AND quality_verdict = 'rejected'), "
+            "COUNT(*) FILTER (WHERE safety_verdict = 'failed') "
             "FROM local_pilot_evidence WHERE cohort = ?",
             (cohort,),
         ).fetchone()
-        status[cohort] = {"cohort": cohort, "accepted": accepted, "eligible": eligible}
+        status[cohort] = {
+            "cohort": cohort,
+            "accepted": accepted,
+            "eligible": accepted,
+            "pending": pending,
+            "rejected": rejected,
+            "safety_failed": safety_failed,
+        }
     return status

@@ -6,14 +6,18 @@ from synlynk.migrations import Migration
 
 
 def _up(conn: sqlite3.Connection) -> None:
-    conn.executescript(
+    # Do not use ``executescript`` here: sqlite3 commits any active
+    # transaction before executing its script, which defeats the migration
+    # runner's per-migration atomicity guarantee.
+    statements = (
         """
         CREATE TABLE IF NOT EXISTS local_pilot_cohort_summaries (
             cohort TEXT PRIMARY KEY CHECK (cohort = 'historical'),
             accepted INTEGER NOT NULL CHECK (accepted >= 0),
             eligible INTEGER NOT NULL CHECK (eligible >= accepted)
-        );
-
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS local_pilot_evidence (
             job_id TEXT PRIMARY KEY,
             cohort TEXT NOT NULL CHECK (cohort IN ('validation', 'expansion')),
@@ -34,11 +38,13 @@ def _up(conn: sqlite3.Connection) -> None:
             reviewer_rationale TEXT,
             reviewer_selection_reason TEXT,
             quality_recorded_at TEXT
-        );
-
+        )
+        """,
+        """
         CREATE INDEX IF NOT EXISTS idx_local_pilot_evidence_cohort
-        ON local_pilot_evidence(cohort, admitted_at);
-
+        ON local_pilot_evidence(cohort, admitted_at)
+        """,
+        """
         CREATE TRIGGER IF NOT EXISTS local_pilot_evidence_immutable_fields
         BEFORE UPDATE ON local_pilot_evidence
         WHEN OLD.job_id != NEW.job_id
@@ -50,8 +56,9 @@ def _up(conn: sqlite3.Connection) -> None:
           OR OLD.admitted_at != NEW.admitted_at
         BEGIN
             SELECT RAISE(ABORT, 'local pilot evidence is immutable');
-        END;
-
+        END
+        """,
+        """
         CREATE TRIGGER IF NOT EXISTS local_pilot_evidence_safety_terminal
         BEFORE UPDATE ON local_pilot_evidence
         WHEN OLD.safety_verdict != 'pending'
@@ -62,8 +69,9 @@ def _up(conn: sqlite3.Connection) -> None:
                OR OLD.safety_recorded_at IS NOT NEW.safety_recorded_at)
         BEGIN
             SELECT RAISE(ABORT, 'local pilot safety outcome is terminal');
-        END;
-
+        END
+        """,
+        """
         CREATE TRIGGER IF NOT EXISTS local_pilot_evidence_quality_terminal
         BEFORE UPDATE ON local_pilot_evidence
         WHEN OLD.quality_verdict != 'pending'
@@ -74,9 +82,34 @@ def _up(conn: sqlite3.Connection) -> None:
                OR OLD.quality_recorded_at IS NOT NEW.quality_recorded_at)
         BEGIN
             SELECT RAISE(ABORT, 'local pilot quality verdict is terminal');
-        END;
+        END
+        """,
         """
+        CREATE TRIGGER IF NOT EXISTS local_pilot_evidence_no_delete
+        BEFORE DELETE ON local_pilot_evidence
+        BEGIN
+            SELECT RAISE(ABORT, 'local pilot evidence is append-only');
+        END
+        """,
+        """
+        CREATE TRIGGER IF NOT EXISTS local_pilot_historical_summary_no_update
+        BEFORE UPDATE ON local_pilot_cohort_summaries
+        WHEN OLD.cohort = 'historical'
+        BEGIN
+            SELECT RAISE(ABORT, 'local pilot historical summary is immutable');
+        END
+        """,
+        """
+        CREATE TRIGGER IF NOT EXISTS local_pilot_historical_summary_no_delete
+        BEFORE DELETE ON local_pilot_cohort_summaries
+        WHEN OLD.cohort = 'historical'
+        BEGIN
+            SELECT RAISE(ABORT, 'local pilot historical summary cannot be deleted');
+        END
+        """,
     )
+    for statement in statements:
+        conn.execute(statement)
     conn.execute(
         "INSERT OR IGNORE INTO local_pilot_cohort_summaries (cohort, accepted, eligible) "
         "VALUES ('historical', 8, 12)"

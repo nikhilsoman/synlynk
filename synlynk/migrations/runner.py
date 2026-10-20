@@ -16,6 +16,7 @@ from synlynk.migrations.m0021_harness_model_catalog import MIGRATION as M0021
 from synlynk.migrations.m0022_subscriptions_harness_name import MIGRATION as M0022
 from synlynk.migrations.m0023_cleanse_execution_log_models import MIGRATION as M0023
 from synlynk.migrations.m0024_local_pilot_ledger import MIGRATION as M0024
+from synlynk.wal_ledger import write_transaction
 
 # Static, explicitly-imported registry. Append future Migration entries here
 # in ascending version order — no dynamic directory scanning.
@@ -42,6 +43,19 @@ def run_pending_migrations(conn: sqlite3.Connection) -> None:
         key=lambda m: m.version,
     )
     for migration in pending:
+        # Migration 24 deliberately avoids executescript, so its schema,
+        # version marker, and history entry can be committed atomically.
+        # Earlier migrations predate this contract and may use executescript.
+        if migration.version == M0024.version:
+            with write_transaction(conn):
+                migration.up(conn)
+                conn.execute(f"PRAGMA user_version = {migration.version}")
+                conn.execute(
+                    "INSERT OR REPLACE INTO migration_history (version, name, applied_at) VALUES (?, ?, ?)",
+                    (migration.version, migration.name, datetime.now(timezone.utc).isoformat()),
+                )
+            continue
+
         migration.up(conn)
         conn.execute(f"PRAGMA user_version = {migration.version}")
         conn.execute(
