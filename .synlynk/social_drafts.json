@@ -2846,5 +2846,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2461 \u2014 resolve_tier_model() discovered-row fallback now respects requested tier (gh:#2454) (PR #2461, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2461.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-20) - PR #2461\n- Merged improvements and fixes for PR #2461."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/425-pr2459-correct-codex-and-local-catalog.md",
+    "title": "PR #2459 \u2014 correct Codex and local catalog",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-20",
+    "pr": "#2459",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2459."
+    ],
+    "tweet": "\ud83d\ude80 PR #2459 \u2014 correct Codex and local catalog (PR #2459, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2459.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-20) - PR #2459\n- Merged improvements and fixes for PR #2459."
   }
 ]
