@@ -1076,6 +1076,33 @@ def test_dispatch_agent_existing_job_quota_exhaustion_updates_row(project_dir):
     conn.close()
 
 
+def test_cost_entry_inherits_dispatch_context_from_daemon_job(project_dir):
+    conn = sl._get_db()
+    job_id = "job-cost-context"
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at, dispatch_context) "
+        "VALUES (?, ?, ?, 'running', ?, ?)",
+        (job_id, "codex", "cost context", "2026-08-08T00:00:00", "home"),
+    )
+    conn.commit()
+    conn.close()
+
+    sl._insert_cost_row(
+        session_date="2026-08-08",
+        agent="codex",
+        model="test-model",
+        cost_source="actual",
+        job_id=job_id,
+    )
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT dispatch_context FROM cost_entries WHERE job_id=?", (job_id,)
+    ).fetchone()
+    conn.close()
+    assert row == ("home",)
+
+
 def test_dispatch_agent_reuses_existing_open_reservation(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod

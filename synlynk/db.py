@@ -2319,12 +2319,24 @@ def _insert_cost_row(
             f"Invalid cost_source: {cost_source!r}, must be one of {_VALID_COST_SOURCES}"
         )
 
-    # Distinguish home vs headless dispatch context; detection logic itself is future work (issue #740).
-    if dispatch_context is None:
-        dispatch_context = "unknown"
-
     conn = _get_db()
     try:
+        # A cost row created from a daemon job inherits the context recorded at
+        # enqueue/dispatch time.  Keep ``unknown`` only for legacy or unlinked
+        # cost entries that have no daemon job to provide that provenance.
+        if dispatch_context is None and job_id is not None:
+            try:
+                row = conn.execute(
+                    "SELECT dispatch_context FROM daemon_jobs WHERE job_id=?",
+                    (job_id,),
+                ).fetchone()
+                if row and row[0]:
+                    dispatch_context = row[0]
+            except sqlite3.Error:
+                pass
+        if dispatch_context is None:
+            dispatch_context = "unknown"
+
         harness_val = harness or agent
         agent_val = agent or harness
         if decision_revision is None and job_id:

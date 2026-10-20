@@ -925,24 +925,29 @@ def _defer_local_concurrency(conn, *, job_id: str, agent: str, task: str,
                              story_id: str, reason: str) -> dict:
     """Keep an at-capacity local dispatch queued for a later scheduler tick."""
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    dispatch_context = _dispatch_context()
     try:
         cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
         if "blocked_reason" not in cols:
             conn.execute("ALTER TABLE daemon_jobs ADD COLUMN blocked_reason TEXT")
+        if "dispatch_context" not in cols:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN dispatch_context TEXT")
         existing = conn.execute(
             "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
         ).fetchone()
         if existing:
             conn.execute(
-                "UPDATE daemon_jobs SET status='queued', blocked_reason=? WHERE job_id=?",
-                (reason, job_id),
+                "UPDATE daemon_jobs SET status='queued', blocked_reason=?, "
+                "dispatch_context=COALESCE(dispatch_context, ?) WHERE job_id=?",
+                (reason, dispatch_context, job_id),
             )
         else:
             conn.execute(
                 "INSERT INTO daemon_jobs "
                 "(job_id, agent, task, story_id, status, priority, depends_on, "
-                "enqueued_at, blocked_reason) VALUES (?, ?, ?, ?, 'queued', 5, '[]', ?, ?)",
-                (job_id, agent, task, story_id, now, reason),
+                "enqueued_at, blocked_reason, dispatch_context) "
+                "VALUES (?, ?, ?, ?, 'queued', 5, '[]', ?, ?, ?)",
+                (job_id, agent, task, story_id, now, reason, dispatch_context),
             )
         conn.commit()
     except Exception:
@@ -4163,6 +4168,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         )
 
         if qstatus.get("status") == "exhausted":
+            dispatch_context = _dispatch_context()
+            _ensure_daemon_job_columns(dconn, {"dispatch_context": "TEXT"})
             reset_at = None
             rows_fn = _pkg("_read_agent_quota_rows")
             if rows_fn:
@@ -4177,16 +4184,17 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             if existing_job:
                 dconn.execute(
                     "UPDATE daemon_jobs SET status='queued', "
-                    "blocked_reason='quota_exhausted' WHERE job_id=?",
-                    (job_id,),
+                    "blocked_reason='quota_exhausted', "
+                    "dispatch_context=COALESCE(dispatch_context, ?) WHERE job_id=?",
+                    (dispatch_context, job_id),
                 )
             else:
                 dconn.execute(
                     "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, "
-                    "priority, depends_on, enqueued_at, blocked_reason) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "priority, depends_on, enqueued_at, blocked_reason, dispatch_context) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (job_id, agent, task, story_id, "queued", 5, "[]", now_iso,
-                     "quota_exhausted"),
+                     "quota_exhausted", dispatch_context),
                 )
             dconn.commit()
             if owns_dconn and dconn is not None:
