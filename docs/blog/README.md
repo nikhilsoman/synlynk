@@ -500,6 +500,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [421](./421-pr2455-implement-gh-2447-live-27-fix-db-cleanse.md) | PR #2455 — Implement gh:#2447 (LIVE-27 fix, DB cleanse layer). (job-66e27536) | [#2455](https://github.com/nikhilsoman/synlynk/pull/2455) | 2026-10-19 |
 | [422](./422-pr2456-add-live-27-fleet-wide-catalog-invariant.md) | PR #2456 — add LIVE-27 fleet-wide catalog invariant test suite (gh:#2450) | [#2456](https://github.com/nikhilsoman/synlynk/pull/2456) | 2026-10-19 |
 | [423](./423-pr2460-reconcile-roadmap-release-sequence.md) | PR #2460 — reconcile roadmap release sequence | [#2460](https://github.com/nikhilsoman/synlynk/pull/2460) | 2026-10-20 |
+| [424](./424-pr2461-resolve-tier-model-discovered-row-fallba.md) | PR #2461 — resolve_tier_model() discovered-row fallback now respects requested tier (gh:#2454) | [#2461](https://github.com/nikhilsoman/synlynk/pull/2461) | 2026-10-20 |
 
 ## Per-PR Post Template
 
