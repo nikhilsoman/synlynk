@@ -51,8 +51,8 @@ def test_local_resolve_model():
     assert LocalAdapter().resolve_model("fast", None)
 
 
-def test_local_resolve_model_supports_hermes_tier():
-    assert LocalAdapter().resolve_model("hermes", None) == "Hermes-3-Llama-3.1-8B"
+def test_local_resolve_model_unknown_tier_falls_back_to_qualified_local_model():
+    assert LocalAdapter().resolve_model("hermes", None) == "Ornith-1.0-9B-4bit"
 
 
 def test_local_resolve_model_preserves_existing_local_tiers():

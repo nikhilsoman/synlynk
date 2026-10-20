@@ -111,3 +111,41 @@ def test_resolution_is_plausible_and_current_catalog_member(monkeypatch, harness
     assert is_plausible_model_id(resolved)
     assert resolved in _curated_model_ids(harness)
 
+
+def test_discovered_fallback_respects_requested_tier(monkeypatch):
+    import synlynk as sl
+    import synlynk.db as db
+
+    conn = _catalog_db()
+    _insert(
+        conn,
+        "agy",
+        "gemini-3.8-flash-medium",
+        "cli:probe",
+        "2026-10-01T00:00:00+00:00",
+        "fast",
+    )
+    _insert(
+        conn,
+        "agy",
+        "claude-opus-4-6-thinking",
+        "cli:probe",
+        "2026-10-02T00:00:00+00:00",
+        "reasoning",
+    )
+    monkeypatch.setattr(sl, "_get_db", lambda: conn)
+
+    original_get_active = db.get_active_harness_models
+    skipped_tiers = set()
+
+    def empty_first_tier_lookup(conn, harness=None, tier=None):
+        if harness == "agy" and tier is not None and tier not in skipped_tiers:
+            skipped_tiers.add(tier)
+            return []
+        return original_get_active(conn, harness=harness, tier=tier)
+
+    monkeypatch.setattr(db, "get_active_harness_models", empty_first_tier_lookup)
+
+    assert resolve_tier_model("fast", "agy") == "gemini-3.8-flash-medium"
+    assert resolve_tier_model("reasoning", "agy") == "claude-opus-4-6-thinking"
+
