@@ -249,6 +249,14 @@ def test_lazy_parser_unknown_command_keeps_the_complete_choice_list():
     assert "sentinel" in choices
 
 
+@pytest.mark.parametrize("command", ["brainstorm", "brief", "gc"])
+def test_lazy_parser_registers_every_declared_top_level_command(command):
+    parser = cli_mod.build_parser(selected_command=command)
+    subparser_action = parser._subparsers._group_actions[0]
+
+    assert subparser_action.choices[command].__class__.__name__ == "ArgumentParser"
+
+
 def test_state_restore_cli_prints_json_result(tmp_path, monkeypatch, capsys):
     source = tmp_path / "snapshot.db"
     sqlite3.connect(source).close()
