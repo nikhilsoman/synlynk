@@ -129,3 +129,33 @@ def test_resolve_tier_model_keeps_live_catalog_id(tmp_path, monkeypatch):
     _DISCOVERY_CACHE.clear()
 
     assert resolve_tier_model("fast", "agy", repo_path=str(tmp_path)) == "gemini-3.8-flash-low"
+
+
+def test_resolve_tier_model_replaces_stale_active_agy_row(tmp_path, monkeypatch):
+    """Live Agy discovery must validate persisted rows before returning them."""
+    from synlynk import _get_db
+    from synlynk.db import upsert_harness_model
+
+    path = tmp_path / ".synlynk"
+    path.mkdir()
+    (path / "models.json").write_text(json.dumps({
+        "tiers": {"fast": {"agy": "retired-agy-model"}},
+    }))
+
+    monkeypatch.setenv("SYNLYNK_FORCE_MODEL_DISCOVERY", "1")
+    monkeypatch.setattr(
+        "synlynk.models.discover_models",
+        lambda: [ModelSpec("gemini-3.8-flash-low", "discovered", "agy", discovered=True)],
+    )
+    from synlynk.models import _DISCOVERY_CACHE
+    _DISCOVERY_CACHE.clear()
+
+    conn = _get_db()
+    upsert_harness_model(
+        conn, "agy", "retired-agy-model", complexity_tier="fast",
+        discovered_at="2026-10-14T00:00:00+00:00",
+    )
+    conn.commit()
+    conn.close()
+
+    assert resolve_tier_model("fast", "agy", repo_path=str(tmp_path)) == "gemini-3.8-flash-low"

@@ -257,9 +257,17 @@ def resolve_tier_model(tier: str, harness: str, repo_path: Optional[str] = None)
     from synlynk import _get_db
     from synlynk.db import get_active_harness_models
 
+    # Validate Agy's persisted choice against the live roster before honoring
+    # it. A previous discovery can leave a stale active row behind until the
+    # next catalog refresh; returning it here would bypass the Agy fallback.
+    live_agy_models = discovered_model_ids("agy") if harness == "agy" else []
     conn = _get_db()
     active = get_active_harness_models(conn, harness=harness, tier=tier)
     if active:
+        if harness == "agy" and live_agy_models:
+            return _pick_discovered_tier_model(
+                harness, tier, active[0]["model_id"], live_agy_models
+            )
         return active[0]["model_id"]
 
     # The static catalog is a bootstrap seed only. Once discovery has ever
@@ -284,7 +292,7 @@ def resolve_tier_model(tier: str, harness: str, repo_path: Optional[str] = None)
     configured = _static_tier_model(tier, harness, repo_path)
     if harness == "agy":
         configured = _pick_discovered_tier_model(
-            harness, tier, configured, discovered_model_ids("agy")
+            harness, tier, configured, live_agy_models
         )
     return configured
 
@@ -531,7 +539,13 @@ def discovered_model_ids(harness: str) -> list[str]:
     cached = _DISCOVERY_CACHE.get(harness)
     if cached and (now - cached[0]) < _DISCOVERY_TTL_SECONDS:
         return list(cached[1])
-    ids = tuple(spec.model_id for spec in probe_cli_harness(harness))
+    # Keep tier resolution on the complete discovery path so harness-scoped
+    # deduplication and future discovery sources are reflected here too.
+    ids = tuple(
+        spec.model_id
+        for spec in discover_models()
+        if spec.harness_binding == harness
+    )
     _DISCOVERY_CACHE[harness] = (now, ids)
     return list(ids)
 
