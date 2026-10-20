@@ -101,6 +101,12 @@ def _load_legacy_imports():
 def main(argv=None):
     """Lazy compatibility entry point for installed console scripts."""
     cli_tokens = list(argv) if argv is not None else sys.argv[1:]
+    # argparse's version action is intentionally available without importing
+    # the CLI module (and its parser registration surface). Keep this path as
+    # small as package startup permits, including for ``synlynk --version``.
+    if "--version" in cli_tokens:
+        print(f"synlynk {VERSION}")
+        raise SystemExit(0)
     if _FAST_CLI and cli_tokens and cli_tokens[0] in {"jobs", "status"}:
         from synlynk._fast_cli import run_fast_command
 
