@@ -1,5 +1,20 @@
 # Codex Devlog
 
+## 2026-10-20 -- Capacity-first roadmap amendment
+
+- Investigated unavailable quota visibility, Muse omission, and Local
+  qualification/operational state. Confirmed quota capture implementation has
+  tests but lacks reliable live observations; Muse is not in the quota
+  registry/profile; Local Ornith has qualification evidence but its live
+  endpoint is unavailable and pilot records drift.
+- At Nikhil's direction, amended the canonical schedule and approved roadmap
+  design: v0.25.2 now admits constrained Local and Muse execution capacity;
+  live quota/cost reconciliation is a v0.25.3 trust gate. Guardrails retain
+  Local's isolated one-at-a-time 20% cohort and deny Muse/Local review,
+  deploy, and GitHub-write authority.
+- Verification: 102 local adapter, dispatch, pilot, qualification, HTTP auth,
+  registry, and permission-policy tests passed.
+
 ## 2026-09-16 - Unattended stacked-PR rebase (#1604)
 
 - Added a mocked `BEHIND`/`MERGEABLE` PR repair helper that fetches `origin/main`, rebases cleanly, and force-pushes with lease; conflicts abort without pushing.
