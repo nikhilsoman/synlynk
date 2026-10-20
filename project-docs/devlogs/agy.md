@@ -1178,3 +1178,38 @@
 - Authored full design specification: `docs/superpowers/specs/2026-10-01-unified-onboarding-journeys-and-lifecycle-design.md`.
 - Ready for implementation plan generation per Brainstorm-First policy.
 [@agy]
+
+## 2026-10-20 — Investigation & Fix: ncurses Signal Handler Crash & Zsh compinit Insecure Directories (Issue #2486)
+
+### Context & Problem Statement
+- Diagnosed two errors reported during session operation:
+  1. Zsh warning: `"zsh compinit: insecure directories and files, run compaudit for list. Ignore insecure directories and files and continue [y] or abort compinit [n]?"`
+  2. Python crash in `com.synlynk.daemon` / pytest runner on macOS:
+     ```text
+     Process: Python 3.14.4 (ARM-64)
+     Exception Type: EXC_BREAKPOINT (SIGKILL)
+     Application Specific Information: BUG IN CLIENT OF LIBPLATFORM: Trying to recursively lock an os_unfair_lock (Abort Cause 259)
+     Triggered Thread: Thread 0 (_os_unfair_lock_recursive_abort -> _os_unfair_lock_lock_slow -> localeconv_l -> sprintf -> _nc_mvcur_wrap -> endwin -> _sigtramp + 56 -> fork + 56)
+     ```
+
+### Root Cause Analysis
+1. **Error 1 (Zsh compinit):**
+   - Zsh audits directory permissions and ownership in `$fpath`. On the host machine, `/opt/homebrew/share/zsh` and `site-functions` were owned by `j8fuel:staff` rather than the active user `nikhilsoman:staff` (UID 501), and had group-write permissions.
+   - Prescribed `compaudit | xargs chmod g-w,o-w` and `sudo chown -R $(whoami):staff /opt/homebrew/share/zsh`.
+2. **Error 2 (Python crash during fork / ncurses signal handler):**
+   - Root `conftest.py` invoked `curses.initscr()` at `pytest_sessionstart` to support curses pad tests (`tests/test_tui_panels.py`).
+   - `curses.initscr()` causes underlying `libncurses.5.4.dylib` to install C-level `sigaction` signal handlers for `SIGWINCH` (28), `SIGTSTP` (18), and `SIGTERM` (15).
+   - Even after `curses.endwin()`, `libncurses` left those C handlers active in the process.
+   - When tests or background tasks ran subprocesses via `fork()`, an asynchronous signal (such as `SIGWINCH` upon terminal resize) was dispatched to Thread 0 via Darwin's signal trampoline (`_sigtramp`).
+   - `ncurses`'s handler ran `endwin()` -> `sprintf()` -> `localeconv_l()`. In Darwin 24+ (macOS 15+), `localeconv_l` acquires an internal non-recursive `os_unfair_lock`.
+   - Because Thread 0 was already executing `fork()` and held locks, re-entrantly calling non-async-signal-safe routines (`sprintf`/`localeconv_l`) triggered Apple's libplatform panic `_os_unfair_lock_recursive_abort` (`Abort Cause 259`).
+
+### Fix & Verification
+- **Issue Tracked:** Filed GitHub issue [#2486](https://github.com/nikhilsoman/synlynk/issues/2486).
+- **Signal Restoration in `conftest.py`:** Updated `ensure_curses_initialized()` in `conftest.py` to save ambient signal handlers for `SIGWINCH`, `SIGTSTP`, `SIGTERM`, and `SIGINT` before `curses.initscr()`, and restore them immediately using `signal.signal()`.
+- **TDD Verification:** Added `tests/test_conftest_curses.py` verifying that:
+  - Ambient signal handlers are preserved and restored.
+  - Curses pad allocation and string rendering (`curses.newpad()`) remain fully operational.
+  - Asynchronous `SIGWINCH` delivery after curses initialization does not trigger `libncurses` re-entrancy aborts.
+- **Test Results:** 12/12 curses/TUI tests and all 14 circuit breaker tests passed green in under 10s.
+[@agy]
