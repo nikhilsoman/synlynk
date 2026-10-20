@@ -37,6 +37,12 @@ class RunnerManager:
         if "fly" in enabled or "fly" in runner_config:
             from synlynk.runners.fly import FlyRunnerDriver
             self.drivers["fly"] = FlyRunnerDriver(runner_config.get("fly", {}))
+        if "docker" in enabled or "docker" in runner_config:
+            from synlynk.runners.docker import DockerRunnerDriver
+            self.drivers["docker"] = DockerRunnerDriver(runner_config.get("docker", {}))
+        if "k8s" in enabled or "k8s" in runner_config:
+            from synlynk.runners.k8s import KubernetesJobRunnerDriver
+            self.drivers["k8s"] = KubernetesJobRunnerDriver(runner_config.get("k8s", {}))
 
     def driver(self, name=None) -> SwarmRunnerDriver:
         name = name or self.config.get("swarm_runners", {}).get("default", "local")

@@ -991,7 +991,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     swarm_parser = subparsers.add_parser("swarm", help="Manage ephemeral swarm runners")
     swarm_sub = swarm_parser.add_subparsers(dest="swarm_action")
     swarm_dispatch = swarm_sub.add_parser("dispatch", help="Provision an ephemeral runner batch")
-    swarm_dispatch.add_argument("--driver", choices=("local", "fly"), default="local")
+    swarm_dispatch.add_argument("--driver", choices=("local", "fly", "docker", "k8s"), default="local")
     swarm_dispatch.add_argument("--batch-size", type=int, default=1)
     swarm_dispatch.add_argument("--task", default="true")
     swarm_status = swarm_sub.add_parser("status", help="Show swarm runner status")
