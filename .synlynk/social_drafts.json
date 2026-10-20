@@ -2942,5 +2942,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2484 \u2014 formalize canonical roadmap reconciliation and schedule (PR #2484, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2484.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-20) - PR #2484\n- Merged improvements and fixes for PR #2484."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/431-pr2485-sync-accumulated-local-cost-log-entries-.md",
+    "title": "PR #2485 \u2014 sync accumulated local cost-log entries into costs.md",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-20",
+    "pr": "#2485",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2485."
+    ],
+    "tweet": "\ud83d\ude80 PR #2485 \u2014 sync accumulated local cost-log entries into costs.md (PR #2485, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2485.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-20) - PR #2485\n- Merged improvements and fixes for PR #2485."
   }
 ]
