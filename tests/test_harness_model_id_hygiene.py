@@ -110,12 +110,12 @@ def test_upsert_harness_model_rejects_malformed_id():
     conn.close()
 
 
-def _insert_raw_catalog_row(conn, harness, model_id, discovered_at):
+def _insert_raw_catalog_row(conn, harness, model_id, discovered_at, tier="pro"):
     conn.execute(
         "INSERT INTO harness_models (harness_name, model_id, first_seen_at,"
-        " last_seen_at, status, discovery_source, provider, discovered_at)"
-        " VALUES (?, ?, ?, ?, 'active', 'execution_log', 'native', ?)",
-        (harness, model_id, discovered_at, discovered_at, discovered_at),
+        " last_seen_at, status, discovery_source, provider, complexity_tier, discovered_at)"
+        " VALUES (?, ?, ?, ?, 'active', 'execution_log', 'native', ?, ?)",
+        (harness, model_id, discovered_at, discovered_at, tier, discovered_at),
     )
 
 
