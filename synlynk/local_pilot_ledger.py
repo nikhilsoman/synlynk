@@ -119,6 +119,16 @@ def record_quality_verdict(
         return _row_as_dict(conn, job_id)
 
 
+def pause_local_pilot(reason: str) -> None:
+    """Disable future Local admission through the owned workspace config path."""
+    from synlynk import _update_config, load_workspace
+
+    workspace = load_workspace()
+    settings = dict(workspace.get("local_pilot") or {})
+    settings.update({"enabled": False, "pause_reason": str(reason)})
+    _update_config({"local_pilot": settings})
+
+
 def load_pilot_status(conn: sqlite3.Connection) -> dict:
     """Return intentionally separate historical, validation, and expansion cohorts."""
     historical = conn.execute(

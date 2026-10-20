@@ -1,3 +1,5 @@
+import hashlib
+import json
 import os
 import sys
 import sqlite3
@@ -7,6 +9,168 @@ import time
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+
+@pytest.fixture
+def local_pilot_terminal_job(tmp_path):
+    """An admitted, read-only pilot job and its runner receipt path."""
+    task = "Summarize the focused test result."
+    task_digest = hashlib.sha256(task.encode("utf-8")).hexdigest()
+    receipt_path = tmp_path / "runner.pilot.json"
+    admission = {
+        "admission_id": "pilot-job-1",
+        "task_sha256": task_digest,
+        "pilot_class": "test_summary",
+        "scope_paths": ["tests/test_jobs.py"],
+        "effective_model": "ornith-9b",
+        "qualified_models": ["ornith-9b"],
+        "result_receipt_file": str(receipt_path),
+    }
+    receipt = {
+        "schema_version": 1,
+        "job_id": "pilot-job-1",
+        "task_sha256": task_digest,
+        "pilot_class": "test_summary",
+        "scope_paths": ["tests/test_jobs.py"],
+        "effective_model": "ornith-9b",
+        "execution": "isolated",
+        "read_only": True,
+        "preflight_passed": True,
+        "rollback_verified": True,
+        "outcome": "completed_read_only",
+        "exit_code": 0,
+        "changed_paths": [],
+        "applied_paths": [],
+    }
+    return {
+        "id": "pilot-job-1",
+        "agent": "local",
+        "task": task,
+        "local_pilot_receipt": admission,
+        "receipt_path": receipt_path,
+        "runner_receipt": receipt,
+    }
+
+
+def _admit_local_pilot_job(conn, job):
+    from synlynk.local_pilot_ledger import ensure_local_pilot_ledger, record_admission
+
+    ensure_local_pilot_ledger(conn)
+    admission = job["local_pilot_receipt"]
+    record_admission(conn, {
+        "job_id": job["id"],
+        "cohort": "validation",
+        "task_class": admission["pilot_class"],
+        "task_digest": admission["task_sha256"],
+        "receipt": admission,
+    })
+
+
+def test_reconcile_local_pilot_terminal_records_only_matching_read_only_safety_pass(
+    tmp_path, monkeypatch, local_pilot_terminal_job
+):
+    """Removing any receipt identity check must stop this safety-only pass."""
+    from synlynk.jobs import reconcile_local_pilot_terminal
+
+    conn = sqlite3.connect(":memory:")
+    job = local_pilot_terminal_job
+    _admit_local_pilot_job(conn, job)
+    job["receipt_path"].write_text(json.dumps(job["runner_receipt"]))
+    monkeypatch.chdir(tmp_path)
+
+    result = reconcile_local_pilot_terminal(conn, job)
+
+    assert result == {"safety_verdict": "passed", "reason": "completed_read_only", "paused": False}
+    stored = conn.execute(
+        "SELECT safety_verdict, quality_verdict FROM local_pilot_evidence WHERE job_id = ?",
+        (job["id"],),
+    ).fetchone()
+    assert stored == ("passed", "pending")
+
+
+@pytest.mark.parametrize(
+    ("mutate", "expected_reason"),
+    [
+        (lambda receipt: receipt.update(job_id="other-job"), "job_id_mismatch"),
+        (lambda receipt: receipt.update(task_sha256="b" * 64), "task_digest_mismatch"),
+        (lambda receipt: receipt.update(changed_paths=["synlynk/dispatch.py"]), "changed_paths_not_empty"),
+        (lambda receipt: receipt.update(scope_paths=["synlynk/dispatch.py"]), "scope_paths_mismatch"),
+        (lambda receipt: receipt.update(effective_model="unqualified"), "model_not_qualified"),
+        (lambda receipt: receipt.update(execution="host"), "host_execution"),
+        (lambda receipt: receipt.update(read_only=False), "not_read_only"),
+        (lambda receipt: receipt.update(preflight_passed=False), "preflight_failed"),
+        (lambda receipt: receipt.update(rollback_verified=False), "rollback_unverified"),
+    ],
+)
+def test_reconcile_local_pilot_terminal_pauses_on_untrusted_runner_receipt(
+    tmp_path, monkeypatch, local_pilot_terminal_job, mutate, expected_reason
+):
+    """A receipt drift must be terminal safety failure, never quality evidence."""
+    from synlynk.jobs import reconcile_local_pilot_terminal
+
+    conn = sqlite3.connect(":memory:")
+    job = local_pilot_terminal_job
+    _admit_local_pilot_job(conn, job)
+    receipt = dict(job["runner_receipt"])
+    mutate(receipt)
+    job["receipt_path"].write_text(json.dumps(receipt))
+    pauses = []
+    monkeypatch.setattr("synlynk.local_pilot_ledger.pause_local_pilot", lambda reason: pauses.append(reason))
+
+    result = reconcile_local_pilot_terminal(conn, job)
+
+    assert result == {"safety_verdict": "failed", "reason": expected_reason, "paused": True}
+    stored = conn.execute(
+        "SELECT safety_verdict, quality_verdict, safety_receipt_json FROM local_pilot_evidence WHERE job_id = ?",
+        (job["id"],),
+    ).fetchone()
+    assert stored[:2] == ("failed", "pending")
+    assert expected_reason in stored[2]
+    assert pauses == [expected_reason]
+
+
+@pytest.mark.parametrize("contents, expected_reason", [(None, "receipt_missing"), ("{bad", "receipt_malformed")])
+def test_reconcile_local_pilot_terminal_pauses_on_missing_or_malformed_receipt(
+    tmp_path, monkeypatch, local_pilot_terminal_job, contents, expected_reason
+):
+    """No receipt is containment failure rather than a benign no-op."""
+    from synlynk.jobs import reconcile_local_pilot_terminal
+
+    conn = sqlite3.connect(":memory:")
+    job = local_pilot_terminal_job
+    _admit_local_pilot_job(conn, job)
+    if contents is not None:
+        job["receipt_path"].write_text(contents)
+    pauses = []
+    monkeypatch.setattr("synlynk.local_pilot_ledger.pause_local_pilot", lambda reason: pauses.append(reason))
+
+    result = reconcile_local_pilot_terminal(conn, job)
+
+    assert result == {"safety_verdict": "failed", "reason": expected_reason, "paused": True}
+    assert pauses == [expected_reason]
+
+
+def test_terminal_job_reconciliation_invokes_local_pilot_receipt_reconciliation(
+    tmp_path, monkeypatch, local_pilot_terminal_job
+):
+    """Removing the terminal hook would leave a completed Local job unverified."""
+    import synlynk.jobs as jobs_mod
+
+    database_path = tmp_path / "pilot.db"
+    setup = sqlite3.connect(database_path)
+    job = local_pilot_terminal_job
+    job["status"] = "completed"
+    _admit_local_pilot_job(setup, job)
+    setup.close()
+    job["receipt_path"].write_text(json.dumps(job["runner_receipt"]))
+    monkeypatch.setattr(jobs_mod, "_pkg", lambda name, default=None: (
+        (lambda: sqlite3.connect(database_path)) if name == "_get_db" else default
+    ))
+
+    assert jobs_mod._reconcile_local_pilot_terminals([job]) is True
+    assert job["local_pilot_safety"] == {
+        "safety_verdict": "passed", "reason": "completed_read_only", "paused": False
+    }
 
 
 def test_check_scope_compliance_all_files_match_single_glob():

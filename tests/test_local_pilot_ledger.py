@@ -65,6 +65,19 @@ def test_outcome_recording_rejects_unknown_verdicts(ledger_conn):
         record_quality_verdict(ledger_conn, "job-1", "codex", "maybe", "bad", "rule")
 
 
+def test_pause_local_pilot_uses_the_approved_configuration_helper(monkeypatch):
+    """Bypassing the helper could write the wrong split config surface."""
+    from synlynk.local_pilot_ledger import pause_local_pilot
+
+    updates = []
+    monkeypatch.setattr("synlynk.load_workspace", lambda: {"local_pilot": {"enabled": True, "share": 0.2}})
+    monkeypatch.setattr("synlynk._update_config", lambda update: updates.append(update))
+
+    pause_local_pilot("host_execution")
+
+    assert updates == [{"local_pilot": {"enabled": False, "share": 0.2, "pause_reason": "host_execution"}}]
+
+
 def test_later_review_preserves_an_earlier_jobs_evidence(ledger_conn):
     from synlynk.local_pilot_ledger import (
         ensure_local_pilot_ledger,
