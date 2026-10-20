@@ -74,16 +74,52 @@ def test_load_model_catalog_fallback_on_missing(tmp_path):
     assert resolve_tier_model("fast", "agy", repo_path=str(tmp_path)) is not None
 
 
-def test_hermes_catalog_tier_resolves_for_local_harness(tmp_path):
-    catalog = load_model_catalog(repo_path=str(tmp_path))
-    assert catalog["tiers"]["hermes"]["local"] == "Hermes-3-Llama-3.1-8B"
-    assert resolve_tier_model("hermes", "local", repo_path=str(tmp_path)) == "Hermes-3-Llama-3.1-8B"
+@pytest.mark.parametrize(
+    ("tier", "codex_model"),
+    (
+        ("fast", "gpt-5.6-luna"),
+        ("pro", "gpt-5.6-terra"),
+        ("reasoning", "gpt-5.6-sol"),
+    ),
+)
+def test_project_catalog_resolves_codex_and_local_tiers(monkeypatch, tier, codex_model):
+    """Catalog tiers remain intentional even when no discovery DB is available."""
+    import synlynk
+
+    repo_root = Path(__file__).resolve().parents[1]
+    monkeypatch.setattr(synlynk, "_get_db", lambda: None)
+
+    catalog = load_model_catalog(repo_path=str(repo_root))
+    assert resolve_tier_model(tier, "codex", repo_path=str(repo_root)) == codex_model
+    assert resolve_tier_model(tier, "local", repo_path=str(repo_root)) == "Ornith-1.0-9B-4bit"
+    assert catalog["tiers"][tier]["codex"] == codex_model
+    assert catalog["tiers"][tier]["local"] == "Ornith-1.0-9B-4bit"
 
 
-def test_builtin_codex_catalog_matches_current_account_model(tmp_path):
-    catalog = load_model_catalog(repo_path=str(tmp_path))
-    assert {catalog["tiers"][tier]["codex"] for tier in ("fast", "pro", "reasoning")} == {"gpt-5.6-luna"}
-    assert [model["model_id"] for model in catalog["models"] if model.get("harness_binding") == "codex"] == ["gpt-5.6-luna"]
+def test_project_catalog_has_verified_codex_rates_and_local_roster():
+    repo_root = Path(__file__).resolve().parents[1]
+    catalog = load_model_catalog(repo_path=str(repo_root))
+    models = {model["model_id"]: model for model in catalog["models"]}
+
+    assert {
+        model_id: models[model_id]["rates"]
+        for model_id in ("gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol")
+    } == {
+        "gpt-5.6-luna": {"input_per_1k": 0.0002, "output_per_1k": 0.0012},
+        "gpt-5.6-terra": {"input_per_1k": 0.002, "output_per_1k": 0.012},
+        "gpt-5.6-sol": {"input_per_1k": 0.004, "output_per_1k": 0.02},
+    }
+    assert {
+        model_id for model_id, model in models.items() if model["harness"] == "local"
+    } == {
+        "Ornith-1.0-9B-4bit",
+        "Qwen2.5-Coder-14B-Instruct-4bit",
+        "gemma-4-12B-it-qat-4bit",
+    }
+    assert models["Qwen2.5-Coder-14B-Instruct-4bit"]["dispatch_eligible"] is False
+    assert models["Qwen2.5-Coder-14B-Instruct-4bit"]["qualification"] == "benchmark-only"
+    assert models["gemma-4-12B-it-qat-4bit"]["dispatch_eligible"] is False
+    assert models["gemma-4-12B-it-qat-4bit"]["qualification"] == "non-qualifying"
 
 
 def test_get_models_from_catalog(tmp_path):
