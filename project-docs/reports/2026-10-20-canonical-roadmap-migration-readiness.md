@@ -114,7 +114,15 @@ The following evidence-preserving changes have been applied to canonical state.
   carry that deterministic GitHub ticket number.
 - `goal-51c4be3f` owns v0.29.0 backlog consolidation.
 
-After these changes, the active ledger is 1,062 stories, with 40 still
-without a goal and 290 still without a ticket. Those remaining records require
-individual thematic disposition; they are not eligible for an automatic
-release-ready transition.
+After these changes, the active ledger is 1,056 stories, with zero stories
+without a goal and 281 still without a ticket. The final six ungoaled records
+were explicit placeholders and were archived. The 31 issue-backed records
+were assigned by theme to trust contracts, state integrity, daemon reliability,
+onboarding, or v0.29 consolidation; the three R12 task records now point to
+#1868 and v0.29.
+
+The remaining ticketless cohort is dominated by historical, source-less ledger
+records: 103 under the universal GOVERNS loop and 31 under the architectural
+review goal. It must be individually classified as delivery work or evidence;
+opening a speculative issue for each record would recreate the drift this
+reconciliation is intended to remove.
