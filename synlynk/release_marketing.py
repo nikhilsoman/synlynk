@@ -163,6 +163,10 @@ def compile_html_to_pdf(
     """Compiles an HTML file to PDF using headless Chrome."""
     if dry_run:
         return True
+    if "PYTEST_CURRENT_TEST" in os.environ and not os.environ.get("SYNLYNK_ALLOW_LIVE_BROWSER"):
+        # Guard against unit tests launching host GUI Chrome processes
+        if getattr(subprocess.run, "__module__", None) == "subprocess":
+            return False
     binary = chrome_bin or find_chrome_binary()
     if not binary:
         return False
@@ -406,23 +410,26 @@ def execute_release_ceremony(
 
     # 3. PDF compilation
     pdfs_compiled: List[str] = []
-    try:
-        pdfs_compiled = compile_docs_pdfs(root=root, dry_run=dry_run)
-    except Exception as exc:
-        errors.append(f"PDF compilation failed: {exc}")
+    if not skip_build:
+        try:
+            pdfs_compiled = compile_docs_pdfs(root=root, dry_run=dry_run)
+        except Exception as exc:
+            errors.append(f"PDF compilation failed: {exc}")
 
     # 4. EPUB compilation
     epub_compiled: Optional[str] = None
-    try:
-        epub_compiled = compile_book_epub(root=root, dry_run=dry_run)
-    except Exception as exc:
-        errors.append(f"EPUB compilation failed: {exc}")
+    if not skip_build:
+        try:
+            epub_compiled = compile_book_epub(root=root, dry_run=dry_run)
+        except Exception as exc:
+            errors.append(f"EPUB compilation failed: {exc}")
 
     # 5. Mirror PDF and EPUB assets to website
-    try:
-        mirror_docs_pdfs_to_website(root=root, dry_run=dry_run)
-    except Exception as exc:
-        errors.append(f"PDF/EPUB mirroring failed: {exc}")
+    if not skip_build:
+        try:
+            mirror_docs_pdfs_to_website(root=root, dry_run=dry_run)
+        except Exception as exc:
+            errors.append(f"PDF/EPUB mirroring failed: {exc}")
 
     # 6. Website metadata update
     website_updated = False
