@@ -283,8 +283,20 @@ def resolve_tier_model(tier: str, harness: str, repo_path: Optional[str] = None)
 
     configured = _static_tier_model(tier, harness, repo_path)
     if harness == "agy":
+        # Keep model resolution on the same discovery path used by the catalog
+        # and discovery commands. In tests, probing remains opt-in so catalog
+        # unit tests do not invoke installed harness CLIs.
+        force_discovery = os.environ.get("SYNLYNK_FORCE_MODEL_DISCOVERY") == "1"
+        if os.environ.get("PYTEST_CURRENT_TEST") and not force_discovery:
+            live_ids = []
+        else:
+            live_ids = [
+                spec.model_id
+                for spec in discover_models()
+                if spec.harness_binding == "agy"
+            ]
         configured = _pick_discovered_tier_model(
-            harness, tier, configured, discovered_model_ids("agy")
+            harness, tier, configured, live_ids
         )
     return configured
 
