@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "as_of": "2026-10-17",
+  "as_of": "2026-10-20",
   "tiers": {
     "fast": {
       "claude": "claude-haiku-4-5-20251001",
@@ -13,7 +13,7 @@
     "pro": {
       "claude": "claude-sonnet-5",
       "agy": "gemini-3.8-flash-high",
-      "codex": "gpt-5.6-luna",
+      "codex": "gpt-5.6-terra",
       "grok": "grok-4.7",
       "local": "Ornith-1.0-9B-4bit",
       "muse": "muse-spark-1.3"
@@ -21,12 +21,9 @@
     "reasoning": {
       "claude": "claude-opus-5",
       "agy": "claude-opus-4-6-thinking",
-      "codex": "gpt-5.6-luna",
+      "codex": "gpt-5.6-sol",
       "grok": "grok-4.7",
       "local": "Ornith-1.0-9B-4bit"
-    },
-    "hermes": {
-      "local": "Hermes-3-Llama-3.1-8B"
     }
   },
   "models": [
@@ -43,6 +40,38 @@
         "output_per_1k": 0.0
       },
       "entitlement_tier": "zero_cost_local"
+    },
+    {
+      "model_id": "Qwen2.5-Coder-14B-Instruct-4bit",
+      "family": "qwen2-5-coder",
+      "harness": "local",
+      "locality": "on_device_local",
+      "quantization": "4bit",
+      "context_window": 0,
+      "max_output": 0,
+      "rates": {
+        "input_per_1k": 0.0,
+        "output_per_1k": 0.0
+      },
+      "entitlement_tier": "zero_cost_local",
+      "dispatch_eligible": false,
+      "qualification": "benchmark-only"
+    },
+    {
+      "model_id": "gemma-4-12B-it-qat-4bit",
+      "family": "gemma-4",
+      "harness": "local",
+      "locality": "on_device_local",
+      "quantization": "4bit",
+      "context_window": 0,
+      "max_output": 0,
+      "rates": {
+        "input_per_1k": 0.0,
+        "output_per_1k": 0.0
+      },
+      "entitlement_tier": "zero_cost_local",
+      "dispatch_eligible": false,
+      "qualification": "non-qualifying"
     },
     {
       "model_id": "claude-sonnet-5",
@@ -162,8 +191,32 @@
       "context_window": 128000,
       "max_output": 16384,
       "rates": {
-        "input_per_1k": 0.00015,
-        "output_per_1k": 0.0006
+        "input_per_1k": 0.0002,
+        "output_per_1k": 0.0012
+      },
+      "entitlement_tier": "included_in_base"
+    },
+    {
+      "model_id": "gpt-5.6-terra",
+      "family": "gpt-5.6",
+      "harness": "codex",
+      "context_window": 128000,
+      "max_output": 16384,
+      "rates": {
+        "input_per_1k": 0.002,
+        "output_per_1k": 0.012
+      },
+      "entitlement_tier": "included_in_base"
+    },
+    {
+      "model_id": "gpt-5.6-sol",
+      "family": "gpt-5.6",
+      "harness": "codex",
+      "context_window": 128000,
+      "max_output": 16384,
+      "rates": {
+        "input_per_1k": 0.004,
+        "output_per_1k": 0.02
       },
       "entitlement_tier": "included_in_base"
     },
@@ -190,54 +243,6 @@
         "output_per_1k": 0.012
       },
       "entitlement_tier": "metered_extra_usage_only"
-    },
-    {
-      "model_id": "deepseek-r1",
-      "family": "deepseek-r1",
-      "harness": "local",
-      "context_window": 128000,
-      "max_output": 8192,
-      "rates": {
-        "input_per_1k": 0.0,
-        "output_per_1k": 0.0
-      },
-      "entitlement_tier": "zero_cost_local"
-    },
-    {
-      "model_id": "Hermes-3-Llama-3.1-8B",
-      "family": "hermes-3",
-      "harness": "local",
-      "context_window": 128000,
-      "max_output": 8192,
-      "rates": {
-        "input_per_1k": 0.0,
-        "output_per_1k": 0.0
-      },
-      "entitlement_tier": "zero_cost_local"
-    },
-    {
-      "model_id": "Hermes-3-Llama-3.1-70B",
-      "family": "hermes-3",
-      "harness": "local",
-      "context_window": 128000,
-      "max_output": 8192,
-      "rates": {
-        "input_per_1k": 0.0,
-        "output_per_1k": 0.0
-      },
-      "entitlement_tier": "zero_cost_local"
-    },
-    {
-      "model_id": "Hermes-3-Llama-3.1-405B",
-      "family": "hermes-3",
-      "harness": "local",
-      "context_window": 128000,
-      "max_output": 8192,
-      "rates": {
-        "input_per_1k": 0.0,
-        "output_per_1k": 0.0
-      },
-      "entitlement_tier": "zero_cost_local"
     }
   ]
 }
