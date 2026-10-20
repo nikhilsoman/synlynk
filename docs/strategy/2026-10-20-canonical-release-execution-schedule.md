@@ -4,6 +4,11 @@
 **Authority:** `dec-f8835ba3`, roadmap parent #2458, and user approval on 2026-10-20  
 **Status:** Active execution contract
 
+**Capacity-first amendment:** User-authorized 2026-10-20. Canonical release
+headers for v0.25.2 and v0.25.3 were synchronized after verified snapshot
+`pre-capacity-first-roadmap-amendment-2026-10-20-20261020T045537Z.db`
+(`1d107610467a50adfb566f4e21ab30f068ad21935b1a8d5806a820610702ca39`).
+
 ## Operating rule
 
 The dates below are hard release-gate dates. A release may be marked `shipped`
