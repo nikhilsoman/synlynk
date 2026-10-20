@@ -14,6 +14,11 @@
   deploy, and GitHub-write authority.
 - Verification: 102 local adapter, dispatch, pilot, qualification, HTTP auth,
   registry, and permission-policy tests passed.
+- Canonical-state synchronization: verified snapshot
+  `pre-capacity-first-roadmap-amendment-2026-10-20-20261020T045537Z.db`
+  (SHA-256 `1d107610467a50adfb566f4e21ab30f068ad21935b1a8d5806a820610702ca39`),
+  then updated only v0.25.2 and v0.25.3 release headers. Both remain planned
+  on their original dates.
 
 ## 2026-09-16 - Unattended stacked-PR rebase (#1604)
 
