@@ -125,14 +125,29 @@ Public commercial launch, P2P Agent Compute Rental, Tokq Decentralized Intellige
 
 Relay → community server · cross-workgroup epics · agent entitlements
 
-- [ ] Fast follow: GOVERNS autonomy control plane & evidence-gated swarm scale (P1) <!-- story:story-ee4529d9 -->
-  Start after synthesized strategic roadmap epic #2384 completes and v1.0.0-preview Phase 3 release gate resolves. This is post-preview, not launch-blocking. Design: docs/superpowers/specs/2026-10-18-governs-autonomy-control-plane-design.md; tracking: #2412, substrate dependency #2413.
-
+- [ ] GOVERNS Autonomous SDLC: Stage Progression, Charters, Attribution & Review Provenance (#2412) (P0) <!-- story:story-ee4529d9 -->
+  Durable synthesis of 2026-09-27, 2026-10-02, 2026-10-16 deep reviews: fail-closed gates, stage policies, receipts contract, and role skill binding.
+- [ ] Evidence-Gated Autonomy Dial & Supervised Gate Enforcement (P0)
+  Enforce supervisor approval before auto-execution to prevent unreviewed daemon dispatches.
+- [ ] Swarm Worker Leases & Distributed Worktree Locking (P1)
+  Distributed lease manager preventing git index lock collisions during concurrent multi-agent sweeps.
+- [ ] Multi-Repo Polyrepo Mesh & Personal Relay Federation (P1)
+  Personal-use hosted NATS relay bridging local broker across devices and multi-repo boundaries (goal-f4ce526a).
 
 ## v1.2.0 — Enterprise Workspace [planned] (target: Q1 2027)
 
 Cross-team · org-level governance agents · enterprise entitlements
 
+- [ ] Role-Based Client IP Isolation & Ephemeral Worktree Boundary (P0)
+  Air-gapped context packs and client repository isolation per engagement (dec-85a5a151).
+- [ ] Multi-Account Delivery Playbook Factory & Template Library (P1)
+  Reusable engagement accelerators, APQC/SFIA cross-account taxonomy mappings.
+- [ ] SOC 2 Type II Security & Compliance Pack (P0)
+  Encrypted telemetry redactor, immutable signed audit logs, and credential boundary.
+- [ ] Tenant Workspace Policy Synchronization (P1)
+  Central policy enforcement across customer accounts without manual drift.
+- [ ] Human-in-the-Loop Change Control & Milestone Gating (P0)
+  Formal stakeholder sign-offs for fixed-price, outcome-based, and regulated deliveries.
 
 ## v1.3.0 — Domain/Discipline Communities [planned] (target: Q2 2027)
 
@@ -312,9 +327,9 @@ Zero-cloud offline local model inference harness optimized for Apple Silicon MLX
 - [ ] Offline Zero-Cloud AST Tier-0 Routing (P1)
   Automatic fallback and tier-0 cost routing for self-hosted models
 
-## v0.26.0 — Universal Gateway: OpenRouter & Fal.ai [planned] (target: 2026-11-05)
+## v0.26.0 — Supervised execution and daemon reliability [planned] (target: 2026-12-18)
 
-Single-key BYOK universal model provider gateway and specialist cloud driver roles
+Canonical release epic #2468. Goals: goal-bd5eaa14, goal-06758149, goal-eacab0dc. Scheduled release gate: 2026-12-18; restart, recovery, cancellation, scan containment, and replay evidence required. No phase is ready until story and ticket linkage are complete.
 
 - [ ] Universal Provider Aggregator Integration (#1711) (P0)
   BYOK gateway with provider fallback chains and latency optimization
@@ -325,9 +340,9 @@ Single-key BYOK universal model provider gateway and specialist cloud driver rol
 - [ ] Specialist 3rd-Party Driver Agents (@supabase, @vercel) (P1)
   Dedicated driver roles for cloud infrastructure automation
 
-## v0.27.0 — Core 5 Fleet: Meta Muse GA [planned] (target: 2026-11-19)
+## v0.27.0 — Developer surfaces [planned] (target: 2027-02-05)
 
-Meta Muse promoted to first-class 5th Core fleet harness
+Canonical release epic #2471. Goals: goal-e3840370, goal-85656c82. Scheduled release gate: 2027-02-05; VS Code and OpenVSX listing, install, update, and dispatch smoke evidence required. No phase is ready until story and ticket linkage are complete.
 
 - [ ] Meta Muse CLI Adapter GA Promotion (P0)
   Full promotion from experimental to first-class peer in fleet baseline
@@ -336,23 +351,90 @@ Meta Muse promoted to first-class 5th Core fleet harness
 - [ ] Muse Structured Output & Cost Ledger Integration (P1)
   Verified token extraction and dual-ledger cost reporting for Muse
 
-## v0.25.2 — Daemon Health & Autonomous Pipeline Activation [planned]
+## v0.25.2 — Fleet capacity recovery and model catalog [planned] (target: 2026-11-06)
 
-Closes gh:#2261 (dormant re-exec bug), gh:#2288 (crash on stale worktree cwd), and the daemon-wiring gap in gh:#2262 (Task 4: wire poll loop to call _autonomy_pass()). Prereq for flipping autonomy_mode to autonomous and completing goal-06758149 (Activate full fleet). Tracked under goal-bd5eaa14.
+Canonical release epic #2465. Goals: goal-3ef62232, goal-005ea87d. Scheduled gate: 2026-11-06. Model resolution plus capacity enlistment: Local Ornith only, isolated, max-one concurrent, successful live preflight, 20% implementation cohort; Muse authenticated, model-allowlisted low-privilege execution. Neither receives review, deploy, or GitHub-write authority. Quota/cost reconciliation is v0.25.3. No phase is ready until story and ticket linkage are complete.
 
-- [ ] Daemon health fixes (gh:#2261, gh:#2288) (P0) <!-- story:story-e73fac9e -->
+- [x] Daemon health fixes (gh:#2261, gh:#2288) (P0) <!-- story:story-e73fac9e -->
   Dormant re-exec bug + crash on stale worktree cwd blocking --requires-gh-write dispatch.
-- [ ] Wire daemon poll loop to autonomy pass (Task 4, gh:#2262) (P1) <!-- story:story-f67acd86 -->
+- [x] Wire daemon poll loop to autonomy pass (Task 4, gh:#2262) (P1) <!-- story:story-f67acd86 -->
   Daemon poll loop never calls _autonomy_pass(); backlog->schedule pipeline only runs via manual CLI today.
+- [ ] Cross-harness live discovery and explicit model validation (#2291) (P0) <!-- story:story-issue-2291 -->
+  Delivery story is goal-3ef62232 and ticket #2291. Exit: supported harnesses reject stale explicit model IDs before a provider call.
+- [ ] Canonical harness-model data cleanup (#2447) (P0) <!-- story:story-f5d725cc -->
+  Delivery story is goal-3ef62232 and ticket #2447. Exit: corrupted execution-log rows cannot contaminate harness model state.
+- [ ] Model candidate ingestion and freshness reliability (#2448) (P0) <!-- story:story-60eea2c4 -->
+  Delivery story is goal-3ef62232 and ticket #2448. Exit: ingestion and timestamps preserve an auditable current catalog.
+- [ ] Authoritative resolution and catalog allowlist (#2449) (P0) <!-- story:story-a846f2a5 -->
+  Delivery story is goal-3ef62232 and ticket #2449. Exit: resolution selects authoritative allowed sources only.
+- [ ] Fleet-wide model resolution invariants (#2450) (P0) <!-- story:story-54758ff8 -->
+  Delivery story is goal-3ef62232 and ticket #2450. Exit: invariant tests cover model resolution across the supported fleet.
 
 ## v1.0.0-preview — v1.0.0 Developer Preview [planned] (target: 2026-10-31)
 
 Developer Preview Launch: empirical capability routing, thin VS Code client, PyPI release, worktree leased concurrency, 5 Invariants
 
-- [ ] Phase 1: Substrate Hardening & Hygiene (P0)
-  Worktree fleet pruning, state.db vacuum, sentinel 7-day TTL cleanup, and GenericAPIAdapter
-- [x] Phase 2: Distribution Wedge & Capability Demonstration (P0)
-  VS Code client packaging, empirical capability report multi-model benchmarks, Synaptic AI Capability Index standalone public service (Prompt Oracle, Pre-Flight API, MCP skill), and 3-agent swarm trial.
+- [x] Phase 1A: Substrate Hardening & Hygiene (P0)
+  Worktree fleet pruning, state.db vacuum (<30MB), sentinel 7-day TTL cleanup, and GenericAPIAdapter all complete.
+- [x] Phase 1B: State & Task Drift Remediation across state.db, project-docs & PR Merges (#2413) (P0) <!-- story:story-ada9a71f -->
+  Unify canonical state.db resolution, sprint-aware todo.md ordering, automated PR merge phase progression, and doctor drift audits.
+- [x] Phase 2A: Open SFIA 8/9 Taxonomy & Historical Capability Backfill (P0)
+  PR #2434 merged. SFIA 8/9 classifier, 1% attribution window, and backfill of 3,170 historical tasks across 102 active models.
+- [x] Phase 2B & 2C: Synaptic AI Capability Index Public Service, Prompt Oracle & Preflight MCP (P0) <!-- story:story-5eecdf01 -->
+  PR #2435 merged. Universal pre-flight routing engine, cryptographic capability pack export, glassmorphic Prompt Oracle UI, and @synlynk/preflight-mcp.
+- [ ] Phase 2D: Standalone AWS Spot Docker Capability Crawler & Calibration Ranker (P0)
+  Continuous public repo contribution & model evaluation loop running on AWS spot instances with dedicated budget (goal-aa48c456).
+- [ ] Thin VS Code Client Extension Packaging & Marketplace Release (P0)
+  Zero-dependency engine, Workspace Trust, native diff review, Doctor diagnostics, and VSIX packaging workflow (feat/agy/vscode-extension-design).
+- [ ] Fast-Path Solo Dispatch Mode for Single-File Edits (P1)
+  Low-overhead single-agent execution bypassing multi-agent review ceremony for low-risk, single-file tasks.
+- [ ] 3-Agent Swarm Concurrency Trial (P1)
+  Verify concurrent multi-agent execution DAGs across isolated leased worktrees with zero lock contention.
 - [ ] Phase 3: Release Gate & Launch (P0)
-  v1.0.0-rc1 tagging, 4,500+ test suite pass, PyPI release, and milestone synthesis blog
+  v1.0.0-rc1 tagging, PyPI Trusted Publishing, 4,500+ test suite pass, 15-min time-to-wow screencast, and milestone synthesis blog.
+
+## v0.25.3 — Trust contracts and capacity accounting [planned] (target: 2026-11-20)
+
+Canonical release epic #2466. Goals: goal-adb60ccc, goal-079e2f37, goal-eacab0dc. Scheduled gate: 2026-11-20. Fail-closed approval, provenance, GitHub-write, cost, and live federated quota/capacity reconciliation evidence required. No phase is ready until story and ticket linkage are complete.
+
+
+## v0.25.4 — Canonical state and release integrity [planned] (target: 2026-12-04)
+
+Canonical release epic #2467. Goals: goal-079e2f37, goal-9ef9a965, goal-eacab0dc. Prerequisite #1914 closed by PR #2462. Scheduled release gate: 2026-12-04; one canonical state path, DR, and review evidence required. No phase is ready until story and ticket linkage are complete.
+
+
+## v0.26.1 — Workspace-agent operations [planned] (target: 2027-01-08)
+
+Canonical release epic #2469. Goals: goal-eacab0dc, goal-a222b393, goal-06758149. Scheduled release gate: 2027-01-08; signed charters, authority, SOP, and operational evidence required. No phase is ready until story and ticket linkage are complete.
+
+
+## v0.26.2 — Evidence-gated supervised autonomy [planned] (target: 2027-01-22)
+
+Canonical release epic #2470. Goals: goal-bd5eaa14, goal-eacab0dc. Containment must precede autonomy escalation. Scheduled release gate: 2027-01-22; evidence-gated autonomy controls required. No phase is ready until story and ticket linkage are complete.
+
+
+## v0.27.1 — Onboarding first win [planned] (target: 2027-02-19)
+
+Canonical release epic #2472. Goals: goal-e47ee312, goal-85656c82, goal-9ef9a965. Scheduled release gate: 2027-02-19; five independent under-15-minute first-win journeys required. No phase is ready until story and ticket linkage are complete.
+
+
+## v0.27.2 — Marketplace distribution [planned] (target: 2027-03-05)
+
+Canonical release epic #2473. Goals: goal-9ef9a965, goal-85656c82. Onboarding gate precedes marketplace distribution. Scheduled release gate: 2027-03-05; install, update, rollback, and support evidence required. No phase is ready until story and ticket linkage are complete.
+
+
+## v0.28.0 — Swarms and Universal Gateway [planned] (target: 2027-03-26)
+
+Canonical release epic #2474. Goals: goal-256d17d6, goal-8d34c416, goal-005ea87d. Scheduled release gate: 2027-03-26; bounded swarm, gateway, lease, budget, containment, and evidence controls required. No phase is ready until story and ticket linkage are complete.
+
+
+## v0.28.1 — Capability crawler, index, and GTM [planned] (target: 2027-04-09)
+
+Canonical release epic #2475. Goals: goal-aa48c456, goal-20bb3987. Scheduled release gate: 2027-04-09; reproducible, privacy-safe, sample-floor-gated capability evidence and GTM surface required. No phase is ready until story and ticket linkage are complete.
+
+
+## v0.29.0 — Backlog consolidation [planned] (target: 2027-04-23)
+
+Canonical release epic #2476. Goal: goal-51c4be3f. Scheduled decision gate: 2027-04-23; every residual candidate promoted, archived, or held and human Dev Preview decision recorded. No Dev Preview date is implied.
+
 
