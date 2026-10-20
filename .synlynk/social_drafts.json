@@ -2958,5 +2958,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2485 \u2014 sync accumulated local cost-log entries into costs.md (PR #2485, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2485.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-20) - PR #2485\n- Merged improvements and fixes for PR #2485."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/432-pr2487-restore-ambient-signal-handlers-after-cu.md",
+    "title": "PR #2487 \u2014 restore ambient signal handlers after curses initscr (#2486)",
+    "author": "nikhilsoman",
+    "date": "2026-10-20",
+    "pr": "#2487",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2487."
+    ],
+    "tweet": "\ud83d\ude80 PR #2487 \u2014 restore ambient signal handlers after curses initscr (#2486) (PR #2487, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2487.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-20) - PR #2487\n- Merged improvements and fixes for PR #2487."
   }
 ]

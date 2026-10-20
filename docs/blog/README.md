@@ -508,6 +508,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [429](./429-pr2480-sync-accumulated-local-cost-log-entries-.md) | PR #2480 — sync accumulated local cost-log entries and roadmap state drift | [#2480](https://github.com/nikhilsoman/synlynk/pull/2480) | 2026-10-20 |
 | [430](./430-pr2484-formalize-canonical-roadmap-reconciliati.md) | PR #2484 — formalize canonical roadmap reconciliation and schedule | [#2484](https://github.com/nikhilsoman/synlynk/pull/2484) | 2026-10-20 |
 | [431](./431-pr2485-sync-accumulated-local-cost-log-entries-.md) | PR #2485 — sync accumulated local cost-log entries into costs.md | [#2485](https://github.com/nikhilsoman/synlynk/pull/2485) | 2026-10-20 |
+| [432](./432-pr2487-restore-ambient-signal-handlers-after-cu.md) | PR #2487 — restore ambient signal handlers after curses initscr (#2486) | [#2487](https://github.com/nikhilsoman/synlynk/pull/2487) | 2026-10-20 |
 
 ## Per-PR Post Template
 
