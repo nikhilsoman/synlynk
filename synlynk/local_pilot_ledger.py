@@ -138,4 +138,15 @@ def load_pilot_status(conn: sqlite3.Connection) -> dict:
             "rejected": rejected,
             "safety_failed": safety_failed,
         }
+    consecutive_accepted = 0
+    for safety_verdict, quality_verdict in conn.execute(
+        "SELECT safety_verdict, quality_verdict FROM local_pilot_evidence "
+        "WHERE cohort = 'expansion' "
+        "ORDER BY COALESCE(quality_recorded_at, admitted_at), rowid"
+    ):
+        if safety_verdict == "passed" and quality_verdict == "accepted":
+            consecutive_accepted += 1
+        elif safety_verdict == "passed" and quality_verdict == "rejected":
+            consecutive_accepted = 0
+    status["expansion"]["consecutive_accepted"] = consecutive_accepted
     return status

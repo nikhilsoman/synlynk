@@ -131,6 +131,28 @@ def test_status_separates_pending_rejected_and_safety_failed_samples(ledger_conn
     }
 
 
+def test_expansion_status_reports_only_the_run_after_its_latest_quality_rejection(ledger_conn):
+    """A status view that reports all accepts as consecutive would bypass the reset gate."""
+    from synlynk.local_pilot_ledger import (
+        ensure_local_pilot_ledger,
+        load_pilot_status,
+        record_admission,
+        record_quality_verdict,
+        record_safety_outcome,
+    )
+
+    ensure_local_pilot_ledger(ledger_conn)
+    for job_id, verdict in (("accepted-before-reset", "accepted"), ("reset", "rejected"), ("accepted-after-reset", "accepted")):
+        record_admission(ledger_conn, _sample(job_id, cohort="expansion"))
+        record_safety_outcome(ledger_conn, job_id, "passed", "contained", {"safe": True})
+        record_quality_verdict(ledger_conn, job_id, "codex", verdict, "reviewed", "qualified")
+
+    expansion = load_pilot_status(ledger_conn)["expansion"]
+    assert expansion["accepted"] == 2
+    assert expansion["rejected"] == 1
+    assert expansion["consecutive_accepted"] == 1
+
+
 def test_ensure_uses_migration_history_and_rolls_back_a_failed_migration(ledger_conn, monkeypatch):
     """A failed schema install must leave neither schema nor migration history behind."""
     from synlynk.local_pilot_ledger import ensure_local_pilot_ledger

@@ -3,6 +3,7 @@ import os
 
 import pytest
 
+from synlynk import local_pilot
 from synlynk.local_pilot import (
     APPROVED_SHARES,
     PILOT_CLASSES,
@@ -60,6 +61,16 @@ def test_only_named_pilot_classes_are_allowlisted():
     assert _decision(pilot_class="implement").reason == "pilot_class_not_allowlisted"
 
 
+def test_rebaseline_admission_restricts_the_existing_pilot_classes_to_its_two_classes():
+    """Admitting documentation work in re-baseline mode would widen the approved lane."""
+    assert _decision(pilot_class="documentation_edit", rebaseline=True).reason == (
+        "rebaseline_pilot_class_not_allowlisted"
+    )
+    assert _decision(pilot_class="codepath_summary", rebaseline=True).reason != (
+        "rebaseline_pilot_class_not_allowlisted"
+    )
+
+
 def test_pilot_cohort_is_deterministic_and_cannot_exceed_approved_share():
     assert APPROVED_SHARES == {0.20, 0.35, 0.50}
     for share in APPROVED_SHARES:
@@ -77,49 +88,114 @@ def test_pilot_bucket_is_stable_across_share_gates():
     assert not low.route_local or high.route_local
 
 
-def test_promotion_requires_sample_and_90_percent_acceptance():
-    waiting = evaluate_promotion_gate(
-        current_share=0.20, eligible_jobs=29, accepted_jobs=29,
-        serious_incidents=0, latency_stable=True, memory_stable=True,
+def _status(*, validation=None, expansion=None):
+    return {
+        "historical": {"cohort": "historical", "accepted": 8, "eligible": 12},
+        "validation": {
+            "cohort": "validation", "accepted": 0, "eligible": 0,
+            "pending": 0, "rejected": 0, "safety_failed": 0,
+            **(validation or {}),
+        },
+        "expansion": {
+            "cohort": "expansion", "accepted": 0, "eligible": 0,
+            "pending": 0, "rejected": 0, "safety_failed": 0,
+            "consecutive_accepted": 0,
+            **(expansion or {}),
+        },
+    }
+
+
+def test_rebaseline_uses_only_the_new_validation_cohort_not_historical_evidence():
+    """Counting the historical 8/12 toward validation must never open expansion."""
+    decision = local_pilot.evaluate_rebaseline(_status())
+
+    assert local_pilot.REBASELINE_PILOT_CLASSES == {"test_summary", "codepath_summary"}
+    assert decision.allow_admission
+    assert decision.cohort == "validation"
+    assert decision.share == 0.20
+    assert not decision.proposal_35_eligible
+    assert decision.reason == "validation_incomplete"
+
+
+def test_five_accepted_validation_samples_open_expansion_without_changing_share():
+    """Returning 0.35 after five validation acceptances would widen traffic automatically."""
+    decision = local_pilot.evaluate_rebaseline(_status(validation={"accepted": 5, "eligible": 5}))
+
+    assert decision.allow_admission
+    assert decision.cohort == "expansion"
+    assert decision.share == 0.20
+    assert not decision.pause_required
+    assert not decision.proposal_35_eligible
+    assert decision.reason == "expansion_evidence_required"
+
+
+def test_validation_rejection_requires_a_human_review_before_more_admission():
+    """Treating a rejected validation result as another attempt would bypass the 5/5 gate."""
+    decision = local_pilot.evaluate_rebaseline(_status(validation={"accepted": 4, "rejected": 1}))
+
+    assert not decision.allow_admission
+    assert decision.cohort is None
+    assert decision.share == 0.20
+    assert not decision.pause_required
+    assert decision.reason == "validation_quality_rejection_requires_human_review"
+
+
+def test_expansion_quality_rejection_resets_only_the_consecutive_acceptance_run():
+    """A quality rejection must not pause the pilot or preserve the prior run."""
+    decision = local_pilot.evaluate_rebaseline(
+        _status(
+            validation={"accepted": 5, "eligible": 5},
+            expansion={"accepted": 7, "rejected": 1, "consecutive_accepted": 0},
+        )
     )
-    assert waiting.next_share == 0.20
-    assert waiting.reason == "insufficient_30_job_sample"
 
-    passed = evaluate_promotion_gate(
-        current_share=0.20, eligible_jobs=30, accepted_jobs=27,
-        serious_incidents=0, latency_stable=True, memory_stable=True,
+    assert decision.allow_admission
+    assert decision.cohort == "expansion"
+    assert decision.share == 0.20
+    assert not decision.pause_required
+    assert not decision.proposal_35_eligible
+    assert decision.reason == "expansion_evidence_required"
+
+
+def test_ten_consecutive_expansion_acceptances_only_make_a_35_percent_proposal_eligible():
+    """Changing the share to 0.35 here would bypass the human expansion approval."""
+    decision = local_pilot.evaluate_rebaseline(
+        _status(
+            validation={"accepted": 5, "eligible": 5},
+            expansion={"accepted": 10, "eligible": 10, "consecutive_accepted": 10},
+        )
     )
-    assert passed.next_share == 0.35
 
-    failed = evaluate_promotion_gate(
-        current_share=0.20, eligible_jobs=30, accepted_jobs=26,
-        serious_incidents=0, latency_stable=True, memory_stable=True,
-    )
-    assert failed.next_share == 0.0
-    assert failed.rollback_required
+    assert decision.allow_admission
+    assert decision.cohort == "expansion"
+    assert decision.share == 0.20
+    assert decision.proposal_35_eligible
+    assert decision.reason == "proposal_35_eligible"
 
 
-def test_50_percent_gate_requires_75_jobs_stability_and_rollback_drill():
-    args = dict(
-        current_share=0.35, accepted_jobs=68, serious_incidents=0,
-        latency_stable=True, memory_stable=True,
-    )
-    assert evaluate_promotion_gate(eligible_jobs=74, **args).next_share == 0.35
-    assert evaluate_promotion_gate(eligible_jobs=75, **args).reason == "rollback_drill_required"
-    promoted = evaluate_promotion_gate(
-        eligible_jobs=75, rollback_drill_passed=True, **args
-    )
-    assert promoted.next_share == 0.50
+def test_hard_safety_failure_pauses_every_rebaseline_stage():
+    """Admitting another Local sample after a safety failure would violate the hard gate."""
+    decision = local_pilot.evaluate_rebaseline(_status(expansion={"safety_failed": 1}))
+
+    assert not decision.allow_admission
+    assert decision.cohort is None
+    assert decision.share == 0.20
+    assert decision.pause_required
+    assert not decision.proposal_35_eligible
+    assert decision.reason == "hard_safety_failure_requires_pause"
 
 
-def test_serious_incident_immediately_rolls_back_to_frontier():
+def test_legacy_promotion_gate_is_retired_and_fails_closed():
+    """Returning 0.35 or 0.50 to an old caller would restore automatic promotion."""
     decision = evaluate_promotion_gate(
         current_share=0.35, eligible_jobs=75, accepted_jobs=75,
-        serious_incidents=1, latency_stable=True, memory_stable=True,
+        serious_incidents=0, latency_stable=True, memory_stable=True,
         rollback_drill_passed=True,
     )
+
     assert decision.next_share == 0.0
     assert decision.rollback_required
+    assert decision.reason == "promotion_gate_retired_use_evaluate_rebaseline"
 
 
 def test_isolated_compose_builder_passes_only_local_model_credential(tmp_path, monkeypatch):
