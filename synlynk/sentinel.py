@@ -282,6 +282,10 @@ def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path:
     candidate = {"severity": severity, "code": code, "message": message}
     identity = _alert_identity(candidate)
     now = datetime.now(timezone.utc)
+    policy = _sentinel_policy()
+    dedup_window = float(
+        policy.get("dedup_window_seconds", DEFAULT_SENTINEL_DEDUP_WINDOW_SECONDS)
+    )
     with _sentinel_file_lock(sentinel_file):
         existing = ""
         if os.path.exists(sentinel_file):
@@ -289,7 +293,18 @@ def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path:
                 existing = f.read()
         existing = _migrate_sentinel_content(existing, now)
         alerts = _iter_sentinel_alerts(sentinel_file, active_only=False)
-        matching = [alert for alert in alerts if _alert_identity(alert) == identity]
+        matching = []
+        for alert in alerts:
+            if _alert_identity(alert) != identity:
+                continue
+            last_seen = alert.get("last_seen_dt") or alert.get("timestamp_dt")
+            if last_seen is None:
+                continue
+            elapsed = (now - last_seen).total_seconds()
+            # Keep a small allowance for minute-rounded timestamps from older
+            # sentinel files, while ensuring old incidents start a new count.
+            if -60 <= elapsed <= dedup_window:
+                matching.append(alert)
         if matching:
             first = min(
                 (a.get("first_seen_dt") or a.get("timestamp_dt") for a in matching if a.get("timestamp_dt")),

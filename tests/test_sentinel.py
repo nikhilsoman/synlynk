@@ -457,6 +457,28 @@ def test_sentinel_write_deduplicates_within_window_but_keeps_distinct_jobs(tmp_p
     assert len(_read_sentinel_alerts(sentinel_path=str(path))) == 2
 
 
+def test_sentinel_write_starts_new_count_after_dedup_window(tmp_path, monkeypatch):
+    from synlynk import sentinel
+
+    path = tmp_path / "sentinel.md"
+    path.write_text(
+        "# Sentinel Alerts\n"
+        "- [WARN] [2000-01-01 00:00] REPEAT: same finding\n"
+    )
+    monkeypatch.setattr(sentinel, "_sentinel_policy", lambda: {
+        "dedup_window_seconds": 24 * 60 * 60,
+        "active_ttl_seconds": {"WARN": 30 * 24 * 60 * 60},
+    })
+
+    result = sentinel._write_sentinel_alert("WARN", "REPEAT", "same finding", str(path))
+
+    assert result["status"] == "written"
+    lines = [line for line in path.read_text().splitlines() if "REPEAT:" in line]
+    assert len(lines) == 2
+    assert "occurrences: 1" in lines[0]
+    assert "occurrences: 1" in lines[1]
+
+
 def test_sentinel_expiry_boundary_and_legacy_are_fail_safe(tmp_path):
     from datetime import datetime, timezone
     from synlynk.sentinel import _alert_is_active, _iter_sentinel_alerts
