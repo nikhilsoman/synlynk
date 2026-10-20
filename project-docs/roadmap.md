@@ -436,5 +436,3 @@ Canonical release epic #2475. Goals: goal-aa48c456, goal-20bb3987. Scheduled rel
 ## v0.29.0 — Backlog consolidation [planned] (target: 2027-04-23)
 
 Canonical release epic #2476. Goal: goal-51c4be3f. Scheduled decision gate: 2027-04-23; every residual candidate promoted, archived, or held and human Dev Preview decision recorded. No Dev Preview date is implied.
-
-
