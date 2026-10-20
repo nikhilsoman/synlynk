@@ -139,6 +139,18 @@
 
 ## Architecture & Conventions
 
+- **2026-10-20 [Capacity-first release sequencing]:** Nikhil authorized
+  v0.25.2 to prioritize immediately usable execution headroom: a constrained
+  Local Ornith pilot and low-privilege Muse onboarding move ahead of live
+  quota reconciliation. Local remains Ornith-only, isolated, max-one
+  concurrent dispatch, and capped at 20% of implementation work; Muse remains
+  authenticated and model-allowlisted with no review, deploy, or GitHub-write
+  authority. Federated quota freshness, calibration fallback, and billing
+  reconciliation move to the v0.25.3 trust gate. [@nikhilsoman]
+  Canonical release headers were synchronized from verified snapshot
+  `pre-capacity-first-roadmap-amendment-2026-10-20-20261020T045537Z.db`
+  (SHA-256 `1d107610467a50adfb566f4e21ab30f068ad21935b1a8d5806a820610702ca39`).
+
 - **2026-10-03 [@nikhilsoman]:** Issue #1928 standardizes the root `VERSION` file as the sole editable release version. Runtime code, setuptools metadata, installer reporting, README release metadata, and the release command now derive from it; CI enforces `synlynk release --check-docs` on PRs, manual runs, and `v*` tags.
 - **Diagrams & Visualizations Format:** All future architecture diagrams and flowcharts must default to a wide layout (~180 columns width, horizontal `flowchart LR` or wide multi-lane layouts) to maximize horizontal viewport utilization across terminal and widescreen displays.
 - **2026-09-28 [Rollback stash race #1834]:** Rollback checkpoints now exclude atomic `.sentinel-*` temporary files and vanished status paths before explicit stash pathspecs. If a path disappears after collection, the stash is retried once using the refreshed surviving list; unchanged real dirty-file failures still propagate. [@codex]
