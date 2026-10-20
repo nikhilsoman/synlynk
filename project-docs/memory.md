@@ -207,3 +207,6 @@
   `--no-suggest-shell-commands` are enabled for the bounded pilot. The printed
   `find` text was not executed: the runner receipt records a read-only outcome
   with no changed paths. [@codex]
+- **2026-10-19 [LIVE-27] Dynamic Model Catalog Ingestion & Invariant Boundaries:** Dynamic model discovery functions (such as `sync_harness_models_window()`) must never blindly insert raw strings from execution logs into canonical catalog tables (`harness_models`). All ingested models must validate against harness baselines/allowlists, and must never overwrite or tie-break against authoritative curated/CLI discoveries. Bulk operations must not assign uniform `CURRENT_TIMESTAMP` timestamps that break `ORDER BY discovered_at DESC` resolution. Catalog resolution must prioritize authoritative discovery sources (`curated` > `cli` > `config` > `execution_log`) and fall back cleanly to static curated tier configurations. [@agy]
+- **2026-10-19 [LIVE-27] Canonical cleanse:** Migration 23 deprecates every malformed or non-current `execution_log` model in `harness_models` using the shared `is_plausible_model_id()` and `_curated_model_ids()` predicates. It preserves authoritative and valid execution-log rows, is idempotent, and has been applied to the canonical state database. [@codex]
+

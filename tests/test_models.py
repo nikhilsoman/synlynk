@@ -140,10 +140,10 @@ def test_resolve_tier_model_prefers_state_db_discovery_over_static_catalog(proje
     monkeypatch.setattr(models, "_static_tier_model", lambda tier, harness, repo_path=None: "stale-static-model")
     conn = sl._get_db()
     upsert_harness_model(
-        conn, "codex", "discovered-model", complexity_tier="pro",
+        conn, "codex", "gpt-5.6-luna", complexity_tier="pro",
         discovered_at="2026-10-14T00:00:00+00:00",
     )
     conn.commit()
     conn.close()
 
-    assert models.resolve_tier_model("pro", "codex") == "discovered-model"
+    assert models.resolve_tier_model("pro", "codex") == "gpt-5.6-luna"

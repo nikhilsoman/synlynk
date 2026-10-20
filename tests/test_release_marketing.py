@@ -149,7 +149,20 @@ def test_cmd_release_invokes_marketing_ceremony(tmp_path, monkeypatch):
     waives = ["hero=test", "install=test", "links=test", "commands=test"]
     # Dry-run release should trigger dry-run marketing ceremony
     cmd_release(dry_run=True, version="0.19.0", role="dev", waive=waives)
-    # Release check docs
+    # Model the metadata committed with the proposed release before its
+    # fail-closed validation. The validator deliberately does not let a
+    # marketing dry-run create a new source-of-truth version.
+    (tmp_path / "VERSION").write_text("0.19.0\n")
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n\n## [v0.19.0]\n- Test release\n")
+    readme = tmp_path / "README.md"
+    readme.write_text(readme.read_text().replace("**v0.18.0:**", "**v0.19.0:**"))
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\n"
+        "dynamic = [\"version\"]\n\n"
+        "[tool.setuptools.dynamic]\n"
+        "version = {file = [\"VERSION\"]}\n"
+    )
+    # Release check docs validates the committed metadata without writing it.
     cmd_release(check_docs=True, version="0.19.0", role="dev", waive=waives)
 
 

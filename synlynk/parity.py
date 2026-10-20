@@ -282,8 +282,7 @@ def run_parity_remediation(
     import shutil
     import subprocess
     from synlynk._constants import VERSION
-    from synlynk.instructions import _build_templates
-    from synlynk.probe import SOP_BLOCKS
+    from synlynk.instructions import _build_templates, sop_body_for_file
 
     path = Path(repo_path).resolve()
     repo_name = path.name
@@ -353,7 +352,6 @@ def run_parity_remediation(
 
     # In-worktree remediation
     templates = _build_templates(repo=repo_name)
-    sop_body = "\n\n".join(SOP_BLOCKS)
 
     for doc_name, tool_name in directive_map.items():
         doc_path = wt_dir / doc_name
@@ -365,7 +363,7 @@ def run_parity_remediation(
             tool=tool_name,
             version=VERSION,
             start_body=template_content,
-            harness_body=sop_body,
+            harness_body=sop_body_for_file(doc_name),
         )
         doc_path.write_text(updated, encoding="utf-8")
 

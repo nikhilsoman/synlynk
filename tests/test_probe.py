@@ -552,8 +552,11 @@ def test_repair_sops_detects_legacy_claude_references(tmp_path, monkeypatch):
     probe._repair_sops_only(harness_name="agy", cfg=cfg, dry_run=False)
 
     updated = gemini_file.read_text()
+    # GEMINI.md is a per-turn file: stale full SOP bodies converge to the lean
+    # SOP index (gh:#2284) rather than being refreshed as full bodies.
     assert "escalate to Claude" not in updated
-    assert "escalate to the Home Harness" in updated
     assert "Run the brainstorm using Claude" not in updated
     assert "without explicit Claude approval" not in updated
-    assert "without explicit Home Harness approval" in updated
+    assert "## SOP Index (load on demand)" in updated
+    assert "## PR Review Discipline" in updated
+    assert "escalate to the Home Harness" not in updated

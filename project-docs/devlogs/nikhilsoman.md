@@ -2188,3 +2188,30 @@ implementation dispatched, external messages sent, or policy changed.
   and request QA approval on the new head. Keep pilot disabled; only resume after
   QA merge and runtime/evidence review.
 [@codex]
+
+## 2026-10-19 — LIVE-27 RCA: PR #2434 Backfill Corrupted harness_models
+
+- Investigated Sev1 incident LIVE-27 (#2441) where dynamic 30-day model sync `sync_harness_models_window()` added in PR #2434 corrupted `harness_models` by bulk-inserting 75 unvetted strings from historical `cost_entries` and `daemon_jobs` with identical default `discovered_at` timestamps (`2026-10-19 05:52:48`).
+- Root cause confirmed: downstream `resolve_tier_model()` relies on `ORDER BY discovered_at DESC`, breaking timestamp ties by storage/rowid order. Codex, Grok, and Agy were assigned malformed or retired models (`"'unknown'\nsynlynk/db.py:3772:"`, `grok-3`, `gemini-1.5-pro`), causing immediate dispatch failure across the fleet.
+- Evaluated PR #2443 partial fix (`is_plausible_model_id()`): verified live against `state.db` that Codex falls through to `'None,'`, and Grok/Agy remain stuck on retired models `grok-3` and `gemini-1.5-pro`.
+- Analyzed review failure: PR #2434 was authored, reviewed, and merged in 8 seconds under the same GitHub identity (`nikhilsoman`) using the same-identity-collision fallback checklist, bypassing independent cross-harness review.
+- Authored formal Sev1 RCA at `docs/rca/2026-10-19-LIVE-27-harness-models-backfill-corruption.md`.
+- Proposed 3-layer defense-in-depth: (1) ingestion hardening and allowlist validation in `sync_harness_models_window()`, (2) database remediation purging corrupted `execution_log` rows, and (3) source prioritization (`curated` > `cli` > `config` > `execution_log`) and allowlist validation in `resolve_tier_model()`.
+- Created P0 action tickets #2447, #2448, #2449, #2450 and appended them to `project-docs/todo.md`.
+[@agy]
+
+## 2026-10-19 — LIVE-27 canonical harness-model cleanse (#2447)
+
+- Added migration 23, `cleanse_execution_log_models`, which reuses
+  `is_plausible_model_id()` and `_curated_model_ids()` to mark malformed or
+  retired `execution_log` discoveries as `deprecated` while preserving rows
+  for auditability. The migration is registered and idempotent.
+- Added regression coverage for `None,`, the multiline source fragment,
+  `grok-3`, and `gemini-1.5-pro`; valid execution-log and authoritative
+  curated/config/CLI rows remain active and untouched.
+- Applied migration 23 to the canonical `/Users/nikhilsoman/.synlynk/workspaces/synlynk/state.db`:
+  73 of 75 execution-log rows were deprecated; the two remaining active rows
+  are allowlisted (`Ornith-1.0-9B-4bit` and `muse-spark-1.3`). Focused tests:
+  11 passed.
+[@codex]
+
