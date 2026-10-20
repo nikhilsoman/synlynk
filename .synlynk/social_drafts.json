@@ -2926,5 +2926,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2480 \u2014 sync accumulated local cost-log entries and roadmap state drift (PR #2480, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2480.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-20) - PR #2480\n- Merged improvements and fixes for PR #2480."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/430-pr2484-formalize-canonical-roadmap-reconciliati.md",
+    "title": "PR #2484 \u2014 formalize canonical roadmap reconciliation and schedule",
+    "author": "nikhilsoman",
+    "date": "2026-10-20",
+    "pr": "#2484",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2484."
+    ],
+    "tweet": "\ud83d\ude80 PR #2484 \u2014 formalize canonical roadmap reconciliation and schedule (PR #2484, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2484.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-20) - PR #2484\n- Merged improvements and fixes for PR #2484."
   }
 ]
