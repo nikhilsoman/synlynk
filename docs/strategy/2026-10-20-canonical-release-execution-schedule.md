@@ -1,7 +1,7 @@
 # Canonical Release Execution Schedule
 
-**Effective date:** 2026-10-20  
-**Authority:** `dec-f8835ba3`, roadmap parent #2458, and user approval on 2026-10-20  
+**Effective date:** 2026-10-20
+**Authority:** `dec-f8835ba3`, roadmap parent #2458, and user approval on 2026-10-20
 **Status:** Active execution contract
 
 **Capacity-first amendment:** User-authorized 2026-10-20. Canonical release
