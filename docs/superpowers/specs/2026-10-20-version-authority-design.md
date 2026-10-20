@@ -1,7 +1,7 @@
 # Version Authority and Release Metadata Integrity Design
 
 Date: 2026-10-20  
-Status: Proposed  
+Status: Approved by Nikhil Soman, 2026-10-20  
 Issue: #1914  
 Roadmap: `docs/superpowers/specs/2026-10-20-roadmap-reconciliation-design.md` Section 4, v0.25.4
 
@@ -93,4 +93,5 @@ may fall back to installed package metadata with a warning.
 
 ## Approval Gate
 
-Implementation begins only after Nikhil Soman approves this proposed design.
+Approved by Nikhil Soman on 2026-10-20. Implementation may proceed through
+the accompanying plan.
