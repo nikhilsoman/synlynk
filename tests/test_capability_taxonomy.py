@@ -42,6 +42,19 @@ def test_harness_profiles_conform_to_known_constraints():
     assert HARNESS_CAPABILITY_PROFILES["local"][CAP_GH_WRITE] is False
 
 
+def test_muse_profile_allows_review_and_github_write_calibration():
+    """Muse must not silently receive the restrictive unknown-harness defaults."""
+    from synlynk.capability_probe import CAP_REVIEW
+
+    result = evaluate_harness_capabilities(
+        "muse",
+        {CAP_SHELL, CAP_WORKSPACE_WRITE, CAP_GH_WRITE, CAP_NET, CAP_REVIEW},
+    )
+
+    assert result.allowed is True
+    assert result.missing_capabilities == []
+
+
 def test_infer_task_required_capabilities_explicit():
     reqs = infer_task_required_capabilities(
         "run tests and review PR",
