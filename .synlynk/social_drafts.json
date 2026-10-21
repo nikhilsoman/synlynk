@@ -3086,5 +3086,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2513 \u2014 fill Grok CLI roster in models.json (gh:#2457) (PR #2513, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2513.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-21) - PR #2513\n- Merged improvements and fixes for PR #2513."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/440-pr2518-complete-live-27-execution-log-model-cle.md",
+    "title": "PR #2518 \u2014 complete LIVE-27 execution-log model cleanse",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-21",
+    "pr": "#2518",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2518."
+    ],
+    "tweet": "\ud83d\ude80 PR #2518 \u2014 complete LIVE-27 execution-log model cleanse (PR #2518, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2518.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-21) - PR #2518\n- Merged improvements and fixes for PR #2518."
   }
 ]
