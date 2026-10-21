@@ -3054,5 +3054,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2514 \u2014 enable Muse review capability calibration (PR #2514, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2514.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-21) - PR #2514\n- Merged improvements and fixes for PR #2514."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/438-pr2515-extend-model-catalog-validation-to-grok-.md",
+    "title": "PR #2515 \u2014 extend model catalog validation to Grok and Codex (gh:#2291)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-21",
+    "pr": "#2515",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2515."
+    ],
+    "tweet": "\ud83d\ude80 PR #2515 \u2014 extend model catalog validation to Grok and Codex (gh:#2291) (PR #2515, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2515.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-21) - PR #2515\n- Merged improvements and fixes for PR #2515."
   }
 ]

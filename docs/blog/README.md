@@ -514,6 +514,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [435](./435-pr2510-preserve-dispatched-role-attribution.md) | PR #2510 — preserve dispatched role attribution | [#2510](https://github.com/nikhilsoman/synlynk/pull/2510) | 2026-10-21 |
 | [436](./436-pr2512-add-fail-closed-operational-resume-contr.md) | PR #2512 — add fail-closed operational resume control | [#2512](https://github.com/nikhilsoman/synlynk/pull/2512) | 2026-10-21 |
 | [437](./437-pr2514-enable-muse-review-capability-calibratio.md) | PR #2514 — enable Muse review capability calibration | [#2514](https://github.com/nikhilsoman/synlynk/pull/2514) | 2026-10-21 |
+| [438](./438-pr2515-extend-model-catalog-validation-to-grok-.md) | PR #2515 — extend model catalog validation to Grok and Codex (gh:#2291) | [#2515](https://github.com/nikhilsoman/synlynk/pull/2515) | 2026-10-21 |
 
 ## Per-PR Post Template
 
