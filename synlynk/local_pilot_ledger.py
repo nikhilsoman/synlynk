@@ -105,30 +105,53 @@ def _authorization_as_dict(conn: sqlite3.Connection, authorization_id: str) -> d
     return {column[0]: value for column, value in zip(columns, row)}
 
 
+def resume_authorization_context(conn: sqlite3.Connection) -> dict:
+    """Return the fresh event identity and evidence watermark to include in a signed envelope."""
+    ensure_local_pilot_ledger(conn)
+    watermark = conn.execute("SELECT COALESCE(MAX(rowid), 0) FROM local_pilot_evidence").fetchone()[0]
+    return {"authorization_id": str(uuid.uuid4()), "safety_watermark": watermark}
+
+
 def create_resume_authorization(conn: sqlite3.Connection, payload: dict) -> dict:
     """Append an activating resume authority at the current safety watermark."""
     ensure_local_pilot_ledger(conn)
     payload = dict(payload or {})
-    authorization_id = str(payload.get("authorization_id") or uuid.uuid4()).strip()
-    signed_payload = payload.get("signed_payload")
-    config_fingerprint = str(payload.get("config_fingerprint") or "").strip()
-    remediation_reference = str(payload.get("remediation_reference") or "").strip()
-    verification_reference = str(payload.get("verification_reference") or "").strip()
-    preflight_receipt = payload.get("preflight_receipt")
-    if not authorization_id or not isinstance(signed_payload, dict):
-        raise ValueError("authorization_id and signed_payload are required")
+    if set(payload) != {"signed_payload"}:
+        raise ValueError("resume authorization accepts only a signed_payload envelope")
+    signed_payload = payload["signed_payload"]
+    if not isinstance(signed_payload, dict):
+        raise ValueError("signed_payload is required")
+    authorization = signed_payload.get("authorization")
+    signature = signed_payload.get("signature")
+    if not isinstance(authorization, dict) or not isinstance(signature, str) or not signature.strip():
+        raise ValueError("signed_payload must contain authorization and signature")
+    required_fields = {
+        "authorization_id", "config_fingerprint", "remediation_reference", "verification_reference",
+        "preflight_receipt", "preflight_receipt_digest", "safety_watermark",
+    }
+    if set(authorization) != required_fields:
+        raise ValueError("signed authorization has an invalid field set")
+    if not _verify_resume_signature(authorization, signature):
+        raise ValueError("signed authorization signature is invalid for the host identity key")
+    authorization_id = str(authorization["authorization_id"] or "").strip()
+    config_fingerprint = str(authorization["config_fingerprint"] or "").strip()
+    remediation_reference = str(authorization["remediation_reference"] or "").strip()
+    verification_reference = str(authorization["verification_reference"] or "").strip()
+    preflight_receipt = authorization["preflight_receipt"]
     if not config_fingerprint or not remediation_reference or not verification_reference:
         raise ValueError("config_fingerprint, remediation_reference, and verification_reference are required")
     if not isinstance(preflight_receipt, dict) or preflight_receipt.get("result") != "passed":
         raise ValueError("a passed preflight_receipt is required")
-    approval_payload = signed_payload.get("approval_payload")
-    signature = signed_payload.get("signature")
-    if not isinstance(approval_payload, dict) or not isinstance(signature, str) or not signature.strip():
-        raise ValueError("signed_payload must contain approval_payload and signature")
-    if not _verify_resume_signature(approval_payload, signature):
-        raise ValueError("signed_payload signature is invalid for the host identity key")
     signed_payload_json, signed_payload_digest = _canonical_receipt(signed_payload)
     preflight_receipt_json, preflight_receipt_digest = _canonical_receipt(preflight_receipt)
+    if authorization["preflight_receipt_digest"] != preflight_receipt_digest:
+        raise ValueError("signed authorization preflight receipt digest does not match")
+    try:
+        safety_watermark = int(authorization["safety_watermark"])
+    except (TypeError, ValueError):
+        raise ValueError("signed authorization safety watermark is invalid") from None
+    if safety_watermark < 0:
+        raise ValueError("signed authorization safety watermark is invalid")
     with write_transaction(conn):
         existing = conn.execute(
             "SELECT state FROM local_pilot_resume_authorizations "
@@ -139,6 +162,8 @@ def create_resume_authorization(conn: sqlite3.Connection, payload: dict) -> dict
                 raise ValueError("a resume authorization is already active")
             raise ValueError("resume authorization activation in progress")
         watermark = conn.execute("SELECT COALESCE(MAX(rowid), 0) FROM local_pilot_evidence").fetchone()[0]
+        if safety_watermark != watermark:
+            raise ValueError("signed authorization safety watermark is stale")
         try:
             conn.execute(
                 """INSERT INTO local_pilot_resume_authorizations
@@ -147,7 +172,7 @@ def create_resume_authorization(conn: sqlite3.Connection, payload: dict) -> dict
                     preflight_receipt_json, preflight_receipt_digest, state)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'activating')""",
                 (authorization_id, _utc_now(), signed_payload_json, signed_payload_digest,
-                 config_fingerprint, remediation_reference, verification_reference, watermark,
+                 config_fingerprint, remediation_reference, verification_reference, safety_watermark,
                  preflight_receipt_json, preflight_receipt_digest),
             )
         except sqlite3.IntegrityError as error:

@@ -3,6 +3,7 @@ import os
 import sqlite3
 import subprocess
 import tempfile
+import hashlib
 
 import pytest
 
@@ -61,16 +62,29 @@ def _signed_resume_payload(key_path: str, payload=None) -> dict:
     return {"approval_payload": payload, "signature": signature}
 
 
-def _resume_authorization_payload(key_path: str, **overrides) -> dict:
-    payload = {
-        "signed_payload": _signed_resume_payload(key_path),
+def _resume_authorization_payload(conn, key_path: str, **overrides) -> dict:
+    from synlynk.local_pilot_ledger import resume_authorization_context
+
+    context = resume_authorization_context(conn)
+    preflight_receipt = {"result": "passed"}
+    authorization = {
+        **context,
         "config_fingerprint": "disabled-20-percent-one-concurrent",
         "remediation_reference": "issue-2342",
         "verification_reference": "review-2349",
-        "preflight_receipt": {"result": "passed"},
+        "preflight_receipt": preflight_receipt,
+        "preflight_receipt_digest": hashlib.sha256(
+            json.dumps(preflight_receipt, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest(),
     }
-    payload.update(overrides)
-    return payload
+    authorization.update(overrides)
+    signed = _signed_resume_payload(key_path, authorization)
+    return {
+        "signed_payload": {
+            "authorization": signed["approval_payload"],
+            "signature": signed["signature"],
+        }
+    }
 
 
 def test_migration_seeds_the_immutable_historical_cohort_once(ledger_conn):
@@ -236,7 +250,7 @@ def test_resume_authorization_is_immutable_and_sets_the_active_epoch(ledger_conn
     record_safety_outcome(ledger_conn, "before-resume", "failed", "scope drift", {"safe": False})
     authorization = create_resume_authorization(
         ledger_conn,
-        _resume_authorization_payload(resume_identity_key, authorization_id="resume-1"),
+        _resume_authorization_payload(ledger_conn, resume_identity_key, authorization_id="resume-1"),
     )
     active = activate_resume_authorization(ledger_conn, authorization["authorization_id"])
 
@@ -274,7 +288,7 @@ def test_status_keeps_historical_failures_and_counts_only_active_epoch_evidence(
     record_quality_verdict(ledger_conn, "old-accept", "codex", "accepted", "correct", "qualified")
     authorization = create_resume_authorization(
         ledger_conn,
-        _resume_authorization_payload(resume_identity_key),
+        _resume_authorization_payload(ledger_conn, resume_identity_key),
     )
     activate_resume_authorization(ledger_conn, authorization["authorization_id"])
     record_admission(ledger_conn, _sample("new-accept"))
@@ -294,19 +308,61 @@ def test_resume_authorization_requires_a_valid_host_signed_payload(ledger_conn, 
     from synlynk.local_pilot_ledger import create_resume_authorization, ensure_local_pilot_ledger
 
     ensure_local_pilot_ledger(ledger_conn)
-    unsigned = _resume_authorization_payload(resume_identity_key, signed_payload={"approved": True})
-    malformed = _resume_authorization_payload(
-        resume_identity_key, signed_payload={"approval_payload": {"approved": True}}
-    )
-    invalid = _resume_authorization_payload(resume_identity_key)
-    invalid["signed_payload"]["approval_payload"] = {"approved": False}
-    failed_preflight = _resume_authorization_payload(
-        resume_identity_key, preflight_receipt={"result": "failed"}
-    )
+    unsigned = {"signed_payload": {"authorization": {}}}
+    malformed = {"signed_payload": {"approval_payload": {"approved": True}}}
+    invalid = _resume_authorization_payload(ledger_conn, resume_identity_key)
+    invalid["signed_payload"]["authorization"]["config_fingerprint"] = "tampered"
+    failed_preflight = _resume_authorization_payload(ledger_conn, resume_identity_key, preflight_receipt={"result": "failed"})
 
     for payload in (unsigned, malformed, invalid, failed_preflight):
         with pytest.raises(ValueError):
             create_resume_authorization(ledger_conn, payload)
+
+
+def test_resume_signature_binds_every_authority_field(ledger_conn, resume_identity_key):
+    """A valid generic signature cannot be replayed with altered authorization metadata."""
+    from synlynk.local_pilot_ledger import create_resume_authorization, ensure_local_pilot_ledger
+
+    ensure_local_pilot_ledger(ledger_conn)
+    signed = _signed_resume_payload(resume_identity_key, {"approved": True})
+    for field, replacement in (
+        ("authorization_id", "replayed-id"),
+        ("config_fingerprint", "attacker-config"),
+        ("remediation_reference", "attacker-remediation"),
+        ("verification_reference", "attacker-verification"),
+        ("preflight_receipt", {"result": "passed", "attacker": True}),
+    ):
+        payload = _resume_authorization_payload(ledger_conn, resume_identity_key)
+        payload["signed_payload"]["authorization"][field] = replacement
+        with pytest.raises(ValueError):
+            create_resume_authorization(ledger_conn, payload)
+
+
+def test_migration_27_reconciles_legacy_multiple_staged_authorizations(ledger_conn):
+    """A v26 ledger must upgrade by failing surplus staged rows before indexing."""
+    from synlynk.migrations.m0026_local_pilot_resume_authorization import MIGRATION as migration_26
+    from synlynk.migrations.m0027_local_pilot_resume_lifecycle_serialization import MIGRATION as migration_27
+
+    migration_26.up(ledger_conn)
+    for authorization_id in ("first", "second"):
+        ledger_conn.execute(
+            """INSERT INTO local_pilot_resume_authorizations
+               (authorization_id, created_at, signed_payload_json, signed_payload_digest,
+                config_fingerprint, remediation_reference, verification_reference, safety_watermark,
+                preflight_receipt_json, preflight_receipt_digest, state)
+               VALUES (?, 'now', '{}', 'digest', 'config', 'remediation', 'verification', 0,
+                       '{}', 'digest', 'activating')""",
+            (authorization_id,),
+        )
+
+    migration_27.up(ledger_conn)
+
+    assert ledger_conn.execute(
+        "SELECT authorization_id, state, terminal_reason FROM local_pilot_resume_authorizations ORDER BY rowid"
+    ).fetchall() == [
+        ("first", "activating", None),
+        ("second", "failed", "migration_27_reconciled_surplus_activating_authorization"),
+    ]
 
 
 def test_resume_authorization_lifecycle_is_serialized_and_reconcilable(ledger_conn, resume_identity_key):
@@ -322,10 +378,10 @@ def test_resume_authorization_lifecycle_is_serialized_and_reconcilable(ledger_co
 
     ensure_local_pilot_ledger(ledger_conn)
     first = create_resume_authorization(
-        ledger_conn, _resume_authorization_payload(resume_identity_key, authorization_id="first")
+        ledger_conn, _resume_authorization_payload(ledger_conn, resume_identity_key, authorization_id="first")
     )
     with pytest.raises(ValueError, match="activation in progress"):
-        create_resume_authorization(ledger_conn, _resume_authorization_payload(resume_identity_key))
+        create_resume_authorization(ledger_conn, _resume_authorization_payload(ledger_conn, resume_identity_key))
     failed = fail_resume_authorization(ledger_conn, first["authorization_id"], "config write failed")
     assert failed["state"] == "failed"
     assert failed["terminal_reason"] == "config write failed"
@@ -333,12 +389,12 @@ def test_resume_authorization_lifecycle_is_serialized_and_reconcilable(ledger_co
     active = activate_resume_authorization(
         ledger_conn,
         create_resume_authorization(
-            ledger_conn, _resume_authorization_payload(resume_identity_key, authorization_id="second")
+            ledger_conn, _resume_authorization_payload(ledger_conn, resume_identity_key, authorization_id="second")
         )["authorization_id"],
     )
     assert active_resume_authorization(ledger_conn)["authorization_id"] == active["authorization_id"]
     with pytest.raises(ValueError, match="authorization is already active"):
-        create_resume_authorization(ledger_conn, _resume_authorization_payload(resume_identity_key))
+        create_resume_authorization(ledger_conn, _resume_authorization_payload(ledger_conn, resume_identity_key))
     revoked = revoke_active_resume_authorization(ledger_conn, "new safety failure")
     assert revoked["state"] == "revoked"
     assert active_resume_authorization(ledger_conn) is None
@@ -372,7 +428,7 @@ def test_active_epoch_excludes_pre_resume_expansion_counters(ledger_conn, resume
     record_admission(ledger_conn, _sample("old-expansion-pending", cohort="expansion"))
     record_admission(ledger_conn, _sample("old-expansion-unsafe", cohort="expansion"))
     record_safety_outcome(ledger_conn, "old-expansion-unsafe", "failed", "scope drift", {"safe": False})
-    authorization = create_resume_authorization(ledger_conn, _resume_authorization_payload(resume_identity_key))
+    authorization = create_resume_authorization(ledger_conn, _resume_authorization_payload(ledger_conn, resume_identity_key))
     activate_resume_authorization(ledger_conn, authorization["authorization_id"])
 
     expansion = load_pilot_status(ledger_conn)["expansion"]
