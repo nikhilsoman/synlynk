@@ -1,7 +1,7 @@
 # Unattended Local Ornith Lifecycle Design
 
 **Date:** 2026-10-21  
-**Status:** Approved by Nikhil on 2026-10-21
+**Status:** Approved by Nikhil on 2026-10-21; runtime ownership and credential-source amendments proposed 2026-10-21, awaiting sign-off
 **Extends:** `docs/superpowers/specs/2026-10-16-local-harness-operationalization-design.md`
 **Release:** v0.25.2 fleet capacity recovery
 **Related pilot:** gh:#2349
@@ -18,15 +18,19 @@ fail-closed execution boundary.
 1. Synlynk owns lifecycle of the local oMLX service for admitted Local pilot
    work: it starts the service when absent and loads only
    `Ornith-1.0-9B-4bit`.
-2. The oMLX credential is imported once from the operator's current
-   `OPENAI_API_KEY` into the macOS Keychain. Thereafter only the local runtime
-   supervisor reads it, at the last responsible moment, for authenticated
-   readiness/model-management API calls and the Synlynk relay. The key is not
-   supplied to the oMLX process: oMLX keeps its own server-side authentication
-   setting. Aider receives no credential: the relay adds authorization to its
-   fixed upstream oMLX connection. The key is never written to project files,
+2. The existing persistent oMLX-generated API key in oMLX's active
+   `settings.json` is authoritative. Synlynk reads it into memory only when
+   needed for authenticated readiness/model-management API calls and the
+   narrow Synlynk relay; it does not prompt, import, replace, or persist a
+   second copy in Keychain. This supersedes the Keychain/`OPENAI_API_KEY`
+   path from the 2026-10-16 operationalization design for Local lifecycle
+   readiness and relay only. The foreground oMLX process reads the same
+   settings file using the installed wrapper's base-path behavior. Aider
+   receives no credential: the relay adds authorization only to its fixed
+   upstream oMLX connection. The key is never written to project files,
    state/telemetry, logs, command-line arguments, Docker configuration, or
-   mounted container files.
+   mounted container files. If the active settings file or key is missing,
+   unreadable, or invalid, Local readiness fails closed to frontier fallback.
 3. After 15 minutes without an admitted Local job, Synlynk unloads Ornith and
    stops the service. The timeout is reset only by a successfully admitted
    Local job, not by rejected or frontier-routed work.
@@ -41,6 +45,19 @@ fail-closed execution boundary.
    untouched. If its authenticated roster lacks Ornith, Synlynk retries the
    read-only readiness probe once, then falls back and files the failure
    ticket. It never takes over, restarts, or unloads an operator-owned server.
+7. **Ownership amendment proposed by Nikhil on 2026-10-21:** when the endpoint
+   is absent, Synlynk launches a dedicated foreground `omlx serve` process,
+   rather than using the app-managed `omlx start` command. Synlynk records the
+   exact spawned PID plus process-start identity and only signals that exact
+   process after revalidating both values. The command binds only to
+   `127.0.0.1:8000`; it uses the installed oMLX wrapper/default base-path and
+   settings, but receives neither `OPENAI_API_KEY` nor `OMLX_API_KEY` in its
+   environment and receives no API key argument. Its stdout/stderr are not
+   persisted by Synlynk. Synlynk reads the key from oMLX's active persistent
+   settings for authenticated readiness and the host relay. If the wrapper cannot be
+   resolved, the child cannot be identity-verified, or the endpoint appears
+   before the child binds, Synlynk does not claim or stop that endpoint and
+   falls back.
 
 ## Scope and non-goals
 
@@ -52,34 +69,29 @@ merges, secrets work, broad tests, architecture/specification work, or a
 larger pilot share.
 
 Synlynk does not download models, manage a multi-model resident pool, expose
-the key to Aider, persist it outside the keychain, or create GitHub issues
-when Local was never selected for the cohort. An operator-controlled emergency
-disable remains authoritative and stops new starts immediately.
+the key to Aider, duplicate or mutate the oMLX key, or create GitHub issues
+when Local was never selected for the cohort. `synlynk local credentials import`
+may remain as a legacy credential-management command for other consumers, but
+it is not a prerequisite or source for this lifecycle path; `local doctor` must
+report the active oMLX settings credential state without printing it or relying
+on `OPENAI_API_KEY`. An operator-controlled emergency disable remains
+authoritative and stops new starts immediately.
 
 ## Components
 
-### Credential setup and access
+### Credential access
 
-`synlynk local credentials import` reads `OPENAI_API_KEY` from the invoking
-environment once and stores it under a stable host-level macOS Keychain
-service/account (`com.synlynk.omlx`, account `local-runtime`). The command
-prints neither value nor a reversible identifier. It requires an interactive
-terminal and reports only that storage succeeded. The implementation uses the
-macOS Keychain Services API, not a shell command that places the value in
-process arguments. Import supports explicit replacement and deletion; headless
-startup never prompts or writes credentials.
-
-`LocalCredentialStore` is the only production reader. It retrieves the secret
-at the last responsible moment for the authenticated oMLX API client and
-Synlynk relay; it is not placed in any child-process environment. The relay
-replaces the current raw TCP passthrough and adds the Bearer authorization
-header only when forwarding to `127.0.0.1:8000`; its egress remains fixed to
-that endpoint. The running oMLX server retains its own API-key setting and is
-started/stopped without passing the credential to it. Missing or inaccessible
-keychain entries are a classified readiness failure, never a prompt for a
-secret in headless mode. The unattended path is supported on macOS; other
-platforms report lifecycle automation as unsupported and use frontier
-fallback.
+For this lifecycle path, `LocalCredentialStore` reads the active oMLX `settings.json` selected by the
+same base-path resolution as the installed oMLX wrapper (including its macOS
+bootstrap file). It extracts only `auth.api_key` into process memory; it must
+not log the settings document or key. It does not invoke a shell, expose the
+key in arguments/environment, create or mutate credentials, or maintain a
+Synlynk-owned duplicate. The relay adds the Bearer authorization header only
+when forwarding to `127.0.0.1:8000`; its egress remains fixed to that endpoint.
+Missing file/key, permission or parse errors, and authentication rejection are
+classified readiness failures, never an interactive prompt. The unattended
+path is supported on macOS; other platforms report lifecycle automation as
+unsupported and use frontier fallback.
 
 ### Local lifecycle manager
 
@@ -88,7 +100,7 @@ daemon/launch agent, so idle shutdown survives the short lifetime of a
 dispatch CLI process. Lifecycle is host-global because all workspaces share
 the local endpoint on port 8000. One lock and reservation registry cover every
 workspace on the host. A durable ownership record stores the managed service
-PID, process start time, launch-agent label, model ID, and lifecycle generation;
+PID, process start time, Synlynk supervisor launch-agent label, model ID, and lifecycle generation;
 it stores no credential. PID plus start time prevents PID-reuse cleanup.
 After daemon restart, the supervisor reconciles that record against the actual
 process and authenticated endpoint before managing anything. Unknown or
@@ -107,33 +119,42 @@ It follows this sequence:
    Synlynk, Docker, and the desktop workload.
 3. Probe the authenticated inventory. If an operator-owned server is already
    running, leave it untouched and accept it only if the exact approved
-   Ornith ID is served. If no service is running, use a Synlynk-managed
-   launch-agent instance.
+   Ornith ID is served. If no service is running, use a Synlynk-owned
+   foreground process instance.
 4. The managed-service adapter resolves the installed `omlx` executable and
-   validates its version. The evaluated host has oMLX 0.5.3, whose CLI exposes
-   `omlx start` and `omlx stop`; its authenticated API exposes
+   validates its version. The evaluated host has oMLX 0.5.3, whose
+   `omlx serve --host 127.0.0.1 --port 8000` command runs the ASGI server in
+   the foreground; its authenticated API exposes
    `POST /v1/models/{model_id}/load` and
-   `POST /v1/models/{model_id}/unload`. When the service was absent at step 3,
-   the manager invokes `omlx start` through an argument-vector API (never a
-   shell command), then authenticates with the Keychain credential and loads
-   only `Ornith-1.0-9B-4bit` through the model-specific API. It polls readiness
-   and live inventory with bounded timeout/backoff. The adapter supports only
+   `POST /v1/models/{model_id}/unload`. When the endpoint is absent at step 3,
+   the manager starts this command through an argument-vector `Popen` call,
+   with no shell and with API-key environment variables removed. It retains the
+   direct child PID/start identity and uses that identity as the only proof
+   authorizing a later stop. The process inherits the oMLX install wrapper's
+   base-path behavior and uses the existing oMLX settings; Synlynk does not
+   alter those settings or pass a key through args/environment. It then
+   authenticates with the persistent settings credential and loads only
+   `Ornith-1.0-9B-4bit` through the model-specific API. It polls readiness and
+   live inventory with bounded timeout/backoff. The adapter supports only
    explicitly tested oMLX versions; unknown versions or missing endpoints
-   produce `unsupported_load_contract` and frontier fallback. The manager
-   never changes the oMLX server-side API key setting.
+   produce `unsupported_load_contract` and frontier fallback.
 5. Confirm that `/v1/models` contains the exact approved model, Aider and
    Docker/Compose are available, and the isolated relay can be constructed.
    Only then issue the signed pilot receipt and start the job.
 
 The host supervisor starts a 15-minute idle timer after the last Local job and
 rechecks that no Local job or reservation exists before calling the
-authenticated per-model unload endpoint and `omlx stop` for its managed
-service. It never terminates an operator-owned oMLX process; service ownership
-is durably recorded only after Synlynk observed the endpoint absent and
-successfully started it. If the endpoint appears during a start race and
-ownership cannot be proved, Synlynk leaves it untouched and falls back. If the
-Synlynk daemon restarts, the LaunchAgent resumes ownership reconciliation and
-the idle timer from the last recorded activity time.
+authenticated per-model unload endpoint and sending `SIGTERM` to the exact
+managed foreground PID. It never invokes the global `omlx stop` command. It
+revalidates PID plus process-start identity immediately before signaling, so
+PID reuse or a replacement operator process cannot be stopped. Ownership is
+durably recorded only after Synlynk observes the endpoint absent, launches the
+foreground server itself, verifies its child identity, and sees that exact
+process own port 8000. If an unrelated process wins the bind race, Synlynk
+terminates only its own failed child (if still alive), creates no ownership
+record, and falls back. If the Synlynk daemon restarts, the LaunchAgent resumes
+ownership reconciliation and the idle timer from the last recorded activity
+time.
 
 ### Failure and fallback
 
@@ -165,9 +186,9 @@ mismatch is actionable but does not permit a different model.
 
 ## Acceptance criteria
 
-- An interactive one-time import stores the oMLX key in the OS keychain; no
-  repository, log, process argument, telemetry record, or Docker config
-  contains the value.
+- Synlynk reads the existing persistent oMLX key from the active settings file
+  without prompting or creating a duplicate; no repository, log, process
+  argument, telemetry record, or Docker config contains the value.
 - The Aider container and oMLX process environments contain no API key; only
   the in-process authenticated API client and narrowly scoped authorization
   relay read it at runtime.
@@ -175,9 +196,11 @@ mismatch is actionable but does not permit a different model.
   an operator shell export when the service is absent.
 - A pre-running operator-owned oMLX service is probed but is never stopped by
   Synlynk's idle timer; if its roster lacks Ornith, the readiness retry and
-  frontier fallback occur without taking over that service.
-- The managed service stops and Ornith unloads after 15 idle minutes only when
-  no Local job or reservation exists.
+  frontier fallback occur without taking over that service. An endpoint
+  appearing during startup never authorizes stopping its listener.
+- The managed foreground process stops only through its verified PID/start
+  identity, and Ornith unloads after 15 idle minutes only when no Local job or
+  reservation exists.
 - A failed readiness sequence retries once, then uses the bound frontier
   fallback; it never runs host-side Aider and never silently retries forever.
 - Exhausted readiness failures create or update a deduplicated redacted GitHub
@@ -192,19 +215,22 @@ mismatch is actionable but does not permit a different model.
 
 Setting `local_pilot.enabled` to `false` prevents new lifecycle starts.
 `synlynk local lifecycle stop` explicitly stops only a Synlynk-managed service
-and clears its in-memory credential reference. Removing the keychain entry
-causes future Local dispatches to fail closed to their frontier fallback.
+and clears its in-memory credential reference. Removing or invalidating the
+oMLX key causes future Local dispatches to fail closed to their frontier fallback.
 Operator-owned services are never affected by the stop command.
 
 ## Verification plan
 
-Unit tests cover keychain interface failures/redaction, ownership tracking,
-readiness retry/fallback, idle-timer races, memory rejection, issue
-deduplication, and proof that failed readiness does not create Local sample
-evidence. Integration tests use fake process and inventory adapters; they must
-not require a real keychain, oMLX server, Docker daemon, or GitHub token.
-A single controlled host smoke run verifies the keychain import, managed start,
-Ornith inventory, isolated receipt, 15-minute idle shutdown, and a forced
+Unit tests cover missing/unreadable/invalid settings credential handling and
+redaction, doctor reporting based on settings rather than `OPENAI_API_KEY`,
+legacy-import independence, foreground-process ownership tracking, readiness
+retry/fallback, idle-timer and bind races,
+memory rejection, issue deduplication, and proof that failed readiness does
+not create Local sample evidence. Integration tests use fake process and
+inventory adapters; they must not require a real keychain, oMLX server, Docker
+daemon, or GitHub token.
+A single controlled host smoke run verifies persistent-settings auth, managed
+start, Ornith inventory, isolated receipt, 15-minute idle shutdown, and a forced
 failure fallback. The pilot remains at 20% and requires separate receipt
 review; this feature does not itself promote it. Before implementation, verify
 the installed oMLX version's documented launch and exact-model load API and
