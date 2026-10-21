@@ -365,6 +365,42 @@ def test_migration_27_reconciles_legacy_multiple_staged_authorizations(ledger_co
     ]
 
 
+def test_migration_27_fails_staged_legacy_authorization_when_active_exists(ledger_conn):
+    """A v26 active row cannot coexist with any staged recovery after upgrade."""
+    from synlynk.migrations.m0026_local_pilot_resume_authorization import MIGRATION as migration_26
+    from synlynk.migrations.m0027_local_pilot_resume_lifecycle_serialization import MIGRATION as migration_27
+
+    migration_26.up(ledger_conn)
+    for authorization_id, state, activated_at in (("active", "active", "now"), ("staged", "activating", None)):
+        ledger_conn.execute(
+            """INSERT INTO local_pilot_resume_authorizations
+               (authorization_id, created_at, signed_payload_json, signed_payload_digest,
+                config_fingerprint, remediation_reference, verification_reference, safety_watermark,
+                preflight_receipt_json, preflight_receipt_digest, state, activated_at)
+               VALUES (?, 'now', '{}', 'digest', 'config', 'remediation', 'verification', 0,
+                       '{}', 'digest', ?, ?)""",
+            (authorization_id, state, activated_at),
+        )
+
+    migration_27.up(ledger_conn)
+
+    assert ledger_conn.execute(
+        "SELECT authorization_id, state, terminal_reason FROM local_pilot_resume_authorizations ORDER BY rowid"
+    ).fetchall() == [
+        ("active", "active", None),
+        ("staged", "failed", "migration_27_reconciled_surplus_activating_authorization"),
+    ]
+    with pytest.raises(sqlite3.IntegrityError):
+        ledger_conn.execute(
+            """INSERT INTO local_pilot_resume_authorizations
+            (authorization_id, created_at, signed_payload_json, signed_payload_digest,
+             config_fingerprint, remediation_reference, verification_reference, safety_watermark,
+             preflight_receipt_json, preflight_receipt_digest, state)
+            VALUES ('new-stage', 'now', '{}', 'digest', 'config', 'remediation', 'verification', 0,
+                    '{}', 'digest', 'activating')"""
+        )
+
+
 def test_resume_authorization_lifecycle_is_serialized_and_reconcilable(ledger_conn, resume_identity_key):
     """Only one staged/active record exists and terminal transitions are explicit."""
     from synlynk.local_pilot_ledger import (
