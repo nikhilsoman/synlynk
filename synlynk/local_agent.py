@@ -919,7 +919,13 @@ def cmd_local_lifecycle(action: str, *, manager=None) -> int:
     manager = manager or LocalLifecycleManager()
     try:
         if action == "status":
-            print(json.dumps(manager.status(), indent=2, sort_keys=True))
+            payload = manager.status()
+            try:
+                from synlynk.local_failure_reporter import outbox_status
+                payload["failure_reporting"] = outbox_status()
+            except Exception:
+                payload["failure_reporting"] = {"pending": None, "tracked": None}
+            print(json.dumps(payload, indent=2, sort_keys=True))
         elif action == "stop":
             stopped = manager.stop_managed_service()
             print("  ✓ Synlynk-managed oMLX stopped" if stopped

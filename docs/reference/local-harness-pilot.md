@@ -31,15 +31,65 @@ recommended share to the frontier (0%).
 
 Pilot Aider runs use `docker/local-pilot.compose.yaml`: Aider is on an
 internal-only Docker network; its sole peer is a relay with a fixed destination
-of host oMLX TCP port 8000. Aider receives a credential-scanned copy of only
+of the host credential broker over a mounted Unix socket. Aider receives a credential-scanned copy of only
 explicitly scoped files in a disposable scratch repository, not the job
 worktree or its Git metadata. Out-of-scope tracked and untracked files are not
 copied into the model's view. Only validated in-scope edits are applied back
 to the disposable job worktree. The Aider container gets only
 `OPENAI_API_KEY`. It does not receive GitHub tokens, SSH credentials, or the
 host home directory. The API base inside Aider is rewritten to
-`http://omlx:8000/v1`. A Docker, Compose, authentication, or isolation setup
-failure never falls back to host Aider execution.
+`http://omlx:8000/v1`. Aider is given only an inert placeholder API key; the
+host broker discards it and injects the Keychain credential. A Docker, Compose,
+authentication, or isolation setup failure never falls back to host Aider
+execution.
+
+## Unattended host lifecycle
+
+The Local pilot starts and loads only the approved
+`Ornith-1.0-9B-4bit` model when an admitted pilot dispatch needs it. On macOS,
+the API key must be imported once into the user's Keychain; the value is never
+written to a file or passed to Aider/Docker. In an interactive terminal:
+
+```sh
+read -s OPENAI_API_KEY
+export OPENAI_API_KEY
+synlynk local credentials import
+unset OPENAI_API_KEY
+synlynk local credentials status
+synlynk local lifecycle status
+```
+
+To rotate the stored credential, repeat the import with `--replace`; to revoke
+it, run `synlynk local credentials delete`. Do not put the key in shell history,
+command arguments, a `.env` file, or issue text. Credential status reports only
+whether a value is present. `synlynk local lifecycle status` separately reports
+credential presence, endpoint reachability, approved-model load state,
+Synlynk ownership, active leases, idle time, and the count of pending redacted
+failure reports.
+
+Synlynk never takes over an already-running operator-owned oMLX service. If that
+service does not expose the approved model, Local is not changed or restarted:
+the dispatch retries readiness once, then routes to the frontier harness
+already selected for that dispatch. The same fallback applies to Keychain,
+authentication, model-load, memory-pressure, unsupported-version, or isolated
+runner errors. A failed readiness creates no Local receipt or eligible sample.
+The control plane files or updates one deduplicated GitHub issue per failure
+fingerprint, at most once an hour; if GitHub is unavailable, only a redacted
+event is retained locally for a later retry.
+
+Synlynk-owned oMLX is stopped only after 15 minutes idle with no active Local
+jobs or reservations. Host memory admission requires normal macOS memory
+pressure, at least 8 GiB available, and no more than 256 MiB swap growth during
+the sampling interval. To disable pilot routing immediately, set
+`local_pilot.enabled` to `false`; to stop only a provably Synlynk-owned idle
+service, run `synlynk local lifecycle stop`. A running operator-owned service
+is never stopped by either command.
+
+The pilot remains at 20%, one concurrent Local job, and isolated execution.
+Before enabling automatic start/load on a host, verify the exact oMLX 0.5.3
+contract, Keychain access, and Docker socket relay using the controlled host
+smoke test in the lifecycle plan. Do not use a real dispatch as a smoke test
+until these checks pass.
 
 To stop Local Pilot routing immediately, set `local_pilot.enabled` to `false`
 in `.synlynk/workspace.json`. To roll back the cohort without changing the

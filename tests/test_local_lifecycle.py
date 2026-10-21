@@ -276,20 +276,23 @@ def test_reservation_fails_closed_when_current_process_identity_is_unknown(tmp_p
     assert error.value.reason_code == "process_identity_unavailable"
 
 
-def test_cli_status_reports_model_and_ownership_without_secret(capsys, tmp_path):
+def test_cli_status_reports_model_and_ownership_without_secret(capsys, tmp_path, monkeypatch):
     from synlynk.local_agent import cmd_local_lifecycle
+    from synlynk import local_failure_reporter
 
     manager = make_manager(
         tmp_path,
         client=FakeRuntimeClient([LIFECYCLE_MODEL_ID]),
         endpoint_probe=lambda: True,
     )
+    monkeypatch.setattr(local_failure_reporter, "outbox_status", lambda: {"pending": 2, "tracked": 3})
     assert cmd_local_lifecycle("status", manager=manager) == 0
     output = capsys.readouterr().out
     payload = json.loads(output)
     assert payload["running"] is True
     assert payload["model_loaded"] is True
     assert payload["managed"] is False
+    assert payload["failure_reporting"] == {"pending": 2, "tracked": 3}
     assert "sk-do-not-leak" not in output
 
 

@@ -1,8 +1,11 @@
 # Isolated local-harness qualification
 
-This is the isolation contract for the benchmark and pilot work in #2349. It
-qualifies a local oMLX model with Aider without exposing a developer worktree
-to the normal Docker bridge network.
+This is the historical isolation contract for the benchmark work in #2349.
+For current Local Pilot execution, use
+[`local-harness-pilot.md`](local-harness-pilot.md): the current runner uses a
+host Keychain credential broker and a Unix-socket relay, and must not receive
+`OPENAI_API_KEY` directly. The commands below describe the earlier benchmark
+setup only; do not use them to provision a current pilot host.
 
 ## Network design
 
