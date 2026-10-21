@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
+import subprocess
+import tempfile
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -19,6 +22,8 @@ _COHORTS = frozenset({"validation", "expansion"})
 _SAFETY_VERDICTS = frozenset({"passed", "failed"})
 _QUALITY_VERDICTS = frozenset({"accepted", "rejected"})
 _REVIEW_VERDICTS = {"accept": "accepted", "reject": "rejected"}
+_RESUME_SIGN_NAMESPACE = "synlynk-local-pilot-resume"
+_RESUME_SIGN_PRINCIPAL = "local-pilot-resume"
 @dataclass(frozen=True)
 class ReviewerSelection:
     candidates: tuple[str, ...]
@@ -33,6 +38,48 @@ def _utc_now() -> str:
 def _canonical_receipt(receipt: Any) -> tuple[str, str]:
     serialized = json.dumps(receipt if receipt is not None else {}, sort_keys=True, separators=(",", ":"))
     return serialized, hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _host_identity_public_key_path() -> str:
+    return os.path.expanduser("~/.synlynk/identity.key.pub")
+
+
+def _verify_resume_signature(approval_payload: dict, signature: str) -> bool:
+    """Verify a canonical approval payload using the host identity public key."""
+    public_key_path = _host_identity_public_key_path()
+    if not os.path.isfile(public_key_path):
+        return False
+    try:
+        with open(public_key_path, encoding="utf-8") as public_key_file:
+            public_key = public_key_file.read().strip()
+    except OSError:
+        return False
+    if not public_key:
+        return False
+    signature_path = signers_path = None
+    try:
+        canonical, _ = _canonical_receipt(approval_payload)
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", delete=False) as signature_file:
+            signature_file.write(signature)
+            signature_path = signature_file.name
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", delete=False) as signers_file:
+            signers_file.write(f"{_RESUME_SIGN_PRINCIPAL} {public_key}\n")
+            signers_path = signers_file.name
+        result = subprocess.run(
+            ["ssh-keygen", "-Y", "verify", "-f", signers_path, "-I", _RESUME_SIGN_PRINCIPAL,
+             "-n", _RESUME_SIGN_NAMESPACE, "-s", signature_path],
+            input=canonical.encode("utf-8"), capture_output=True,
+        )
+        return result.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+    finally:
+        for path in (signature_path, signers_path):
+            if path:
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
 
 
 def _row_as_dict(conn: sqlite3.Connection, job_id: str) -> dict:
@@ -72,11 +119,25 @@ def create_resume_authorization(conn: sqlite3.Connection, payload: dict) -> dict
         raise ValueError("authorization_id and signed_payload are required")
     if not config_fingerprint or not remediation_reference or not verification_reference:
         raise ValueError("config_fingerprint, remediation_reference, and verification_reference are required")
-    if not isinstance(preflight_receipt, dict):
-        raise ValueError("preflight_receipt is required")
+    if not isinstance(preflight_receipt, dict) or preflight_receipt.get("result") != "passed":
+        raise ValueError("a passed preflight_receipt is required")
+    approval_payload = signed_payload.get("approval_payload")
+    signature = signed_payload.get("signature")
+    if not isinstance(approval_payload, dict) or not isinstance(signature, str) or not signature.strip():
+        raise ValueError("signed_payload must contain approval_payload and signature")
+    if not _verify_resume_signature(approval_payload, signature):
+        raise ValueError("signed_payload signature is invalid for the host identity key")
     signed_payload_json, signed_payload_digest = _canonical_receipt(signed_payload)
     preflight_receipt_json, preflight_receipt_digest = _canonical_receipt(preflight_receipt)
     with write_transaction(conn):
+        existing = conn.execute(
+            "SELECT state FROM local_pilot_resume_authorizations "
+            "WHERE state IN ('activating', 'active')"
+        ).fetchone()
+        if existing:
+            if existing[0] == "active":
+                raise ValueError("a resume authorization is already active")
+            raise ValueError("resume authorization activation in progress")
         watermark = conn.execute("SELECT COALESCE(MAX(rowid), 0) FROM local_pilot_evidence").fetchone()[0]
         try:
             conn.execute(
@@ -98,10 +159,31 @@ def activate_resume_authorization(conn: sqlite3.Connection, authorization_id: st
     """Mark one prepared authorization active; SQLite enforces one active authority."""
     ensure_local_pilot_ledger(conn)
     with write_transaction(conn):
+        try:
+            result = conn.execute(
+                "UPDATE local_pilot_resume_authorizations SET state = 'active', activated_at = ? "
+                "WHERE authorization_id = ? AND state = 'activating'",
+                (_utc_now(), authorization_id),
+            )
+        except sqlite3.IntegrityError as error:
+            raise ValueError("a resume authorization is already active") from error
+        if result.rowcount != 1:
+            _authorization_as_dict(conn, authorization_id)
+            raise ValueError(f"resume authorization is not activating: {authorization_id}")
+        return _authorization_as_dict(conn, authorization_id)
+
+
+def fail_resume_authorization(conn: sqlite3.Connection, authorization_id: str, reason: str) -> dict:
+    """Reconcile a crash-boundary activating record into the terminal failed state."""
+    ensure_local_pilot_ledger(conn)
+    reason = str(reason or "").strip()
+    if not reason:
+        raise ValueError("failure reason is required")
+    with write_transaction(conn):
         result = conn.execute(
-            "UPDATE local_pilot_resume_authorizations SET state = 'active', activated_at = ? "
+            "UPDATE local_pilot_resume_authorizations SET state = 'failed', revoked_at = ?, terminal_reason = ? "
             "WHERE authorization_id = ? AND state = 'activating'",
-            (_utc_now(), authorization_id),
+            (_utc_now(), reason, authorization_id),
         )
         if result.rowcount != 1:
             _authorization_as_dict(conn, authorization_id)
