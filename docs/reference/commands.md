@@ -66,6 +66,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `story draft` (secondary) — goal
 - `story done` (secondary) — goal
 - `story reclaim` (secondary) — goal
+- `story claim` (secondary) — goal
 - `backlog capture` (secondary) — open
 - `backlog list` (secondary) — open
 - `backlog sync` (secondary) — open
