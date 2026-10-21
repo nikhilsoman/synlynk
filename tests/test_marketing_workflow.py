@@ -55,13 +55,26 @@ def test_required_checks_support_automation_branch_dispatch():
     assert "github.event_name == 'workflow_dispatch'" in workflow
 
 
-def test_release_docs_runs_for_pull_requests_dispatch_or_version_tags():
+def test_release_docs_warns_on_pr_test_count_drift_but_release_events_are_strict():
     workflow = Path(".github/workflows/test.yml").read_text(encoding="utf-8")
     release_docs = workflow.split("  release-docs:", 1)[1]
 
+    assert "tags: ['v*']" in workflow
     assert "github.event_name == 'workflow_dispatch'" in release_docs
     assert "startsWith(github.ref, 'refs/tags/v')" in release_docs
     assert "github.event_name == 'pull_request'" in release_docs
+    assert "PR test-count drift is non-blocking" in release_docs
+    assert (
+        "release --check-docs --waive \"test_count=PR test-count drift is non-blocking; "
+        "enforced during release cuts\""
+    ) in release_docs
+    assert release_docs.count("run: python3 bin/synlynk.py release --check-docs") == 2
+    strict_step = release_docs.split(
+        "- name: Enforce named-release README and version gate", 1
+    )[1]
+    assert "github.event_name != 'pull_request'" in strict_step
+    assert "--waive" not in strict_step
+
 
 def test_marketing_sync_stages_blog_and_social_draft_outputs():
     workflow = WORKFLOW.read_text(encoding="utf-8")

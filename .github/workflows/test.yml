@@ -3,6 +3,7 @@ name: Tests
 on:
   push:
     branches: [main, unstable]
+    tags: ['v*']
   pull_request:
     branches: [main, unstable]
   workflow_dispatch: {}
@@ -137,5 +138,10 @@ jobs:
       - name: Install pytest for README collection count
         run: python -m pip install pytest
 
+      - name: Check release docs with non-blocking PR test-count drift
+        if: github.event_name == 'pull_request'
+        run: python3 bin/synlynk.py release --check-docs --waive "test_count=PR test-count drift is non-blocking; enforced during release cuts"
+
       - name: Enforce named-release README and version gate
+        if: github.event_name != 'pull_request'
         run: python3 bin/synlynk.py release --check-docs
