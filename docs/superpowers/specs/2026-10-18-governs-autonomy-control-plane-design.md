@@ -192,7 +192,8 @@ Capture per attempt, with explicit provenance and coverage state:
 - token/usage-derived estimate with pricing version and uncertainty;
 - subscription-amortized allocation, kept separate from marginal spend;
 - manual correction/true-up and source reference;
-- shared control-plane overhead as its own bucket.
+- shared control-plane overhead as its own bucket;
+- customer-brought-credential (BYO-provider) usage, metered but not vendor-billed, kept separate from every bucket above — no subscription-amortization or vendor-markup logic applies to it, since the vendor is not the payer of record.
 
 Roll up without double-counting across task, story, workstream, goal, workspace role/agent, harness, provider, and retry/review activity. Unavailable, disputed, unattributed, and stale measurements remain explicit. Reserve the remaining project/goal budget transactionally before task admission; child and retry ceilings cannot exceed the unspent parent budget. Define a permitted measurement error/overshoot envelope from provider limits, sampling interval, and cancellation latency. Do not claim zero overshoot where the provider cannot support it.
 
@@ -311,11 +312,11 @@ The first scale gates should be calibrated from the baseline rather than inventi
 ## 9. Open decisions for review
 
 1. Does the proposed hybrid architecture—central logical governance with hierarchical decomposition and independently scalable workers—fit the long-term intent?
-2. Which transitions require explicit human sign-off in all workspaces, and which may be configured by policy? The spec assumes design approval and high-impact release/merge gates remain reserved unless policy explicitly delegates them.
-3. What task risk classes and action taxonomy should control autonomous admission?
+2. Which transitions require explicit human sign-off in all workspaces, and which may be configured by policy? The spec assumes design approval and high-impact release/merge gates remain reserved unless policy explicitly delegates them. In a multi-tenant deployment, each reserved gate also needs a principal-class: **vendor-reserved** (fixed by synlynk policy regardless of tenant — e.g. the independent-review requirement cannot be disabled by any tenant) versus **tenant-reserved** (the gate exists, but the human who must clear it is the enterprise customer's own approver, not the vendor's). The single-tenant tranche has no vendor/tenant distinction to make; this question is unresolved and must be answered before any multi-tenant admission.
+3. What task risk classes and action taxonomy should control autonomous admission? A related, currently unresolved question for multi-tenant deployment: is there one synlynk-defined risk taxonomy that every tenant's policy maps onto, or is the taxonomy itself tenant-configurable above a vendor-enforced floor? The second option is more flexible for enterprise compliance variance but harder to keep consistently auditable across tenants. Not decided; Phase 1/2 (single-tenant) can proceed with one taxonomy regardless of which way this resolves later.
 4. What baseline sample sizes and quantitative cost/quality/recovery thresholds should govern the 1→5→10→25→50→100+ promotion ladder?
 5. Should parent coordinators be allowed to create proposed child tasks directly, or must every child be admitted by a separate TPM/control-plane role? This draft favors proposals by coordinators and authoritative admission by the control plane.
-6. Which cost dimensions are decision-grade and available from each harness/provider, and what constitutes acceptable estimate error?
+6. Which cost dimensions are decision-grade and available from each harness/provider, and what constitutes acceptable estimate error? Enterprise customers who bring their own provider credentials (5.7's BYO-provider bucket) introduce a case where synlynk never sees a vendor-billed amount at all — only usage to meter and report. How reporting-grade accuracy is demonstrated for a bucket synlynk doesn't pay for is unresolved.
 7. Which local identity/credential mechanisms are in scope for the first vertical slice, including explicit handling of host-auth fallback?
 8. What retention, redaction, and privacy policy applies to prompts, diffs, logs, provenance receipts, and external identities?
 
