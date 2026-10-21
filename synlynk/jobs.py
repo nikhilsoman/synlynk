@@ -3873,6 +3873,15 @@ def reclaim_stranded_stories(
                         break
 
             if not has_active_worker:
+                lease_row = conn.execute(
+                    "SELECT pid FROM task_leases WHERE story_id=? AND status='active' "
+                    "ORDER BY rowid DESC LIMIT 1",
+                    (story_id,),
+                ).fetchone()
+                if lease_row and lease_row[0] is not None and _pid_is_alive(lease_row[0]):
+                    has_active_worker = True
+
+            if not has_active_worker:
                 reclaimed.append({
                     "story_id": story_id,
                     "title": title,

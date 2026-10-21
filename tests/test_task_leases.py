@@ -135,10 +135,10 @@ def test_get_active_lease_includes_harness_and_pid(db_conn):
 
 
 def test_reclaim_stranded_story_with_lease(db_conn):
-    # Acquire lease
-    acquire_task_lease("story-lease-1", "dead-worker", duration_seconds=60, conn=db_conn)
+    # Acquire lease with an explicitly dead PID (dead worker scenario)
+    acquire_task_lease("story-lease-1", "dead-worker", duration_seconds=60, pid=999999, conn=db_conn)
 
-    # Run reclaim (dead worker has no running daemon job)
+    # Run reclaim (dead worker has no running daemon job, and its claim PID is dead)
     reclaimed = reclaim_stranded_stories(max_age_minutes=30, dry_run=False, conn=db_conn)
     assert len(reclaimed) == 1
     assert reclaimed[0]["story_id"] == "story-lease-1"
@@ -148,6 +148,20 @@ def test_reclaim_stranded_story_with_lease(db_conn):
 
     active_lease = get_active_lease("story-lease-1", conn=db_conn)
     assert active_lease is None
+
+
+def test_reclaim_leaves_live_interactive_claim_alone(db_conn):
+    # A live interactive claim (no daemon job at all) must NOT be reclaimed.
+    acquire_task_lease(
+        "story-lease-1", "claude:host:live", duration_seconds=600,
+        pid=os.getpid(), harness="claude", conn=db_conn,
+    )
+
+    reclaimed = reclaim_stranded_stories(max_age_minutes=30, dry_run=False, conn=db_conn)
+    assert reclaimed == []
+
+    row = db_conn.execute("SELECT status FROM stories WHERE story_id='story-lease-1'").fetchone()
+    assert row[0] == "in_progress"
 
 
 def test_heartbeat_all_claims_for_pid(db_conn):
