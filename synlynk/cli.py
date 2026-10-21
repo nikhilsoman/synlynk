@@ -635,6 +635,18 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         default=False,
         help="Detect hardware tier and write pinned_model to .agents/local.json",
     )
+    local_credentials_parser = local_sub.add_parser(
+        "credentials", help="Manage the host-local oMLX API credential"
+    )
+    local_credentials_sub = local_credentials_parser.add_subparsers(
+        dest="local_credentials_action"
+    )
+    local_credentials_import = local_credentials_sub.add_parser(
+        "import", help="Import OPENAI_API_KEY into macOS Keychain"
+    )
+    local_credentials_import.add_argument("--replace", action="store_true")
+    local_credentials_sub.add_parser("status", help="Show whether a credential is stored")
+    local_credentials_sub.add_parser("delete", help="Delete the stored credential")
     local_pilot_parser = local_sub.add_parser("pilot", help="Inspect and review Local pilot evidence")
     local_pilot_sub = local_pilot_parser.add_subparsers(dest="local_pilot_action")
     local_pilot_status_parser = local_pilot_sub.add_parser("status", help="Show Local pilot cohorts and controls")
@@ -3382,6 +3394,7 @@ def main(argv=None) -> None:
     elif args.command == "local":
         from synlynk.local_agent import (
             cmd_local_doctor,
+            cmd_local_credentials,
             local_pilot_status,
             record_local_pilot_review,
             render_local_pilot_resume_preflight,
@@ -3391,6 +3404,11 @@ def main(argv=None) -> None:
         )
         if args.local_action == "doctor":
             sys.exit(cmd_local_doctor(init=args.init))
+        elif args.local_action == "credentials":
+            sys.exit(cmd_local_credentials(
+                args.local_credentials_action,
+                replace=getattr(args, "replace", False),
+            ))
         elif args.local_action == "pilot":
             if args.local_pilot_action == "status":
                 payload = local_pilot_status()

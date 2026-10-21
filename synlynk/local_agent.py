@@ -205,12 +205,18 @@ def resolve_effective_local_model(
         endpoint = config.get("endpoint")
         if not endpoint:
             raise ValueError("local policy has no oMLX endpoint; cannot verify live model inventory")
-        health_result = _health_check(endpoint, api_key=api_key or os.environ.get("OPENAI_API_KEY"))
+        if api_key is None:
+            try:
+                from synlynk.local_credentials import LocalCredentialStore
+                api_key = LocalCredentialStore().get()
+            except Exception:
+                api_key = None
+        health_result = _health_check(endpoint, api_key=api_key)
         inventory_status = health_result.get("status", "unavailable")
         if not health_result.get("reachable"):
             detail = health_result.get("error", "inventory health check failed")
             if inventory_status == "unauthenticated":
-                detail = "oMLX rejected authentication (HTTP 401); configure OPENAI_API_KEY"
+                detail = "oMLX rejected authentication (HTTP 401); run `synlynk local credentials import`"
             elif inventory_status == "timeout":
                 detail = "oMLX inventory request timed out"
             elif inventory_status == "malformed_inventory":
@@ -778,7 +784,7 @@ def record_local_pilot_review(job_id: str, reviewer: str, verdict: str, rational
         conn.close()
 
 
-def cmd_local_doctor(config_path: str = None, init: bool = False) -> int:
+def cmd_local_doctor(config_path: str = None, init: bool = False, api_key: str = None) -> int:
     """Print oMLX reachability, roster status, and hardware recommendation.
 
     With ``init=True``, write the detected ``hardware_tier`` and recommended
@@ -795,12 +801,17 @@ def cmd_local_doctor(config_path: str = None, init: bool = False) -> int:
             print(f"  ✗ {exc}")
             return 1
     endpoint = config["endpoint"]
-    api_key = os.environ.get("OPENAI_API_KEY")
+    if api_key is None:
+        try:
+            from synlynk.local_credentials import LocalCredentialStore
+            api_key = LocalCredentialStore().get()
+        except Exception:
+            api_key = None
     result = _health_check(endpoint, api_key=api_key)
     if not result["reachable"]:
         print(f"  ✗ oMLX unreachable at {endpoint}: {result['error']}")
         if "401" in result["error"]:
-            print("    oMLX rejected the request (401 Unauthorized) — export OPENAI_API_KEY and retry")
+            print("    oMLX rejected the request (401 Unauthorized) — run `synlynk local credentials import`")
         else:
             print("    Start it with: omlx serve")
         return 1
@@ -857,3 +868,37 @@ def cmd_local_doctor(config_path: str = None, init: bool = False) -> int:
     if missing or aider_missing:
         return 1
     return 0
+
+
+def cmd_local_credentials(action: str, *, replace: bool = False, environ=None,
+                          interactive: bool = None, store=None) -> int:
+    """Manage the host Keychain credential without displaying its value."""
+    import sys
+    from synlynk.local_credentials import LocalCredentialStore
+
+    store = store or LocalCredentialStore()
+    environ = os.environ if environ is None else environ
+    interactive = (sys.stdin.isatty() and sys.stdout.isatty()) if interactive is None else interactive
+    try:
+        if action == "import":
+            if not interactive:
+                print("  ✗ credential import requires an interactive terminal")
+                return 1
+            store.import_from_environment(environ, replace=replace)
+            print("  ✓ oMLX credential stored in macOS Keychain")
+        elif action == "status":
+            print("  ✓ oMLX credential configured" if store.is_configured()
+                  else "  ✗ oMLX credential not configured")
+        elif action == "delete":
+            store.delete()
+            print("  ✓ oMLX credential deleted from macOS Keychain")
+        else:
+            raise ValueError("unknown local credentials action")
+        return 0
+    except Exception as exc:
+        message = str(exc)
+        if "OPENAI_API_KEY" in message:
+            print("  ✗ OPENAI_API_KEY is missing")
+        else:
+            print(f"  ✗ {message}")
+        return 1

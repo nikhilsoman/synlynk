@@ -297,7 +297,7 @@ class TestEffectiveLocalModelResolution(unittest.TestCase):
             "reachable": False, "status": "unauthenticated", "error": "HTTP 401 Unauthorized"
         }
         try:
-            with self.assertRaisesRegex(ValueError, "configure OPENAI_API_KEY") as raised:
+            with self.assertRaisesRegex(ValueError, "local credentials import") as raised:
                 local_agent.resolve_effective_local_model(
                     config_path=path,
                     require_live_inventory=True,
@@ -614,13 +614,13 @@ class TestHealthCheckApiKey(unittest.TestCase):
 
 
 class TestCmdLocalDoctorApiKey(unittest.TestCase):
-    def test_reads_openai_api_key_env_and_passes_to_health_check(self):
+    def test_reads_keychain_credential_and_passes_to_health_check(self):
         healthy_response = {"reachable": True, "available_models": ["Ornith-1.0-9B-4bit"]}
         with patch("synlynk.local_agent._health_check", return_value=healthy_response) as mock_check, \
              patch("synlynk.local_agent.shutil.which", return_value="/usr/local/bin/aider"), \
              patch("synlynk.local_agent._get_db"), \
              patch("synlynk.local_agent_seed.seed_local_capability_envelope"), \
-             patch.dict(os.environ, {"OPENAI_API_KEY": "sk-env-key"}):
+             patch("synlynk.local_credentials.LocalCredentialStore.get", return_value="sk-keychain-key"):
             with tempfile.TemporaryDirectory() as d:
                 path = os.path.join(d, "local.json")
                 with open(path, "w") as f:
@@ -631,7 +631,7 @@ class TestCmdLocalDoctorApiKey(unittest.TestCase):
                         "hardware_tier": "16gb-default",
                     }, f)
                 local_agent.cmd_local_doctor(path)
-        mock_check.assert_called_once_with("http://127.0.0.1:8000", api_key="sk-env-key")
+        mock_check.assert_called_once_with("http://127.0.0.1:8000", api_key="sk-keychain-key")
 
     def test_401_reports_auth_hint_not_unreachable_hint(self):
         unauthorized_response = {"reachable": False, "error": "HTTP Error 401: Unauthorized"}
@@ -652,5 +652,5 @@ class TestCmdLocalDoctorApiKey(unittest.TestCase):
         printed = " ".join(str(call.args[0]) for call in mock_print.call_args_list)
         self.assertEqual(result, 1)
         self.assertIn("401", printed)
-        self.assertIn("OPENAI_API_KEY", printed)
+        self.assertIn("local credentials import", printed)
         self.assertNotIn("Start it with: omlx serve", printed)

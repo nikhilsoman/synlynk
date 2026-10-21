@@ -2222,3 +2222,10 @@ implementation dispatched, external messages sent, or policy changed.
   11 passed.
 [@codex]
 
+## 2026-10-21 — Unattended Local oMLX Lifecycle (Task 1)
+
+- Began the approved Local unattended lifecycle plan on the isolated branch `chore/local-unattended-lifecycle`; the plan worktree is cleanly separated from a pre-existing unrelated cost-log edit in the primary checkout.
+- Added a Keychain-backed credential-store abstraction and `synlynk local credentials import|status|delete`; Local doctor now reads its credential from Keychain rather than inheriting `OPENAI_API_KEY` from the environment.
+- Verification: `pytest -q tests/test_local_credentials.py tests/test_local_agent.py tests/test_cli_parser.py` — 71 passed. The no-write Keychain status check reported the credential is not configured; no secret was imported or displayed.
+- The installed executing-plans helper bundle lacks its documented `task-start` / `task-done` scripts; the plan-local SDD ledger records the manual task-boundary workflow used instead.
+

@@ -355,6 +355,9 @@ Canonical release epic #2471. Goals: goal-e3840370, goal-85656c82. Scheduled rel
 
 Canonical release epic #2465. Goals: goal-3ef62232, goal-005ea87d. Scheduled gate: 2026-11-06. Model resolution plus capacity enlistment: Local Ornith only, isolated, max-one concurrent, successful live preflight, 20% implementation cohort; Muse authenticated, model-allowlisted low-privilege execution. Neither receives review, deploy, or GitHub-write authority. Quota/cost reconciliation is v0.25.3. No phase is ready until story and ticket linkage are complete.
 
+- [ ] Unattended Local oMLX readiness lifecycle (approved plan; in progress on `chore/local-unattended-lifecycle`)
+  Store the runtime credential in macOS Keychain, manage only Synlynk-owned oMLX services, and retain the existing isolated 20% pilot/fallback gate.
+
 - [x] Daemon health fixes (gh:#2261, gh:#2288) (P0) <!-- story:story-e73fac9e -->
   Dormant re-exec bug + crash on stale worktree cwd blocking --requires-gh-write dispatch.
 - [x] Wire daemon poll loop to autonomy pass (Task 4, gh:#2262) (P1) <!-- story:story-f67acd86 -->
