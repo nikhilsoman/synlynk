@@ -381,6 +381,18 @@ def _resolve_dispatch_agent(
         _log_routing_fallback(message, requested="local", actual=fallback)
         return fallback
     try:
+        from synlynk.local_lifecycle import prepare_local_pilot
+
+        prepare_local_pilot(os.getcwd(), str(dispatch_key or task), pilot_class)
+    except Exception as exc:
+        # Keep the cohort decision deterministic: a readiness failure always
+        # returns to the frontier selected before Local was considered.
+        safe_reason = getattr(exc, "reason_code", "readiness_failed")
+        message = f"Routing to: {fallback} (local runtime readiness failed: {safe_reason})"
+        print(message)
+        _log_routing_fallback(message, requested="local", actual=fallback)
+        return fallback
+    try:
         from synlynk.local_agent import resolve_effective_local_model
 
         model_resolution = resolve_effective_local_model(

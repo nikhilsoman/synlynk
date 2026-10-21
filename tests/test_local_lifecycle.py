@@ -291,3 +291,37 @@ def test_cli_status_reports_model_and_ownership_without_secret(capsys, tmp_path)
     assert payload["model_loaded"] is True
     assert payload["managed"] is False
     assert "sk-do-not-leak" not in output
+
+
+def test_prepare_local_pilot_retries_once_with_same_manager(monkeypatch):
+    from synlynk import local_lifecycle
+
+    class Manager:
+        calls = 0
+
+        def ensure_ready(self):
+            self.calls += 1
+            raise LifecycleError("omlx_unreachable", "safe failure")
+
+    manager = Manager()
+    monkeypatch.setattr(local_lifecycle, "LocalLifecycleManager", lambda: manager)
+    monkeypatch.setattr("synlynk.local_failure_reporter.report_local_failure", lambda _error: False)
+    with pytest.raises(LifecycleError):
+        local_lifecycle.prepare_local_pilot("/repo", "dispatch-1", "test_summary")
+    assert manager.calls == 2
+
+
+def test_local_failure_reporter_redacts_and_rate_limits(tmp_path):
+    from synlynk.local_failure_reporter import report_local_failure
+
+    secret_error = LifecycleError("authentication_failed", "token sk-secret refused")
+    calls = []
+    writer = lambda fingerprint, error, version: calls.append((fingerprint, error, version)) or False
+    path = str(tmp_path / "outbox.json")
+    assert report_local_failure(secret_error, path=path, now=1000, issue_writer=writer) is False
+    assert report_local_failure(secret_error, path=path, now=2000, issue_writer=writer) is False
+    payload = (tmp_path / "outbox.json").read_text()
+    assert len(calls) == 1
+    assert "sk-secret" not in payload
+    assert "token" not in payload
+    assert '"outbox": true' in payload

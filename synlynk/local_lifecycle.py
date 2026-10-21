@@ -213,6 +213,28 @@ class LocalRuntimeResult:
     owner_pid: int | None = None
 
 
+def prepare_local_pilot(repo_root: str, dispatch_key: str, pilot_class: str) -> LocalRuntimeResult:
+    """Make the approved Local runtime ready, retry once, and report redacted failure."""
+    del repo_root  # Lifecycle ownership is host-global, not repository-local.
+    if not dispatch_key or not pilot_class:
+        raise LifecycleError("invalid_dispatch_context", "Local readiness requires a dispatch identity")
+    manager = LocalLifecycleManager()
+    last_error = None
+    for _attempt in range(2):
+        try:
+            return manager.ensure_ready()
+        except LifecycleError as exc:
+            last_error = exc
+    if last_error is not None:
+        try:
+            from synlynk.local_failure_reporter import report_local_failure
+            report_local_failure(last_error)
+        except Exception:
+            pass
+        raise last_error
+    raise LifecycleError("readiness_failed", "Local runtime readiness failed")
+
+
 def _process_start_identity(pid: int) -> float | None:
     """Return a process start timestamp suitable for guarding against PID reuse."""
     env = {key: value for key, value in os.environ.items() if key != "OPENAI_API_KEY"}

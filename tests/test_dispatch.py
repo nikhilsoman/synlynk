@@ -3044,6 +3044,7 @@ def test_matching_signed_resume_authorization_auto_routes_local(project_dir, mon
     from synlynk import _get_db
 
     monkeypatch.setattr(dispatch_mod, "_read_local_fallback", lambda _path: "codex")
+    monkeypatch.setattr("synlynk.local_lifecycle.prepare_local_pilot", lambda *_args: object())
     monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda _root: {
         "enabled": True, "share": 0.2, "max_concurrent": 1,
         "qualified": True, "isolated": True, "qualified_models": ["ornith-approved"],
