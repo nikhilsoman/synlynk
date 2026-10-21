@@ -65,6 +65,24 @@ def test_api_errors_are_classified_without_echoing_credentials(monkeypatch, stat
     assert "sk-do-not-leak" not in str(error.value)
 
 
+def test_missing_persistent_settings_key_is_classified_without_network_request(monkeypatch):
+    from synlynk.local_credentials import CredentialUnavailable
+
+    class MissingSettingsCredential:
+        def get(self):
+            raise CredentialUnavailable("oMLX settings credential is unavailable")
+
+    def unexpected_request(*args, **kwargs):
+        raise AssertionError("request must not be sent without the persistent settings key")
+
+    monkeypatch.setattr("synlynk.local_lifecycle.urllib.request.urlopen", unexpected_request)
+    client = OmlxClient("http://127.0.0.1:8000", MissingSettingsCredential())
+    with pytest.raises(LifecycleError) as error:
+        client.list_models()
+    assert error.value.reason_code == "credential_unavailable"
+    assert error.value.phase == "authentication"
+
+
 def test_model_allowlist_rejects_everything_except_ornith():
     client = OmlxClient("http://127.0.0.1:8000", Credentials())
     with pytest.raises(LifecycleError, match="approved Ornith model"):

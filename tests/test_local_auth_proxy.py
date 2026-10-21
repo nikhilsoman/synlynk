@@ -10,6 +10,15 @@ import pytest
 from synlynk.local_auth_proxy import LocalAuthBroker, ensure_inert_aider_key
 
 
+def test_broker_settings_factory_reads_authoritative_omlx_credential():
+    class PersistentSettings:
+        def get(self):
+            return "persistent-omlx-key"
+
+    broker = LocalAuthBroker.from_settings("/tmp/relay.sock", PersistentSettings())
+    assert broker.credential == "persistent-omlx-key"
+
+
 @pytest.fixture
 def short_socket_dir():
     directory = tempfile.mkdtemp(prefix="synlynk-relay-", dir="/private/tmp")

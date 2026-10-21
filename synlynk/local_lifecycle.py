@@ -22,6 +22,7 @@ from datetime import datetime
 from typing import Callable
 from urllib.parse import urlsplit
 
+from synlynk.local_credentials import CredentialError, UnsupportedCredentialPlatform
 
 LIFECYCLE_MODEL_ID = "Ornith-1.0-9B-4bit"
 SUPPORTED_OMLX_VERSION = "0.5.3"
@@ -177,6 +178,16 @@ class OmlxClient:
             raise LifecycleError(reason, f"oMLX API request failed (HTTP {exc.code})") from None
         except LifecycleError:
             raise
+        except CredentialError as exc:
+            code = (
+                "unsupported_platform"
+                if isinstance(exc, UnsupportedCredentialPlatform)
+                else "credential_unavailable"
+            )
+            raise LifecycleError(
+                code, "persistent oMLX settings credential is unavailable",
+                phase="authentication",
+            ) from None
         except Exception:
             raise LifecycleError("omlx_unreachable", "authenticated oMLX API request failed") from None
 

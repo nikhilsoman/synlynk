@@ -881,7 +881,7 @@ def cmd_local_doctor(config_path: str = None, init: bool = False, api_key: str =
 
 def cmd_local_credentials(action: str, *, replace: bool = False, environ=None,
                           interactive: bool = None, store=None) -> int:
-    """Manage the host Keychain credential without displaying its value."""
+    """Manage legacy Keychain credentials or inspect active oMLX settings."""
     import sys
     from synlynk.local_credentials import LocalCredentialStore
 
@@ -900,7 +900,7 @@ def cmd_local_credentials(action: str, *, replace: bool = False, environ=None,
                   else "  ✗ oMLX persistent settings API key missing or unreadable")
         elif action == "delete":
             store.delete()
-            print("  ✓ oMLX credential deleted from macOS Keychain")
+            print("  ✓ legacy Keychain credential deleted; oMLX settings were not changed")
         else:
             raise ValueError("unknown local credentials action")
         return 0

@@ -40,11 +40,16 @@ class LocalAuthBroker:
         self._owns_socket = False
 
     @classmethod
-    def from_keychain(cls, socket_path: str, credential_store=None, **kwargs):
+    def from_settings(cls, socket_path: str, credential_store=None, **kwargs):
         from synlynk.local_credentials import LocalCredentialStore
 
         store = credential_store or LocalCredentialStore()
         return cls(socket_path, store.get(), **kwargs)
+
+    @classmethod
+    def from_keychain(cls, socket_path: str, credential_store=None, **kwargs):
+        """Compatibility alias; lifecycle credentials now come from oMLX settings."""
+        return cls.from_settings(socket_path, credential_store, **kwargs)
 
     def start(self) -> None:
         if not self.credential:
