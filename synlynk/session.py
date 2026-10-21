@@ -65,6 +65,7 @@ def _add_active_claim(story_id: str) -> None:
 
 
 def _remove_active_claim(story_id: str) -> None:
+    """Wired into cmd_story_done / execute_home_handover in Task 6 (gh:#2511) — not yet called."""
     claims = set(_read_active_claims())
     claims.discard(story_id)
     os.makedirs(".synlynk", exist_ok=True)
