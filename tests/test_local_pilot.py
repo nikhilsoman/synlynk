@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 
 import pytest
 
@@ -37,6 +38,30 @@ def test_pilot_fails_closed_when_any_safety_prerequisite_is_missing():
     assert _decision(requires_gh_write=True).reason == "github_write_excluded"
     assert _decision(share=0.21).reason == "share_not_an_approved_gate"
     assert _decision(dispatch_key=None).reason == "dispatch_identity_missing"
+
+
+def test_tracked_rebaseline_config_keeps_local_disabled_after_merge():
+    """A merge must leave the tracked pilot unable to admit live work."""
+    repo_root = Path(__file__).resolve().parents[1]
+    workspace = json.loads((repo_root / ".synlynk" / "workspace.json").read_text())
+
+    assert workspace["local_pilot"]["enabled"] is False
+
+    decision = evaluate_local_pilot(
+        enabled=workspace["local_pilot"]["enabled"],
+        qualified=True,
+        isolated=True,
+        pilot_class="test_summary",
+        role="dev",
+        requires_gh_write=False,
+        share=workspace["local_pilot"]["share"],
+        dispatch_key="merged-rebaseline-task",
+        scope_paths=["test.log"],
+        rebaseline=True,
+    )
+
+    assert not decision.route_local
+    assert decision.reason == "pilot_disabled"
 
 
 def test_pilot_rejects_excluded_work_and_unscoped_edits():
