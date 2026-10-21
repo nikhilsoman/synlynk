@@ -909,3 +909,24 @@ def cmd_local_credentials(action: str, *, replace: bool = False, environ=None,
         else:
             print(f"  ✗ {message}")
         return 1
+
+
+def cmd_local_lifecycle(action: str, *, manager=None) -> int:
+    """Inspect lifecycle state or stop only a provably managed service."""
+    import json
+    from synlynk.local_lifecycle import LocalLifecycleManager
+
+    manager = manager or LocalLifecycleManager()
+    try:
+        if action == "status":
+            print(json.dumps(manager.status(), indent=2, sort_keys=True))
+        elif action == "stop":
+            stopped = manager.stop_managed_service()
+            print("  ✓ Synlynk-managed oMLX stopped" if stopped
+                  else "  ✦ no provably Synlynk-managed oMLX service to stop")
+        else:
+            raise ValueError("unknown local lifecycle action")
+        return 0
+    except Exception as exc:
+        print(f"  ✗ {exc}")
+        return 1

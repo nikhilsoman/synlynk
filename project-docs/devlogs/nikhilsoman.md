@@ -2235,3 +2235,10 @@ implementation dispatched, external messages sent, or policy changed.
 - Corrected the 24 GiB label mismatch: measured RAM is now displayed independently and the nearest conservative named tier is `16gb-default`; 32 GiB still maps to `32gb-pro`.
 - Verification: `pytest -q tests/test_local_lifecycle.py tests/test_local_agent.py` — 55 passed. Host sysctl memory/swap reads are blocked by this sandbox, so no live lifecycle admission/load was attempted.
 
+## 2026-10-21 — Unattended Local oMLX Lifecycle (Task 3)
+
+- Added a host-global lifecycle manager with a shared file lock, mode-restricted ownership state, process PID/start-identity validation, managed start/load, untouched operator-owned service behavior, persisted job and pre-dispatch reservation leases, and 900-second idle unload/stop.
+- Integrated the supervisor into each Synlynk daemon poll and added `synlynk local lifecycle status|stop`; status reports endpoint/model/credential/ownership separately without printing the key.
+- Verification: lifecycle, Local agent, CLI parser, new daemon lifecycle seam, and existing daemon start/lock tests — 99 passed.
+- Repository deviation: `tests/test_daemon.py` named by the plan is absent; the added `tests/test_daemon_local_lifecycle.py` and two extant daemon regression suites cover the seam.
+

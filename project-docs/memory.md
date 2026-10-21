@@ -230,4 +230,5 @@
 
 - Local runtime authentication must be sourced from macOS Keychain (`com.synlynk.omlx` / `local-runtime`) rather than propagated from `OPENAI_API_KEY` into unattended subprocesses. Import is an explicit interactive operation; status and doctor never reveal the value. Lifecycle work remains behind the existing isolated 20% pilot admission and frontier fallback.
 - A 24 GiB host must not be labeled as 32 GiB: display measured physical memory separately and select the conservative 16 GiB named tier until a true 24 GiB tier exists. Runtime admission depends on measured available memory, pressure, and swap signals rather than that label. [@codex]
+- Managed oMLX shutdown is authorized only by persisted service PID plus process-start identity. Persist pre-dispatch reservations and active-job leases host-wide; unknown process identity means keep the runtime alive/fail Local closed. Never let the daemon stop an operator-owned endpoint. [@codex]
 

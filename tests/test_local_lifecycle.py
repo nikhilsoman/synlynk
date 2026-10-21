@@ -9,6 +9,7 @@ from synlynk.local_lifecycle import (
     LIFECYCLE_MODEL_ID,
     LifecycleError,
     OmlxClient,
+    LocalLifecycleManager,
     HostMemorySnapshot,
     check_memory_admission,
     parse_memory_pressure,
@@ -114,3 +115,179 @@ def test_memory_gate_rejects_swap_growth_and_unavailable_signals():
     assert error.value.reason_code == "memory_pressure"
     with pytest.raises(LifecycleError):
         check_memory_admission(before, None)
+
+
+class FakeRuntimeClient:
+    def __init__(self, models=None):
+        self.models = list(models or [])
+        self.loads = []
+        self.unloads = []
+        self.versions = []
+
+    def list_models(self):
+        return list(self.models)
+
+    def installed_version(self):
+        self.versions.append(True)
+        return "0.5.3"
+
+    def load_model(self, model_id):
+        self.loads.append(model_id)
+        self.models.append(model_id)
+
+    def unload_model(self, model_id):
+        self.unloads.append(model_id)
+        self.models.remove(model_id)
+
+
+def make_manager(tmp_path, *, client=None, endpoint_probe=None, identity=None,
+                 start_service=None, stop_service=None, now=None, alive=None,
+                 memory_admission=None, current_process_identity=None):
+    if endpoint_probe is None:
+        probes = iter([False, True])
+        endpoint_probe = lambda: next(probes, True)
+    return LocalLifecycleManager(
+        client=client or FakeRuntimeClient(),
+        state_path=str(tmp_path / "local-runtime.json"),
+        lock_path=str(tmp_path / "local-runtime.lock"),
+        endpoint_probe=endpoint_probe,
+        process_identity=identity or (lambda: (4321, 1000.0)),
+        start_service=start_service or (lambda: None),
+        stop_service=stop_service or (lambda: None),
+        clock=now or (lambda: 1000.0),
+        process_identity_alive=alive or (lambda pid, started: True),
+        memory_admission=memory_admission or (lambda: None),
+        current_process_identity=current_process_identity or (lambda: (9999, 1000.0)),
+    )
+
+
+def test_manager_starts_absent_runtime_loads_ornith_and_persists_ownership(tmp_path):
+    client = FakeRuntimeClient()
+    starts = []
+    manager = make_manager(tmp_path, client=client, start_service=lambda: starts.append(True))
+    result = manager.ensure_ready()
+    assert result.ready and result.managed
+    assert client.loads == [LIFECYCLE_MODEL_ID]
+    assert starts == [True]
+    state = json.loads((tmp_path / "local-runtime.json").read_text())
+    assert state["ownership"]["pid"] == 4321
+    assert state["ownership"]["process_start"] == 1000.0
+    assert "credential" not in json.dumps(state).lower()
+
+
+def test_operator_owned_ornith_is_accepted_without_start_or_load(tmp_path):
+    client = FakeRuntimeClient([LIFECYCLE_MODEL_ID])
+    starts = []
+    manager = make_manager(tmp_path, client=client, endpoint_probe=lambda: True,
+                           start_service=lambda: starts.append(True))
+    result = manager.ensure_ready()
+    assert result.ready and not result.managed
+    assert client.loads == []
+    assert starts == []
+
+
+def test_operator_owned_runtime_without_ornith_is_left_untouched(tmp_path):
+    client = FakeRuntimeClient(["Qwen2.5-Coder-14B-Instruct-4bit"])
+    starts = []
+    manager = make_manager(tmp_path, client=client, endpoint_probe=lambda: True,
+                           start_service=lambda: starts.append(True))
+    with pytest.raises(LifecycleError) as error:
+        manager.ensure_ready()
+    assert error.value.reason_code == "operator_owned_model_missing"
+    assert client.loads == []
+    assert starts == []
+
+
+def test_manual_stop_cannot_stop_operator_owned_omlx(tmp_path):
+    client = FakeRuntimeClient([LIFECYCLE_MODEL_ID])
+    stopped = []
+    manager = make_manager(tmp_path, client=client, endpoint_probe=lambda: True,
+                           stop_service=lambda: stopped.append(True))
+    manager.ensure_ready()
+    assert manager.stop_managed_service() is False
+    assert stopped == []
+
+
+def test_start_race_with_old_or_unidentifiable_process_fails_without_claiming_ownership(tmp_path):
+    client = FakeRuntimeClient()
+    identities = iter([None, (777, 10.0)])
+    endpoints = iter([False, True])
+    manager = make_manager(tmp_path, client=client,
+                           endpoint_probe=lambda: next(endpoints),
+                           identity=lambda: next(identities))
+    with pytest.raises(LifecycleError) as error:
+        manager.ensure_ready()
+    assert error.value.reason_code == "ownership_ambiguous"
+    assert client.loads == []
+    assert not (tmp_path / "local-runtime.json").exists()
+
+
+def test_restart_reconciles_persisted_ownership_without_restarting(tmp_path):
+    client = FakeRuntimeClient()
+    manager = make_manager(tmp_path, client=client)
+    manager.ensure_ready()
+    starts = []
+    restarted = make_manager(tmp_path, client=FakeRuntimeClient([LIFECYCLE_MODEL_ID]),
+                             endpoint_probe=lambda: True,
+                             start_service=lambda: starts.append(True))
+    result = restarted.ensure_ready()
+    assert result.ready and result.managed
+    assert starts == []
+
+
+def test_active_job_reservation_prevents_idle_shutdown(tmp_path):
+    client = FakeRuntimeClient()
+    stopped = []
+    manager = make_manager(tmp_path, client=client, stop_service=lambda: stopped.append(True))
+    manager.ensure_ready()
+    manager.record_reservation_started("dispatch-1")
+    manager.tick(now=5000.0)
+    assert stopped == []
+    assert client.unloads == []
+
+
+def test_owned_runtime_stops_only_after_900_idle_seconds(tmp_path):
+    client = FakeRuntimeClient()
+    stopped = []
+    manager = make_manager(tmp_path, client=client, stop_service=lambda: stopped.append(True))
+    manager.ensure_ready()
+    manager.record_job_finished("job-1")
+    manager.tick(now=1899.0)
+    assert stopped == []
+    manager.tick(now=1900.0)
+    assert stopped == [True]
+    assert client.unloads == [LIFECYCLE_MODEL_ID]
+
+
+def test_active_job_lease_prevents_idle_shutdown(tmp_path):
+    client = FakeRuntimeClient()
+    stopped = []
+    manager = make_manager(tmp_path, client=client, stop_service=lambda: stopped.append(True))
+    manager.ensure_ready()
+    manager.record_job_started("job-1")
+    manager.tick(now=5000.0)
+    assert stopped == []
+
+
+def test_reservation_fails_closed_when_current_process_identity_is_unknown(tmp_path):
+    manager = make_manager(tmp_path, current_process_identity=lambda: None)
+    with pytest.raises(LifecycleError) as error:
+        manager.record_reservation_started("dispatch-unknown")
+    assert error.value.reason_code == "process_identity_unavailable"
+
+
+def test_cli_status_reports_model_and_ownership_without_secret(capsys, tmp_path):
+    from synlynk.local_agent import cmd_local_lifecycle
+
+    manager = make_manager(
+        tmp_path,
+        client=FakeRuntimeClient([LIFECYCLE_MODEL_ID]),
+        endpoint_probe=lambda: True,
+    )
+    assert cmd_local_lifecycle("status", manager=manager) == 0
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+    assert payload["running"] is True
+    assert payload["model_loaded"] is True
+    assert payload["managed"] is False
+    assert "sk-do-not-leak" not in output

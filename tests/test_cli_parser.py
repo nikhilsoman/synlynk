@@ -98,6 +98,14 @@ def test_local_credentials_commands_parse():
     assert parser.parse_args(["local", "credentials", "delete"]).local_credentials_action == "delete"
 
 
+def test_local_lifecycle_commands_parse():
+    parser = cli_mod.build_parser()
+    status = parser.parse_args(["local", "lifecycle", "status"])
+    stop = parser.parse_args(["local", "lifecycle", "stop"])
+    assert (status.local_action, status.local_lifecycle_action) == ("lifecycle", "status")
+    assert (stop.local_action, stop.local_lifecycle_action) == ("lifecycle", "stop")
+
+
 def test_start_command_parses():
     parser = cli_mod.build_parser()
     args = parser.parse_args(["start"])

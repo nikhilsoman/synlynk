@@ -5,14 +5,20 @@ from __future__ import annotations
 import json
 import os
 import re
+import socket
 import shutil
 import subprocess
 import sys
+import tempfile
+import uuid
 import time
 import urllib.error
 import urllib.request
+from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Callable
+from urllib.parse import urlsplit
 
 
 LIFECYCLE_MODEL_ID = "Ornith-1.0-9B-4bit"
@@ -194,3 +200,355 @@ class OmlxClient:
 
     def unload_model(self, model_id: str) -> None:
         self._model_action(model_id, "unload")
+
+
+IDLE_TIMEOUT_SECONDS = 900
+
+
+@dataclass(frozen=True)
+class LocalRuntimeResult:
+    ready: bool
+    model_id: str
+    managed: bool
+    owner_pid: int | None = None
+
+
+def _process_start_identity(pid: int) -> float | None:
+    """Return a process start timestamp suitable for guarding against PID reuse."""
+    env = {key: value for key, value in os.environ.items() if key != "OPENAI_API_KEY"}
+    try:
+        result = subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)], check=True,
+                                capture_output=True, text=True, timeout=5, env=env)
+        parsed = datetime.strptime(result.stdout.strip(), "%a %b %d %H:%M:%S %Y")
+        return parsed.timestamp()
+    except Exception:
+        return None
+
+
+def _listening_process_identity() -> tuple[int, float] | None:
+    env = {key: value for key, value in os.environ.items() if key != "OPENAI_API_KEY"}
+    try:
+        result = subprocess.run(["lsof", "-nP", "-tiTCP:8000", "-sTCP:LISTEN"],
+                                check=True, capture_output=True, text=True, timeout=5, env=env)
+        pids = [int(line.strip()) for line in result.stdout.splitlines() if line.strip().isdigit()]
+        if len(pids) != 1:
+            return None
+        started = _process_start_identity(pids[0])
+        return (pids[0], started) if started is not None else None
+    except Exception:
+        return None
+
+
+def _probe_local_endpoint(endpoint: str = "http://127.0.0.1:8000") -> bool:
+    parsed = urlsplit(endpoint)
+    try:
+        with socket.create_connection((parsed.hostname or "127.0.0.1", parsed.port or 80), timeout=1):
+            return True
+    except OSError:
+        return False
+
+
+def _run_omlx_command(action: str) -> None:
+    if action not in {"start", "stop"}:
+        raise LifecycleError("unsupported_omlx_command", "oMLX command is not allowed", phase="service")
+    executable = shutil.which("omlx")
+    if not executable:
+        raise LifecycleError("omlx_not_installed", "oMLX executable is unavailable", phase="service")
+    env = {key: value for key, value in os.environ.items() if key != "OPENAI_API_KEY"}
+    try:
+        subprocess.run([executable, action, "--timeout", "30"], check=True,
+                       capture_output=True, text=True, timeout=40, env=env)
+    except Exception:
+        raise LifecycleError("omlx_service_command_failed", f"oMLX {action} command failed", phase="service") from None
+
+
+class LocalLifecycleManager:
+    """Host-global owner, reservation registry, and 15-minute idle supervisor."""
+
+    def __init__(self, *, client=None, endpoint: str = "http://127.0.0.1:8000",
+                 credential_store=None, state_path: str | None = None,
+                 lock_path: str | None = None, endpoint_probe=None,
+                 process_identity=None, start_service=None, stop_service=None,
+                 clock=None, sleeper=None, process_identity_alive=None,
+                 memory_admission=None, current_process_identity=None):
+        from synlynk.local_credentials import LocalCredentialStore
+        home = os.path.expanduser("~")
+        app_support = os.path.join(home, "Library", "Application Support", "Synlynk")
+        self.endpoint = endpoint
+        self.credential_store = credential_store or LocalCredentialStore()
+        self.client = client or OmlxClient(endpoint, self.credential_store)
+        self.state_path = state_path or os.path.join(app_support, "local-runtime.json")
+        self.lock_path = lock_path or os.path.join(app_support, "local-runtime.lock")
+        self.endpoint_probe = endpoint_probe or (lambda: _probe_local_endpoint(endpoint))
+        self.process_identity = process_identity or _listening_process_identity
+        self.start_service = start_service or (lambda: _run_omlx_command("start"))
+        self.stop_service = stop_service or (lambda: _run_omlx_command("stop"))
+        self.clock = clock or time.time
+        self.sleeper = sleeper or time.sleep
+        self.process_identity_alive = process_identity_alive or self._identity_alive
+        self.memory_admission = memory_admission or require_memory_admission
+        self.current_process_identity = current_process_identity or self._current_process_identity
+
+    def _identity_alive(self, pid: int, start: float) -> bool:
+        return _process_start_identity(pid) == start
+
+    def _current_process_identity(self) -> tuple[int, float]:
+        pid = os.getpid()
+        started = _process_start_identity(pid)
+        if started is None:
+            raise LifecycleError("process_identity_unavailable", "cannot safely reserve Local runtime", phase="ownership")
+        return pid, started
+
+    def _require_current_process_identity(self) -> tuple[int, float]:
+        identity = self.current_process_identity()
+        if not identity or len(identity) != 2:
+            raise LifecycleError("process_identity_unavailable", "cannot safely reserve Local runtime", phase="ownership")
+        return int(identity[0]), float(identity[1])
+
+    @contextmanager
+    def _locked(self):
+        try:
+            import fcntl
+        except ImportError:
+            raise LifecycleError("host_lock_unavailable", "host lifecycle lock is unavailable", phase="ownership")
+        os.makedirs(os.path.dirname(self.lock_path), mode=0o700, exist_ok=True)
+        fd = os.open(self.lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+
+    def _read_state(self) -> dict:
+        try:
+            with open(self.state_path, encoding="utf-8") as stream:
+                value = json.load(stream)
+            return value if isinstance(value, dict) else {}
+        except FileNotFoundError:
+            return {}
+        except Exception:
+            raise LifecycleError("ownership_state_invalid", "Local lifecycle ownership state is unreadable", phase="ownership") from None
+
+    def _write_state(self, state: dict) -> None:
+        os.makedirs(os.path.dirname(self.state_path), mode=0o700, exist_ok=True)
+        fd, temporary = tempfile.mkstemp(prefix=".local-runtime-", dir=os.path.dirname(self.state_path))
+        try:
+            os.fchmod(fd, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                json.dump(state, stream, sort_keys=True)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, self.state_path)
+        finally:
+            try:
+                os.unlink(temporary)
+            except FileNotFoundError:
+                pass
+
+    def _reconcile_jobs(self, state: dict) -> dict:
+        for registry_name in ("active_jobs", "active_reservations"):
+            records = state.get(registry_name) or {}
+            alive = {}
+            for record_id, identity in records.items():
+                try:
+                    if self.process_identity_alive(int(identity["pid"]), float(identity["process_start"])):
+                        alive[record_id] = identity
+                except Exception:
+                    # Unknown process identity means retain the reservation and fail closed.
+                    alive[record_id] = identity
+            state[registry_name] = alive
+        return state
+
+    def _owned_identity(self, state: dict) -> dict | None:
+        ownership = state.get("ownership")
+        if not ownership:
+            return None
+        try:
+            current = self.process_identity()
+            expected = (int(ownership["pid"]), float(ownership["process_start"]))
+            if current == expected:
+                return ownership
+        except Exception:
+            pass
+        return None
+
+    def _wait_for_endpoint(self, attempts: int = 30) -> bool:
+        for _ in range(attempts):
+            if self.endpoint_probe():
+                return True
+            self.sleeper(1)
+        return False
+
+    def _wait_for_model(self, model_id: str, attempts: int = 30) -> bool:
+        for _ in range(attempts):
+            if model_id in self.client.list_models():
+                return True
+            self.sleeper(1)
+        return False
+
+    def ensure_ready(self) -> LocalRuntimeResult:
+        if sys.platform != "darwin":
+            raise LifecycleError("unsupported_platform", "automatic Local lifecycle requires macOS", phase="service")
+        with self._locked():
+            state = self._reconcile_jobs(self._read_state())
+            endpoint_running = self.endpoint_probe()
+            ownership = self._owned_identity(state)
+            if endpoint_running:
+                models = self.client.list_models()
+                if LIFECYCLE_MODEL_ID in models:
+                    managed = ownership is not None
+                    if managed:
+                        state["last_activity"] = float(self.clock())
+                        state["model_id"] = LIFECYCLE_MODEL_ID
+                        self._write_state(state)
+                    return LocalRuntimeResult(True, LIFECYCLE_MODEL_ID, managed,
+                                             ownership.get("pid") if managed else None)
+                if ownership is None:
+                    raise LifecycleError("operator_owned_model_missing", "operator-owned oMLX is running without the approved Ornith model", phase="inventory")
+                self.memory_admission()
+                self.client.load_model(LIFECYCLE_MODEL_ID)
+                if not self._wait_for_model(LIFECYCLE_MODEL_ID):
+                    raise LifecycleError("model_not_ready", "approved Ornith model did not become ready", phase="model")
+                state["model_id"] = LIFECYCLE_MODEL_ID
+                state["last_activity"] = float(self.clock())
+                self._write_state(state)
+                return LocalRuntimeResult(True, LIFECYCLE_MODEL_ID, True, ownership.get("pid"))
+
+            # A stale ownership record must not authorize control of a process
+            # whose PID/start identity no longer matches.
+            if ownership is None:
+                state.pop("ownership", None)
+            self.memory_admission()
+            self.client.installed_version()
+            requested_at = float(self.clock())
+            self.start_service()
+            if not self._wait_for_endpoint():
+                raise LifecycleError("omlx_start_timeout", "oMLX did not become reachable after start", phase="service")
+            identity = self.process_identity()
+            if not identity or float(identity[1]) < requested_at:
+                raise LifecycleError("ownership_ambiguous", "cannot prove Synlynk owns the started oMLX process", phase="ownership")
+            pid, process_start = int(identity[0]), float(identity[1])
+            ownership = {
+                "pid": pid,
+                "process_start": process_start,
+                "generation": uuid.uuid4().hex,
+                "model_id": LIFECYCLE_MODEL_ID,
+            }
+            state.update({"ownership": ownership, "last_activity": requested_at,
+                          "model_id": LIFECYCLE_MODEL_ID,
+                          "active_jobs": state.get("active_jobs", {}),
+                          "active_reservations": state.get("active_reservations", {})})
+            self._write_state(state)
+            self.memory_admission()
+            self.client.load_model(LIFECYCLE_MODEL_ID)
+            if not self._wait_for_model(LIFECYCLE_MODEL_ID):
+                raise LifecycleError("model_not_ready", "approved Ornith model did not become ready", phase="model")
+            return LocalRuntimeResult(True, LIFECYCLE_MODEL_ID, True, pid)
+
+    def record_job_started(self, job_id: str) -> None:
+        with self._locked():
+            state = self._reconcile_jobs(self._read_state())
+            pid, process_start = self._require_current_process_identity()
+            state.setdefault("active_jobs", {})[job_id] = {
+                "pid": pid,
+                "process_start": process_start,
+            }
+            state["last_activity"] = float(self.clock())
+            self._write_state(state)
+
+    def record_job_finished(self, job_id: str) -> None:
+        with self._locked():
+            state = self._reconcile_jobs(self._read_state())
+            state.setdefault("active_jobs", {}).pop(job_id, None)
+            state["last_activity"] = float(self.clock())
+            self._write_state(state)
+
+    def record_reservation_started(self, reservation_id: str) -> None:
+        with self._locked():
+            state = self._reconcile_jobs(self._read_state())
+            pid, process_start = self._require_current_process_identity()
+            state.setdefault("active_reservations", {})[reservation_id] = {
+                "pid": pid,
+                "process_start": process_start,
+            }
+            state["last_activity"] = float(self.clock())
+            self._write_state(state)
+
+    def record_reservation_finished(self, reservation_id: str) -> None:
+        with self._locked():
+            state = self._reconcile_jobs(self._read_state())
+            state.setdefault("active_reservations", {}).pop(reservation_id, None)
+            self._write_state(state)
+
+    def _stop_if_safe(self, state: dict) -> bool:
+        ownership = self._owned_identity(state)
+        if ownership is None:
+            return False
+        reconciled = self._reconcile_jobs(state)
+        if reconciled.get("active_jobs") or reconciled.get("active_reservations"):
+            return False
+        try:
+            if LIFECYCLE_MODEL_ID in self.client.list_models():
+                self.client.unload_model(LIFECYCLE_MODEL_ID)
+            # Revalidate PID and start identity immediately before stop.
+            if self._owned_identity(state) is None:
+                return False
+            self.stop_service()
+            state.pop("ownership", None)
+            state.pop("model_id", None)
+            state["active_jobs"] = {}
+            self._write_state(state)
+            return True
+        except LifecycleError:
+            raise
+        except Exception:
+            raise LifecycleError("omlx_stop_failed", "could not safely stop Synlynk-managed oMLX", phase="idle_shutdown") from None
+
+    def tick(self, now: float | None = None) -> None:
+        with self._locked():
+            state = self._reconcile_jobs(self._read_state())
+            self._write_state(state)
+            if state.get("active_jobs") or state.get("active_reservations") or not state.get("ownership"):
+                return
+            last_activity = float(state.get("last_activity", self.clock()))
+            if float(self.clock() if now is None else now) - last_activity < IDLE_TIMEOUT_SECONDS:
+                return
+            self._stop_if_safe(state)
+
+    def stop_managed_service(self) -> bool:
+        with self._locked():
+            state = self._reconcile_jobs(self._read_state())
+            if state.get("active_jobs") or state.get("active_reservations"):
+                raise LifecycleError("local_jobs_active", "cannot stop oMLX while Local jobs or reservations are active", phase="idle_shutdown")
+            return self._stop_if_safe(state)
+
+    def status(self) -> dict:
+        with self._locked():
+            state = self._reconcile_jobs(self._read_state())
+            ownership = self._owned_identity(state)
+            running = bool(self.endpoint_probe())
+            loaded = None
+            if running:
+                try:
+                    loaded = LIFECYCLE_MODEL_ID in self.client.list_models()
+                except LifecycleError:
+                    loaded = None
+            try:
+                credential_configured = self.credential_store.is_configured()
+            except Exception:
+                credential_configured = False
+            now = float(self.clock())
+            last = float(state.get("last_activity", now))
+            return {
+                "running": running,
+                "model_id": LIFECYCLE_MODEL_ID if loaded else state.get("model_id"),
+                "model_loaded": loaded,
+                "credential_configured": credential_configured,
+                "managed": ownership is not None,
+                "owner_pid": ownership.get("pid") if ownership else None,
+                "active_jobs": len(state.get("active_jobs", {})),
+                "active_reservations": len(state.get("active_reservations", {})),
+                "idle_seconds": max(0, int(now - last)) if ownership else None,
+                "idle_timeout_seconds": IDLE_TIMEOUT_SECONDS,
+            }
