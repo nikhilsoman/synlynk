@@ -374,6 +374,7 @@ def _local_dispatch_model_flags(
 
 def local_pilot_status() -> dict:
     """Return read-only operator state for the disabled-by-default pilot."""
+    from synlynk.dispatch import _local_max_concurrent
     from synlynk.local_pilot import REBASELINE_SHARE, evaluate_rebaseline, load_pilot_runtime
     from synlynk.local_pilot_ledger import ensure_local_pilot_ledger, load_pilot_status
 
@@ -387,7 +388,7 @@ def local_pilot_status() -> dict:
     decision = evaluate_rebaseline(cohorts)
     return {
         "cohorts": cohorts,
-        "boundaries": {"share": REBASELINE_SHARE, "max_concurrent": 1},
+        "boundaries": {"share": REBASELINE_SHARE, "max_concurrent": _local_max_concurrent()},
         "enabled": runtime["enabled"],
         "paused": not runtime["enabled"],
         "model": runtime["qualified_models"][0] if runtime["qualified_models"] else None,

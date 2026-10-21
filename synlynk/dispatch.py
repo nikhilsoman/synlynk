@@ -19,7 +19,11 @@ import tempfile
 import time
 from typing import List, Optional, Sequence, Tuple
 
-from synlynk._constants import HARNESS_CAPABILITY_BASELINES, _CODEX_NETWORK_PERMISSION
+from synlynk._constants import (
+    GH_WRITE_HARNESS_PRIORITY as _GH_WRITE_HARNESS_PRIORITY,
+    HARNESS_CAPABILITY_BASELINES,
+    _CODEX_NETWORK_PERMISSION,
+)
 from synlynk._lazy import pkg as _pkg
 from synlynk.harness_adapters.base import PermissionEnforcementError
 from synlynk.container_exec import ContainerExecError, resolve_container_image, wrap as wrap_container
@@ -35,15 +39,6 @@ _ORG_ROLE_TO_BASELINE_ROLE = {
     "synlynk-bot": "builder",
 }
 
-# Measured 2026-10-14 from ~/.synlynk/workspaces/synlynk/state.db
-# capability_ratings (no task_type column; 14-day AVG(quality), n>=5).
-# Query datetime('now')=2026-10-14 06:27:32, max(ts)=2026-10-14 06:24:10:
-#   codex 9.04 n=410, grok 8.55 n=176, claude 8.19 n=170, agy 7.58 n=89.
-# local (n=2) and muse (n=1) stay out. Codex is first because that
-# measurement says so. The pre-2026-10-04 tuple ("claude", "agy", "grok")
-# omitted Codex and listed Grok last; that heuristic is retired. Grok's
-# sandbox-deny finding is superseded (gh:#2034). Docs keep "Codex by default".
-_GH_WRITE_HARNESS_PRIORITY = ("codex", "grok", "claude", "agy")
 _STARTUP_FAILOVER_ORDER = ("codex", "agy", "claude")
 _CODEX_REVIEW_WRITABLE_ROOTS = "sandbox_workspace_write.writable_roots=[]"
 _LOCAL_PILOT_RECEIPT_KEY = secrets.token_bytes(32)

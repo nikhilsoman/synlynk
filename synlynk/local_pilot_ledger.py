@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+from synlynk._constants import GH_WRITE_HARNESS_PRIORITY
 from synlynk.migrations.runner import run_pending_migrations
 from synlynk.wal_ledger import write_transaction
 
@@ -17,12 +18,6 @@ _COHORTS = frozenset({"validation", "expansion"})
 _SAFETY_VERDICTS = frozenset({"passed", "failed"})
 _QUALITY_VERDICTS = frozenset({"accepted", "rejected"})
 _REVIEW_VERDICTS = {"accept": "accepted", "reject": "rejected"}
-# Keep this aligned with dispatch._GH_WRITE_HARNESS_PRIORITY: it is the
-# current measured frontier routing order, used here as a read-only ranking
-# input. Review selection grants no GitHub or operational authority.
-_FRONTIER_REVIEWER_ORDER = ("codex", "grok", "claude", "agy")
-
-
 @dataclass(frozen=True)
 class ReviewerSelection:
     candidates: tuple[str, ...]
@@ -140,7 +135,7 @@ def select_local_pilot_reviewer(
     author = str(author_harness or "").strip().casefold()
     available = {str(name).strip().casefold() for name in eligible if str(name).strip()}
     candidates = tuple(
-        harness for harness in _FRONTIER_REVIEWER_ORDER
+        harness for harness in GH_WRITE_HARNESS_PRIORITY
         if harness in available and harness not in {"local", author}
     )
     if not candidates:
@@ -183,7 +178,7 @@ def start_local_pilot_review(conn: sqlite3.Connection, job_id: str) -> dict:
     selection = select_local_pilot_reviewer(
         conn,
         author_harness=author,
-        eligible=list(_FRONTIER_REVIEWER_ORDER),
+        eligible=list(GH_WRITE_HARNESS_PRIORITY),
     )
     with write_transaction(conn):
         existing = conn.execute(

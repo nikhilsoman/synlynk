@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import subprocess
 import re
@@ -2436,6 +2437,161 @@ def test_local_pilot_review_commands_parse_their_factual_review_inputs():
     assert (record.local_pilot_action, record.reviewer, record.verdict, record.rationale) == (
         "record-review", "grok", "accept", "verified",
     )
+
+
+def test_local_pilot_status_cli_reports_live_configured_concurrency(project_dir, capsys):
+    """Changing the dispatch concurrency cap must change the operator status view."""
+    from synlynk.cli import main
+
+    (project_dir / ".agents").mkdir()
+    (project_dir / ".agents" / "local.json").write_text(
+        '{"max_concurrent": 3, "models": [{"id": "ornith-test", '
+        '"qualification": "qualified"}]}'
+    )
+
+    main(["local", "pilot", "status", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["cohorts"]["historical"] == {
+        "accepted": 8,
+        "cohort": "historical",
+        "eligible": 12,
+    }
+    assert payload["boundaries"] == {"max_concurrent": 3, "share": 0.2}
+    assert payload["enabled"] is False
+    assert payload["paused"] is True
+    assert payload["model"] == "ornith-test"
+    assert payload["proposal_35_eligible"] is False
+
+
+def test_local_pilot_review_start_cli_prints_the_factual_brief(monkeypatch, capsys):
+    """The CLI must expose only the factual review brief returned by its handler."""
+    from synlynk import local_agent
+    from synlynk.cli import main
+
+    brief = {
+        "job_id": "job-brief",
+        "reviewer": "grok",
+        "selection_reason": "selected grok as highest-ranked eligible frontier reviewer",
+        "task_intent": "Summarize test output",
+        "expected_factual_claims": ["names failures"],
+        "local_answer_log_reference": "logs/job-brief.log",
+        "automated_receipt_result": "passed",
+    }
+    monkeypatch.setattr(local_agent, "start_local_pilot_review", lambda job_id: brief)
+
+    main(["local", "pilot", "review-start", "job-brief"])
+
+    assert json.loads(capsys.readouterr().out) == brief
+
+
+def test_local_pilot_record_review_cli_records_the_handler_result(monkeypatch, capsys):
+    """A selected factual verdict must be passed through the public CLI unchanged."""
+    from synlynk import local_agent
+    from synlynk.cli import main
+
+    recorded = {"job_id": "job-review", "reviewer_harness": "grok", "quality_verdict": "accepted"}
+    monkeypatch.setattr(
+        local_agent,
+        "record_local_pilot_review",
+        lambda job_id, reviewer, verdict, rationale: recorded,
+    )
+
+    main([
+        "local", "pilot", "record-review", "job-review", "--reviewer", "grok",
+        "--verdict", "accept", "--rationale", "claims checked",
+    ])
+
+    assert json.loads(capsys.readouterr().out) == recorded
+
+
+def _seed_selected_local_pilot_review(job_id):
+    from synlynk import _get_db
+    from synlynk.local_pilot_ledger import (
+        ensure_local_pilot_ledger,
+        record_admission,
+        record_safety_outcome,
+        start_local_pilot_review,
+    )
+
+    conn = _get_db()
+    try:
+        ensure_local_pilot_ledger(conn)
+        record_admission(conn, {
+            "job_id": job_id,
+            "cohort": "validation",
+            "task_class": "test_summary",
+            "task_digest": f"digest-{job_id}",
+            "receipt": {"author_harness": "codex", "task_intent": "Check facts"},
+        })
+        record_safety_outcome(conn, job_id, "passed", "contained", {"safe": True})
+        start_local_pilot_review(conn, job_id)
+    finally:
+        conn.close()
+
+
+def test_local_pilot_record_review_cli_enforces_selected_once_quality_verdict(project_dir, capsys):
+    """The public CLI must enforce the real selected-reviewer and one-verdict rules."""
+    from synlynk.cli import main
+
+    _seed_selected_local_pilot_review("job-cli-review")
+    main([
+        "local", "pilot", "record-review", "job-cli-review", "--reviewer", "grok",
+        "--verdict", "accept", "--rationale", "claims checked",
+    ])
+    assert json.loads(capsys.readouterr().out)["quality_verdict"] == "accepted"
+
+    with pytest.raises(ValueError, match="already recorded"):
+        main([
+            "local", "pilot", "record-review", "job-cli-review", "--reviewer", "grok",
+            "--verdict", "reject", "--rationale", "changed mind",
+        ])
+
+    _seed_selected_local_pilot_review("job-cli-unselected")
+    with pytest.raises(ValueError, match="selected reviewer"):
+        main([
+            "local", "pilot", "record-review", "job-cli-unselected", "--reviewer", "claude",
+            "--verdict", "accept", "--rationale", "claims checked",
+        ])
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (("--reviewer", "claude", "--verdict", "accept", "--rationale", "checked"), "selected reviewer"),
+        (("--reviewer", "grok", "--verdict", "reject", "--rationale", "changed mind"), "already recorded"),
+    ],
+)
+def test_local_pilot_record_review_cli_refuses_handler_rejections(monkeypatch, arguments, message):
+    """Unselected reviewers and duplicate verdicts must remain visible CLI refusals."""
+    from synlynk import local_agent
+    from synlynk.cli import main
+
+    def refuse(*_args):
+        raise ValueError(f"reviewer is not the {message}")
+
+    monkeypatch.setattr(local_agent, "record_local_pilot_review", refuse)
+
+    with pytest.raises(ValueError, match=message):
+        main(["local", "pilot", "record-review", "job-review", *arguments])
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected"),
+    [
+        (("--reviewer", "grok", "--verdict", "maybe", "--rationale", "checked"), "invalid choice"),
+        (("--reviewer", "grok", "--verdict", "accept"), "--rationale"),
+    ],
+)
+def test_local_pilot_record_review_cli_refuses_invalid_or_incomplete_input(capsys, arguments, expected):
+    """Parser validation must refuse unsupported verdicts and a missing rationale."""
+    from synlynk.cli import main
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(["local", "pilot", "record-review", "job-review", *arguments])
+
+    assert exc_info.value.code == 2
+    assert expected in capsys.readouterr().err
 
 
 def test_cli_dispatch_infers_defaults_and_prints_one_line_preview(project_dir, capsys):
