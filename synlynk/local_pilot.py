@@ -399,6 +399,7 @@ def load_pilot_runtime(repo_root: str) -> dict:
         # malformed or broader runtime value is returned for dispatch to
         # reject, rather than normalized into an accidental admission.
         "share": settings.get("share", 0.0),
+        "max_concurrent": settings.get("max_concurrent"),
         "qualified": bool(qualified_models),
         "qualified_models": sorted(qualified_models),
         "isolated": os.path.isfile(compose_path) and shutil.which("docker") is not None,

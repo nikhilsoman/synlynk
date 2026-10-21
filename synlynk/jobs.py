@@ -657,7 +657,7 @@ def reconcile_local_pilot_terminal(conn, job: dict) -> dict:
             raise
         return {"safety_verdict": row[0], "reason": row[1], "paused": row[0] == "failed"}
     if verdict == "failed":
-        pause_local_pilot(outcome_reason)
+        pause_local_pilot(outcome_reason, conn=conn)
         return {"safety_verdict": verdict, "reason": outcome_reason, "paused": True}
     return {"safety_verdict": verdict, "reason": outcome_reason, "paused": False}
 
@@ -687,7 +687,7 @@ def _reconcile_local_pilot_terminals(jobs: list[dict]) -> bool:
             # If reconciliation itself cannot establish an immutable outcome,
             # stop all future Local admission rather than leaving it active.
             from synlynk.local_pilot_ledger import pause_local_pilot
-            pause_local_pilot("terminal_reconciliation_failed")
+            pause_local_pilot("terminal_reconciliation_failed", conn=conn)
             job["local_pilot_safety"] = {
                 "safety_verdict": "failed",
                 "reason": "terminal_reconciliation_failed",

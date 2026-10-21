@@ -343,11 +343,20 @@ def _resolve_dispatch_agent(
         evaluate_rebaseline,
         load_pilot_runtime,
     )
-    from synlynk.local_pilot_ledger import load_pilot_status
+    from synlynk.local_pilot_ledger import (
+        active_resume_authorization_matches_runtime,
+        load_pilot_status,
+    )
 
     try:
         runtime = load_pilot_runtime(os.getcwd())
         rebaseline = evaluate_rebaseline(load_pilot_status(db))
+        if not active_resume_authorization_matches_runtime(
+            db, share=REBASELINE_SHARE, max_concurrent=1
+        ):
+            raise ValueError("active_resume_authorization_required")
+        if runtime.get("max_concurrent") != 1:
+            raise ValueError("runtime_concurrency_disagrees_with_rebaseline_cap")
         if runtime["share"] != REBASELINE_SHARE or rebaseline.share != REBASELINE_SHARE:
             raise ValueError("runtime_share_disagrees_with_rebaseline_cap")
         decision = evaluate_local_pilot(
@@ -4134,7 +4143,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             gh_write_target_kind=gh_write_target_kind, gh_write_expect=gh_write_expect,
             model=None, effort=effort, model_tier=model_tier, role=role,
             task_domain=task_domain, criticality=criticality, lambda_=lambda_,
-            db_conn=None, _startup_failover=_startup_failover,
+            db_conn=None, _startup_failover=_startup_failover, pr=pr,
             skip_permissions=skip_permissions, container_image=None,
             local_pilot_requested=False,
         )
@@ -4157,7 +4166,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             evaluate_rebaseline,
             load_pilot_runtime,
         )
-        from synlynk.local_pilot_ledger import load_pilot_status
+        from synlynk.local_pilot_ledger import (
+            active_resume_authorization_matches_runtime,
+            load_pilot_status,
+        )
 
         receipt_payload = {
             key: value for key, value in local_pilot_receipt.items() if key != "_signature"
@@ -4165,7 +4177,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         current_dispatch_key = str(story_id or issue or task)
         runtime = load_pilot_runtime(os.getcwd())
         try:
-            rebaseline = evaluate_rebaseline(load_pilot_status(db_conn or _pkg("_get_db")()))
+            ledger_conn = db_conn or _pkg("_get_db")()
+            rebaseline = evaluate_rebaseline(load_pilot_status(ledger_conn))
+            authorization_matches = active_resume_authorization_matches_runtime(
+                ledger_conn, share=REBASELINE_SHARE, max_concurrent=1
+            )
         except Exception:
             return frontier_fallback("rebaseline ledger unavailable", local_pilot_receipt)
         decision = evaluate_local_pilot(
@@ -4184,7 +4200,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         if (
             not decision.route_local
             or not rebaseline.allow_admission
+            or not authorization_matches
             or runtime["share"] != REBASELINE_SHARE
+            or runtime.get("max_concurrent") != 1
             or rebaseline.share != REBASELINE_SHARE
             or decision.share != receipt_payload.get("share")
             or decision.bucket != receipt_payload.get("bucket")

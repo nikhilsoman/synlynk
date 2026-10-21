@@ -134,17 +134,54 @@ def test_outcome_recording_rejects_unknown_verdicts(ledger_conn):
         record_quality_verdict(ledger_conn, "job-1", "codex", "maybe", "bad", "rule")
 
 
-def test_pause_local_pilot_uses_the_approved_configuration_helper(monkeypatch):
+def test_pause_local_pilot_uses_the_approved_configuration_helper(ledger_conn, monkeypatch):
     """Bypassing the helper could write the wrong split config surface."""
-    from synlynk.local_pilot_ledger import pause_local_pilot
+    from synlynk.local_pilot_ledger import ensure_local_pilot_ledger, pause_local_pilot
 
     updates = []
     monkeypatch.setattr("synlynk.load_workspace", lambda: {"local_pilot": {"enabled": True, "share": 0.2}})
     monkeypatch.setattr("synlynk._update_config", lambda update: updates.append(update))
 
-    pause_local_pilot("host_execution")
+    ensure_local_pilot_ledger(ledger_conn)
+    pause_local_pilot("host_execution", conn=ledger_conn)
 
     assert updates == [{"local_pilot": {"enabled": False, "share": 0.2, "pause_reason": "host_execution"}}]
+
+
+def test_pause_revokes_active_resume_authorization_before_disabling_config(
+    ledger_conn, resume_identity_key, monkeypatch
+):
+    """A safety pause must leave neither config nor durable authority active."""
+    from synlynk.local_pilot_ledger import (
+        activate_resume_authorization,
+        active_resume_authorization,
+        create_resume_authorization,
+        ensure_local_pilot_ledger,
+        pause_local_pilot,
+    )
+
+    ensure_local_pilot_ledger(ledger_conn)
+    staged = create_resume_authorization(
+        ledger_conn, _resume_authorization_payload(ledger_conn, resume_identity_key),
+    )
+    activate_resume_authorization(ledger_conn, staged["authorization_id"])
+    updates = []
+    monkeypatch.setattr("synlynk.load_workspace", lambda: {"local_pilot": {"enabled": True, "share": 0.2}})
+
+    def update_config(update):
+        # This is the ordering boundary: config replacement cannot observe an
+        # active authority that a concurrent resume might otherwise preserve.
+        assert active_resume_authorization(ledger_conn) is None
+        updates.append(update)
+
+    monkeypatch.setattr("synlynk._update_config", update_config)
+
+    pause_local_pilot("post_watermark_safety_failure", conn=ledger_conn)
+
+    assert active_resume_authorization(ledger_conn) is None
+    assert updates == [{"local_pilot": {
+        "enabled": False, "share": 0.2, "pause_reason": "post_watermark_safety_failure",
+    }}]
 
 
 def test_later_review_preserves_an_earlier_jobs_evidence(ledger_conn):

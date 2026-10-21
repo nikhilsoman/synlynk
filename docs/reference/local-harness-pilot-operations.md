@@ -9,7 +9,10 @@ todo files do not change pilot state.
 
 Use `synlynk local pilot status --json` for machine-readable state or
 `synlynk local pilot status` for the concise operator view. The command is
-read-only: it neither enables Local nor dispatches work.
+read-only: it neither enables Local nor dispatches work. It reports every
+historical safety failure as well as failures in the current authorized epoch,
+the latest authorization ID/state/watermark, and whether the enabled runtime
+still matches its signed 20%/one-concurrent target.
 
 Read the three denominators separately:
 
@@ -40,6 +43,34 @@ prints a credential, authorization header, or secret-bearing response.
    without that decision the 20% cap remains in force.
 
 Merging the implementation branch leaves `local_pilot.enabled` disabled, so no live work is authorized by code merge alone.
+
+## Operational-resume ceremony and recovery
+
+The only normal re-enable path is `synlynk local pilot resume --remediation-ref
+<reference> --verification-ref <reference>`. It requires an interactive input
+and output terminal plus the exact typed confirmation. `--yes`, redirected
+input, inherited shell defaults, and blank audit references are not approval.
+Before prompting, Synlynk displays the current pause/failure state, selected
+qualified Ornith model, fixed 20%/one-concurrent target, and the complete
+preflight receipt.
+
+The local host Ed25519 key signs the durable authorization record and makes it
+tamper-evident; it is not proof that a particular human is Nikhil. The command
+requires the human ceremony above and never accepts a caller-supplied
+`approved-by` value as identity proof. Preflight requires a disabled exact
+target configuration, qualified live Ornith model, usable isolated
+Docker/Compose runner, endpoint/authentication health, readable migrated
+ledger, no Local reservation, and no reconciliation debt. It creates no Local
+job or dispatch.
+
+Activation is staged: `activating` authorization, atomic config replacement,
+then `active` authorization after a fresh check. `activating`, `failed`, and
+`revoked` records never admit work. If status or a later resume finds a
+stranded `activating` record, it terminalizes it as failed and disables Local;
+a matching config file alone never restores authority. A safety pause revokes
+the active authorization before disabling config. Dispatch therefore requires
+both the enabled exact runtime and a matching active signed authorization; any
+uncertainty or drift goes to the selected frontier fallback.
 
 ## Evidence and tracking procedure
 

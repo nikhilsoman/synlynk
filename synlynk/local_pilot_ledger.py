@@ -246,6 +246,28 @@ def active_resume_authorization(conn: sqlite3.Connection) -> dict | None:
     return _authorization_as_dict(conn, row[0]) if row else None
 
 
+def active_resume_authorization_matches_runtime(
+    conn: sqlite3.Connection, *, share: float, max_concurrent: int
+) -> bool:
+    """Return whether durable approval authorizes this exact Local runtime.
+
+    The signed preflight receipt is the authority's immutable declaration of
+    the narrow target.  An enabled config is deliberately insufficient.
+    """
+    authorization = active_resume_authorization(conn)
+    if authorization is None:
+        return False
+    try:
+        receipt = json.loads(authorization["preflight_receipt_json"])
+    except (KeyError, TypeError, json.JSONDecodeError):
+        return False
+    return (
+        receipt.get("result") == "passed"
+        and receipt.get("requested_share") == share
+        and receipt.get("requested_max_concurrent") == max_concurrent
+    )
+
+
 def record_admission(conn: sqlite3.Connection, sample: dict) -> dict:
     """Append an admitted validation or expansion sample exactly once."""
     job_id = str(sample.get("job_id", "")).strip()
@@ -424,9 +446,18 @@ def record_local_pilot_review(
     )
 
 
-def pause_local_pilot(reason: str) -> None:
-    """Disable future Local admission through the owned workspace config path."""
-    from synlynk import _update_config, load_workspace
+def pause_local_pilot(reason: str, *, conn: sqlite3.Connection | None = None) -> None:
+    """Revoke Local authority before disabling its owned workspace config."""
+    from synlynk import _get_db, _update_config, load_workspace
+
+    owns_connection = conn is None
+    if conn is None:
+        conn = _get_db()
+    try:
+        revoke_active_resume_authorization(conn, str(reason))
+    finally:
+        if owns_connection:
+            conn.close()
 
     workspace = load_workspace()
     settings = dict(workspace.get("local_pilot") or {})

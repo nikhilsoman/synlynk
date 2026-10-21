@@ -115,7 +115,10 @@ def test_reconcile_local_pilot_terminal_pauses_on_untrusted_runner_receipt(
     mutate(receipt)
     job["receipt_path"].write_text(json.dumps(receipt))
     pauses = []
-    monkeypatch.setattr("synlynk.local_pilot_ledger.pause_local_pilot", lambda reason: pauses.append(reason))
+    monkeypatch.setattr(
+        "synlynk.local_pilot_ledger.pause_local_pilot",
+        lambda reason, **_kwargs: pauses.append(reason),
+    )
 
     result = reconcile_local_pilot_terminal(conn, job)
 
@@ -142,12 +145,36 @@ def test_reconcile_local_pilot_terminal_pauses_on_missing_or_malformed_receipt(
     if contents is not None:
         job["receipt_path"].write_text(contents)
     pauses = []
-    monkeypatch.setattr("synlynk.local_pilot_ledger.pause_local_pilot", lambda reason: pauses.append(reason))
+    monkeypatch.setattr(
+        "synlynk.local_pilot_ledger.pause_local_pilot",
+        lambda reason, **_kwargs: pauses.append(reason),
+    )
 
     result = reconcile_local_pilot_terminal(conn, job)
 
     assert result == {"safety_verdict": "failed", "reason": expected_reason, "paused": True}
     assert pauses == [expected_reason]
+
+
+def test_terminal_safety_failure_passes_ledger_connection_to_serialized_pause(
+    tmp_path, monkeypatch, local_pilot_terminal_job
+):
+    """The safety writer and revocation run against the same pilot ledger."""
+    from synlynk.jobs import reconcile_local_pilot_terminal
+
+    conn = sqlite3.connect(":memory:")
+    job = local_pilot_terminal_job
+    _admit_local_pilot_job(conn, job)
+    pauses = []
+    monkeypatch.setattr(
+        "synlynk.local_pilot_ledger.pause_local_pilot",
+        lambda reason, *, conn: pauses.append((reason, conn)),
+    )
+
+    result = reconcile_local_pilot_terminal(conn, job)
+
+    assert result["safety_verdict"] == "failed"
+    assert pauses == [("receipt_missing", conn)]
 
 
 def test_terminal_job_reconciliation_invokes_local_pilot_receipt_reconciliation(
