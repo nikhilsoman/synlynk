@@ -1,9 +1,9 @@
 # Unattended Local Ornith Lifecycle Design
 
 **Date:** 2026-10-21  
-**Status:** Draft -- awaiting Nikhil approval  
-**Extends:** `docs/superpowers/specs/2026-10-16-local-harness-operationalization-design.md`  
-**Release:** v0.25.2 fleet capacity recovery  
+**Status:** Approved by Nikhil on 2026-10-21
+**Extends:** `docs/superpowers/specs/2026-10-16-local-harness-operationalization-design.md`
+**Release:** v0.25.2 fleet capacity recovery
 **Related pilot:** gh:#2349
 
 ## Intent
@@ -20,12 +20,13 @@ fail-closed execution boundary.
    `Ornith-1.0-9B-4bit`.
 2. The oMLX credential is imported once from the operator's current
    `OPENAI_API_KEY` into the macOS Keychain. Thereafter only the local runtime
-   supervisor reads it, at the last responsible moment. It is supplied to the
-   managed oMLX process and the Synlynk relay through short-lived process
-   environments. Aider receives no credential: the relay adds authorization
-   to its fixed upstream oMLX connection. The key is never written to project
-   files, state/telemetry, logs, command-line arguments, Docker configuration,
-   or mounted container files.
+   supervisor reads it, at the last responsible moment, for authenticated
+   readiness/model-management API calls and the Synlynk relay. The key is not
+   supplied to the oMLX process: oMLX keeps its own server-side authentication
+   setting. Aider receives no credential: the relay adds authorization to its
+   fixed upstream oMLX connection. The key is never written to project files,
+   state/telemetry, logs, command-line arguments, Docker configuration, or
+   mounted container files.
 3. After 15 minutes without an admitted Local job, Synlynk unloads Ornith and
    stops the service. The timeout is reset only by a successfully admitted
    Local job, not by rejected or frontier-routed work.
@@ -69,15 +70,16 @@ process arguments. Import supports explicit replacement and deletion; headless
 startup never prompts or writes credentials.
 
 `LocalCredentialStore` is the only production reader. It retrieves the secret
-at the last responsible moment, injects it into an in-memory environment for
-the oMLX readiness client, managed server, and Synlynk relay, then removes
-references after lifecycle operations. It is not passed to Aider. The relay
+at the last responsible moment for the authenticated oMLX API client and
+Synlynk relay; it is not placed in any child-process environment. The relay
 replaces the current raw TCP passthrough and adds the Bearer authorization
 header only when forwarding to `127.0.0.1:8000`; its egress remains fixed to
-that endpoint. Missing or inaccessible keychain entries are a classified
-readiness failure, never a prompt for a secret in headless mode. The unattended
-path is supported on macOS; other platforms report lifecycle automation as
-unsupported and use frontier fallback.
+that endpoint. The running oMLX server retains its own API-key setting and is
+started/stopped without passing the credential to it. Missing or inaccessible
+keychain entries are a classified readiness failure, never a prompt for a
+secret in headless mode. The unattended path is supported on macOS; other
+platforms report lifecycle automation as unsupported and use frontier
+fallback.
 
 ### Local lifecycle manager
 
@@ -107,24 +109,31 @@ It follows this sequence:
    running, leave it untouched and accept it only if the exact approved
    Ornith ID is served. If no service is running, use a Synlynk-managed
    launch-agent instance.
-4. The managed-service adapter resolves the installed `omlx` executable,
-   validates it against the supported version range, and starts it using a
-   documented, versioned argument-vector contract (never a shell command).
-   It requests only `Ornith-1.0-9B-4bit`, then polls authenticated readiness
-   and the live model inventory with bounded timeout/backoff. The manager must
-   not guess CLI flags or load APIs: if the installed version exposes no
-   supported exact-model load operation, it records `unsupported_load_contract`
-   and falls back.
+4. The managed-service adapter resolves the installed `omlx` executable and
+   validates its version. The evaluated host has oMLX 0.5.3, whose CLI exposes
+   `omlx start` and `omlx stop`; its authenticated API exposes
+   `POST /v1/models/{model_id}/load` and
+   `POST /v1/models/{model_id}/unload`. When the service was absent at step 3,
+   the manager invokes `omlx start` through an argument-vector API (never a
+   shell command), then authenticates with the Keychain credential and loads
+   only `Ornith-1.0-9B-4bit` through the model-specific API. It polls readiness
+   and live inventory with bounded timeout/backoff. The adapter supports only
+   explicitly tested oMLX versions; unknown versions or missing endpoints
+   produce `unsupported_load_contract` and frontier fallback. The manager
+   never changes the oMLX server-side API key setting.
 5. Confirm that `/v1/models` contains the exact approved model, Aider and
    Docker/Compose are available, and the isolated relay can be constructed.
    Only then issue the signed pilot receipt and start the job.
 
 The host supervisor starts a 15-minute idle timer after the last Local job and
-rechecks that no Local job or reservation exists before unloading Ornith and
-stopping its managed service. It never terminates an operator-owned oMLX
-process; service ownership is durably recorded at start time. If the Synlynk
-daemon restarts, the LaunchAgent resumes ownership reconciliation and the idle
-timer from the last recorded activity time.
+rechecks that no Local job or reservation exists before calling the
+authenticated per-model unload endpoint and `omlx stop` for its managed
+service. It never terminates an operator-owned oMLX process; service ownership
+is durably recorded only after Synlynk observed the endpoint absent and
+successfully started it. If the endpoint appears during a start race and
+ownership cannot be proved, Synlynk leaves it untouched and falls back. If the
+Synlynk daemon restarts, the LaunchAgent resumes ownership reconciliation and
+the idle timer from the last recorded activity time.
 
 ### Failure and fallback
 
@@ -159,9 +168,9 @@ mismatch is actionable but does not permit a different model.
 - An interactive one-time import stores the oMLX key in the OS keychain; no
   repository, log, process argument, telemetry record, or Docker config
   contains the value.
-- The Aider container environment contains no API key; only the host-side
-  oMLX process and the narrowly scoped authorization relay receive it at
-  runtime.
+- The Aider container and oMLX process environments contain no API key; only
+  the in-process authenticated API client and narrowly scoped authorization
+  relay read it at runtime.
 - An admitted, eligible Local job starts oMLX and makes Ornith ready without
   an operator shell export when the service is absent.
 - A pre-running operator-owned oMLX service is probed but is never stopped by
