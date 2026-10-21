@@ -73,6 +73,12 @@ def test_release_task_lease(db_conn):
     assert row[0] == "done"
 
 
+def test_task_leases_table_has_pid_and_harness_columns(db_conn):
+    cols = {row[1] for row in db_conn.execute("PRAGMA table_info(task_leases)")}
+    assert "pid" in cols
+    assert "harness" in cols
+
+
 def test_reclaim_stranded_story_with_lease(db_conn):
     # Acquire lease
     acquire_task_lease("story-lease-1", "dead-worker", duration_seconds=60, conn=db_conn)

@@ -1266,6 +1266,17 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE stories ADD COLUMN stack_tags TEXT DEFAULT '[]'")
             except sqlite3.OperationalError:
                 pass
+        task_lease_cols = {row[1] for row in conn.execute("PRAGMA table_info(task_leases)")}
+        if task_lease_cols and "pid" not in task_lease_cols:
+            try:
+                conn.execute("ALTER TABLE task_leases ADD COLUMN pid INTEGER")
+            except sqlite3.OperationalError:
+                pass
+        if task_lease_cols and "harness" not in task_lease_cols:
+            try:
+                conn.execute("ALTER TABLE task_leases ADD COLUMN harness TEXT")
+            except sqlite3.OperationalError:
+                pass
         if "status" not in story_cols:
             try:
                 conn.execute("ALTER TABLE stories ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
