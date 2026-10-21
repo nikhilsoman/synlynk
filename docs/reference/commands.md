@@ -150,6 +150,10 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `run` (primary) — execute
 - `run --trio` (secondary) — execute
 - `local doctor` (secondary) — sustain
+- `local pilot status` (secondary) — sustain
+- `local pilot review-start` (secondary) — sustain
+- `local pilot record-review` (secondary) — sustain
+- `local pilot resume` (secondary) — execute
 - `upgrade` (secondary) — sustain
 - `rollback` (secondary) — sustain
 - `uninstall` (secondary) — sustain
