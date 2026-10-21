@@ -66,82 +66,40 @@ file is the per-workspace, cross-checkout `state.db` keyed by `workspace_id` —
 not a per-checkout file). No new cross-checkout sync mechanism is needed; the
 shared DB already is the thing every checkout reads.
 
-### Schema
+### Implementation note (added after planning)
 
-New table in `state.db`, initialized the same way `worktree_leases` is
-(`init_worktree_lease_schema`-style function called at DB-open time):
+This design is implemented by extending the pre-existing `task_leases` table
+and `synlynk/jobs.py` functions (`acquire_task_lease`, `renew_task_lease`,
+`release_task_lease`, `get_active_lease`, originally built for gh:#1507 but
+previously uncalled from anywhere) rather than by adding a new table/module.
+See `docs/superpowers/plans/2026-10-21-story-home-claims-design.md` for the
+full rationale and implementation detail. The schema gained `pid` and
+`harness` columns; `acquire_task_lease` gained dead-PID detection and an
+`override` flag; a new `synlynk story claim` CLI command, an `exec_command()`
+heartbeat hook, and release hooks on `story done`/home handover are the new
+integration points. `reclaim_stranded_stories` now also checks claim-PID
+liveness.
 
-```sql
-CREATE TABLE IF NOT EXISTS story_home_claims (
-    story_id      TEXT PRIMARY KEY,
-    harness       TEXT NOT NULL,
-    session_id    TEXT NOT NULL,   -- "<hostname>:<checkout_path>:<pid>"
-    pid           INTEGER NOT NULL,
-    acquired_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    heartbeat_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status        TEXT NOT NULL DEFAULT 'active'   -- active | released
-);
+`leased_by` is the composite session identity (`f"{harness}:{hostname}:{pid}"`,
+set by `cmd_story_claim`) — note this is distinct from the separate `harness`
+column, which stores only the bare harness name. Callers releasing a lease
+must look it up via `get_active_lease()` first and pass the real `leased_by`
+value through, not reconstruct or guess it (a bare-harness-string substitution
+bug of exactly this kind was caught and fixed during Task 6's review — see the
+plan's PR description for detail).
 
-CREATE INDEX IF NOT EXISTS idx_story_home_claims_status
-    ON story_home_claims(status, heartbeat_at);
-```
-
-`session_id` is generated once per interactive session (not per command) and
-reused for every claim/heartbeat/release call that session makes. `pid` is the
-interactive session's own process id, used for the dead-PID reclamation check
-exactly as `worktree_lease.py` already does for `_is_pid_alive()`.
-
-### New module: `synlynk/story_claims.py`
-
-Mirrors `worktree_lease.py`'s shape:
-
-- `take_story_claim(story_id, harness, session_id, pid, *, override=False) ->
-  ClaimResult` — looks up any `status='active'` row for `story_id`. If found
-  and (heartbeat within TTL) and (PID alive), it's a live conflicting claim:
-  return `ClaimConflict(holder_harness, holder_session_id, acquired_at)` unless
-  `override=True`. Otherwise (no live conflict, or override), upsert the row
-  with the new claimant's harness/session_id/pid and fresh timestamps.
-- `heartbeat_story_claim(story_id, session_id) -> bool` — bumps `heartbeat_at`
-  for the row matching `(story_id, session_id)`; no-op (returns False) if that
-  session doesn't hold the claim (e.g. it was already reclaimed).
-- `release_story_claim(story_id, session_id) -> bool` — sets `status =
-  'released'` for the row matching `(story_id, session_id)`.
-- `is_claim_stale(row, ttl_seconds) -> bool` — shared predicate: heartbeat older
-  than TTL, or PID no longer alive (reuses `_is_pid_alive` from
-  `worktree_lease.py` rather than duplicating it).
-
-Default TTL: 45 minutes (same order of magnitude as `story reclaim`'s existing
-30-minute default, intentionally slightly larger since a claim's heartbeat
-only needs to arrive once per `synlynk exec` cycle, not continuously).
-
-### Integration points
-
-- **Claim acquisition:** wherever the existing story state machine flips a
-  story's status to `in_progress` for an *interactive* session (as opposed to
-  a dispatched job). Call `take_story_claim()` there; on `ClaimConflict`,
-  print the holder's harness/session/claimed-at and exit non-zero unless
-  `--override` was passed on the command that triggered the transition.
-- **Heartbeat:** `exec_command()` in `bin/synlynk.py` already runs once per
-  `synlynk exec` invocation and already knows the active story from
-  `.synlynk/context.md` generation. Add a call to
-  `heartbeat_story_claim(active_story_id, session_id)` there if a story is
-  active — reuses an existing per-command hook, no new polling loop.
-- **Release:** `synlynk story done <id>` and `execute_home_handover()` (the
-  existing handover path in `synlynk/handover.py`) both call
-  `release_story_claim()` for the relevant story.
-- **Reclamation:** extend the **existing** `reclaim_stranded_stories()` /
-  `story reclaim` command (`synlynk/jobs.py`) to also sweep
-  `story_home_claims` for stale rows (TTL-expired or dead-PID) in the same
-  pass as its current orphaned-`in_progress`-status logic, rather than adding
-  a second, separate reclaim command.
-
-### session_id generation
-
-Generated once per interactive session start (first `synlynk exec` call, or
-wherever the session first becomes "home"), as `f"{socket.gethostname()}:
-{repo_root}:{os.getpid()}"`, and held in-memory / in an env var for the rest of
-that process's lifetime. Not persisted to any gitignored per-checkout file —
-the claim row in shared `state.db` is the only durable record.
+Session identity for the *claim-tracking marker* (as opposed to the
+`task_leases.leased_by` value above) ended up being file-based rather than the
+in-memory/env-var approach originally anticipated below: `synlynk/session.py`
+tracks which story_ids the current checkout has claimed in a gitignored
+`.synlynk/active_claims.json` marker file (`_read_active_claims()` /
+`_add_active_claim()` / `_remove_active_claim()`), written by `cmd_story_claim`
+and cleared by `cmd_story_done` / `execute_home_handover`. This lets a *later,
+different-PID* process in the same checkout (e.g. a subsequent `synlynk exec`
+invocation) still heartbeat the claim taken by an earlier one-shot `story
+claim` process, via `heartbeat_claims_by_story_ids()` — solving the
+cross-process heartbeat problem the in-memory/env-var approach below would not
+have solved on its own.
 
 ## Error handling
 
