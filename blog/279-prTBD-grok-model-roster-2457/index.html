@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grok reports its own model roster into models.json | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 21, 2026</span>
+        
+          <span class="blog-post-pr">PR 2513</span>
+        
+      </div>
+      <h1 class="blog-post-title">Grok reports its own model roster into models.json</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>279 — Grok reports its own model roster into models.json</h1>
+<p>Date: 2026-10-21
+PR: #2513
+Story: story-issue-2457 / gh:#2457</p>
+<h2>Goalpost coming in</h2>
+<p>gh:#2454 / job-595f5739 already asked each harness's own CLI for real model
+tiers and pricing, then wrote those answers into <code>.synlynk/models.json</code> for
+Claude, Codex, Agy, and local. Grok's row stayed a placeholder because the
+2026-10-20 audit hit Grok's weekly quota mid-query.</p>
+<h2>What shifted</h2>
+<p>The quota reset. This dispatch ran <code>grok models</code> (CLI 1.0.62) against the live
+account and read <code>~/.grok/models_cache.json</code> plus official xAI text-API
+pricing at docs.x.ai. Muse is still out of scope here (same ticket, still
+blocked on gh:#2077).</p>
+<h2>What shipped</h2>
+<p>Live Grok Build roster (2026-10-21):</p>
+<table>
+<thead>
+<tr>
+<th>CLI id</th>
+<th>Name</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>grok-4.7</code></td>
+<td>Grok 4.7 (default)</td>
+<td>Latest frontier model; <code>pro</code> and <code>reasoning</code> dispatch tiers</td>
+</tr>
+<tr>
+<td><code>grok-4.7-build-fast</code></td>
+<td>Grok 4.7 Fast</td>
+<td>Premium latency SKU; CLI description &quot;2x the price&quot;</td>
+</tr>
+<tr>
+<td><code>grok-4.6</code></td>
+<td>Grok 4.6</td>
+<td>Previous generation; <code>fast</code> dispatch tier</td>
+</tr>
+<tr>
+<td><code>grok-4.5</code></td>
+<td>Grok 4.5</td>
+<td>Older generation still on the CLI</td>
+</tr>
+</tbody>
+</table>
+<p>There is no separate reasoning model id. <code>grok-4.7</code> exposes
+<code>reasoning_effort</code> (<code>xhigh</code> / <code>high</code> / <code>medium</code> / <code>low</code>). Mapping
+<code>grok-4.7-build-fast</code> onto synlynk's cheap <code>fast</code> tier would invert the
+economic meaning used by Claude/Codex/Agy, so <code>fast</code> stays <code>grok-4.6</code>.</p>
+<p>Standard (&lt;200k prompt) rates encoded per 1k tokens from docs.x.ai, with
+<code>grok-4.7-build-fast</code> at 2× <code>grok-4.7</code> because that SKU is not on the public
+price table. Context window is 500k (CLI also lists a 256k compact window).
+Max output is unpublished (<code>0</code>).</p>
+<h2>Goalpost going out</h2>
+<p>Grok's catalog gap on gh:#2457 is closed. Muse still needs a live CLI roster
+once its usage/API-key blocker clears.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
