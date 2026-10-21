@@ -36,7 +36,7 @@ def test_builtin_catalog_uses_current_remote_models_and_preserves_local_models()
         "claude-opus-5", "claude-opus-5-5", "claude-sonnet-5",
         "claude-fable-5-1", "claude-fable-5", "claude-haiku-4-5-20251001",
         "gemini-3.8-flash-medium", "gemini-3.8-flash-high", "claude-opus-4-6-thinking",
-        "gpt-5.6-luna", "grok-4.7", "grok-4.6",
+        "gpt-5.6-luna", "grok-4.7", "grok-4.7-build-fast", "grok-4.6", "grok-4.5",
     } <= model_ids
     assert {
         "Ornith-1.0-9B-4bit", "deepseek-r1", "gemma-2-9b-it-q4", "qwen2.5"
