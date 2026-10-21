@@ -24,7 +24,7 @@
 
 - Broker bind/start failure must fail before Aider starts and must not leave an open listener.
 - Unsupported endpoint, query, model, oversized, or malformed requests must not reach oMLX.
-- Relay failure or timeout must produce a failed pilot result promptly and clean up Compose resources.
+- Relay failure, upstream/authentication failure, oversized response, or response timeout must fail closed and clean up Compose resources.
 - The real oMLX key must not enter Aider arguments/environment, Docker inspect output, logs, receipts, or worktree files.
 - Aider must not reach the host broker directly or arbitrary Internet destinations; only the relay receives the broker-facing network attachment.
 
@@ -97,7 +97,7 @@ git commit -m "fix(local-pilot): route isolated relay to host broker"
   - Send `/v1/models` and `/v1/chat/completions` through `omlx:8000` from a temporary client attached to the internal pilot network; assert the approved model and fake upstream response are returned and the real test credential is injected only upstream.
   - Assert denied paths/models fail without upstream calls; assert Aider-network clients cannot bypass the relay to reach the host broker; always tear down the project and broker.
 - [x] **Step 2: Run the integration test with the feature flag unset and verify it skips without Docker side effects**
-- [x] **Step 3: Run `SYNLYNK_RUN_LOCAL_PILOT_RELAY_INTEGRATION=1 pytest tests/test_local_pilot_relay_integration.py -q` on OrbStack; authenticated inventory and chat succeed, disallowed model is denied, and direct host/Internet probes fail**
+- [x] **Step 3: Run `SYNLYNK_RUN_LOCAL_PILOT_RELAY_INTEGRATION=1 pytest tests/test_local_pilot_relay_integration.py -q` on OrbStack; authenticated inventory and chat succeed, disallowed model is denied, direct host/Internet probes fail, and an upstream 401 prevents readiness**
 - [x] **Step 4: Run the focused regression suite `pytest tests/test_local_auth_proxy.py tests/test_local_pilot.py tests/test_dispatch.py -q` (excluding the pre-existing conflicting workspace assertion): 245 passed**
 - [x] **Step 5: Commit**
 
@@ -123,3 +123,11 @@ workspace edit enables Local routing), `test_apply_gh_write_verification_uses_da
 (same pre-existing workspace edit), `test_cmd_multirepo_mesh_conflicts_json`
 (pre-existing non-UTF-8 diff decode), `test_synlynk_daemon_stop_idempotent`,
 `test_daemon_cli_stop_idempotent`, and `test_taxonomy_matches_real_cli_surface`.
+
+Fresh review follow-up: readiness now performs a bounded authenticated inventory
+request through the relay (30-second recurring interval; 12-second probe timeout),
+and streamed chat responses are limited to 32 MiB and five minutes. Broker tests
+cover oversized known-length and chunked responses; the Docker integration proves
+upstream authentication failure leaves the relay unhealthy. Post-review checks:
+broker suite 12 passed; Docker integration 1 passed in 25.87 seconds. The full
+suite was not rerun after these scoped review fixes.

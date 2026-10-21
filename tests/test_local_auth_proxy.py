@@ -194,6 +194,58 @@ def test_broker_sanitizes_upstream_errors_and_clears_credential_on_close():
     assert broker.credential == ""
 
 
+def test_broker_rejects_chat_response_over_configured_size_limit():
+    broker = LocalAuthBroker(
+        credential="host-secret",
+        max_response_bytes=4,
+        connection_factory=lambda *args, **kwargs: FakeConnection(
+            *args, **kwargs, result=FakeResponse(b"too large")
+        ),
+    )
+    port = broker.start()
+    payload = json.dumps({"model": "Ornith-1.0-9B-4bit", "messages": []}).encode()
+    try:
+        response = send_tcp_request(
+            port,
+            b"POST /v1/chat/completions HTTP/1.1\r\nHost: relay\r\nContent-Type: application/json\r\nContent-Length: "
+            + str(len(payload)).encode() + b"\r\nConnection: close\r\n\r\n" + payload,
+        )
+    finally:
+        broker.close()
+    assert b"502 Bad Gateway" in response
+    assert b"response exceeded limit" in response
+    assert b"too large" not in response
+
+
+def test_broker_cuts_off_oversized_unknown_length_chat_stream():
+    class ChunkedResponse(FakeResponse):
+        def getheader(self, name, default=None):
+            return default
+
+        def getheaders(self):
+            return [("Content-Type", "application/json")]
+
+    broker = LocalAuthBroker(
+        credential="host-secret",
+        max_response_bytes=4,
+        connection_factory=lambda *args, **kwargs: FakeConnection(
+            *args, **kwargs, result=ChunkedResponse(b"too large")
+        ),
+    )
+    port = broker.start()
+    payload = json.dumps({"model": "Ornith-1.0-9B-4bit", "messages": []}).encode()
+    try:
+        response = send_tcp_request(
+            port,
+            b"POST /v1/chat/completions HTTP/1.1\r\nHost: relay\r\nContent-Type: application/json\r\nContent-Length: "
+            + str(len(payload)).encode() + b"\r\nConnection: close\r\n\r\n" + payload,
+        )
+    finally:
+        broker.close()
+    assert b"Transfer-Encoding: chunked" in response
+    assert b"too large" not in response
+
+
 def test_aider_gets_only_an_inert_local_placeholder():
     assert ensure_inert_aider_key(["--model", "openai/ornith"]) == [
         "--model", "openai/ornith", "--openai-api-key", "synlynk-local-relay-only"

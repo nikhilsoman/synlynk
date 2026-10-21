@@ -6,6 +6,7 @@ import http.client
 import json
 import socketserver
 import threading
+import time
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlsplit
 
@@ -14,6 +15,8 @@ from synlynk.local_lifecycle import LIFECYCLE_MODEL_ID
 
 MAX_REQUEST_BYTES = 32 * 1024 * 1024
 MAX_MODEL_RESPONSE_BYTES = 4 * 1024 * 1024
+MAX_CHAT_RESPONSE_BYTES = 32 * 1024 * 1024
+MAX_UPSTREAM_RESPONSE_SECONDS = 300
 UPSTREAM_HOST = "127.0.0.1"
 UPSTREAM_PORT = 8000
 INERT_AIDER_API_KEY = "synlynk-local-relay-only"
@@ -27,7 +30,9 @@ class LocalAuthBroker:
     """Expose only model metadata and chat completions on host loopback."""
 
     def __init__(self, credential: str, *, host: str = "127.0.0.1", port: int = 0,
-                 connection_factory=None, max_request_bytes: int = MAX_REQUEST_BYTES):
+                 connection_factory=None, max_request_bytes: int = MAX_REQUEST_BYTES,
+                 max_response_bytes: int = MAX_CHAT_RESPONSE_BYTES,
+                 response_timeout_seconds: int = MAX_UPSTREAM_RESPONSE_SECONDS):
         if host != "127.0.0.1":
             raise ValueError("Local auth broker must bind to 127.0.0.1")
         self.host = host
@@ -38,6 +43,8 @@ class LocalAuthBroker:
             lambda host, port, timeout: http.client.HTTPConnection(host, port, timeout=timeout)
         )
         self.max_request_bytes = max_request_bytes
+        self.max_response_bytes = max_response_bytes
+        self.response_timeout_seconds = response_timeout_seconds
         self._server = None
         self._thread = None
         self._owns_socket = False
@@ -160,14 +167,40 @@ class LocalAuthBroker:
                 handler.close_connection = True
                 return
 
+            try:
+                content_length_header = response.getheader("Content-Length")
+                content_length = (
+                    int(content_length_header) if content_length_header is not None else None
+                )
+            except (TypeError, ValueError):
+                handler._error(502, "Local relay upstream response was invalid")
+                return
+            if content_length is not None and content_length > self.max_response_bytes:
+                handler._error(502, "Local relay response exceeded limit")
+                return
+
             handler.send_response(response.status, response.reason)
             self._copy_response_headers(handler, response)
             handler.end_headers()
             chunked = response.getheader("Content-Length") is None
+            bytes_sent = 0
+            deadline = time.monotonic() + self.response_timeout_seconds
             while True:
-                chunk = response.read(64 * 1024)
+                remaining_time = deadline - time.monotonic()
+                if remaining_time <= 0:
+                    handler.close_connection = True
+                    return
+                upstream_socket = getattr(connection, "sock", None)
+                if upstream_socket is not None:
+                    upstream_socket.settimeout(min(120, remaining_time))
+                remaining_bytes = self.max_response_bytes - bytes_sent
+                chunk = response.read(min(64 * 1024, remaining_bytes + 1))
                 if not chunk:
                     break
+                if len(chunk) > remaining_bytes:
+                    handler.close_connection = True
+                    return
+                bytes_sent += len(chunk)
                 if chunked:
                     handler.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
                     handler.wfile.write(chunk + b"\r\n")

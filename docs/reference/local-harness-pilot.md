@@ -36,7 +36,10 @@ to `127.0.0.1` on an ephemeral port. The relay alone also joins a dedicated brid
 network so it can reach `host.docker.internal`; it forwards only to that broker port.
 Aider remains attached only to the internal network, so it cannot reach the host
 broker directly or use the relay for arbitrary destinations. The relay is a
-non-privileged fixed-destination forwarder. Aider receives a credential-scanned copy of only
+non-privileged fixed-destination forwarder. Compose waits for a successful model
+inventory request through the relay before starting Aider; upstream/authentication
+failure therefore fails closed. The broker limits model inventory to 4 MiB and
+chat responses to 32 MiB or five minutes. Aider receives a credential-scanned copy of only
 explicitly scoped files in a disposable scratch repository, not the job
 worktree or its Git metadata. Out-of-scope tracked and untracked files are not
 copied into the model's view. Only validated in-scope edits are applied back

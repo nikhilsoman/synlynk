@@ -551,7 +551,7 @@ def test_real_compose_uses_fixed_host_tcp_relay_and_no_host_key_environment():
     assert "internal: true" in content
     assert "cap_drop: [ALL]" in relay
     assert "no-new-privileges:true" in relay
-    assert "TCP:host.docker.internal:${PILOT_RELAY_PORT}" in relay
+    assert "wget -q -T 2 -O /dev/null http://127.0.0.1:8000/v1/models" in relay
 
 
 def test_sensitive_files_are_rejected_before_the_worktree_is_mounted(tmp_path, monkeypatch):

@@ -18,11 +18,10 @@ pytestmark = pytest.mark.skipif(
 
 
 class FakeResponse:
-    status = 200
-    reason = "OK"
-
-    def __init__(self, body):
+    def __init__(self, body, status=200):
         self.body = body
+        self.status = status
+        self.reason = "OK" if status == 200 else "Unauthorized"
         self.sent = False
 
     def getheader(self, name, default=None):
@@ -56,6 +55,11 @@ class FakeConnection:
 
     def close(self):
         pass
+
+
+class UnauthorizedConnection(FakeConnection):
+    def getresponse(self):
+        return FakeResponse(b'{"error":"unauthorized"}', status=401)
 
 
 def _docker(argv, *, timeout=20, check=True):
@@ -131,6 +135,24 @@ def test_relay_routes_only_allowlisted_requests_and_aider_network_cannot_bypass_
         assert bypass.returncode != 0
         internet = client("-T", "2", "-q", "-O", "/dev/null", "http://1.1.1.1/", check=False)
         assert internet.returncode != 0
+
+        down = subprocess.run(["docker", *prefix, "down", "--remove-orphans"], env=env,
+                              capture_output=True, text=True, timeout=30, check=False)
+        assert down.returncode == 0, down.stdout + down.stderr
+        broker.close()
+        broker = LocalAuthBroker(
+            "integration-secret",
+            connection_factory=lambda host, upstream_port, timeout: UnauthorizedConnection(
+                host, upstream_port, timeout, capture=[]
+            ),
+        )
+        env["PILOT_RELAY_PORT"] = str(broker.start())
+        failed_start = subprocess.run(
+            ["docker", *prefix, "up", "--detach", "--wait", "--wait-timeout", "15", "omlx-relay"],
+            env=env, capture_output=True, text=True, timeout=30, check=False,
+        )
+        assert failed_start.returncode != 0
+        assert "not healthy" in failed_start.stdout + failed_start.stderr
     finally:
         subprocess.run(["docker", *prefix, "down", "--remove-orphans"], env=env,
                        capture_output=True, text=True, timeout=30, check=False)

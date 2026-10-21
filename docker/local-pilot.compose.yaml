@@ -11,11 +11,18 @@ services:
       - TCP:host.docker.internal:${PILOT_RELAY_PORT:?PILOT_RELAY_PORT is required}
     restart: "no"
     healthcheck:
-      test: ["CMD", "socat", "-T", "2", "-u", "/dev/null", "TCP:host.docker.internal:${PILOT_RELAY_PORT}"]
-      interval: 1s
-      timeout: 2s
+      test:
+        - CMD-SHELL
+        - >-
+          for attempt in 1 2 3 4 5; do
+          wget -q -T 2 -O /dev/null http://127.0.0.1:8000/v1/models && exit 0;
+          sleep 1;
+          done;
+          exit 1
+      interval: 30s
+      timeout: 12s
       retries: 10
-      start_period: 1s
+      start_period: 2s
     read_only: true
     cap_drop: [ALL]
     security_opt:
