@@ -565,6 +565,141 @@ def _record_local_adapter_evidence(job: dict, log_text: str) -> None:
     job["adapter_failure_kind"] = failure.value if failure else None
 
 
+def _local_pilot_receipt_failure(job: dict, receipt: object) -> Optional[str]:
+    """Return the first containment failure for an isolated pilot receipt."""
+    admission = job.get("local_pilot_receipt")
+    if not isinstance(admission, dict):
+        return "admission_missing"
+    if not isinstance(receipt, dict):
+        return "receipt_malformed"
+    if receipt.get("schema_version") != 1:
+        return "receipt_schema_invalid"
+    if receipt.get("job_id") != job.get("id") or admission.get("admission_id") != job.get("id"):
+        return "job_id_mismatch"
+    expected_digest = admission.get("task_sha256")
+    actual_task = job.get("task")
+    if not isinstance(expected_digest, str) or expected_digest != hashlib.sha256(
+        str(actual_task or "").encode("utf-8")
+    ).hexdigest():
+        return "admission_task_digest_mismatch"
+    if receipt.get("task_sha256") != expected_digest:
+        return "task_digest_mismatch"
+    if receipt.get("pilot_class") != admission.get("pilot_class"):
+        return "pilot_class_mismatch"
+    if receipt.get("scope_paths") != admission.get("scope_paths"):
+        return "scope_paths_mismatch"
+    if receipt.get("effective_model") not in admission.get("qualified_models", []):
+        return "model_not_qualified"
+    if receipt.get("effective_model") != admission.get("effective_model"):
+        return "model_mismatch"
+    if receipt.get("execution") == "host" or receipt.get("execution") != "isolated":
+        return "host_execution"
+    if receipt.get("read_only") is not True:
+        return "not_read_only"
+    if receipt.get("preflight_passed") is not True:
+        return "preflight_failed"
+    if receipt.get("rollback_verified") is not True:
+        return "rollback_unverified"
+    if receipt.get("outcome") != "completed_read_only":
+        return "outcome_not_completed_read_only"
+    if receipt.get("exit_code") != 0:
+        return "runner_exit_failed"
+    if receipt.get("changed_paths") != []:
+        return "changed_paths_not_empty"
+    if receipt.get("applied_paths") != []:
+        return "applied_paths_not_empty"
+    return None
+
+
+def reconcile_local_pilot_terminal(conn, job: dict) -> dict:
+    """Record terminal Local containment evidence and pause on any uncertainty.
+
+    Runner receipts are untrusted input.  They can prove safety only after every
+    admission identity and read-only isolation invariant is cross-checked; they
+    never create a quality verdict.
+    """
+    admission = job.get("local_pilot_receipt")
+    if not isinstance(admission, dict):
+        return {"safety_verdict": None, "reason": "not_local_pilot", "paused": False}
+    receipt_path = admission.get("result_receipt_file")
+    receipt = None
+    reason = None
+    if not isinstance(receipt_path, str) or not receipt_path:
+        reason = "receipt_missing"
+    else:
+        try:
+            with open(receipt_path, encoding="utf-8") as handle:
+                receipt = json.load(handle)
+        except FileNotFoundError:
+            reason = "receipt_missing"
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            reason = "receipt_malformed"
+    if reason is None:
+        reason = _local_pilot_receipt_failure(job, receipt)
+
+    from synlynk.local_pilot_ledger import pause_local_pilot, record_safety_outcome
+
+    verdict = "failed" if reason else "passed"
+    outcome_reason = reason or "completed_read_only"
+    evidence = {"runner_receipt": receipt, "reconciliation_reason": outcome_reason}
+    try:
+        record_safety_outcome(conn, job["id"], verdict, outcome_reason, evidence)
+    except ValueError as exc:
+        # Reconciliation is repeatable. An already-recorded immutable terminal
+        # outcome remains authoritative and must not be rewritten.
+        if "already recorded" not in str(exc):
+            raise
+        row = conn.execute(
+            "SELECT safety_verdict, safety_reason FROM local_pilot_evidence WHERE job_id = ?",
+            (job["id"],),
+        ).fetchone()
+        if row is None:
+            raise
+        return {"safety_verdict": row[0], "reason": row[1], "paused": row[0] == "failed"}
+    if verdict == "failed":
+        pause_local_pilot(outcome_reason, conn=conn)
+        return {"safety_verdict": verdict, "reason": outcome_reason, "paused": True}
+    return {"safety_verdict": verdict, "reason": outcome_reason, "paused": False}
+
+
+def _reconcile_local_pilot_terminals(jobs: list[dict]) -> bool:
+    """Reconcile each newly terminal Local pilot job once from its durable DB."""
+    candidates = [
+        job for job in jobs
+        if isinstance(job, dict)
+        and is_terminal_status(job.get("status"))
+        and isinstance(job.get("local_pilot_receipt"), dict)
+        and "local_pilot_safety" not in job
+    ]
+    if not candidates:
+        return False
+    get_db = _pkg("_get_db")
+    if not get_db:
+        from synlynk import _get_db as get_db
+    changed = False
+    for job in candidates:
+        conn = None
+        try:
+            conn = get_db()
+            job["local_pilot_safety"] = reconcile_local_pilot_terminal(conn, job)
+            changed = True
+        except Exception:
+            # If reconciliation itself cannot establish an immutable outcome,
+            # stop all future Local admission rather than leaving it active.
+            from synlynk.local_pilot_ledger import pause_local_pilot
+            pause_local_pilot("terminal_reconciliation_failed", conn=conn)
+            job["local_pilot_safety"] = {
+                "safety_verdict": "failed",
+                "reason": "terminal_reconciliation_failed",
+                "paused": True,
+            }
+            changed = True
+        finally:
+            if conn is not None:
+                conn.close()
+    return changed
+
+
 # Harness logs often wrap the receipt inside a JSON text field
 # (`"text": "...SYNLYNK_INSTRUCTION_VERSION: 0.23.0-dev\\n..."`), so the marker
 # is not the start of a physical line (gh:#2236, job-70a6a736).
@@ -3116,6 +3251,8 @@ def _reconcile_jobs_unlocked() -> None:
         except PermissionError:
             # Process exists but is owned by another user — keep status as running.
             pass
+    if _reconcile_local_pilot_terminals(jobs):
+        changed = True
     if changed:
         _save_jobs(jobs)
 
