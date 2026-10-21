@@ -555,6 +555,8 @@ CREATE TABLE IF NOT EXISTS task_leases (
     lease_id           TEXT PRIMARY KEY,
     story_id           TEXT NOT NULL,
     leased_by          TEXT NOT NULL,
+    pid                INTEGER,
+    harness            TEXT,
     acquired_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     heartbeat_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     expires_at         TIMESTAMP NOT NULL,

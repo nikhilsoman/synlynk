@@ -3873,6 +3873,15 @@ def reclaim_stranded_stories(
                         break
 
             if not has_active_worker:
+                lease_row = conn.execute(
+                    "SELECT pid FROM task_leases WHERE story_id=? AND status='active' "
+                    "ORDER BY rowid DESC LIMIT 1",
+                    (story_id,),
+                ).fetchone()
+                if lease_row and lease_row[0] is not None and _pid_is_alive(lease_row[0]):
+                    has_active_worker = True
+
+            if not has_active_worker:
                 reclaimed.append({
                     "story_id": story_id,
                     "title": title,
@@ -3920,9 +3929,28 @@ def acquire_task_lease(
     story_id: str,
     leased_by: str,
     duration_seconds: int = 1800,
+    pid: int = None,
+    harness: str = None,
+    override: bool = False,
     conn=None,
 ) -> dict:
-    """Acquire or extend a rolling lease on a story in state.db."""
+    """Acquire or extend a rolling lease on a story in state.db.
+
+    A live conflicting claim (unexpired TTL) blocks acquisition unless
+    ``override=True``. A claim whose TTL expired is stale and does not block
+    (gh:#2511).
+
+    Staleness here is TTL-based only, not holder-PID-based: the one-shot
+    ``synlynk story claim`` CLI process exits immediately by design, and a
+    later, different-PID process in the same checkout keeps the claim alive
+    across that process boundary via ``heartbeat_claims_by_story_ids``, which
+    renews ``heartbeat_at``/``expires_at`` but never the stored ``pid``. A
+    dead-PID check here would treat every such claim as stale the instant the
+    claiming process exits, defeating conflict detection entirely (found by
+    cross-harness review on PR #2524). Holder-PID liveness is still used, but
+    only as a secondary signal in ``reclaim_stranded_stories``'s maintenance
+    sweep, which is free to be more aggressive than the live conflict gate.
+    """
     owns_conn = False
     if conn is None:
         from synlynk import _get_db
@@ -3933,17 +3961,22 @@ def acquire_task_lease(
     expires_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + duration_seconds))
     now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
     lease_id = f"lease-{hashlib.md5(f'{story_id}:{leased_by}:{now}'.encode()).hexdigest()[:8]}"
+    effective_pid = pid if pid is not None else os.getpid()
 
     try:
         row = conn.execute(
-            "SELECT lease_id, leased_by, expires_at FROM task_leases "
+            "SELECT lease_id, leased_by, pid, harness, expires_at FROM task_leases "
             "WHERE story_id=? AND status='active' ORDER BY rowid DESC LIMIT 1",
             (story_id,),
         ).fetchone()
 
         if row:
-            curr_id, curr_holder, curr_exp = row
-            if curr_exp < now_str or curr_holder == leased_by:
+            curr_id, curr_holder, curr_pid, curr_harness, curr_exp = row
+            is_expired = curr_exp < now_str
+            is_same_holder = curr_holder == leased_by
+            is_stale = is_expired or is_same_holder
+
+            if is_stale or override:
                 conn.execute(
                     "UPDATE task_leases SET status='expired' WHERE lease_id=?",
                     (curr_id,),
@@ -3953,13 +3986,15 @@ def acquire_task_lease(
                     "acquired": False,
                     "reason": "already_leased",
                     "leased_by": curr_holder,
+                    "harness": curr_harness,
                     "expires_at": curr_exp,
                 }
 
         conn.execute(
-            """INSERT INTO task_leases (lease_id, story_id, leased_by, acquired_at, heartbeat_at, expires_at, status)
-               VALUES (?, ?, ?, ?, ?, ?, 'active')""",
-            (lease_id, story_id, leased_by, now_str, now_str, expires_at),
+            """INSERT INTO task_leases
+               (lease_id, story_id, leased_by, pid, harness, acquired_at, heartbeat_at, expires_at, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')""",
+            (lease_id, story_id, leased_by, effective_pid, harness, now_str, now_str, expires_at),
         )
         conn.execute(
             "UPDATE stories SET status='in_progress', readiness='in_progress' WHERE story_id=?",
@@ -3971,6 +4006,7 @@ def acquire_task_lease(
             "lease_id": lease_id,
             "story_id": story_id,
             "leased_by": leased_by,
+            "harness": harness,
             "expires_at": expires_at,
         }
     finally:
@@ -4003,6 +4039,70 @@ def renew_task_lease(
         )
         conn.commit()
         return res.rowcount > 0
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def heartbeat_claims_for_pid(pid: int, extend_seconds: int = 2700, conn=None) -> int:
+    """Renew every active task_lease held by the given PID. Returns count renewed."""
+    owns_conn = False
+    if conn is None:
+        from synlynk import _get_db
+        conn = _get_db()
+        owns_conn = True
+
+    try:
+        now = time.time()
+        now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
+        expires_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + extend_seconds))
+        cur = conn.execute(
+            "UPDATE task_leases SET heartbeat_at=?, expires_at=? WHERE pid=? AND status='active'",
+            (now_str, expires_at, pid),
+        )
+        conn.commit()
+        return cur.rowcount
+    except sqlite3.OperationalError:
+        return 0
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def heartbeat_claims_by_story_ids(claim_leases: dict, extend_seconds: int = 2700, conn=None) -> int:
+    """Renew the active task_lease for each {story_id: lease_id} this checkout holds.
+
+    Renewal is scoped to the exact ``lease_id`` the marker was issued for, not
+    just the story_id. If another session force-took the story via
+    ``--override``, the active lease row now has a different lease_id; a
+    stale marker from the original checkout then renews zero rows instead of
+    silently extending the replacement claimant's lease (gh:#2511, found by
+    cross-harness review on PR #2524).
+    """
+    if not claim_leases:
+        return 0
+    owns_conn = False
+    if conn is None:
+        from synlynk import _get_db
+        conn = _get_db()
+        owns_conn = True
+
+    try:
+        now = time.time()
+        now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
+        expires_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + extend_seconds))
+        renewed = 0
+        for story_id, lease_id in claim_leases.items():
+            cur = conn.execute(
+                "UPDATE task_leases SET heartbeat_at=?, expires_at=? "
+                "WHERE story_id=? AND lease_id=? AND status='active'",
+                (now_str, expires_at, story_id, lease_id),
+            )
+            renewed += cur.rowcount
+        conn.commit()
+        return renewed
+    except sqlite3.OperationalError:
+        return 0
     finally:
         if owns_conn:
             conn.close()
@@ -4048,7 +4148,7 @@ def get_active_lease(story_id: str, conn=None) -> Optional[dict]:
 
     try:
         row = conn.execute(
-            "SELECT lease_id, story_id, leased_by, acquired_at, heartbeat_at, expires_at, status "
+            "SELECT lease_id, story_id, leased_by, pid, harness, acquired_at, heartbeat_at, expires_at, status "
             "FROM task_leases WHERE story_id=? AND status='active' ORDER BY rowid DESC LIMIT 1",
             (story_id,),
         ).fetchone()
@@ -4058,10 +4158,12 @@ def get_active_lease(story_id: str, conn=None) -> Optional[dict]:
             "lease_id": row[0],
             "story_id": row[1],
             "leased_by": row[2],
-            "acquired_at": row[3],
-            "heartbeat_at": row[4],
-            "expires_at": row[5],
-            "status": row[6],
+            "pid": row[3],
+            "harness": row[4],
+            "acquired_at": row[5],
+            "heartbeat_at": row[6],
+            "expires_at": row[7],
+            "status": row[8],
         }
     finally:
         if owns_conn:
@@ -4077,6 +4179,44 @@ def cmd_story_reclaim(max_age_minutes: int = 30, dry_run: bool = False) -> int:
         print(f"  ✓ {r['story_id']:16}  {r['title']}")
     print()
     return 0
+
+
+def cmd_story_claim(
+    story_id: str,
+    harness: str = None,
+    duration_seconds: int = 2700,
+    override: bool = False,
+) -> int:
+    """CLI handler for `synlynk story claim` (gh:#2511)."""
+    import socket
+    from synlynk.context import detect_active_home_harness
+
+    effective_harness = harness or detect_active_home_harness()
+    session_id = f"{effective_harness}:{socket.gethostname()}:{os.getpid()}"
+
+    result = acquire_task_lease(
+        story_id,
+        session_id,
+        duration_seconds=duration_seconds,
+        pid=os.getpid(),
+        harness=effective_harness,
+        override=override,
+    )
+
+    if result["acquired"]:
+        from synlynk.session import _add_active_claim
+        try:
+            _add_active_claim(story_id, result["lease_id"])
+        except OSError:
+            pass
+        print(f"\n  {_BOLD}synlynk story claim{_RESET}  story={story_id}  harness={effective_harness}  session={session_id}")
+        print(f"  Claim active until {result['expires_at']}\n")
+        return 0
+
+    print(f"\n  {_BOLD}synlynk story claim{_RESET}  REFUSED — story={story_id} already claimed")
+    print(f"  Held by harness={result.get('harness')}  leased_by={result.get('leased_by')}  expires_at={result.get('expires_at')}")
+    print("  Pass --override to force-take this claim.\n")
+    return 1
 
 
 def _existing_terminal_summary_truth(job_id: str) -> Optional[tuple]:
