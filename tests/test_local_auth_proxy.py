@@ -1,9 +1,5 @@
 import json
-import os
 import socket
-import threading
-import shutil
-import tempfile
 
 import pytest
 
@@ -15,15 +11,8 @@ def test_broker_settings_factory_reads_authoritative_omlx_credential():
         def get(self):
             return "persistent-omlx-key"
 
-    broker = LocalAuthBroker.from_settings("/tmp/relay.sock", PersistentSettings())
+    broker = LocalAuthBroker.from_settings(credential_store=PersistentSettings())
     assert broker.credential == "persistent-omlx-key"
-
-
-@pytest.fixture
-def short_socket_dir():
-    directory = tempfile.mkdtemp(prefix="synlynk-relay-", dir="/private/tmp")
-    yield directory
-    shutil.rmtree(directory, ignore_errors=True)
 
 
 class FakeResponse:
@@ -69,9 +58,8 @@ class FakeConnection:
         pass
 
 
-def send_unix_request(path, request):
-    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    client.connect(path)
+def send_tcp_request(port, request):
+    client = socket.create_connection(("127.0.0.1", port), timeout=3)
     client.sendall(request)
     chunks = []
     while True:
@@ -83,21 +71,23 @@ def send_unix_request(path, request):
     return b"".join(chunks)
 
 
-def test_broker_injects_key_to_fixed_upstream_and_filters_model_inventory(short_socket_dir):
+def test_broker_binds_loopback_ephemeral_port_and_injects_key():
     capture = {}
     body = json.dumps({"data": [
         {"id": "Ornith-1.0-9B-4bit"},
         {"id": "Qwen2.5-Coder-14B-Instruct-4bit"},
     ]}).encode()
     broker = LocalAuthBroker(
-        os.path.join(short_socket_dir, "relay.sock"), "host-secret",
+        credential="host-secret",
         connection_factory=lambda host, port, timeout: FakeConnection(
             host, port, timeout, result=FakeResponse(body), capture=capture),
     )
-    broker.start()
+    port = broker.start()
     try:
-        response = send_unix_request(
-            broker.socket_path,
+        assert port > 0
+        assert broker.address == ("127.0.0.1", port)
+        response = send_tcp_request(
+            port,
             b"GET /v1/models HTTP/1.1\r\nHost: relay\r\nAuthorization: Bearer inert-placeholder\r\nConnection: close\r\n\r\n",
         )
     finally:
@@ -110,18 +100,18 @@ def test_broker_injects_key_to_fixed_upstream_and_filters_model_inventory(short_
     assert b"Qwen2.5" not in response
 
 
-def test_broker_allows_only_ornith_chat_completion_and_rewrites_provider_prefix(short_socket_dir):
+def test_broker_allows_only_ornith_chat_completion_and_rewrites_provider_prefix():
     capture = {}
     broker = LocalAuthBroker(
-        os.path.join(short_socket_dir, "relay.sock"), "host-secret",
+        credential="host-secret",
         connection_factory=lambda host, port, timeout: FakeConnection(
             host, port, timeout, capture=capture),
     )
-    broker.start()
+    port = broker.start()
     try:
         payload = json.dumps({"model": "openai/Ornith-1.0-9B-4bit", "messages": []}).encode()
-        response = send_unix_request(
-            broker.socket_path,
+        response = send_tcp_request(
+            port,
             b"POST /v1/chat/completions HTTP/1.1\r\nHost: relay\r\nAuthorization: Bearer inert-placeholder\r\nContent-Type: application/json\r\nContent-Length: "
             + str(len(payload)).encode() + b"\r\nConnection: close\r\n\r\n" + payload,
         )
@@ -137,33 +127,33 @@ def test_broker_allows_only_ornith_chat_completion_and_rewrites_provider_prefix(
     "http://example.com/v1/chat/completions",
     "/v1/chat/completions?url=http://example.com",
 ])
-def test_broker_denies_management_arbitrary_and_ambiguous_paths(short_socket_dir, path):
+def test_broker_denies_management_arbitrary_and_ambiguous_paths(path):
     calls = []
     broker = LocalAuthBroker(
-        os.path.join(short_socket_dir, "relay.sock"), "host-secret",
+        credential="host-secret",
         connection_factory=lambda *args: calls.append(args),
     )
-    broker.start()
+    port = broker.start()
     try:
         request = f"GET {path} HTTP/1.1\r\nHost: relay\r\nConnection: close\r\n\r\n".encode()
-        response = send_unix_request(broker.socket_path, request)
+        response = send_tcp_request(port, request)
     finally:
         broker.close()
     assert b"403 Forbidden" in response
     assert calls == []
 
 
-def test_broker_bounds_request_body_and_rejects_unapproved_model(short_socket_dir):
+def test_broker_bounds_request_body_and_rejects_unapproved_model():
     calls = []
     broker = LocalAuthBroker(
-        os.path.join(short_socket_dir, "relay.sock"), "host-secret", max_request_bytes=32,
+        credential="host-secret", max_request_bytes=32,
         connection_factory=lambda *args: calls.append(args),
     )
-    broker.start()
+    port = broker.start()
     try:
         payload = b"x" * 33
-        response = send_unix_request(
-            broker.socket_path,
+        response = send_tcp_request(
+            port,
             b"POST /v1/chat/completions HTTP/1.1\r\nHost: relay\r\nContent-Length: 33\r\nConnection: close\r\n\r\n" + payload,
         )
     finally:
@@ -171,13 +161,13 @@ def test_broker_bounds_request_body_and_rejects_unapproved_model(short_socket_di
     assert b" 413 " in response
     assert calls == []
 
-    broker = LocalAuthBroker(os.path.join(short_socket_dir, "r2.sock"), "host-secret",
+    broker = LocalAuthBroker(credential="host-secret",
                              connection_factory=lambda *args: calls.append(args))
-    broker.start()
+    port = broker.start()
     try:
         payload = b'{"model":"openai/Qwen2.5-Coder-14B-Instruct-4bit"}'
-        response = send_unix_request(
-            broker.socket_path,
+        response = send_tcp_request(
+            port,
             b"POST /v1/chat/completions HTTP/1.1\r\nHost: relay\r\nContent-Type: application/json\r\nContent-Length: "
             + str(len(payload)).encode() + b"\r\nConnection: close\r\n\r\n" + payload,
         )
@@ -187,21 +177,20 @@ def test_broker_bounds_request_body_and_rejects_unapproved_model(short_socket_di
     assert calls == []
 
 
-def test_broker_sanitizes_upstream_errors_and_removes_socket_on_close(short_socket_dir):
+def test_broker_sanitizes_upstream_errors_and_clears_credential_on_close():
     broker = LocalAuthBroker(
-        os.path.join(short_socket_dir, "relay.sock"), "host-secret",
+        credential="host-secret",
         connection_factory=lambda *args: FakeConnection(*args, error=RuntimeError("host-secret")),
     )
-    broker.start()
-    socket_path = broker.socket_path
-    response = send_unix_request(
-        socket_path,
+    port = broker.start()
+    response = send_tcp_request(
+        port,
         b"GET /v1/models HTTP/1.1\r\nHost: relay\r\nConnection: close\r\n\r\n",
     )
     broker.close()
     assert b"502 Bad Gateway" in response
     assert b"host-secret" not in response
-    assert not os.path.exists(socket_path)
+    assert broker._server is None
     assert broker.credential == ""
 
 

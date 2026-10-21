@@ -1,10 +1,9 @@
-"""Per-job Unix-socket broker for authenticated, allowlisted oMLX inference."""
+"""Per-job loopback TCP broker for authenticated, allowlisted oMLX inference."""
 
 from __future__ import annotations
 
 import http.client
 import json
-import os
 import socketserver
 import threading
 from http.server import BaseHTTPRequestHandler
@@ -25,11 +24,15 @@ _HOP_BY_HOP_HEADERS = {
 
 
 class LocalAuthBroker:
-    """Expose only model metadata and chat completions through a private UDS."""
+    """Expose only model metadata and chat completions on host loopback."""
 
-    def __init__(self, socket_path: str, credential: str, *,
+    def __init__(self, credential: str, *, host: str = "127.0.0.1", port: int = 0,
                  connection_factory=None, max_request_bytes: int = MAX_REQUEST_BYTES):
-        self.socket_path = os.path.abspath(socket_path)
+        if host != "127.0.0.1":
+            raise ValueError("Local auth broker must bind to 127.0.0.1")
+        self.host = host
+        self.port = port
+        self.address = None
         self.credential = credential
         self.connection_factory = connection_factory or (
             lambda host, port, timeout: http.client.HTTPConnection(host, port, timeout=timeout)
@@ -40,25 +43,20 @@ class LocalAuthBroker:
         self._owns_socket = False
 
     @classmethod
-    def from_settings(cls, socket_path: str, credential_store=None, **kwargs):
+    def from_settings(cls, credential_store=None, **kwargs):
         from synlynk.local_credentials import LocalCredentialStore
 
         store = credential_store or LocalCredentialStore()
-        return cls(socket_path, store.get(), **kwargs)
+        return cls(store.get(), **kwargs)
 
     @classmethod
-    def from_keychain(cls, socket_path: str, credential_store=None, **kwargs):
+    def from_keychain(cls, credential_store=None, **kwargs):
         """Compatibility alias; lifecycle credentials now come from oMLX settings."""
-        return cls.from_settings(socket_path, credential_store, **kwargs)
+        return cls.from_settings(credential_store, **kwargs)
 
-    def start(self) -> None:
+    def start(self) -> int:
         if not self.credential:
             raise RuntimeError("Local oMLX credential is unavailable")
-        if len(os.fsencode(self.socket_path)) >= 100:
-            raise RuntimeError("Local relay socket path is too long")
-        os.makedirs(os.path.dirname(self.socket_path), mode=0o700, exist_ok=True)
-        if os.path.exists(self.socket_path):
-            raise RuntimeError("Local relay socket path is already in use")
         owner = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -83,15 +81,16 @@ class LocalAuthBroker:
                 self.wfile.write(body)
                 self.close_connection = True
 
-        class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+        class Server(socketserver.ThreadingMixIn, socketserver.TCPServer):
             daemon_threads = True
             allow_reuse_address = True
 
-        self._server = Server(self.socket_path, Handler)
-        self._owns_socket = True
-        os.chmod(self.socket_path, 0o600)
+        self._server = Server((self.host, self.port), Handler)
+        self.address = self._server.server_address
+        self.port = self.address[1]
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
+        return self.port
 
     def _handle(self, handler: BaseHTTPRequestHandler) -> None:
         parsed = urlsplit(handler.path)
@@ -232,12 +231,7 @@ class LocalAuthBroker:
         if self._thread is not None:
             self._thread.join(timeout=2)
             self._thread = None
-        if self._owns_socket:
-            try:
-                os.unlink(self.socket_path)
-            except FileNotFoundError:
-                pass
-            self._owns_socket = False
+        self.address = None
         self.credential = ""
 
 
