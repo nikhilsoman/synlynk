@@ -4098,6 +4098,39 @@ def cmd_story_reclaim(max_age_minutes: int = 30, dry_run: bool = False) -> int:
     return 0
 
 
+def cmd_story_claim(
+    story_id: str,
+    harness: str = None,
+    duration_seconds: int = 2700,
+    override: bool = False,
+) -> int:
+    """CLI handler for `synlynk story claim` (gh:#2511)."""
+    import socket
+    from synlynk.context import detect_active_home_harness
+
+    effective_harness = harness or detect_active_home_harness()
+    session_id = f"{effective_harness}:{socket.gethostname()}:{os.getpid()}"
+
+    result = acquire_task_lease(
+        story_id,
+        session_id,
+        duration_seconds=duration_seconds,
+        pid=os.getpid(),
+        harness=effective_harness,
+        override=override,
+    )
+
+    if result["acquired"]:
+        print(f"\n  {_BOLD}synlynk story claim{_RESET}  story={story_id}  harness={effective_harness}  session={session_id}")
+        print(f"  Claim active until {result['expires_at']}\n")
+        return 0
+
+    print(f"\n  {_BOLD}synlynk story claim{_RESET}  REFUSED — story={story_id} already claimed")
+    print(f"  Held by harness={result.get('harness')}  leased_by={result.get('leased_by')}  expires_at={result.get('expires_at')}")
+    print("  Pass --override to force-take this claim.\n")
+    return 1
+
+
 def _existing_terminal_summary_truth(job_id: str) -> Optional[tuple]:
     """If a high-confidence terminal job summary already exists, prefer it.
 
