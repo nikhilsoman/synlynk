@@ -4414,22 +4414,26 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     # harness_models catalog is discovery metadata, and may be stale or
     # polluted by filesystem shard names when an unauthenticated oMLX probe
     # cannot read /v1/models. It must not override the local resolver.
-    if requested_model_input and dconn is not None and agent != "local":
-        from synlynk.db import get_active_harness_models
+    if requested_model_input and agent != "local":
+        from synlynk.models import valid_harness_model_ids
 
-        active_models = get_active_harness_models(dconn, harness=agent)
-        if active_models:
-            valid_model_ids = list(dict.fromkeys(row["model_id"] for row in active_models))
-            if requested_model_input not in valid_model_ids:
-                if owns_dconn:
-                    try:
-                        dconn.close()
-                    except Exception:
-                        pass
-                raise ValueError(
-                    f"Invalid model '{requested_model_input}' for harness '{agent}'. "
-                    f"Valid model ids: {', '.join(valid_model_ids)}"
-                )
+        valid_model_ids = valid_harness_model_ids(agent, conn=dconn)
+        if valid_model_ids and requested_model_input not in valid_model_ids:
+            if owns_dconn and dconn is not None:
+                try:
+                    dconn.close()
+                except Exception:
+                    pass
+            import difflib
+
+            matches = difflib.get_close_matches(
+                requested_model_input, valid_model_ids, n=1, cutoff=0.5
+            )
+            suggestion = f". Did you mean '{matches[0]}'?" if matches else ""
+            raise ValueError(
+                f"Invalid model '{requested_model_input}' for harness '{agent}'. "
+                f"Valid model ids: {', '.join(valid_model_ids)}{suggestion}"
+            )
 
     if agent == "local" and dconn is not None:
         # Direct dispatch is a valid first-use path; do not require the
@@ -5210,7 +5214,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 static_baseline=static_baseline, task_type=task_type, requires=requires,
                 grants=grants, revokes=revokes, job_id=job_id, issue=issue, base=base,
                 scope_paths=scope_paths, session_id=session_id,
-                gh_write_target_kind=gh_write_target_kind, model=model, role=role,
+                gh_write_target_kind=gh_write_target_kind, model=requested_model_input, role=role,
                 model_tier=model_tier,
                 db_conn=db_conn, _startup_failover=False,
                 container_image=container_image,
