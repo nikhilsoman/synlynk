@@ -51,8 +51,11 @@ class TestDetectHardwareTier(unittest.TestCase):
     def test_16gb_returns_16gb_default(self):
         self.assertEqual(self._run_with_ram(16 * 1024**3), "16gb-default")
 
-    def test_24gb_returns_32gb_pro(self):
-        self.assertEqual(self._run_with_ram(24 * 1024**3), "32gb-pro")
+    def test_24gb_is_not_mislabeled_as_32gb_pro(self):
+        self.assertEqual(self._run_with_ram(24 * 1024**3), "16gb-default")
+
+    def test_32gb_returns_32gb_pro(self):
+        self.assertEqual(self._run_with_ram(32 * 1024**3), "32gb-pro")
 
     def test_64gb_returns_64gb_fleet(self):
         self.assertEqual(self._run_with_ram(64 * 1024**3), "64gb-fleet")
@@ -62,7 +65,7 @@ class TestDetectHardwareTier(unittest.TestCase):
         with patch("builtins.open", unittest.mock.mock_open(read_data=meminfo)):
             with patch("sys.platform", "linux"):
                 result = local_agent._detect_hardware_tier()
-        self.assertEqual(result, "32gb-pro")
+        self.assertEqual(result, "16gb-default")
 
 
 class TestSelectModelForTier(unittest.TestCase):

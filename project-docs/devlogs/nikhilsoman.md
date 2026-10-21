@@ -2229,3 +2229,9 @@ implementation dispatched, external messages sent, or policy changed.
 - Verification: `pytest -q tests/test_local_credentials.py tests/test_local_agent.py tests/test_cli_parser.py` — 71 passed. The no-write Keychain status check reported the credential is not configured; no secret was imported or displayed.
 - The installed executing-plans helper bundle lacks its documented `task-start` / `task-done` scripts; the plan-local SDD ledger records the manual task-boundary workflow used instead.
 
+## 2026-10-21 — Unattended Local oMLX Lifecycle (Task 2)
+
+- Added an authenticated oMLX client pinned to the observed 0.5.3 API contract, Ornith-only model actions, redacted HTTP error classes, credential-free version subprocesses, macOS memory/swap parsers, and a fail-closed 8 GiB / normal-pressure / <=256 MiB swap-growth gate.
+- Corrected the 24 GiB label mismatch: measured RAM is now displayed independently and the nearest conservative named tier is `16gb-default`; 32 GiB still maps to `32gb-pro`.
+- Verification: `pytest -q tests/test_local_lifecycle.py tests/test_local_agent.py` — 55 passed. Host sysctl memory/swap reads are blocked by this sandbox, so no live lifecycle admission/load was attempted.
+

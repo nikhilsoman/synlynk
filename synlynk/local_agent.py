@@ -50,33 +50,35 @@ def _check_prism_ml_available() -> bool:
 
 _TIER_THRESHOLDS = [
     (12 * 1024**3, "8gb-light"),
-    (20 * 1024**3, "16gb-default"),
+    (28 * 1024**3, "16gb-default"),
     (48 * 1024**3, "32gb-pro"),
     (float("inf"), "64gb-fleet"),
 ]
 
 
+def _detect_physical_memory_bytes() -> Optional[int]:
+    """Return measured physical memory without rounding it to a tier label."""
+    try:
+        if sys.platform == "darwin":
+            raw = _subprocess.check_output(["sysctl", "-n", "hw.memsize"], timeout=5)
+            return int(raw.strip())
+        with open("/proc/meminfo") as meminfo:
+            for line in meminfo:
+                if line.startswith("MemTotal:"):
+                    return int(line.split()[1]) * 1024
+    except Exception:
+        return None
+    return None
+
+
 def _detect_hardware_tier() -> str:
-    """Detect RAM and return the corresponding local hardware tier.
+    """Detect RAM and return the corresponding conservative local tier.
 
     Uses ``sysctl`` on macOS and ``/proc/meminfo`` on Linux. Detection
     failures conservatively fall back to the default tier.
     """
-    try:
-        if sys.platform == "darwin":
-            raw = _subprocess.check_output(
-                ["sysctl", "-n", "hw.memsize"], timeout=5
-            )
-            ram_bytes = int(raw.strip())
-        else:
-            with open("/proc/meminfo") as meminfo:
-                for line in meminfo:
-                    if line.startswith("MemTotal:"):
-                        ram_bytes = int(line.split()[1]) * 1024
-                        break
-                else:
-                    return "16gb-default"
-    except Exception:
+    ram_bytes = _detect_physical_memory_bytes()
+    if ram_bytes is None:
         return "16gb-default"
 
     for threshold, tier in _TIER_THRESHOLDS:
@@ -816,6 +818,11 @@ def cmd_local_doctor(config_path: str = None, init: bool = False, api_key: str =
             print("    Start it with: omlx serve")
         return 1
     print(f"  ✓ oMLX reachable at {endpoint}")
+    physical_memory = _detect_physical_memory_bytes()
+    if physical_memory is not None:
+        print(f"  ✓ physical memory: {physical_memory / 1024**3:.1f} GiB (measured)")
+    else:
+        print("  ⚠ physical memory: unavailable (tier is conservative)")
     tier = _detect_hardware_tier()
     best_model = _select_model_for_tier(tier, config)
     print(f"  ✓ hardware tier: {tier}")
