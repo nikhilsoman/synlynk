@@ -154,6 +154,7 @@ def test_resume_preflight_fails_closed_for_config_runtime_or_reconciliation_debt
     )
     (repo / ".agents" / "local.json").write_text(json.dumps({"max_concurrent": 1}))
     conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE daemon_jobs (status TEXT, agent TEXT)")
     monkeypatch.setattr(local_agent, "load_pilot_runtime", lambda *_: {
         "enabled": False, "share": 0.20, "qualified": True, "qualified_models": ["ornith-test"], "isolated": True,
     })
@@ -169,6 +170,60 @@ def test_resume_preflight_fails_closed_for_config_runtime_or_reconciliation_debt
     failed = local_agent.preflight_local_pilot_resume(str(repo), conn)
     assert failed["result"] == "failed"
     assert "config_share" in failed["failures"]
+
+
+def test_resume_preflight_requires_the_effectively_resolved_model_to_be_qualified_ornith(tmp_path, monkeypatch):
+    """A qualified fallback model must not authorize an unqualified pinned selection."""
+    import sqlite3
+    from synlynk import local_agent
+
+    repo = tmp_path / "repo"
+    (repo / ".synlynk").mkdir(parents=True)
+    (repo / ".agents").mkdir()
+    (repo / ".synlynk" / "workspace.json").write_text(
+        json.dumps({"local_pilot": {"enabled": False, "share": 0.20, "max_concurrent": 1}})
+    )
+    (repo / ".agents" / "local.json").write_text(json.dumps({"max_concurrent": 1}))
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE daemon_jobs (status TEXT, agent TEXT)")
+    monkeypatch.setattr(local_agent, "load_pilot_runtime", lambda *_: {
+        "enabled": False, "share": 0.20, "qualified": True,
+        "qualified_models": ["ornith-qualified"], "isolated": True,
+    })
+    monkeypatch.setattr(
+        local_agent, "resolve_effective_local_model", lambda **_: {"resolved_model": "unqualified-pinned-model"}
+    )
+    monkeypatch.setattr(local_agent, "_usable_compose_runner", lambda: True)
+
+    result = local_agent.preflight_local_pilot_resume(str(repo), conn)
+
+    assert result["result"] == "failed"
+    assert "resolved_model_unqualified" in result["failures"]
+
+
+def test_resume_preflight_fails_when_local_reservation_source_is_unreadable(tmp_path, monkeypatch):
+    """A missing reservation table cannot safely mean no Local work is running."""
+    import sqlite3
+    from synlynk import local_agent
+
+    repo = tmp_path / "repo"
+    (repo / ".synlynk").mkdir(parents=True)
+    (repo / ".agents").mkdir()
+    (repo / ".synlynk" / "workspace.json").write_text(
+        json.dumps({"local_pilot": {"enabled": False, "share": 0.20, "max_concurrent": 1}})
+    )
+    (repo / ".agents" / "local.json").write_text(json.dumps({"max_concurrent": 1}))
+    conn = sqlite3.connect(":memory:")
+    monkeypatch.setattr(local_agent, "load_pilot_runtime", lambda *_: {
+        "enabled": False, "share": 0.20, "qualified": True, "qualified_models": ["ornith-test"], "isolated": True,
+    })
+    monkeypatch.setattr(local_agent, "resolve_effective_local_model", lambda **_: {"resolved_model": "ornith-test"})
+    monkeypatch.setattr(local_agent, "_usable_compose_runner", lambda: True)
+
+    result = local_agent.preflight_local_pilot_resume(str(repo), conn)
+
+    assert result["result"] == "failed"
+    assert "reservation_unreadable" in result["failures"]
 
 
 def test_resume_preflight_reconciles_stranded_activation_without_inferring_config_approval(tmp_path):
@@ -197,6 +252,39 @@ def test_resume_preflight_reconciles_stranded_activation_without_inferring_confi
     assert conn.execute(
         "SELECT state FROM local_pilot_resume_authorizations WHERE authorization_id = 'stranded'"
     ).fetchone()[0] == "failed"
+
+
+def test_status_reconciles_stranded_activation_to_a_disabled_terminal_state(project_dir, monkeypatch):
+    """A read-only status request is also a required crash-boundary reconciliation point."""
+    import sqlite3
+    from synlynk import local_agent
+    from synlynk.local_pilot_ledger import ensure_local_pilot_ledger
+
+    conn = sqlite3.connect(":memory:")
+    ensure_local_pilot_ledger(conn)
+    conn.execute("CREATE TABLE daemon_jobs (status TEXT, agent TEXT)")
+    conn.execute(
+        "INSERT INTO local_pilot_resume_authorizations "
+        "(authorization_id, created_at, signed_payload_json, signed_payload_digest, config_fingerprint, "
+        "remediation_reference, verification_reference, safety_watermark, preflight_receipt_json, "
+        "preflight_receipt_digest, state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'activating')",
+        ("stranded-status", "now", "{}", "digest", "fingerprint", "fix", "verify", 0, "{}", "digest"),
+    )
+    conn.commit()
+    (project_dir / ".synlynk" / "workspace.json").write_text(
+        json.dumps({"local_pilot": {"enabled": True, "share": .2, "max_concurrent": 1}})
+    )
+    monkeypatch.setattr(local_agent, "_get_db", lambda: conn)
+    monkeypatch.setattr(local_agent, "load_pilot_runtime", lambda *_: {
+        "enabled": False, "share": .2, "qualified": True, "qualified_models": ["ornith-test"], "isolated": True,
+    })
+    monkeypatch.setattr(local_agent, "_local_pilot_endpoint_status", lambda: "healthy")
+
+    status = local_agent.local_pilot_status()
+
+    assert status["cohorts"]["latest_authorization"]["state"] == "failed"
+    workspace = json.loads((project_dir / ".synlynk" / "workspace.json").read_text())
+    assert workspace["local_pilot"]["enabled"] is False
 
 
 def test_pilot_resume_signs_and_activates_only_the_fixed_lane(tmp_path, monkeypatch):
@@ -244,6 +332,7 @@ def test_pilot_resume_refusal_or_missing_signing_key_leaves_config_disabled(tmp_
     (repo / ".synlynk" / "workspace.json").write_text(json.dumps(baseline))
     (repo / ".agents" / "local.json").write_text(json.dumps({"max_concurrent": 1}))
     conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE daemon_jobs (status TEXT, agent TEXT)")
     monkeypatch.setattr(local_agent, "load_pilot_runtime", lambda *_: {
         "enabled": False, "share": 0.20, "qualified": True, "qualified_models": ["ornith-test"], "isolated": True,
     })

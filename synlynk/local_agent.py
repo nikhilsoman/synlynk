@@ -389,6 +389,11 @@ def local_pilot_status() -> dict:
     conn = _get_db()
     try:
         ensure_local_pilot_ledger(conn)
+        reconciled = _reconcile_activating_authorizations(conn)
+        if reconciled:
+            _write_disabled_local_pilot_config(
+                os.getcwd(), "activation interrupted; fresh confirmation required"
+            )
         cohorts = load_pilot_status(conn)
         max_concurrent = _local_max_concurrent()
         try:
@@ -438,6 +443,7 @@ def local_pilot_status() -> dict:
             "qualified": runtime["qualified"],
         },
         "operational": operational,
+        "reconciled_authorizations": reconciled,
         "proposal_35_eligible": decision.proposal_35_eligible,
     }
 
@@ -554,12 +560,21 @@ def preflight_local_pilot_resume(repo_root: str, conn) -> dict:
     except Exception:
         resolution = None
         failures.append("endpoint_health")
+    resolved_model = resolution.get("resolved_model") if resolution else None
+    qualified_models = {str(model) for model in runtime.get("qualified_models", [])}
+    if (
+        not isinstance(resolved_model, str)
+        or resolved_model not in qualified_models
+        or not resolved_model.casefold().startswith("ornith")
+    ):
+        failures.append("resolved_model_unqualified")
     try:
         running = conn.execute(
             "SELECT COUNT(*) FROM daemon_jobs WHERE status = 'running' AND agent = 'local'"
         ).fetchone()[0]
     except Exception:
-        running = 0
+        running = None
+        failures.append("reservation_unreadable")
     if running:
         failures.append("active_reservation")
     pending = conn.execute(
@@ -577,7 +592,7 @@ def preflight_local_pilot_resume(repo_root: str, conn) -> dict:
         "failures": failures,
         "reconciled": reconciled,
         "runtime": runtime,
-        "resolved_model": resolution.get("resolved_model") if resolution else None,
+        "resolved_model": resolved_model,
         "config_fingerprint": _resume_config_fingerprint(settings),
         "requested_share": _RESUME_SHARE,
         "requested_max_concurrent": _RESUME_CONCURRENCY,
@@ -625,7 +640,12 @@ def _write_resumed_local_pilot_config(repo_root: str) -> None:
 
 
 def resume_local_pilot(
-    repo_root: str, conn, remediation_ref: str, verification_ref: str, confirm: Callable[[str], str]
+    repo_root: str,
+    conn,
+    remediation_ref: str,
+    verification_ref: str,
+    confirm: Callable[[str], str],
+    render: Callable[[dict], None] | None = None,
 ) -> dict:
     """Run the explicit human ceremony and activate only the fixed validation lane."""
     from synlynk.local_pilot_ledger import (
@@ -638,6 +658,8 @@ def resume_local_pilot(
     if not remediation_ref or not verification_ref:
         raise ValueError("remediation and independent verification references are required")
     preflight = preflight_local_pilot_resume(repo_root, conn)
+    if render is not None:
+        render(preflight)
     if preflight["result"] != "passed":
         raise ValueError("Local pilot resume preflight failed: " + ", ".join(preflight["failures"]))
     if confirm("Type RESUME LOCAL PILOT to authorize the 20% / one-concurrent lane: ") != _RESUME_CONFIRMATION:
@@ -691,6 +713,11 @@ def _write_disabled_local_pilot_config(repo_root: str, reason: str) -> None:
     settings.update({"enabled": False, "pause_reason": reason})
     workspace["local_pilot"] = settings
     _write_json_atomic(os.path.join(repo_root, ".synlynk", "workspace.json"), workspace)
+
+
+def render_local_pilot_resume_preflight(preflight: dict) -> str:
+    """Render the operator-safe preflight receipt before an approval prompt."""
+    return json.dumps(preflight, indent=2, sort_keys=True)
 
 
 def render_local_pilot_status(status: dict) -> str:

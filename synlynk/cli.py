@@ -3384,6 +3384,7 @@ def main(argv=None) -> None:
             cmd_local_doctor,
             local_pilot_status,
             record_local_pilot_review,
+            render_local_pilot_resume_preflight,
             render_local_pilot_status,
             resume_local_pilot,
             start_local_pilot_review,
@@ -3400,14 +3401,17 @@ def main(argv=None) -> None:
                     args.job_id, args.reviewer, args.verdict, args.rationale
                 )
             elif args.local_pilot_action == "resume":
-                if not sys.stdin.isatty():
+                if not sys.stdin.isatty() or not sys.stdout.isatty():
                     raise ValueError("Local pilot resume requires an interactive terminal")
                 from synlynk import _get_db
 
                 conn = _get_db()
                 try:
+                    print("Current Local pilot status:")
+                    print(json.dumps(local_pilot_status(), indent=2, sort_keys=True))
                     payload = resume_local_pilot(
-                        os.getcwd(), conn, args.remediation_ref, args.verification_ref, input
+                        os.getcwd(), conn, args.remediation_ref, args.verification_ref, input,
+                        lambda preflight: print(render_local_pilot_resume_preflight(preflight)),
                     )
                 finally:
                     conn.close()

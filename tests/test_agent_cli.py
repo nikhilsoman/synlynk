@@ -2473,6 +2473,53 @@ def test_local_pilot_resume_cli_refuses_noninteractive_confirmation(project_dir,
     assert workspace.get("local_pilot", {}).get("enabled") is not True
 
 
+def test_local_pilot_resume_cli_requires_interactive_output(project_dir, monkeypatch):
+    """Redirected output prevents the operator from seeing the required approval summary."""
+    import sys
+    from synlynk.cli import main
+
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: False)
+
+    with pytest.raises(ValueError, match="interactive terminal"):
+        main([
+            "local", "pilot", "resume", "--remediation-ref", "issue-2342",
+            "--verification-ref", "review-2349",
+        ])
+
+
+def test_local_pilot_resume_cli_displays_status_and_preflight_before_confirmation(project_dir, monkeypatch, capsys):
+    """The confirmation must be informed by the exact current state and preflight receipt."""
+    import sys
+    from synlynk import local_agent
+    from synlynk.cli import main
+
+    sequence = []
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    monkeypatch.setattr(local_agent, "local_pilot_status", lambda: {"state": {"enabled": False}})
+
+    def fake_resume(_root, _conn, _remediation, _verification, confirm, render):
+        render({"result": "passed", "requested_share": .2, "requested_max_concurrent": 1})
+        sequence.append("preflight")
+        confirm("confirm")
+        sequence.append("confirm")
+        return {"authorization": {"state": "active"}}
+
+    monkeypatch.setattr(local_agent, "resume_local_pilot", fake_resume)
+    monkeypatch.setattr("builtins.input", lambda _: sequence.append("input") or "RESUME LOCAL PILOT")
+
+    main([
+        "local", "pilot", "resume", "--remediation-ref", "issue-2342",
+        "--verification-ref", "review-2349",
+    ])
+
+    output = capsys.readouterr().out
+    assert "Current Local pilot status" in output
+    assert '"result": "passed"' in output
+    assert sequence == ["preflight", "input", "confirm"]
+
+
 def test_local_pilot_status_cli_reports_live_configured_concurrency(project_dir, capsys):
     """Changing the dispatch concurrency cap must change the operator status view."""
     from synlynk.cli import main
