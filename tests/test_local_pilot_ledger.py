@@ -166,6 +166,87 @@ def test_expansion_status_reports_only_the_run_after_its_latest_quality_rejectio
     assert expansion["consecutive_accepted"] == 1
 
 
+def test_resume_authorization_is_immutable_and_sets_the_active_epoch(ledger_conn):
+    """Recovery must add a durable fact, never rewrite the safety ledger."""
+    from synlynk.local_pilot_ledger import (
+        activate_resume_authorization,
+        create_resume_authorization,
+        ensure_local_pilot_ledger,
+        record_admission,
+        record_safety_outcome,
+    )
+
+    ensure_local_pilot_ledger(ledger_conn)
+    record_admission(ledger_conn, _sample("before-resume"))
+    record_safety_outcome(ledger_conn, "before-resume", "failed", "scope drift", {"safe": False})
+    authorization = create_resume_authorization(
+        ledger_conn,
+        {
+            "authorization_id": "resume-1",
+            "signed_payload": {"approved": True},
+            "config_fingerprint": "disabled-20-percent-one-concurrent",
+            "remediation_reference": "issue-2342",
+            "verification_reference": "review-2349",
+            "preflight_receipt": {"result": "passed"},
+        },
+    )
+    active = activate_resume_authorization(ledger_conn, authorization["authorization_id"])
+
+    assert authorization["state"] == "activating"
+    assert active["state"] == "active"
+    assert active["safety_watermark"] == 1
+    with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        ledger_conn.execute(
+            "UPDATE local_pilot_resume_authorizations SET remediation_reference = 'rewritten' "
+            "WHERE authorization_id = 'resume-1'"
+        )
+    with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        ledger_conn.execute(
+            "DELETE FROM local_pilot_resume_authorizations WHERE authorization_id = 'resume-1'"
+        )
+
+
+def test_status_keeps_historical_failures_and_counts_only_active_epoch_evidence(ledger_conn):
+    """Pre-incident samples must not advance the post-resume validation lane."""
+    from synlynk.local_pilot_ledger import (
+        activate_resume_authorization,
+        create_resume_authorization,
+        ensure_local_pilot_ledger,
+        load_pilot_status,
+        record_admission,
+        record_quality_verdict,
+        record_safety_outcome,
+    )
+
+    ensure_local_pilot_ledger(ledger_conn)
+    record_admission(ledger_conn, _sample("historical-failure"))
+    record_safety_outcome(ledger_conn, "historical-failure", "failed", "scope drift", {"safe": False})
+    record_admission(ledger_conn, _sample("old-accept"))
+    record_safety_outcome(ledger_conn, "old-accept", "passed", "contained", {"safe": True})
+    record_quality_verdict(ledger_conn, "old-accept", "codex", "accepted", "correct", "qualified")
+    authorization = create_resume_authorization(
+        ledger_conn,
+        {
+            "signed_payload": {"approved": True},
+            "config_fingerprint": "disabled-20-percent-one-concurrent",
+            "remediation_reference": "issue-2342",
+            "verification_reference": "review-2349",
+            "preflight_receipt": {"result": "passed"},
+        },
+    )
+    activate_resume_authorization(ledger_conn, authorization["authorization_id"])
+    record_admission(ledger_conn, _sample("new-accept"))
+    record_safety_outcome(ledger_conn, "new-accept", "passed", "contained", {"safe": True})
+    record_quality_verdict(ledger_conn, "new-accept", "codex", "accepted", "correct", "qualified")
+
+    status = load_pilot_status(ledger_conn)
+
+    assert status["historical_safety_failures"] == 1
+    assert status["active_epoch_safety_failures"] == 0
+    assert status["active_authorization"]["authorization_id"] == authorization["authorization_id"]
+    assert status["validation"]["accepted"] == 1
+
+
 def test_ensure_uses_migration_history_and_rolls_back_a_failed_migration(ledger_conn, monkeypatch):
     """A failed schema install must leave neither schema nor migration history behind."""
     from synlynk.local_pilot_ledger import ensure_local_pilot_ledger

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -44,6 +45,98 @@ def _row_as_dict(conn: sqlite3.Connection, job_id: str) -> dict:
 def ensure_local_pilot_ledger(conn: sqlite3.Connection) -> None:
     """Install the ledger through the canonical versioned migration runner."""
     run_pending_migrations(conn)
+
+
+def _authorization_as_dict(conn: sqlite3.Connection, authorization_id: str) -> dict:
+    row = conn.execute(
+        "SELECT * FROM local_pilot_resume_authorizations WHERE authorization_id = ?",
+        (authorization_id,),
+    ).fetchone()
+    if row is None:
+        raise ValueError(f"unknown Local pilot resume authorization: {authorization_id}")
+    columns = conn.execute("SELECT * FROM local_pilot_resume_authorizations LIMIT 0").description
+    return {column[0]: value for column, value in zip(columns, row)}
+
+
+def create_resume_authorization(conn: sqlite3.Connection, payload: dict) -> dict:
+    """Append an activating resume authority at the current safety watermark."""
+    ensure_local_pilot_ledger(conn)
+    payload = dict(payload or {})
+    authorization_id = str(payload.get("authorization_id") or uuid.uuid4()).strip()
+    signed_payload = payload.get("signed_payload")
+    config_fingerprint = str(payload.get("config_fingerprint") or "").strip()
+    remediation_reference = str(payload.get("remediation_reference") or "").strip()
+    verification_reference = str(payload.get("verification_reference") or "").strip()
+    preflight_receipt = payload.get("preflight_receipt")
+    if not authorization_id or not isinstance(signed_payload, dict):
+        raise ValueError("authorization_id and signed_payload are required")
+    if not config_fingerprint or not remediation_reference or not verification_reference:
+        raise ValueError("config_fingerprint, remediation_reference, and verification_reference are required")
+    if not isinstance(preflight_receipt, dict):
+        raise ValueError("preflight_receipt is required")
+    signed_payload_json, signed_payload_digest = _canonical_receipt(signed_payload)
+    preflight_receipt_json, preflight_receipt_digest = _canonical_receipt(preflight_receipt)
+    with write_transaction(conn):
+        watermark = conn.execute("SELECT COALESCE(MAX(rowid), 0) FROM local_pilot_evidence").fetchone()[0]
+        try:
+            conn.execute(
+                """INSERT INTO local_pilot_resume_authorizations
+                   (authorization_id, created_at, signed_payload_json, signed_payload_digest,
+                    config_fingerprint, remediation_reference, verification_reference, safety_watermark,
+                    preflight_receipt_json, preflight_receipt_digest, state)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'activating')""",
+                (authorization_id, _utc_now(), signed_payload_json, signed_payload_digest,
+                 config_fingerprint, remediation_reference, verification_reference, watermark,
+                 preflight_receipt_json, preflight_receipt_digest),
+            )
+        except sqlite3.IntegrityError as error:
+            raise ValueError(f"duplicate resume authorization_id: {authorization_id}") from error
+        return _authorization_as_dict(conn, authorization_id)
+
+
+def activate_resume_authorization(conn: sqlite3.Connection, authorization_id: str) -> dict:
+    """Mark one prepared authorization active; SQLite enforces one active authority."""
+    ensure_local_pilot_ledger(conn)
+    with write_transaction(conn):
+        result = conn.execute(
+            "UPDATE local_pilot_resume_authorizations SET state = 'active', activated_at = ? "
+            "WHERE authorization_id = ? AND state = 'activating'",
+            (_utc_now(), authorization_id),
+        )
+        if result.rowcount != 1:
+            _authorization_as_dict(conn, authorization_id)
+            raise ValueError(f"resume authorization is not activating: {authorization_id}")
+        return _authorization_as_dict(conn, authorization_id)
+
+
+def revoke_active_resume_authorization(conn: sqlite3.Connection, reason: str) -> dict | None:
+    """Terminally revoke the one active authority, if present."""
+    ensure_local_pilot_ledger(conn)
+    reason = str(reason or "").strip()
+    if not reason:
+        raise ValueError("revocation reason is required")
+    with write_transaction(conn):
+        active = conn.execute(
+            "SELECT authorization_id FROM local_pilot_resume_authorizations WHERE state = 'active'"
+        ).fetchone()
+        if active is None:
+            return None
+        authorization_id = active[0]
+        conn.execute(
+            "UPDATE local_pilot_resume_authorizations SET state = 'revoked', revoked_at = ?, terminal_reason = ? "
+            "WHERE authorization_id = ?",
+            (_utc_now(), reason, authorization_id),
+        )
+        return _authorization_as_dict(conn, authorization_id)
+
+
+def active_resume_authorization(conn: sqlite3.Connection) -> dict | None:
+    """Return the sole active authorization, never an activating authority."""
+    ensure_local_pilot_ledger(conn)
+    row = conn.execute(
+        "SELECT authorization_id FROM local_pilot_resume_authorizations WHERE state = 'active'"
+    ).fetchone()
+    return _authorization_as_dict(conn, row[0]) if row else None
 
 
 def record_admission(conn: sqlite3.Connection, sample: dict) -> dict:
@@ -241,7 +334,18 @@ def load_pilot_status(conn: sqlite3.Connection) -> dict:
     ).fetchone()
     if historical is None:
         raise RuntimeError("Local pilot ledger has not been initialized")
-    status = {"historical": dict(zip(("cohort", "accepted", "eligible"), historical))}
+    latest_row = conn.execute(
+        "SELECT authorization_id FROM local_pilot_resume_authorizations ORDER BY rowid DESC LIMIT 1"
+    ).fetchone()
+    active = active_resume_authorization(conn)
+    watermark = int(active["safety_watermark"]) if active else None
+    status = {
+        "historical": dict(zip(("cohort", "accepted", "eligible"), historical)),
+        "latest_authorization": _authorization_as_dict(conn, latest_row[0]) if latest_row else None,
+        "active_authorization": active,
+    }
+    epoch_clause = " AND rowid > ?" if watermark is not None else ""
+    epoch_args = (watermark,) if watermark is not None else ()
     for cohort in ("validation", "expansion"):
         accepted, pending, rejected, safety_failed = conn.execute(
             "SELECT "
@@ -250,8 +354,8 @@ def load_pilot_status(conn: sqlite3.Connection) -> dict:
             "AND (safety_verdict = 'pending' OR quality_verdict = 'pending')), "
             "COUNT(*) FILTER (WHERE safety_verdict != 'failed' AND quality_verdict = 'rejected'), "
             "COUNT(*) FILTER (WHERE safety_verdict = 'failed') "
-            "FROM local_pilot_evidence WHERE cohort = ?",
-            (cohort,),
+            f"FROM local_pilot_evidence WHERE cohort = ?{epoch_clause}",
+            (cohort, *epoch_args),
         ).fetchone()
         status[cohort] = {
             "cohort": cohort,
@@ -264,12 +368,23 @@ def load_pilot_status(conn: sqlite3.Connection) -> dict:
     consecutive_accepted = 0
     for safety_verdict, quality_verdict in conn.execute(
         "SELECT safety_verdict, quality_verdict FROM local_pilot_evidence "
-        "WHERE cohort = 'expansion' "
-        "ORDER BY COALESCE(quality_recorded_at, admitted_at), rowid"
+        f"WHERE cohort = 'expansion'{epoch_clause} "
+        "ORDER BY COALESCE(quality_recorded_at, admitted_at), rowid",
+        epoch_args,
     ):
         if safety_verdict == "passed" and quality_verdict == "accepted":
             consecutive_accepted += 1
         elif safety_verdict == "passed" and quality_verdict == "rejected":
             consecutive_accepted = 0
     status["expansion"]["consecutive_accepted"] = consecutive_accepted
+    status["historical_safety_failures"] = conn.execute(
+        "SELECT COUNT(*) FROM local_pilot_evidence WHERE safety_verdict = 'failed'"
+    ).fetchone()[0]
+    status["active_epoch_safety_failures"] = (
+        conn.execute(
+            "SELECT COUNT(*) FROM local_pilot_evidence WHERE safety_verdict = 'failed' AND rowid > ?",
+            (watermark,),
+        ).fetchone()[0]
+        if watermark is not None else 0
+    )
     return status

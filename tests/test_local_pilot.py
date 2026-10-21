@@ -130,6 +130,49 @@ def _status(*, validation=None, expansion=None):
     }
 
 
+def test_historical_safety_failure_requires_an_active_resume_authorization():
+    """A historical hard failure cannot be bypassed by ordinary rebaseline evidence."""
+    decision = local_pilot.evaluate_rebaseline(
+        {**_status(), "historical_safety_failures": 1, "active_authorization": None}
+    )
+
+    assert not decision.allow_admission
+    assert decision.pause_required
+    assert decision.reason == "operational_resume_required"
+
+
+def test_active_resume_authorization_uses_only_its_new_epoch_for_rebaseline():
+    """The policy consumes the reset status arithmetic rather than old evidence."""
+    decision = local_pilot.evaluate_rebaseline(
+        {
+            **_status(validation={"accepted": 1, "eligible": 1}),
+            "historical_safety_failures": 1,
+            "active_epoch_safety_failures": 0,
+            "active_authorization": {"authorization_id": "resume-1", "state": "active"},
+        }
+    )
+
+    assert decision.allow_admission
+    assert decision.cohort == "validation"
+    assert decision.reason == "validation_incomplete"
+
+
+def test_activating_resume_authorization_cannot_admit_after_a_historical_failure():
+    """A crash before activation must remain fail-closed."""
+    decision = local_pilot.evaluate_rebaseline(
+        {
+            **_status(),
+            "historical_safety_failures": 1,
+            "active_epoch_safety_failures": 0,
+            "active_authorization": {"authorization_id": "resume-1", "state": "activating"},
+        }
+    )
+
+    assert not decision.allow_admission
+    assert decision.pause_required
+    assert decision.reason == "operational_resume_required"
+
+
 def test_rebaseline_uses_only_the_new_validation_cohort_not_historical_evidence():
     """Counting the historical 8/12 toward validation must never open expansion."""
     decision = local_pilot.evaluate_rebaseline(_status())

@@ -225,6 +225,21 @@ def evaluate_rebaseline(status: dict) -> RebaselineDecision:
             False, None, 0.20, True, False, "rebaseline_status_incomplete_requires_pause"
         )
 
+    authorization = status.get("active_authorization")
+    active_authorization = (
+        authorization if isinstance(authorization, dict) and authorization.get("state") == "active" else None
+    )
+    if "historical_safety_failures" in status:
+        historical_safety_failures = int(status["historical_safety_failures"])
+        active_epoch_safety_failures = int(status.get("active_epoch_safety_failures", 0))
+        if historical_safety_failures > 0 and not active_authorization:
+            return RebaselineDecision(
+                False, None, 0.20, True, False, "operational_resume_required"
+            )
+        if active_authorization and active_epoch_safety_failures > 0:
+            return RebaselineDecision(
+                False, None, 0.20, True, False, "hard_safety_failure_requires_pause"
+            )
     if safety_failed > 0:
         return RebaselineDecision(
             False, None, 0.20, True, False, "hard_safety_failure_requires_pause"
