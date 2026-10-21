@@ -180,9 +180,11 @@ def execute_home_handover(
 
     if active_story_id:
         try:
-            from synlynk.jobs import release_task_lease
+            from synlynk.jobs import get_active_lease, release_task_lease
             from synlynk.session import _remove_active_claim
-            release_task_lease(active_story_id, current_home, new_status=None)
+            active_lease = get_active_lease(active_story_id)
+            if active_lease:
+                release_task_lease(active_story_id, active_lease["leased_by"], new_status=None)
             _remove_active_claim(active_story_id)
         except Exception:
             pass

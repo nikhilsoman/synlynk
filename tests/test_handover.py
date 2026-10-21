@@ -103,10 +103,21 @@ def test_execute_home_handover_releases_active_lease_and_claim(tmp_path, monkeyp
     canonical path inside one) — exactly the class of error the surrounding
     try/except Exception: pass in execute_home_handover is designed to absorb.
     This test instead proves, directly and without mocking that machinery, that
-    the two calls execute_home_handover makes when active_story_id is set —
-    release_task_lease(active_story_id, current_home, new_status=None) followed
-    by _remove_active_claim(active_story_id) — behave correctly together against
-    a real task_leases row and a real active_claims.json file."""
+    the lookup-then-release logic execute_home_handover runs when active_story_id
+    is set — get_active_lease(active_story_id) to resolve the real leased_by
+    session id, then release_task_lease(active_story_id, that leased_by,
+    new_status=None), followed by _remove_active_claim(active_story_id) — behaves
+    correctly against a real task_leases row and a real active_claims.json file.
+
+    The lease is acquired with a realistic composite leased_by
+    ("claude:testhost:424242"), NOT the bare harness string "claude" that
+    current_home resolves to — matching production's cmd_story_claim, which sets
+    leased_by to f"{harness}:{hostname}:{pid}". This is deliberate: a bare
+    "claude" leased_by would accidentally match current_home and mask the exact
+    bug this test exists to catch (gh:#2511 follow-up) — execute_home_handover
+    once passed current_home directly as leased_by to release_task_lease, which
+    silently matched 0 rows against real leases since leased_by is never a bare
+    harness name in production."""
     from synlynk import _get_db
     from synlynk.jobs import acquire_task_lease, release_task_lease, get_active_lease
     from synlynk.session import _add_active_claim, _read_active_claims, _remove_active_claim
@@ -121,15 +132,21 @@ def test_execute_home_handover_releases_active_lease_and_claim(tmp_path, monkeyp
     )
     conn.commit()
 
-    acquire_task_lease("story-9012", "claude", duration_seconds=600, conn=conn)
+    real_leased_by = "claude:testhost:424242"
+    acquire_task_lease(
+        "story-9012", real_leased_by, duration_seconds=600, pid=424242, harness="claude", conn=conn
+    )
     _add_active_claim("story-9012")
     assert "story-9012" in _read_active_claims()
 
     active_story_id = "story-9012"
-    current_home = "claude"
 
-    # Same two calls execute_home_handover makes when active_story_id is truthy.
-    release_task_lease(active_story_id, current_home, new_status=None, conn=conn)
+    # Same lookup-then-release logic execute_home_handover runs when
+    # active_story_id is truthy.
+    active_lease = get_active_lease(active_story_id, conn=conn)
+    assert active_lease is not None
+    assert active_lease["leased_by"] == real_leased_by  # not "claude"
+    release_task_lease(active_story_id, active_lease["leased_by"], new_status=None, conn=conn)
     _remove_active_claim(active_story_id)
 
     lease = get_active_lease("story-9012", conn=conn)
