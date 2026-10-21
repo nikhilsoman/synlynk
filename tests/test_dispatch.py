@@ -3918,6 +3918,109 @@ def test_dispatch_agent_populates_harness_and_role_in_daemon_jobs(project_dir, m
     assert row == ("codex", "codex", "dev")
 
 
+def test_dispatch_cost_capture_preserves_explicit_role_across_same_story_dispatches(
+    project_dir, monkeypatch
+):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    import synlynk.jobs as jobs_mod
+
+    class FakeProc:
+        pid = 12345
+
+    real_popen = subprocess.Popen
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(
+        sl,
+        "_preflight_dispatch",
+        lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {
+            "passed": True,
+            "sentinel": None,
+            "reason": None,
+        },
+    )
+
+    story_id = "story-role-cost"
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO stories (story_id, title, status, role) VALUES (?, ?, ?, ?)",
+        (story_id, "Role-specific cost attribution", "in_progress", "dev"),
+    )
+    conn.commit()
+    conn.close()
+
+    jobs = [
+        sl.dispatch_agent(
+            "codex",
+            "analyze the implementation",
+            story_id=story_id,
+            role="architect",
+            job_id="job-role-cost-first",
+            force_agent=True,
+            context_mode="none",
+        ),
+        sl.dispatch_agent(
+            "codex",
+            "verify the follow-up",
+            story_id=story_id,
+            role="qa",
+            job_id="job-role-cost-second",
+            force_agent=True,
+            context_mode="none",
+        ),
+    ]
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", real_popen)
+
+    original_pkg = jobs_mod._pkg
+
+    def capture_cost(*args, **kwargs):
+        from synlynk.db import _insert_cost_row
+
+        _insert_cost_row(
+            session_date="2026-10-21",
+            agent=kwargs["agent"],
+            harness=kwargs["harness"],
+            agent_role=kwargs.get("agent_role"),
+            model="test-model",
+            input_tokens=1,
+            output_tokens=1,
+            cache_read_tokens=0,
+            cost_source="actual",
+            total_cost_usd=0.01,
+            story_id=kwargs["story_id"],
+            job_id=kwargs["job_id"],
+        )
+
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: {
+            "_get_db": sl._get_db,
+            "update_costs": capture_cost,
+            "extract_tokens": lambda *a, **k: (0, 0),
+            "extract_model_version": lambda *a, **k: "test-model",
+        }.get(name, original_pkg(name, default)),
+    )
+
+    conn = sl._get_db()
+    for job in jobs:
+        jobs_mod._ensure_daemon_job_cost_entry(
+            job["id"], job["agent"], story_id, "", conn=conn
+        )
+
+    rows = conn.execute(
+        "SELECT job_id, agent_role FROM cost_entries "
+        "WHERE job_id IN (?, ?) ORDER BY job_id",
+        (jobs[0]["id"], jobs[1]["id"]),
+    ).fetchall()
+    conn.close()
+
+    assert rows == [
+        ("job-role-cost-first", "architect"),
+        ("job-role-cost-second", "qa"),
+    ]
+
+
 def test_dispatch_logs_isolated_and_preserved_on_reap(tmp_path, monkeypatch):
     import os
     import synlynk as sl

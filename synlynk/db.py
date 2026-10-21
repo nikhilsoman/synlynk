@@ -2400,18 +2400,18 @@ def _insert_cost_row(
             except sqlite3.Error:
                 pass
         role_val = agent_role
-        if role_val is None and story_id:
-            try:
-                r_row = conn.execute("SELECT role FROM stories WHERE story_id=?", (story_id,)).fetchone()
-                if r_row and r_row[0]:
-                    role_val = r_row[0]
-            except Exception:
-                pass
         if role_val is None and job_id:
             try:
                 j_row = conn.execute("SELECT role FROM daemon_jobs WHERE job_id=?", (job_id,)).fetchone()
                 if j_row and j_row[0]:
                     role_val = j_row[0]
+            except Exception:
+                pass
+        if role_val is None and story_id:
+            try:
+                r_row = conn.execute("SELECT role FROM stories WHERE story_id=?", (story_id,)).fetchone()
+                if r_row and r_row[0]:
+                    role_val = r_row[0]
             except Exception:
                 pass
 
