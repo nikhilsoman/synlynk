@@ -37,3 +37,36 @@ def _clear_active_session() -> None:
     path = _active_session_path()
     if os.path.exists(path):
         os.remove(path)
+
+
+def _active_claims_path() -> str:
+    return os.path.join(".synlynk", "active_claims.json")
+
+
+def _read_active_claims() -> list:
+    """Returns the list of story_ids this checkout has claimed via `synlynk story claim`."""
+    path = _active_claims_path()
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return []
+    return data.get("story_ids", [])
+
+
+def _add_active_claim(story_id: str) -> None:
+    claims = set(_read_active_claims())
+    claims.add(story_id)
+    os.makedirs(".synlynk", exist_ok=True)
+    with open(_active_claims_path(), "w") as f:
+        json.dump({"story_ids": sorted(claims)}, f)
+
+
+def _remove_active_claim(story_id: str) -> None:
+    claims = set(_read_active_claims())
+    claims.discard(story_id)
+    os.makedirs(".synlynk", exist_ok=True)
+    with open(_active_claims_path(), "w") as f:
+        json.dump({"story_ids": sorted(claims)}, f)

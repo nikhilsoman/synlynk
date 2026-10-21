@@ -5706,8 +5706,10 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
     if generate_context:
         generate_context()
     try:
-        from synlynk.jobs import heartbeat_claims_for_pid
+        from synlynk.jobs import heartbeat_claims_for_pid, heartbeat_claims_by_story_ids
+        from synlynk.session import _read_active_claims
         heartbeat_claims_for_pid(os.getpid())
+        heartbeat_claims_by_story_ids(_read_active_claims())
     except Exception:
         pass
     cmd_args = _inject_grok_rules(cmd_args)

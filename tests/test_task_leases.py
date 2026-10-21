@@ -164,3 +164,28 @@ def test_heartbeat_all_claims_for_pid(db_conn):
 
     after = get_active_lease("story-lease-1", conn=db_conn)
     assert after["heartbeat_at"] > before["heartbeat_at"]
+
+
+def test_heartbeat_by_story_ids_renews_across_simulated_process_boundary(db_conn, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+
+    from synlynk.session import _add_active_claim, _read_active_claims
+    from synlynk.jobs import heartbeat_claims_by_story_ids, get_active_lease
+
+    # Simulate the one-shot `story claim` process: takes the lease with its own PID,
+    # then "exits" (we never heartbeat using that PID again in this test).
+    acquire_task_lease(
+        "story-lease-1", "claude:host:555", duration_seconds=10,
+        pid=999999, harness="claude", conn=db_conn,
+    )
+    _add_active_claim("story-lease-1")
+    before = get_active_lease("story-lease-1", conn=db_conn)
+
+    time.sleep(1)
+    # Simulate a later, unrelated `synlynk exec` process (different PID, same checkout):
+    count = heartbeat_claims_by_story_ids(_read_active_claims(), extend_seconds=120, conn=db_conn)
+    assert count == 1
+
+    after = get_active_lease("story-lease-1", conn=db_conn)
+    assert after["heartbeat_at"] > before["heartbeat_at"]

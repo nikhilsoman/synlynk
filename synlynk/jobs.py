@@ -4050,6 +4050,35 @@ def heartbeat_claims_for_pid(pid: int, extend_seconds: int = 2700, conn=None) ->
             conn.close()
 
 
+def heartbeat_claims_by_story_ids(story_ids, extend_seconds: int = 2700, conn=None) -> int:
+    """Renew every active task_lease for the given story_ids. Returns count renewed."""
+    if not story_ids:
+        return 0
+    owns_conn = False
+    if conn is None:
+        from synlynk import _get_db
+        conn = _get_db()
+        owns_conn = True
+
+    try:
+        now = time.time()
+        now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
+        expires_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + extend_seconds))
+        placeholders = ",".join("?" * len(story_ids))
+        cur = conn.execute(
+            f"UPDATE task_leases SET heartbeat_at=?, expires_at=? "
+            f"WHERE story_id IN ({placeholders}) AND status='active'",
+            (now_str, expires_at, *story_ids),
+        )
+        conn.commit()
+        return cur.rowcount
+    except sqlite3.OperationalError:
+        return 0
+    finally:
+        if owns_conn:
+            conn.close()
+
+
 def release_task_lease(
     story_id: str,
     leased_by: str,
@@ -4146,6 +4175,11 @@ def cmd_story_claim(
     )
 
     if result["acquired"]:
+        from synlynk.session import _add_active_claim
+        try:
+            _add_active_claim(story_id)
+        except OSError:
+            pass
         print(f"\n  {_BOLD}synlynk story claim{_RESET}  story={story_id}  harness={effective_harness}  session={session_id}")
         print(f"  Claim active until {result['expires_at']}\n")
         return 0

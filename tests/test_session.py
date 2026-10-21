@@ -34,6 +34,26 @@ def test_clear_active_session_removes_marker(tmp_path, monkeypatch):
     assert _read_active_session() is None
 
 
+def test_add_and_read_active_claim(tmp_path, monkeypatch):
+    from synlynk.session import _add_active_claim, _read_active_claims
+
+    monkeypatch.chdir(tmp_path)
+    _add_active_claim("story-a")
+    _add_active_claim("story-b")
+
+    assert set(_read_active_claims()) == {"story-a", "story-b"}
+
+
+def test_remove_active_claim(tmp_path, monkeypatch):
+    from synlynk.session import _add_active_claim, _remove_active_claim, _read_active_claims
+
+    monkeypatch.chdir(tmp_path)
+    _add_active_claim("story-a")
+    _remove_active_claim("story-a")
+
+    assert _read_active_claims() == []
+
+
 import sqlite3
 
 
