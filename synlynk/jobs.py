@@ -3936,9 +3936,20 @@ def acquire_task_lease(
 ) -> dict:
     """Acquire or extend a rolling lease on a story in state.db.
 
-    A live conflicting claim (unexpired TTL AND holder PID still alive) blocks
-    acquisition unless ``override=True``. A claim whose TTL expired OR whose
-    holder PID is dead is stale and does not block (gh:#2511).
+    A live conflicting claim (unexpired TTL) blocks acquisition unless
+    ``override=True``. A claim whose TTL expired is stale and does not block
+    (gh:#2511).
+
+    Staleness here is TTL-based only, not holder-PID-based: the one-shot
+    ``synlynk story claim`` CLI process exits immediately by design, and a
+    later, different-PID process in the same checkout keeps the claim alive
+    across that process boundary via ``heartbeat_claims_by_story_ids``, which
+    renews ``heartbeat_at``/``expires_at`` but never the stored ``pid``. A
+    dead-PID check here would treat every such claim as stale the instant the
+    claiming process exits, defeating conflict detection entirely (found by
+    cross-harness review on PR #2524). Holder-PID liveness is still used, but
+    only as a secondary signal in ``reclaim_stranded_stories``'s maintenance
+    sweep, which is free to be more aggressive than the live conflict gate.
     """
     owns_conn = False
     if conn is None:
@@ -3962,9 +3973,8 @@ def acquire_task_lease(
         if row:
             curr_id, curr_holder, curr_pid, curr_harness, curr_exp = row
             is_expired = curr_exp < now_str
-            is_dead = not _pid_is_alive(curr_pid)
             is_same_holder = curr_holder == leased_by
-            is_stale = is_expired or is_dead or is_same_holder
+            is_stale = is_expired or is_same_holder
 
             if is_stale or override:
                 conn.execute(

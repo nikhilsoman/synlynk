@@ -75,8 +75,12 @@ def test_release_task_lease(db_conn):
     assert row[0] == "done"
 
 
-def test_dead_pid_claim_does_not_block_new_claim(db_conn):
-    # Simulate a crashed session: a PID that is guaranteed not to exist.
+def test_dead_pid_claim_with_unexpired_ttl_still_blocks_new_claim(db_conn):
+    # A dead holder PID alone must NOT make a claim stale: the one-shot
+    # `synlynk story claim` CLI process exits immediately by design, and a
+    # later, different-PID process in the same checkout keeps the claim
+    # alive via heartbeat_claims_by_story_ids (which never touches `pid`).
+    # Staleness is TTL-based only (gh:#2511 regression found on PR #2524).
     dead_pid = 999999
     acquire_task_lease(
         "story-lease-1", "claude:session-a", duration_seconds=600,
@@ -87,7 +91,49 @@ def test_dead_pid_claim_does_not_block_new_claim(db_conn):
         "story-lease-1", "codex:session-b", duration_seconds=600,
         pid=os.getpid(), harness="codex", conn=db_conn,
     )
+    assert result["acquired"] is False
+
+
+def test_dead_pid_claim_with_expired_ttl_does_not_block_new_claim(db_conn):
+    # A dead PID whose TTL has also actually expired (nobody heartbeated it)
+    # is genuinely abandoned and must not block.
+    dead_pid = 999999
+    acquire_task_lease(
+        "story-lease-1", "claude:session-a", duration_seconds=-10,
+        pid=dead_pid, harness="claude", conn=db_conn,
+    )
+
+    result = acquire_task_lease(
+        "story-lease-1", "codex:session-b", duration_seconds=600,
+        pid=os.getpid(), harness="codex", conn=db_conn,
+    )
     assert result["acquired"] is True
+
+
+def test_cross_process_heartbeat_handoff_still_blocks_second_claimant(db_conn):
+    # Reproduces the exact scenario from the cross-harness review on PR #2524:
+    # claimant process exits (PID now dead), its checkout heartbeats the
+    # tracked story via heartbeat_claims_by_story_ids (a different PID), and
+    # a second non-override claimant must still be refused.
+    from synlynk.jobs import heartbeat_claims_by_story_ids
+
+    dead_pid = 999999
+    first = acquire_task_lease(
+        "story-lease-1", "claude:host:dead_pid", duration_seconds=10,
+        pid=dead_pid, harness="claude", conn=db_conn,
+    )
+    assert first["acquired"] is True
+
+    heartbeat_count = heartbeat_claims_by_story_ids(
+        ["story-lease-1"], extend_seconds=600, conn=db_conn,
+    )
+    assert heartbeat_count == 1
+
+    second = acquire_task_lease(
+        "story-lease-1", "codex:host:live_pid", duration_seconds=600,
+        pid=os.getpid(), harness="codex", conn=db_conn,
+    )
+    assert second["acquired"] is False
 
 
 def test_live_pid_claim_blocks_new_claim_without_override(db_conn):
