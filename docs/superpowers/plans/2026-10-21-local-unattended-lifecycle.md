@@ -19,6 +19,7 @@
 - Retry a failed readiness operation once, then bind to the approved frontier fallback and report a redacted, deduplicated failure.
 - Never expose the oMLX API key in repo files, logs, telemetry, command arguments, child environments, Docker config, or mounted container files.
 - Unknown oMLX versions or unsupported API contracts fail closed; no explicit Local forcing, model choice, review/GitHub-write work, merges, or broader pilot.
+- Runtime readiness uses oMLX 0.5.3 `/v1/models/status` `loaded` evidence, not discovered-roster membership. The runner receipt must match the signed admission's task digest/model and attest its isolation, preflight, and verified cleanup.
 
 ## Review Focus
 
@@ -70,6 +71,9 @@
 
 **Files:**
 - Modify: `synlynk/local_lifecycle.py`
+- Modify: `synlynk/local_pilot.py`
+- Modify: `synlynk/local_pilot_runner.py`
+- Modify: `synlynk/dispatch.py`
 - Modify: `synlynk/local_auth_proxy.py`
 - Modify: daemon lifecycle integration as discovered from `tests/test_daemon_local_lifecycle.py`
 - Modify: `tests/test_local_auth_proxy.py`
@@ -80,7 +84,7 @@
 - `OmlxClient` and `LocalAuthBroker` continue to depend on `LocalCredentialStore.get()`; key material remains in memory only.
 - Preserve `prepare_local_pilot()` retry-once and frontier-fallback behavior and existing signed-receipt/pilot-ledger ordering.
 
-- [x] **Step 1: Add failing integration tests** proving persistent-settings auth is used for readiness and relay, missing/invalid settings key retries once then falls back, no Local receipt/sample is created on failure, and deduplicated issue reporting remains redacted.
+- [x] **Step 1: Add failing integration tests** proving persistent-settings auth is used for readiness and relay, only a `loaded: true` model status proves readiness, missing/invalid settings key retries once then falls back, the real runner receipt reconciles against signed task/model admission, no Local receipt/sample is created on failure, and deduplicated issue reporting remains redacted.
 - [x] **Step 2: Run** `pytest tests/test_local_auth_proxy.py tests/test_daemon_local_lifecycle.py tests/test_local_pilot.py -q` and verify the credential/fallback cases fail before integration changes.
 - [x] **Step 3: Update integration wiring** so managed startup and relay use the new reader, while a pre-running operator-owned service is only probed and never controlled.
 - [x] **Step 4: Run** the same focused integration command and expect retry, fallback, relay authorization, receipt ordering, and ownership tests to pass.

@@ -203,6 +203,24 @@ class OmlxClient:
         except Exception:
             raise LifecycleError("malformed_inventory", "oMLX returned malformed model inventory") from None
 
+    def model_loaded(self, model_id: str) -> bool:
+        try:
+            payload = json.loads(self._request("/v1/models/status"))
+            models = payload.get("models")
+            if not isinstance(models, list):
+                raise ValueError
+            for item in models:
+                if isinstance(item, dict) and item.get("id") == model_id:
+                    loaded = item.get("loaded")
+                    if not isinstance(loaded, bool):
+                        raise ValueError
+                    return loaded
+            return False
+        except LifecycleError:
+            raise
+        except Exception:
+            raise LifecycleError("malformed_model_status", "oMLX returned malformed model status") from None
+
     def _model_action(self, model_id: str, action: str) -> None:
         if model_id != LIFECYCLE_MODEL_ID:
             raise LifecycleError("model_not_approved", "only the approved Ornith model may be loaded or unloaded", phase="model")
@@ -446,7 +464,7 @@ class LocalLifecycleManager:
 
     def _wait_for_model(self, model_id: str, attempts: int = 30) -> bool:
         for _ in range(attempts):
-            if model_id in self.client.list_models():
+            if self.client.model_loaded(model_id):
                 return True
             self.sleeper(1)
         return False
@@ -459,8 +477,7 @@ class LocalLifecycleManager:
             endpoint_running = self.endpoint_probe()
             ownership = self._owned_identity(state)
             if endpoint_running:
-                models = self.client.list_models()
-                if LIFECYCLE_MODEL_ID in models:
+                if self.client.model_loaded(LIFECYCLE_MODEL_ID):
                     managed = ownership is not None
                     if managed:
                         state["last_activity"] = float(self.clock())
@@ -578,7 +595,7 @@ class LocalLifecycleManager:
         if reconciled.get("active_jobs") or reconciled.get("active_reservations"):
             return False
         try:
-            if LIFECYCLE_MODEL_ID in self.client.list_models():
+            if self.client.model_loaded(LIFECYCLE_MODEL_ID):
                 self.client.unload_model(LIFECYCLE_MODEL_ID)
             # Revalidate PID and start identity immediately before stop.
             if self._owned_identity(state) is None:
@@ -620,7 +637,7 @@ class LocalLifecycleManager:
             loaded = None
             if running:
                 try:
-                    loaded = LIFECYCLE_MODEL_ID in self.client.list_models()
+                    loaded = self.client.model_loaded(LIFECYCLE_MODEL_ID)
                 except LifecycleError:
                     loaded = None
             try:

@@ -52,6 +52,30 @@ def test_model_api_uses_authenticated_model_specific_paths(monkeypatch):
     ]
 
 
+def test_model_readiness_uses_loaded_status_not_discovered_roster(monkeypatch):
+    seen = []
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return b'{"models":[{"id":"Ornith-1.0-9B-4bit","loaded":false}]}'
+
+    def fake_urlopen(request, timeout=None):
+        seen.append(request.full_url)
+        return Response()
+
+    monkeypatch.setattr("synlynk.local_lifecycle.urllib.request.urlopen", fake_urlopen)
+    client = OmlxClient("http://127.0.0.1:8000", Credentials())
+
+    assert client.model_loaded(LIFECYCLE_MODEL_ID) is False
+    assert seen == ["http://127.0.0.1:8000/v1/models/status"]
+
+
 @pytest.mark.parametrize("status,reason", [(401, "authentication_failed"), (404, "unsupported_load_contract"), (507, "insufficient_memory")])
 def test_api_errors_are_classified_without_echoing_credentials(monkeypatch, status, reason):
     def fail(*args, **kwargs):
@@ -239,6 +263,9 @@ class FakeRuntimeClient:
     def list_models(self):
         return list(self.models)
 
+    def model_loaded(self, model_id):
+        return model_id in self.models
+
     def installed_version(self):
         self.versions.append(True)
         return "0.5.3"
@@ -299,6 +326,18 @@ def test_operator_owned_ornith_is_accepted_without_start_or_load(tmp_path):
     assert result.ready and not result.managed
     assert client.loads == []
     assert starts == []
+
+
+def test_operator_owned_unloaded_ornith_is_not_treated_as_ready(tmp_path):
+    client = FakeRuntimeClient([LIFECYCLE_MODEL_ID])
+    client.model_loaded = lambda _model_id: False
+    manager = make_manager(tmp_path, client=client, endpoint_probe=lambda: True)
+
+    with pytest.raises(LifecycleError) as error:
+        manager.ensure_ready()
+
+    assert error.value.reason_code == "operator_owned_model_missing"
+    assert client.loads == []
 
 
 def test_operator_owned_runtime_without_ornith_is_left_untouched(tmp_path):

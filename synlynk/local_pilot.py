@@ -271,6 +271,8 @@ def build_isolated_compose_shell(
     exit_file: str,
     job_id: str,
     aider_args: list[str],
+    task_sha256: str,
+    effective_model: str,
     pilot_class: str,
     scope_paths: list[str],
     env: dict,
@@ -354,6 +356,8 @@ def build_isolated_compose_shell(
         "--exit-file", exit_file,
         "--job-id", project,
         "--pilot-class", pilot_class,
+        "--task-sha256", task_sha256,
+        "--effective-model", effective_model,
     ]
     for path in scope_paths:
         command.extend(["--scope-path", path])

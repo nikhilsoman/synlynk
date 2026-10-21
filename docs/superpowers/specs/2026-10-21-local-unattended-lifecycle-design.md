@@ -138,8 +138,12 @@ It follows this sequence:
    live inventory with bounded timeout/backoff. The adapter supports only
    explicitly tested oMLX versions; unknown versions or missing endpoints
    produce `unsupported_load_contract` and frontier fallback.
-5. Confirm that `/v1/models` contains the exact approved model, Aider and
-   Docker/Compose are available, and the isolated relay can be constructed.
+5. Confirm through authenticated `/v1/models/status` that the exact approved
+   model reports `loaded: true`; `/v1/models` is only a discovered-model roster
+   and is not readiness evidence. A discovered-but-unloaded model on an
+   operator-owned server is not loaded or otherwise changed by Synlynk.
+   Confirm Aider and Docker/Compose are available and the isolated relay can be
+   constructed.
    Only then issue the signed pilot receipt and start the job.
 
 The host supervisor starts a 15-minute idle timer after the last Local job and
@@ -208,6 +212,11 @@ mismatch is actionable but does not permit a different model.
 - The 24 GiB memory guard and static-label mismatch are covered by tests.
 - Readiness and issue creation run after cohort admission but before any Local
   receipt or sample is recorded.
+- The isolated runner's result receipt carries the admitted task digest and
+  effective model, attests isolated/read-only execution and completed
+  preflight, and reports rollback verified only after Compose teardown and
+  scratch cleanup succeed; reconciliation rejects mismatched or incomplete
+  attestations.
 - Existing Local-pilot isolation, receipt, one-concurrency, 20% cohort, and
   fallback-binding tests remain green.
 

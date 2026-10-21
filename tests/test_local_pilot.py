@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -492,6 +493,7 @@ def test_isolated_compose_builder_never_passes_host_credential(tmp_path, monkeyp
         repo_root=str(repo), worktree=str(worktree),
         prompt_file=str(prompt), log_file=str(log), exit_file=str(exit_file),
         job_id="job-abc123", aider_args=["--model", "openai/Ornith"],
+        task_sha256="a" * 64, effective_model="ornith",
         pilot_class="test_summary", scope_paths=["test.log"],
         env={
             "PATH": "/usr/bin", "OPENAI_API_KEY": "local-test-secret",
@@ -508,6 +510,8 @@ def test_isolated_compose_builder_never_passes_host_credential(tmp_path, monkeyp
     assert "GH_TOKEN" not in env
     assert "ANTHROPIC_API_KEY" not in env
     assert "local-test-secret" not in " ".join(command)
+    assert command[command.index("--task-sha256") + 1] == "a" * 64
+    assert command[command.index("--effective-model") + 1] == "ornith"
 
 
 def test_isolated_compose_builder_does_not_require_environment_key(tmp_path, monkeypatch):
@@ -524,6 +528,7 @@ def test_isolated_compose_builder_does_not_require_environment_key(tmp_path, mon
         repo_root=str(repo), worktree=str(source), prompt_file=str(prompt),
         log_file=str(tmp_path / "log"), exit_file=str(tmp_path / "exit"),
         job_id="job-no-env-key", aider_args=[], pilot_class="test_summary",
+        task_sha256="b" * 64, effective_model="ornith",
         scope_paths=["test.log"], env={"PATH": "/usr/bin"},
     )
     assert "OPENAI_API_KEY" not in env
@@ -560,6 +565,7 @@ def test_sensitive_files_are_rejected_before_the_worktree_is_mounted(tmp_path, m
             repo_root=str(repo), worktree=str(worktree),
             prompt_file=str(prompt), log_file=str(tmp_path / "log"),
             exit_file=str(tmp_path / "exit"), job_id="job-test", aider_args=[],
+            task_sha256="c" * 64, effective_model="ornith",
             pilot_class="test_summary", scope_paths=["test.log"],
             env={"OPENAI_API_KEY": "local-key"},
         )
@@ -658,6 +664,9 @@ def test_isolated_runner_cleans_up_compose_and_redacts_persisted_logs(tmp_path, 
     result = local_pilot_runner.run_isolated_dispatch(
         repo_root=str(tmp_path), source_worktree=str(source), prompt_file=str(prompt), log_file=str(log),
         exit_file=str(exit_file), job_id="job-test", pilot_class="test_summary",
+        task_sha256=hashlib.sha256(
+            b"Summarize the focused test result."
+        ).hexdigest(), effective_model="ornith",
         scope_paths=["test.log"], aider_args=["--model", "openai/ornith"],
         env={"PATH": "/usr/bin", "OPENAI_API_KEY": "test-secret"},
     )
@@ -666,7 +675,28 @@ def test_isolated_runner_cleans_up_compose_and_redacts_persisted_logs(tmp_path, 
     assert exit_file.read_text() == "0\n"
     receipt = json.loads((tmp_path / "runner.log.pilot.json").read_text())
     assert receipt["outcome"] == "completed_read_only"
+    assert receipt["task_sha256"] == hashlib.sha256(
+        b"Summarize the focused test result."
+    ).hexdigest()
+    assert receipt["effective_model"] == "ornith"
+    assert receipt["execution"] == "isolated"
+    assert receipt["read_only"] is True
+    assert receipt["preflight_passed"] is True
+    assert receipt["rollback_verified"] is True
     assert receipt["changed_paths"] == []
+    from synlynk.jobs import _local_pilot_receipt_failure
+    task = "Summarize the focused test result."
+    admission = {
+        "admission_id": "job-test",
+        "task_sha256": hashlib.sha256(task.encode("utf-8")).hexdigest(),
+        "pilot_class": "test_summary",
+        "scope_paths": ["test.log"],
+        "effective_model": "ornith",
+        "qualified_models": ["ornith"],
+    }
+    assert _local_pilot_receipt_failure(
+        {"id": "job-test", "task": task, "local_pilot_receipt": admission}, receipt
+    ) is None
     assert compose_envs[0]["PILOT_WORKTREE"] != str(source)
     assert compose_envs[0]["PILOT_RELAY_SOCKET"] == relay_calls[0][1]
     assert relay_calls[1][0] == "start"
