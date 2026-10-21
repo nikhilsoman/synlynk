@@ -17,6 +17,8 @@ import sys
 from pathlib import PurePosixPath
 from typing import Optional
 
+from synlynk.local_auth_proxy import ensure_inert_aider_key
+
 
 PILOT_CLASSES = frozenset(
     {
@@ -279,10 +281,6 @@ def build_isolated_compose_shell(
     disposable job worktree. No out-of-scope files or host Git metadata are
     mounted into Aider. No setup failure falls back to host execution.
     """
-    if not env.get("OPENAI_API_KEY"):
-        raise LocalPilotSetupError(
-            "isolated Local Harness pilot requires OPENAI_API_KEY; refusing host execution"
-        )
     for name, path in (
         ("repo_root", repo_root), ("worktree", worktree),
         ("prompt_file", prompt_file),
@@ -306,7 +304,10 @@ def build_isolated_compose_shell(
     if not project or len(project) > 48:
         project = "job-" + hashlib.sha256(job_id.encode("utf-8")).hexdigest()[:16]
 
-    isolated_args = list(aider_args)
+    try:
+        isolated_args = ensure_inert_aider_key(list(aider_args))
+    except ValueError:
+        raise LocalPilotSetupError("isolated Local Harness pilot rejected a credential override") from None
     endpoint = "http://omlx:8000/v1"
     if "--openai-api-base" in isolated_args:
         index = isolated_args.index("--openai-api-base")
@@ -340,7 +341,6 @@ def build_isolated_compose_shell(
             "PILOT_GID": str(os.getgid()),
             # The runner replaces this with a fresh declared-scope scratch repo.
             "PILOT_WORKTREE": "",
-            "OPENAI_API_KEY": env["OPENAI_API_KEY"],
         }
     )
     command = [

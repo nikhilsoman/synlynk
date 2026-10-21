@@ -19,6 +19,7 @@ from synlynk.local_pilot import (
     find_sensitive_worktree_paths,
     valid_scope_path,
 )
+from synlynk.local_auth_proxy import LocalAuthBroker, ensure_inert_aider_key
 
 
 class _SecretRedactor:
@@ -180,9 +181,10 @@ def run_isolated_dispatch(
     env: dict | None = None,
 ) -> int:
     env = dict(os.environ if env is None else env)
-    api_key = env.get("OPENAI_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is required for isolated oMLX dispatch")
+    env.pop("OPENAI_API_KEY", None)
+    from synlynk.local_credentials import LocalCredentialStore
+    api_key = LocalCredentialStore().get()
+    aider_args = ensure_inert_aider_key(list(aider_args))
     if pilot_class not in PILOT_CLASSES or not scope_paths:
         raise RuntimeError("Local Pilot task class and bounded scope are required")
     compose_file = str(Path(repo_root) / "docker" / "local-pilot.compose.yaml")
@@ -210,6 +212,10 @@ def run_isolated_dispatch(
     scratch = scratch_context.name
     log_handle = open(log_file, "wb")
     redactor = _SecretRedactor(api_key.encode("utf-8"), log_handle)
+    short_tmp = "/private/tmp" if os.path.isdir("/private/tmp") else tempfile.gettempdir()
+    relay_directory = tempfile.mkdtemp(prefix="synlynk-relay-", dir=short_tmp)
+    relay_socket = os.path.join(relay_directory, "relay.sock")
+    auth_relay = LocalAuthBroker(relay_socket, api_key)
 
     def stop_child(signum, _frame):
         if child is not None and child.poll() is None:
@@ -224,6 +230,8 @@ def run_isolated_dispatch(
         if find_sensitive_worktree_paths(source_worktree):
             raise RuntimeError("source worktree contains credential-like paths")
         _scoped_file_copy(source_worktree, scratch, scope_paths)
+        auth_relay.start()
+        env["PILOT_RELAY_SOCKET"] = relay_socket
         expanded_scope = _expanded_scope(scratch, scope_paths, require_existing=True)
         if not expanded_scope:
             raise RuntimeError("Local Pilot scope resolved to no files")
@@ -315,7 +323,11 @@ def run_isolated_dispatch(
             down = _run_captured(prefix + ["down", "--remove-orphans"], env)
             if down.returncode != 0:
                 redactor.write(down.stdout + down.stderr)
+        auth_relay.close()
         redactor.flush()
+        api_key = ""
+        redactor.secret = b""
+        redactor.pending = b""
         log_handle.close()
         receipt["exit_code"] = output_code
         receipt["ended_at"] = time.time()
@@ -324,6 +336,7 @@ def run_isolated_dispatch(
         )
         Path(exit_file).write_text(f"{output_code}\n", encoding="utf-8")
         scratch_context.cleanup()
+        shutil.rmtree(relay_directory, ignore_errors=True)
         for signum, handler in previous_handlers.items():
             signal.signal(signum, handler)
     return output_code

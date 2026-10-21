@@ -474,7 +474,7 @@ def test_legacy_promotion_gate_is_retired_and_fails_closed():
     assert decision.reason == "promotion_gate_retired_use_evaluate_rebaseline"
 
 
-def test_isolated_compose_builder_passes_only_local_model_credential(tmp_path, monkeypatch):
+def test_isolated_compose_builder_never_passes_host_credential(tmp_path, monkeypatch):
     from synlynk import local_pilot
 
     repo = tmp_path / "repo"
@@ -502,23 +502,44 @@ def test_isolated_compose_builder_passes_only_local_model_credential(tmp_path, m
     assert command[1:3] == ["-m", "synlynk.local_pilot_runner"]
     assert "--openai-api-base" in command
     assert command[command.index("--openai-api-base") + 1] == "http://omlx:8000/v1"
-    assert env["OPENAI_API_KEY"] == "local-test-secret"
+    assert "OPENAI_API_KEY" not in env
+    assert "local-test-secret" not in repr(env)
+    assert command[command.index("--openai-api-key") + 1] == "synlynk-local-relay-only"
     assert "GH_TOKEN" not in env
     assert "ANTHROPIC_API_KEY" not in env
     assert "local-test-secret" not in " ".join(command)
 
 
-def test_isolated_compose_builder_fails_closed_without_key_or_runner(tmp_path):
+def test_isolated_compose_builder_does_not_require_environment_key(tmp_path, monkeypatch):
     from synlynk.local_pilot import LocalPilotSetupError, build_isolated_compose_shell
+    repo = tmp_path / "repo"
+    (repo / "docker").mkdir(parents=True)
+    (repo / "docker" / "local-pilot.compose.yaml").write_text("services: {}\n")
+    source = tmp_path / "source"
+    source.mkdir()
+    prompt = tmp_path / "prompt"
+    prompt.write_text("summary")
+    monkeypatch.setattr("synlynk.local_pilot.shutil.which", lambda name: "/usr/bin/docker")
+    command, env = build_isolated_compose_shell(
+        repo_root=str(repo), worktree=str(source), prompt_file=str(prompt),
+        log_file=str(tmp_path / "log"), exit_file=str(tmp_path / "exit"),
+        job_id="job-no-env-key", aider_args=[], pilot_class="test_summary",
+        scope_paths=["test.log"], env={"PATH": "/usr/bin"},
+    )
+    assert "OPENAI_API_KEY" not in env
+    assert "--openai-api-key" in command
 
-    with pytest.raises(LocalPilotSetupError, match="OPENAI_API_KEY"):
-        build_isolated_compose_shell(
-            repo_root=str(tmp_path), worktree=str(tmp_path),
-            prompt_file=str(tmp_path / "missing"),
-            log_file=str(tmp_path / "log"), exit_file=str(tmp_path / "exit"),
-            job_id="job", aider_args=[], pilot_class="test_summary",
-            scope_paths=["test.log"], env={},
-        )
+
+def test_real_compose_uses_private_unix_relay_and_no_host_key_environment():
+    from pathlib import Path
+
+    compose = Path(__file__).resolve().parents[1] / "docker" / "local-pilot.compose.yaml"
+    content = compose.read_text()
+    assert "UNIX-CONNECT:/run/synlynk/relay.sock" in content
+    assert "PILOT_RELAY_SOCKET" in content
+    assert "OPENAI_API_KEY" not in content
+    assert "host.docker.internal" not in content
+    assert "upstream" not in content
 
 
 def test_sensitive_files_are_rejected_before_the_worktree_is_mounted(tmp_path, monkeypatch):
@@ -579,12 +600,30 @@ def test_isolated_runner_cleans_up_compose_and_redacts_persisted_logs(tmp_path, 
     compose_envs = []
     scratch_entries = []
     scratch_files = []
+    relay_calls = []
+
+    class FakeAuthRelay:
+        def __init__(self, socket_path, credential):
+            relay_calls.append(("init", socket_path, credential))
+            self.socket_path = socket_path
+
+        def start(self):
+            relay_calls.append(("start", self.socket_path))
+
+        def close(self):
+            relay_calls.append(("close", self.socket_path))
+
+    monkeypatch.setattr(local_pilot_runner, "LocalAuthBroker", FakeAuthRelay)
+    monkeypatch.setattr(
+        "synlynk.local_credentials.LocalCredentialStore.get", lambda self: "test-secret"
+    )
     aider_calls = []
     aider_stdin = []
 
     def fake_run(argv, env):
         compose_calls.append(argv)
         compose_envs.append(dict(env))
+        assert "OPENAI_API_KEY" not in env
         if env.get("PILOT_WORKTREE"):
             scratch_entries.append(sorted(os.listdir(env["PILOT_WORKTREE"])))
             scratch_files.append(sorted(
@@ -629,11 +668,15 @@ def test_isolated_runner_cleans_up_compose_and_redacts_persisted_logs(tmp_path, 
     assert receipt["outcome"] == "completed_read_only"
     assert receipt["changed_paths"] == []
     assert compose_envs[0]["PILOT_WORKTREE"] != str(source)
+    assert compose_envs[0]["PILOT_RELAY_SOCKET"] == relay_calls[0][1]
+    assert relay_calls[1][0] == "start"
+    assert relay_calls[-1][0] == "close"
     assert scratch_entries[0] == [".git", "test.log"]
     assert scratch_files[0] == ["test.log"]
     assert aider_stdin == [b"prompt"]
     assert aider_calls[0][aider_calls[0].index("aider") + 1:] == [
         "--model", "openai/ornith",
+        "--openai-api-key", "synlynk-local-relay-only",
         "--no-show-model-warnings",
         "--no-pretty",
         "--no-suggest-shell-commands",
