@@ -46,6 +46,27 @@ Review-correction TDD evidence:
 5. `pytest tests/test_agent_cli.py -q -k "local_pilot"`
    — `17 passed, 160 deselected`.
 
+## Final review correction
+
+Auto-routing now resolves the live effective Local model before checking that
+the active signed authorization's preflight receipt names that exact model.
+The model check is outside the broad ledger/runtime exception path, so a
+programming-order error cannot be silently mislabeled as unavailable ledger
+state. The paired tests prove that a matching signed authorization produces a
+Local routing receipt and that a different (but otherwise qualified) model
+falls back.
+
+TDD evidence:
+
+1. `test_matching_signed_resume_authorization_auto_routes_local` initially
+   failed with `model_resolution` unbound and returned the frontier fallback.
+2. `pytest tests/test_dispatch.py -q -k "matching_signed_resume_authorization_auto_routes_local or preflight_selected_model"`
+   — `2 passed` after moving the binding check.
+3. `pytest tests/test_local_pilot.py tests/test_local_pilot_ledger.py tests/test_dispatch.py tests/test_jobs.py -q`
+   — `422 passed`.
+4. `pytest tests/test_agent_cli.py -q -k "local_pilot"`
+   — `17 passed, 160 deselected`.
+
 ## TDD and verification
 
 RED observations:

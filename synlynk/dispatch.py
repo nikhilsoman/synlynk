@@ -351,11 +351,6 @@ def _resolve_dispatch_agent(
     try:
         runtime = load_pilot_runtime(os.getcwd())
         rebaseline = evaluate_rebaseline(load_pilot_status(db))
-        if not active_resume_authorization_matches_runtime(
-            db, share=REBASELINE_SHARE, max_concurrent=1,
-            effective_model=model_resolution["effective_model"],
-        ):
-            raise ValueError("active_resume_authorization_required")
         if runtime.get("max_concurrent") != 1:
             raise ValueError("runtime_concurrency_disagrees_with_rebaseline_cap")
         if runtime["share"] != REBASELINE_SHARE or rebaseline.share != REBASELINE_SHARE:
@@ -403,6 +398,16 @@ def _resolve_dispatch_agent(
         return fallback
     if model_resolution["effective_model"] not in runtime["qualified_models"]:
         message = f"Routing to: {fallback} (resolved local model is not pilot-qualified)"
+        print(message)
+        _log_routing_fallback(message, requested="local", actual=fallback)
+        return fallback
+    if not active_resume_authorization_matches_runtime(
+        db,
+        share=REBASELINE_SHARE,
+        max_concurrent=1,
+        effective_model=model_resolution["effective_model"],
+    ):
+        message = f"Routing to: {fallback} (local pilot: active resume authorization required)"
         print(message)
         _log_routing_fallback(message, requested="local", actual=fallback)
         return fallback
