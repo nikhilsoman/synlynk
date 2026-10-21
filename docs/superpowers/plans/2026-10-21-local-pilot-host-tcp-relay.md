@@ -98,7 +98,7 @@ git commit -m "fix(local-pilot): route isolated relay to host broker"
   - Assert denied paths/models fail without upstream calls; assert Aider-network clients cannot bypass the relay to reach the host broker; always tear down the project and broker.
 - [x] **Step 2: Run the integration test with the feature flag unset and verify it skips without Docker side effects**
 - [x] **Step 3: Run `SYNLYNK_RUN_LOCAL_PILOT_RELAY_INTEGRATION=1 pytest tests/test_local_pilot_relay_integration.py -q` on OrbStack; authenticated inventory and chat succeed, disallowed model is denied, direct host/Internet probes fail, and an upstream 401 prevents readiness**
-- [x] **Step 4: Run the focused regression suite `pytest tests/test_local_auth_proxy.py tests/test_local_pilot.py tests/test_dispatch.py -q` (excluding the pre-existing conflicting workspace assertion): 245 passed**
+- [x] **Step 4: Run the focused regression suite `pytest tests/test_local_auth_proxy.py tests/test_local_pilot.py tests/test_dispatch.py -q` (excluding the pre-existing conflicting workspace assertion): 247 passed after review fixes**
 - [x] **Step 5: Commit**
 
 ```bash

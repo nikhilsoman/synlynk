@@ -2249,3 +2249,11 @@ implementation dispatched, external messages sent, or policy changed.
 - Verification: broker socket tests 9 passed (outside sandbox because UDS binding is denied inside it); Local pilot suite 30 passed; Compose config validation passed.
 - Docker/OrbStack was not running and was left untouched; actual container socket bind-mount smoke remains a required integration check before Local is enabled.
 
+## 2026-10-22 — Local Pilot Host TCP Relay (#2525)
+
+- Replaced the unsupported host Unix-socket transport with a loopback-only ephemeral TCP broker. The non-privileged socat relay has a fixed `host.docker.internal:<job-port>` destination and alone joins a dedicated bridge; Aider remains internal-only with an inert key.
+- Added bounded Compose readiness and a gated fake-upstream Docker integration test. OrbStack verified allowlisted inventory/chat forwarding and rejected-model handling; internal-only clients could not bypass directly to the host broker or the tested Internet endpoint. Teardown left no test containers or networks.
+- Verification: focused Local Pilot/dispatch suite 245 passed (one workspace-state assertion excluded because a pre-existing user edit enables Local); full suite 4,967 passed, 14 skipped, 3 xfailed, 7 failed in unrelated tests/current workspace state. Full failure names and details are recorded in the committed implementation plan.
+- Fresh review identified and closed two gaps: readiness now uses an authenticated model-inventory request and fails on upstream 401; chat streams are capped at 32 MiB / 300 seconds. Post-review checks: broker suite 12 passed, focused Local Pilot/dispatch suite 247 passed with the same one workspace assertion excluded, and OrbStack integration passed including the unhealthy-auth case. The full suite was not rerun after this scoped hardening.
+- Commits: `e00ede3d`, `2d36cb4c`, `250f62dd`, `b3cd3aff`, `db0cb1b3`. No pilot canary was launched. The implementation/status rollup is on GitHub issue #2525; no PR has been opened.
+
