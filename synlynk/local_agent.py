@@ -382,18 +382,120 @@ def local_pilot_status() -> dict:
     try:
         ensure_local_pilot_ledger(conn)
         cohorts = load_pilot_status(conn)
+        max_concurrent = _local_max_concurrent()
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM daemon_jobs WHERE status = 'running' AND agent = 'local'"
+            ).fetchone()
+            running = int(row[0]) if row else 0
+        except Exception:
+            running = None
     finally:
         conn.close()
     runtime = load_pilot_runtime(os.getcwd())
     decision = evaluate_rebaseline(cohorts)
+    pause_reason = _local_pilot_pause_reason(os.getcwd())
+    endpoint = _local_pilot_endpoint_status()
+    reservation_state = (
+        "unknown" if running is None else "at_capacity" if running >= max_concurrent else "available"
+    )
+    operational = {
+        "endpoint": endpoint,
+        "credentials": "configured" if os.environ.get("OPENAI_API_KEY") else "missing",
+        "model_qualification": "qualified" if runtime["qualified"] else "unqualified",
+        "runner": "available" if runtime["isolated"] else "unavailable",
+        "reservation": {
+            "state": reservation_state,
+            "running": running,
+            "max_concurrent": max_concurrent,
+        },
+    }
     return {
         "cohorts": cohorts,
-        "boundaries": {"share": REBASELINE_SHARE, "max_concurrent": _local_max_concurrent()},
-        "enabled": runtime["enabled"],
-        "paused": not runtime["enabled"],
-        "model": runtime["qualified_models"][0] if runtime["qualified_models"] else None,
+        "progress": {
+            "validation": {"accepted": cohorts["validation"]["accepted"], "required": 5},
+            "expansion": {
+                "consecutive_accepted": cohorts["expansion"]["consecutive_accepted"],
+                "required": 10,
+            },
+        },
+        "boundaries": {"share": REBASELINE_SHARE, "max_concurrent": max_concurrent},
+        "state": {
+            "enabled": runtime["enabled"],
+            "paused": not runtime["enabled"],
+            "reason": pause_reason,
+        },
+        "model": {
+            "selected": runtime["qualified_models"][0] if runtime["qualified_models"] else None,
+            "qualified": runtime["qualified"],
+        },
+        "operational": operational,
         "proposal_35_eligible": decision.proposal_35_eligible,
     }
+
+
+def _local_pilot_pause_reason(repo_root: str) -> str:
+    """Return the configured pause reason without falling back to generated state."""
+    workspace_path = os.path.join(repo_root, ".synlynk", "workspace.json")
+    try:
+        with open(workspace_path, encoding="utf-8") as handle:
+            settings = (json.load(handle).get("local_pilot") or {})
+    except (OSError, json.JSONDecodeError, AttributeError):
+        settings = {}
+    if settings.get("enabled") is True:
+        return "enabled"
+    return str(settings.get("pause_reason") or "disabled by configuration")
+
+
+def _local_pilot_endpoint_status() -> str:
+    """Check the configured endpoint by status only; never return a credential or error body."""
+    try:
+        config = _load_local_config()
+        endpoint = config.get("endpoint")
+    except (FileNotFoundError, AttributeError):
+        endpoint = None
+    if not endpoint:
+        return "missing"
+    return str(
+        _health_check(endpoint, timeout=3, api_key=os.environ.get("OPENAI_API_KEY")).get(
+            "status", "endpoint_unavailable"
+        )
+    )
+
+
+def render_local_pilot_status(status: dict) -> str:
+    """Render the read-only pilot view without combining independent cohorts."""
+    historical = status["cohorts"]["historical"]
+    progress = status["progress"]
+    boundaries = status["boundaries"]
+    state = status["state"]
+    model = status["model"]
+    operational = status["operational"]
+    mismatches = []
+    for name in ("credentials", "endpoint", "model_qualification", "runner"):
+        value = operational[name]
+        if (name, value) not in {
+            ("credentials", "configured"),
+            ("endpoint", "healthy"),
+            ("model_qualification", "qualified"),
+            ("runner", "available"),
+        }:
+            mismatches.append(f"{name}={value}")
+    reservation = operational["reservation"]
+    if reservation["state"] != "available":
+        mismatches.append(f"reservation={reservation['state']}")
+    lines = [
+        f"Pilot: {'enabled' if state['enabled'] else 'paused'} ({state['reason']})",
+        f"Historical evidence: {historical['accepted']}/{historical['eligible']} (preserved separately)",
+        f"Validation: {progress['validation']['accepted']}/{progress['validation']['required']} accepted",
+        "Expansion: "
+        f"{progress['expansion']['consecutive_accepted']}/{progress['expansion']['required']} consecutive accepted",
+        f"Boundary: {boundaries['share']:.0%} cap; {boundaries['max_concurrent']} concurrent",
+        f"Qualified Ornith model: {model['selected'] or 'none'}",
+        f"35% proposal eligible: {'yes' if status['proposal_35_eligible'] else 'no'}",
+        "Operational mismatches: " + ("; ".join(mismatches) if mismatches else "none"),
+    ]
+    return "\n".join(lines)
 
 
 def start_local_pilot_review(job_id: str) -> dict:

@@ -3379,6 +3379,7 @@ def main(argv=None) -> None:
             cmd_local_doctor,
             local_pilot_status,
             record_local_pilot_review,
+            render_local_pilot_status,
             start_local_pilot_review,
         )
         if args.local_action == "doctor":
@@ -3395,7 +3396,12 @@ def main(argv=None) -> None:
             else:
                 local_pilot_parser.print_help()
                 return
-            print(json.dumps(payload, sort_keys=True) if getattr(args, "json_output", False) else json.dumps(payload, indent=2, sort_keys=True))
+            if getattr(args, "json_output", False):
+                print(json.dumps(payload, sort_keys=True))
+            elif args.local_pilot_action == "status":
+                print(render_local_pilot_status(payload))
+            else:
+                print(json.dumps(payload, indent=2, sort_keys=True))
         else:
             help_parsers.get("local", parser).print_help()
     elif args.command == "gateway":

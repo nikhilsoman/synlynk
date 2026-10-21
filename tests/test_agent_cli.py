@@ -2458,10 +2458,87 @@ def test_local_pilot_status_cli_reports_live_configured_concurrency(project_dir,
         "eligible": 12,
     }
     assert payload["boundaries"] == {"max_concurrent": 3, "share": 0.2}
-    assert payload["enabled"] is False
-    assert payload["paused"] is True
-    assert payload["model"] == "ornith-test"
+    assert payload["state"] == {
+        "enabled": False,
+        "paused": True,
+        "reason": "disabled by configuration",
+    }
+    assert payload["model"] == {"qualified": True, "selected": "ornith-test"}
     assert payload["proposal_35_eligible"] is False
+
+
+def test_local_pilot_status_cli_keeps_cohort_denominators_and_operational_mismatches_separate(
+    project_dir, monkeypatch, capsys
+):
+    """A status renderer must not merge cohorts or hide a blocked pilot behind secrets."""
+    from synlynk import local_agent
+    from synlynk.cli import main
+
+    (project_dir / ".agents").mkdir()
+    (project_dir / ".agents" / "local.json").write_text(
+        '{"endpoint": "http://127.0.0.1:8000", "max_concurrent": 1, '
+        '"models": [{"id": "ornith-test", "qualification": "qualified"}]}'
+    )
+    (project_dir / ".synlynk" / "workspace.json").write_text(
+        '{"local_pilot": {"enabled": false, "pause_reason": "preflight disagreement"}}'
+    )
+    monkeypatch.setattr(
+        local_agent,
+        "_health_check",
+        lambda *args, **kwargs: {"reachable": False, "status": "unauthenticated", "error": "HTTP 401"},
+    )
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    main(["local", "pilot", "status", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["cohorts"]["historical"] == {
+        "accepted": 8,
+        "cohort": "historical",
+        "eligible": 12,
+    }
+    assert payload["progress"] == {
+        "validation": {"accepted": 0, "required": 5},
+        "expansion": {"consecutive_accepted": 0, "required": 10},
+    }
+    assert payload["boundaries"] == {"max_concurrent": 1, "share": 0.2}
+    assert payload["state"] == {"enabled": False, "paused": True, "reason": "preflight disagreement"}
+    assert payload["model"] == {"qualified": True, "selected": "ornith-test"}
+    assert payload["proposal_35_eligible"] is False
+    assert payload["operational"] == {
+        "credentials": "missing",
+        "endpoint": "unauthenticated",
+        "model_qualification": "qualified",
+        "reservation": {"max_concurrent": 1, "running": 0, "state": "available"},
+        "runner": "unavailable",
+    }
+    assert "HTTP 401" not in json.dumps(payload)
+
+    main(["local", "pilot", "status"])
+
+    text = capsys.readouterr().out
+    assert "Historical evidence: 8/12" in text
+    assert "Validation: 0/5 accepted" in text
+    assert "Expansion: 0/10 consecutive accepted" in text
+    assert "Boundary: 20% cap; 1 concurrent" in text
+    assert "Pilot: paused (preflight disagreement)" in text
+    assert "Qualified Ornith model: ornith-test" in text
+    assert "35% proposal eligible: no" in text
+    assert "Operational mismatches: credentials=missing; endpoint=unauthenticated; runner=unavailable" in text
+
+
+def test_local_pilot_operations_runbook_preserves_human_approval_authority():
+    """A merge or evidence threshold must never authorize live Local work by itself."""
+    runbook = Path("docs/reference/local-harness-pilot-operations.md").read_text()
+
+    assert "#2342" in runbook
+    assert "#2349" in runbook
+    assert "Design approval" in runbook
+    assert "Operational-resume approval" in runbook
+    assert "Expansion approval" in runbook
+    assert "35% proposal is never automatic" in runbook
+    assert "no live work is authorized by code merge alone" in runbook
+    assert "only Nikhil's later operational-resume approval authorizes live samples" in runbook
 
 
 def test_local_pilot_review_start_cli_prints_the_factual_brief(monkeypatch, capsys):
