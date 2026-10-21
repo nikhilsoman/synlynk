@@ -8,8 +8,11 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.util
+import json
+import os
 import sys
 from collections.abc import Mapping
+from pathlib import Path
 
 
 SERVICE = "com.synlynk.omlx"
@@ -183,11 +186,39 @@ class _SecurityKeychain:
 
 
 class LocalCredentialStore:
-    """Narrow API over the host Keychain; adapter injection supports tests."""
+    """Read oMLX's persistent API key; retain Keychain only for legacy commands."""
 
-    def __init__(self, adapter=None, platform=None):
+    def __init__(self, adapter=None, platform=None, *, settings_path=None,
+                 environ=None, home=None, bootstrap_path=None):
         self._platform = platform or sys.platform
         self._adapter = adapter
+        self._settings_path = Path(settings_path).expanduser() if settings_path else None
+        self._environ = environ
+        self._home = Path(home).expanduser() if home else Path.home()
+        self._bootstrap_path = Path(bootstrap_path) if bootstrap_path else (
+            self._home / "Library" / "Application Support" / "oMLX" / "base-path"
+        )
+
+    def _active_settings_path(self) -> Path:
+        if self._settings_path is not None:
+            return self._settings_path
+        environ = os.environ if self._environ is None else self._environ
+        bootstrap_readable = False
+        try:
+            base_path = self._bootstrap_path.read_text(encoding="utf-8").strip()
+            bootstrap_readable = True
+        except OSError:
+            base_path = ""
+        if base_path:
+            base = Path(base_path).expanduser().resolve()
+        elif bootstrap_readable:
+            # The installed wrapper assigns the empty bootstrap value before
+            # launching Python, so an inherited OMLX_BASE_PATH is cleared.
+            base = self._home / ".omlx"
+        else:
+            base_path = environ.get("OMLX_BASE_PATH", "")
+            base = Path(base_path).expanduser().resolve() if base_path else self._home / ".omlx"
+        return base / "settings.json"
 
     def _keychain(self):
         if self._platform != "darwin":
@@ -218,15 +249,17 @@ class LocalCredentialStore:
 
     def get(self) -> str:
         try:
-            return self._keychain().get(SERVICE, ACCOUNT)
-        except FileNotFoundError as exc:
-            raise CredentialUnavailable("oMLX credential is not configured") from exc
-        except UnsupportedCredentialPlatform:
-            raise
+            with self._active_settings_path().open(encoding="utf-8") as stream:
+                settings = json.load(stream)
+            auth = settings.get("auth") if isinstance(settings, dict) else None
+            value = auth.get("api_key") if isinstance(auth, dict) else None
+            if not isinstance(value, str) or not value.strip():
+                raise CredentialUnavailable("oMLX settings API key is not configured")
+            return value
         except Exception as exc:
             if isinstance(exc, CredentialError):
                 raise
-            raise CredentialUnavailable("Keychain credential is unavailable") from None
+            raise CredentialUnavailable("oMLX settings credential is unavailable") from None
 
     def delete(self) -> None:
         try:

@@ -218,7 +218,7 @@ def resolve_effective_local_model(
         if not health_result.get("reachable"):
             detail = health_result.get("error", "inventory health check failed")
             if inventory_status == "unauthenticated":
-                detail = "oMLX rejected authentication (HTTP 401); run `synlynk local credentials import`"
+                detail = "oMLX rejected authentication (HTTP 401); check the oMLX persistent settings API key"
             elif inventory_status == "timeout":
                 detail = "oMLX inventory request timed out"
             elif inventory_status == "malformed_inventory":
@@ -809,11 +809,13 @@ def cmd_local_doctor(config_path: str = None, init: bool = False, api_key: str =
             api_key = LocalCredentialStore().get()
         except Exception:
             api_key = None
+    print("  ✓ oMLX persistent settings API key configured" if api_key
+          else "  ✗ oMLX persistent settings API key missing or unreadable")
     result = _health_check(endpoint, api_key=api_key)
     if not result["reachable"]:
         print(f"  ✗ oMLX unreachable at {endpoint}: {result['error']}")
         if "401" in result["error"]:
-            print("    oMLX rejected the request (401 Unauthorized) — run `synlynk local credentials import`")
+            print("    oMLX rejected the request (401 Unauthorized) — check the oMLX persistent settings API key")
         else:
             print("    Start it with: omlx serve")
         return 1
@@ -894,8 +896,8 @@ def cmd_local_credentials(action: str, *, replace: bool = False, environ=None,
             store.import_from_environment(environ, replace=replace)
             print("  ✓ oMLX credential stored in macOS Keychain")
         elif action == "status":
-            print("  ✓ oMLX credential configured" if store.is_configured()
-                  else "  ✗ oMLX credential not configured")
+            print("  ✓ oMLX persistent settings API key configured" if store.is_configured()
+                  else "  ✗ oMLX persistent settings API key missing or unreadable")
         elif action == "delete":
             store.delete()
             print("  ✓ oMLX credential deleted from macOS Keychain")
