@@ -95,6 +95,60 @@ def test_execute_home_handover_drain_flow(tmp_path, monkeypatch):
     assert is_harness_draining("claude", repo_path=tmp_path) is False
 
 
+def test_execute_home_handover_releases_active_lease_and_claim(tmp_path, monkeypatch):
+    """Full-integration note (gh:#2511): a real execute_home_handover() run resolves
+    its state.db through _project_root()'s canonical-identity machinery, which a
+    hand-rolled tmp_path .synlynk/state.db cannot stand in for (it raises
+    RuntimeError outside a real git worktree, or resolves to an unrelated
+    canonical path inside one) — exactly the class of error the surrounding
+    try/except Exception: pass in execute_home_handover is designed to absorb.
+    This test instead proves, directly and without mocking that machinery, that
+    the two calls execute_home_handover makes when active_story_id is set —
+    release_task_lease(active_story_id, current_home, new_status=None) followed
+    by _remove_active_claim(active_story_id) — behave correctly together against
+    a real task_leases row and a real active_claims.json file."""
+    from synlynk import _get_db
+    from synlynk.jobs import acquire_task_lease, release_task_lease, get_active_lease
+    from synlynk.session import _add_active_claim, _read_active_claims, _remove_active_claim
+
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+
+    conn = _get_db(db_path=str(tmp_path / ".synlynk" / "test_handover_leases.db"))
+    conn.execute(
+        "INSERT INTO stories (story_id, title, role, stage, status, readiness) "
+        "VALUES ('story-9012', 'Lease Handover Story', 'dev', 'open', 'in_progress', 'in_progress')"
+    )
+    conn.commit()
+
+    acquire_task_lease("story-9012", "claude", duration_seconds=600, conn=conn)
+    _add_active_claim("story-9012")
+    assert "story-9012" in _read_active_claims()
+
+    active_story_id = "story-9012"
+    current_home = "claude"
+
+    # Same two calls execute_home_handover makes when active_story_id is truthy.
+    release_task_lease(active_story_id, current_home, new_status=None, conn=conn)
+    _remove_active_claim(active_story_id)
+
+    lease = get_active_lease("story-9012", conn=conn)
+    assert lease is None  # no active lease remains
+
+    row = conn.execute(
+        "SELECT status FROM task_leases WHERE story_id='story-9012' ORDER BY rowid DESC LIMIT 1"
+    ).fetchone()
+    assert row[0] == "released"
+
+    # new_status=None must not force the mid-flight story to 'done'.
+    story_status = conn.execute(
+        "SELECT status FROM stories WHERE story_id='story-9012'"
+    ).fetchone()
+    assert story_status[0] == "in_progress"
+
+    assert "story-9012" not in _read_active_claims()
+
+
 def test_execute_home_handover_prefers_load_config_over_stale_legacy_file(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk")

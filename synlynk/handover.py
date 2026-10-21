@@ -178,6 +178,15 @@ def execute_home_handover(
     drain_info = calculate_drain_horizon(current_home, repo_path=repo)
     active_story_id = drain_info["active_story_id"] if not force else None
 
+    if active_story_id:
+        try:
+            from synlynk.jobs import release_task_lease
+            from synlynk.session import _remove_active_claim
+            release_task_lease(active_story_id, current_home, new_status=None)
+            _remove_active_claim(active_story_id)
+        except Exception:
+            pass
+
     # Record handover state
     handover_data = record_handover_state(
         outgoing_harness=current_home,

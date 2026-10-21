@@ -166,6 +166,34 @@ def test_heartbeat_all_claims_for_pid(db_conn):
     assert after["heartbeat_at"] > before["heartbeat_at"]
 
 
+def test_story_done_releases_active_claim(db_conn):
+    acquire_task_lease(
+        "story-lease-1", "claude:host:1", duration_seconds=600,
+        pid=os.getpid(), harness="claude", conn=db_conn,
+    )
+
+    from synlynk.db import cmd_story_done
+    cmd_story_done("story-lease-1", conn=db_conn)
+
+    row = db_conn.execute(
+        "SELECT status FROM task_leases WHERE story_id='story-lease-1' ORDER BY rowid DESC LIMIT 1"
+    ).fetchone()
+    assert row[0] == "released"
+
+
+def test_story_done_clears_tracked_active_claim(db_conn, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+
+    from synlynk.session import _add_active_claim, _read_active_claims
+    from synlynk.db import cmd_story_done
+
+    _add_active_claim("story-lease-1")
+    cmd_story_done("story-lease-1", conn=db_conn)
+
+    assert "story-lease-1" not in _read_active_claims()
+
+
 def test_heartbeat_by_story_ids_renews_across_simulated_process_boundary(db_conn, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk", exist_ok=True)

@@ -4146,20 +4146,29 @@ def cmd_story_draft(story_id: str) -> None:
     conn.close()
     print(f"  {_GREEN}✓{_RESET} Story {story_id} reverted to draft")
 
-def cmd_story_done(story_id: str) -> None:
-    """Marks a story done and emits a story_done event carrying its linked goal ids."""
+def cmd_story_done(story_id: str, conn=None) -> None:
+    """Marks a story done, releases any active task_lease, and emits a story_done event."""
     from synlynk import _GREEN, _RESET, _get_db
     from synlynk.events import emit_event
-    conn = _get_db()
+    from synlynk.session import _remove_active_claim
+    owns_conn = False
+    if conn is None:
+        conn = _get_db()
+        owns_conn = True
     story = conn.execute(
         "SELECT story_id, goal_id FROM stories WHERE story_id=?", (story_id,)
     ).fetchone()
     if not story:
-        conn.close()
+        if owns_conn:
+            conn.close()
         print(f"  Story '{story_id}' not found.")
         return
     conn.execute(
         "UPDATE stories SET status='done', readiness='done' WHERE story_id=?",
+        (story_id,),
+    )
+    conn.execute(
+        "UPDATE task_leases SET status='released' WHERE story_id=? AND status='active'",
         (story_id,),
     )
     phase_result = conn.execute(
@@ -4167,13 +4176,18 @@ def cmd_story_done(story_id: str) -> None:
         (story_id,),
     )
     conn.commit()
+    try:
+        _remove_active_claim(story_id)
+    except OSError:
+        pass
     goal_ids = []
     if story[1]:
         goal_ids.append(story[1])
     secondary = conn.execute(
         "SELECT goal_id FROM goal_contributions WHERE story_id=?", (story_id,)
     ).fetchall()
-    conn.close()
+    if owns_conn:
+        conn.close()
     goal_ids.extend(g[0] for g in secondary if g[0] not in goal_ids)
     if phase_result.rowcount:
         _generate_roadmap_md()
