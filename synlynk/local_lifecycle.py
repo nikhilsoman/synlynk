@@ -222,7 +222,9 @@ def prepare_local_pilot(repo_root: str, dispatch_key: str, pilot_class: str) -> 
     last_error = None
     for _attempt in range(2):
         try:
-            return manager.ensure_ready()
+            result = manager.ensure_ready()
+            manager.record_reservation_started(dispatch_key)
+            return result
         except LifecycleError as exc:
             last_error = exc
     if last_error is not None:
@@ -468,12 +470,17 @@ class LocalLifecycleManager:
                 raise LifecycleError("model_not_ready", "approved Ornith model did not become ready", phase="model")
             return LocalRuntimeResult(True, LIFECYCLE_MODEL_ID, True, pid)
 
-    def record_job_started(self, job_id: str) -> None:
+    def record_job_started(self, job_id: str, *, pid: int | None = None) -> None:
         with self._locked():
             state = self._reconcile_jobs(self._read_state())
-            pid, process_start = self._require_current_process_identity()
+            if pid is None:
+                pid, process_start = self._require_current_process_identity()
+            else:
+                process_start = _process_start_identity(int(pid))
+                if process_start is None:
+                    raise LifecycleError("process_identity_unavailable", "cannot safely track Local job", phase="ownership")
             state.setdefault("active_jobs", {})[job_id] = {
-                "pid": pid,
+                "pid": int(pid),
                 "process_start": process_start,
             }
             state["last_activity"] = float(self.clock())

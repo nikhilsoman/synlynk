@@ -5335,6 +5335,34 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             local_pilot_control.__exit__(None, None, None)
             local_pilot_control = None
 
+    if isolated_local_pilot:
+        try:
+            from synlynk.local_lifecycle import LocalLifecycleManager
+            lifecycle_manager = LocalLifecycleManager()
+            lifecycle_manager.record_job_started(job_id, pid=proc.pid)
+            lifecycle_manager.record_reservation_finished(
+                str(story_id or issue or task)
+            )
+        except Exception:
+            # The runner is already spawned. Stop it and roll back its pending
+            # admission if its process lease cannot be established; otherwise
+            # the idle supervisor could stop oMLX during a live task.
+            try:
+                proc.terminate()
+                proc.wait(timeout=5)
+            except Exception:
+                pass
+            if local_slot_claimed and dconn is not None:
+                dconn.rollback()
+            if pytest_shim_dir is not None:
+                pytest_shim_dir.cleanup()
+            if local_pilot_control is not None:
+                local_pilot_control.__exit__(None, None, None)
+                local_pilot_control = None
+            if owns_dconn and dconn is not None:
+                dconn.close()
+            return frontier_fallback("Local active-job lease unavailable", local_pilot_receipt)
+
     if hasattr(proc, "wait"):
         threading.Thread(
             target=_cleanup_shim_after_process,

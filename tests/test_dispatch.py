@@ -2839,6 +2839,13 @@ def test_local_pilot_dispatch_uses_isolated_runner_and_records_cohort_receipt(pr
         },
     )
     monkeypatch.setattr("synlynk.harness_adapters.registry.get_adapter", lambda agent: adapter)
+    leased = []
+    class FakeLifecycleManager:
+        def record_job_started(self, job_id, *, pid=None):
+            leased.append((job_id, pid))
+        def record_reservation_finished(self, reservation_id):
+            leased.append(("released", reservation_id))
+    monkeypatch.setattr("synlynk.local_lifecycle.LocalLifecycleManager", FakeLifecycleManager)
     monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda root: {
         "enabled": True, "qualified": True, "isolated": True,
         "share": 0.2, "max_concurrent": 1, "qualified_models": ["ornith"],
@@ -2898,6 +2905,7 @@ def test_local_pilot_dispatch_uses_isolated_runner_and_records_cohort_receipt(pr
         "result_receipt_file": job["log_file"] + ".pilot.json",
     }
     assert job["local_pilot_receipt"] == expected_receipt
+    assert leased == [(job["id"], 9998), ("released", "test-2")]
     assert job["local_model_receipt"]["pilot"] == expected_receipt
     from synlynk import _get_db
 

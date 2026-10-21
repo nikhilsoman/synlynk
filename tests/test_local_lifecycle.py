@@ -314,6 +314,25 @@ def test_prepare_local_pilot_retries_once_with_same_manager(monkeypatch):
     assert manager.calls == 2
 
 
+def test_prepare_local_pilot_holds_reservation_until_dispatch(monkeypatch):
+    from synlynk import local_lifecycle
+
+    class Manager:
+        reservation = None
+
+        def ensure_ready(self):
+            return local_lifecycle.LocalRuntimeResult(True, LIFECYCLE_MODEL_ID, True, 123)
+
+        def record_reservation_started(self, reservation_id):
+            self.reservation = reservation_id
+
+    manager = Manager()
+    monkeypatch.setattr(local_lifecycle, "LocalLifecycleManager", lambda: manager)
+    result = local_lifecycle.prepare_local_pilot("/repo", "dispatch-1", "test_summary")
+    assert result.ready
+    assert manager.reservation == "dispatch-1"
+
+
 def test_local_failure_reporter_redacts_and_rate_limits(tmp_path):
     from synlynk.local_failure_reporter import report_local_failure
 
