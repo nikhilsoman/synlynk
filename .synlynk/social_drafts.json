@@ -3038,5 +3038,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2512 \u2014 add fail-closed operational resume control (PR #2512, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2512.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-21) - PR #2512\n- Merged improvements and fixes for PR #2512."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/437-pr2514-enable-muse-review-capability-calibratio.md",
+    "title": "PR #2514 \u2014 enable Muse review capability calibration",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-21",
+    "pr": "#2514",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2514."
+    ],
+    "tweet": "\ud83d\ude80 PR #2514 \u2014 enable Muse review capability calibration (PR #2514, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2514.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-21) - PR #2514\n- Merged improvements and fixes for PR #2514."
   }
 ]
