@@ -2242,3 +2242,10 @@ implementation dispatched, external messages sent, or policy changed.
 - Verification: lifecycle, Local agent, CLI parser, new daemon lifecycle seam, and existing daemon start/lock tests — 99 passed.
 - Repository deviation: `tests/test_daemon.py` named by the plan is absent; the added `tests/test_daemon_local_lifecycle.py` and two extant daemon regression suites cover the seam.
 
+## 2026-10-21 — Unattended Local oMLX Lifecycle (Task 4)
+
+- Replaced the raw host TCP relay with a per-job host Unix-socket broker and minimal pinned socat relay. The broker injects Keychain auth only to fixed `127.0.0.1:8000`, permits only model metadata/chat completion, filters inventory to Ornith, rewrites the Aider provider prefix, bounds requests, streams responses, and removes the socket/secret reference on teardown.
+- Removed `OPENAI_API_KEY` from runner/Compose/Aider environment. Aider requires a non-empty OpenAI client value, so it gets the fixed inert `synlynk-local-relay-only` sentinel; the broker unconditionally replaces inbound Authorization.
+- Verification: broker socket tests 9 passed (outside sandbox because UDS binding is denied inside it); Local pilot suite 30 passed; Compose config validation passed.
+- Docker/OrbStack was not running and was left untouched; actual container socket bind-mount smoke remains a required integration check before Local is enabled.
+
