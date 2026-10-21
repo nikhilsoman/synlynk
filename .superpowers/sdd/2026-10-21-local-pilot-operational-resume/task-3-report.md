@@ -20,6 +20,32 @@
 
 No resume command was invoked and no Local configuration was enabled.
 
+## Review correction
+
+Commit pending: serializes the three control-plane actors (resume config/
+activation, safety pause, and final Local slot claim) with a Local control
+lock. Activation now checks for post-watermark safety failures in its own
+SQLite transition; pause terminalizes both staged and active authority before
+writing disabled config; and the final slot-claim transaction reloads the
+authorization, epoch, enabled runtime, exact one-concurrent target, and
+signed preflight-selected model immediately before it reserves/spawns Local.
+The claim always uses one as its capacity bound and also rejects a divergent
+`.agents/local.json` capacity value.
+
+Review-correction TDD evidence:
+
+1. New staged-pause and post-watermark activation tests first failed because
+   pause retained `activating` authority and activation did not query later
+   safety evidence.
+2. `pytest tests/test_local_pilot_ledger.py -q -k "pause_terminalizes or activation_rejects"`
+   — `2 passed` after the lifecycle correction.
+3. `pytest tests/test_dispatch.py -q -k "preflight_selected_model or final_local_slot_claim_refuses"`
+   — `2 passed` for selected-model binding and operative concurrency drift.
+4. `pytest tests/test_local_pilot.py tests/test_local_pilot_ledger.py tests/test_dispatch.py tests/test_jobs.py -q`
+   — `421 passed`.
+5. `pytest tests/test_agent_cli.py -q -k "local_pilot"`
+   — `17 passed, 160 deselected`.
+
 ## TDD and verification
 
 RED observations:

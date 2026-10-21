@@ -184,6 +184,55 @@ def test_pause_revokes_active_resume_authorization_before_disabling_config(
     }}]
 
 
+def test_pause_terminalizes_an_activating_authorization_before_disabling_config(
+    ledger_conn, resume_identity_key, monkeypatch
+):
+    """A safety pause wins even when resume is still between its two phases."""
+    from synlynk.local_pilot_ledger import (
+        create_resume_authorization,
+        ensure_local_pilot_ledger,
+        pause_local_pilot,
+    )
+
+    ensure_local_pilot_ledger(ledger_conn)
+    staged = create_resume_authorization(
+        ledger_conn, _resume_authorization_payload(ledger_conn, resume_identity_key),
+    )
+    monkeypatch.setattr("synlynk.load_workspace", lambda: {"local_pilot": {"enabled": True, "share": 0.2}})
+    monkeypatch.setattr("synlynk._update_config", lambda _update: None)
+
+    pause_local_pilot("post_watermark_safety_failure", conn=ledger_conn)
+
+    row = ledger_conn.execute(
+        "SELECT state, terminal_reason FROM local_pilot_resume_authorizations WHERE authorization_id = ?",
+        (staged["authorization_id"],),
+    ).fetchone()
+    assert row == ("failed", "post_watermark_safety_failure")
+
+
+def test_activation_rejects_a_safety_failure_after_its_signed_watermark(
+    ledger_conn, resume_identity_key
+):
+    """The final activation transition must recheck its own evidence epoch."""
+    from synlynk.local_pilot_ledger import (
+        activate_resume_authorization,
+        create_resume_authorization,
+        ensure_local_pilot_ledger,
+        record_admission,
+        record_safety_outcome,
+    )
+
+    ensure_local_pilot_ledger(ledger_conn)
+    staged = create_resume_authorization(
+        ledger_conn, _resume_authorization_payload(ledger_conn, resume_identity_key),
+    )
+    record_admission(ledger_conn, _sample("post-watermark"))
+    record_safety_outcome(ledger_conn, "post-watermark", "failed", "containment", {"safe": False})
+
+    with pytest.raises(ValueError, match="post-watermark safety failure"):
+        activate_resume_authorization(ledger_conn, staged["authorization_id"])
+
+
 def test_later_review_preserves_an_earlier_jobs_evidence(ledger_conn):
     from synlynk.local_pilot_ledger import (
         ensure_local_pilot_ledger,

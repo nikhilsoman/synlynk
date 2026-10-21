@@ -9,6 +9,7 @@ import sqlite3
 import subprocess
 import tempfile
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -184,6 +185,13 @@ def activate_resume_authorization(conn: sqlite3.Connection, authorization_id: st
     """Mark one prepared authorization active; SQLite enforces one active authority."""
     ensure_local_pilot_ledger(conn)
     with write_transaction(conn):
+        authorization = _authorization_as_dict(conn, authorization_id)
+        post_watermark_failure = conn.execute(
+            "SELECT 1 FROM local_pilot_evidence WHERE safety_verdict = 'failed' AND rowid > ?",
+            (authorization["safety_watermark"],),
+        ).fetchone()
+        if post_watermark_failure is not None:
+            raise ValueError("post-watermark safety failure requires a fresh resume authorization")
         try:
             result = conn.execute(
                 "UPDATE local_pilot_resume_authorizations SET state = 'active', activated_at = ? "
@@ -247,7 +255,8 @@ def active_resume_authorization(conn: sqlite3.Connection) -> dict | None:
 
 
 def active_resume_authorization_matches_runtime(
-    conn: sqlite3.Connection, *, share: float, max_concurrent: int
+    conn: sqlite3.Connection, *, share: float, max_concurrent: int,
+    effective_model: str | None = None,
 ) -> bool:
     """Return whether durable approval authorizes this exact Local runtime.
 
@@ -265,7 +274,24 @@ def active_resume_authorization_matches_runtime(
         receipt.get("result") == "passed"
         and receipt.get("requested_share") == share
         and receipt.get("requested_max_concurrent") == max_concurrent
+        and (effective_model is None or receipt.get("resolved_model") == effective_model)
     )
+
+
+@contextmanager
+def local_pilot_control_lock(repo_root: str | None = None):
+    """Serialize Local config, authority lifecycle, and final slot admission."""
+    import fcntl
+
+    root = os.path.abspath(repo_root or os.getcwd())
+    lock_path = os.path.join(root, ".synlynk", "local-pilot-control.lock")
+    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+    with open(lock_path, "a+") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def record_admission(conn: sqlite3.Connection, sample: dict) -> dict:
@@ -454,15 +480,35 @@ def pause_local_pilot(reason: str, *, conn: sqlite3.Connection | None = None) ->
     if conn is None:
         conn = _get_db()
     try:
-        revoke_active_resume_authorization(conn, str(reason))
+        with local_pilot_control_lock():
+            with write_transaction(conn):
+                staged = conn.execute(
+                    "SELECT authorization_id FROM local_pilot_resume_authorizations WHERE state = 'activating'"
+                ).fetchone()
+                if staged is not None:
+                    conn.execute(
+                        "UPDATE local_pilot_resume_authorizations "
+                        "SET state = 'failed', revoked_at = ?, terminal_reason = ? "
+                        "WHERE authorization_id = ? AND state = 'activating'",
+                        (_utc_now(), str(reason), staged[0]),
+                    )
+                active = conn.execute(
+                    "SELECT authorization_id FROM local_pilot_resume_authorizations WHERE state = 'active'"
+                ).fetchone()
+                if active is not None:
+                    conn.execute(
+                        "UPDATE local_pilot_resume_authorizations "
+                        "SET state = 'revoked', revoked_at = ?, terminal_reason = ? "
+                        "WHERE authorization_id = ? AND state = 'active'",
+                        (_utc_now(), str(reason), active[0]),
+                    )
+            workspace = load_workspace()
+            settings = dict(workspace.get("local_pilot") or {})
+            settings.update({"enabled": False, "pause_reason": str(reason)})
+            _update_config({"local_pilot": settings})
     finally:
         if owns_connection:
             conn.close()
-
-    workspace = load_workspace()
-    settings = dict(workspace.get("local_pilot") or {})
-    settings.update({"enabled": False, "pause_reason": str(reason)})
-    _update_config({"local_pilot": settings})
 
 
 def load_pilot_status(conn: sqlite3.Connection) -> dict:

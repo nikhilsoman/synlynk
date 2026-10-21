@@ -72,6 +72,13 @@ the active authorization before disabling config. Dispatch therefore requires
 both the enabled exact runtime and a matching active signed authorization; any
 uncertainty or drift goes to the selected frontier fallback.
 
+The control lock serializes that staged activation, a safety pause, and the
+final Local reservation/runner launch. Immediately before taking the sole
+slot, dispatch reads the active signed authority, epoch safety state, exact
+workspace runtime, local-agent one-concurrent setting, and signed
+preflight-selected model again. A changed, revoked, or merely differently
+qualified model is refused before a Local reservation or runner is created.
+
 ## Evidence and tracking procedure
 
 For every cohort result, safety pause, operational-resume decision, or 35%

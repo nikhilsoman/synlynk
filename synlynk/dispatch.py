@@ -352,7 +352,8 @@ def _resolve_dispatch_agent(
         runtime = load_pilot_runtime(os.getcwd())
         rebaseline = evaluate_rebaseline(load_pilot_status(db))
         if not active_resume_authorization_matches_runtime(
-            db, share=REBASELINE_SHARE, max_concurrent=1
+            db, share=REBASELINE_SHARE, max_concurrent=1,
+            effective_model=model_resolution["effective_model"],
         ):
             raise ValueError("active_resume_authorization_required")
         if runtime.get("max_concurrent") != 1:
@@ -4180,7 +4181,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             ledger_conn = db_conn or _pkg("_get_db")()
             rebaseline = evaluate_rebaseline(load_pilot_status(ledger_conn))
             authorization_matches = active_resume_authorization_matches_runtime(
-                ledger_conn, share=REBASELINE_SHARE, max_concurrent=1
+                ledger_conn, share=REBASELINE_SHARE, max_concurrent=1,
+                effective_model=receipt_payload.get("effective_model"),
             )
         except Exception:
             return frontier_fallback("rebaseline ledger unavailable", local_pilot_receipt)
@@ -5113,13 +5115,51 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     gh_write_expect_for_job = gh_write_expect or gh_write_expect_value or "closed"
 
     local_slot_claimed = False
+    local_pilot_control = None
     if agent == "local" and dconn is not None:
+        if local_pilot_receipt:
+            from synlynk.local_pilot_ledger import local_pilot_control_lock
+            local_pilot_control = local_pilot_control_lock(os.getcwd())
+            local_pilot_control.__enter__()
         # Serialize the final capacity check with the running-row claim. The
         # transaction stays open through Popen and the row update below, so a
         # direct dispatch and a scheduler dispatch cannot both take the slot.
         dconn.execute("BEGIN IMMEDIATE")
-        if _local_concurrency_exceeded(dconn, max_concurrent=_local_max_concurrent()):
+        if local_pilot_receipt:
+            from synlynk.local_pilot import REBASELINE_SHARE, evaluate_rebaseline, load_pilot_runtime
+            from synlynk.local_pilot_ledger import (
+                active_resume_authorization_matches_runtime,
+                load_pilot_status,
+            )
+            final_runtime = load_pilot_runtime(os.getcwd())
+            final_authorization_matches = active_resume_authorization_matches_runtime(
+                dconn,
+                share=REBASELINE_SHARE,
+                max_concurrent=1,
+                effective_model=local_pilot_receipt.get("effective_model"),
+            )
+            final_rebaseline = evaluate_rebaseline(load_pilot_status(dconn))
+            if (
+                not final_authorization_matches
+                or not final_rebaseline.allow_admission
+                or final_runtime.get("enabled") is not True
+                or final_runtime.get("share") != REBASELINE_SHARE
+                or final_runtime.get("max_concurrent") != 1
+                or _local_max_concurrent() != 1
+            ):
+                dconn.rollback()
+                local_pilot_control.__exit__(None, None, None)
+                local_pilot_control = None
+                if pytest_shim_dir is not None:
+                    pytest_shim_dir.cleanup()
+                if owns_dconn:
+                    dconn.close()
+                return frontier_fallback("Local authorization or runtime changed before slot claim", local_pilot_receipt)
+        if _local_concurrency_exceeded(dconn, max_concurrent=1):
             dconn.rollback()
+            if local_pilot_control is not None:
+                local_pilot_control.__exit__(None, None, None)
+                local_pilot_control = None
             if local_pilot_receipt:
                 if pytest_shim_dir is not None:
                     pytest_shim_dir.cleanup()
@@ -5202,6 +5242,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 pytest_shim_dir.cleanup()
             if local_slot_claimed:
                 dconn.rollback()
+            if local_pilot_control is not None:
+                local_pilot_control.__exit__(None, None, None)
+                local_pilot_control = None
             if owns_dconn and dconn is not None:
                 dconn.close()
             return frontier_fallback("isolated runner setup failed", local_pilot_receipt)
@@ -5225,6 +5268,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 pytest_shim_dir.cleanup()
             if local_slot_claimed:
                 dconn.rollback()
+            if local_pilot_control is not None:
+                local_pilot_control.__exit__(None, None, None)
+                local_pilot_control = None
             if owns_dconn and dconn is not None:
                 dconn.close()
             return frontier_fallback("ledger admission failed", local_pilot_receipt)
@@ -5268,6 +5314,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     finally:
         if stderr_handle is not None:
             stderr_handle.close()
+        if local_pilot_control is not None:
+            local_pilot_control.__exit__(None, None, None)
+            local_pilot_control = None
 
     if hasattr(proc, "wait"):
         threading.Thread(

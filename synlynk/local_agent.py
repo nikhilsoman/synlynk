@@ -650,7 +650,7 @@ def resume_local_pilot(
     """Run the explicit human ceremony and activate only the fixed validation lane."""
     from synlynk.local_pilot_ledger import (
         activate_resume_authorization, create_resume_authorization, fail_resume_authorization,
-        resume_authorization_context,
+        local_pilot_control_lock, resume_authorization_context,
     )
 
     remediation_ref = str(remediation_ref or "").strip()
@@ -678,25 +678,26 @@ def resume_local_pilot(
         "authorization": authorization, "signature": _sign_resume_authorization(authorization),
     }})
     try:
-        _write_resumed_local_pilot_config(repo_root)
-        # Recheck the state that can race the config write without treating enabled config as approval.
-        try:
-            running = conn.execute(
-                "SELECT COUNT(*) FROM daemon_jobs WHERE status = 'running' AND agent = 'local'"
+        with local_pilot_control_lock(repo_root):
+            _write_resumed_local_pilot_config(repo_root)
+            # Recheck the state that can race the config write without treating enabled config as approval.
+            try:
+                running = conn.execute(
+                    "SELECT COUNT(*) FROM daemon_jobs WHERE status = 'running' AND agent = 'local'"
+                ).fetchone()[0]
+            except Exception as error:
+                raise ValueError("Local reservation state is unreadable during activation") from error
+            pending = conn.execute(
+                "SELECT COUNT(*) FROM local_pilot_evidence "
+                "WHERE safety_verdict = 'pending' OR quality_verdict = 'pending'"
             ).fetchone()[0]
-        except Exception as error:
-            raise ValueError("Local reservation state is unreadable during activation") from error
-        pending = conn.execute(
-            "SELECT COUNT(*) FROM local_pilot_evidence "
-            "WHERE safety_verdict = 'pending' OR quality_verdict = 'pending'"
-        ).fetchone()[0]
-        post_watermark_failure = conn.execute(
-            "SELECT COUNT(*) FROM local_pilot_evidence WHERE safety_verdict = 'failed' AND rowid > ?",
-            (authorization["safety_watermark"],),
-        ).fetchone()[0]
-        if running or pending or post_watermark_failure:
-            raise ValueError("Local pilot state changed during activation")
-        active = activate_resume_authorization(conn, staged["authorization_id"])
+            post_watermark_failure = conn.execute(
+                "SELECT COUNT(*) FROM local_pilot_evidence WHERE safety_verdict = 'failed' AND rowid > ?",
+                (authorization["safety_watermark"],),
+            ).fetchone()[0]
+            if running or pending or post_watermark_failure:
+                raise ValueError("Local pilot state changed during activation")
+            active = activate_resume_authorization(conn, staged["authorization_id"])
         return {"preflight": preflight, "authorization": active, "enabled": True}
     except Exception as error:
         try:
