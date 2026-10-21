@@ -3,7 +3,7 @@ title: "Grok reports its own model roster into models.json"
 date: 2026-10-21
 series: "Building the OS for Multi-Agent Development"
 post: 279
-pr: TBD
+pr: 2513
 status: open
 author: "synlynk team"
 tags: [posts]
@@ -13,7 +13,7 @@ type: pr
 # 279 — Grok reports its own model roster into models.json
 
 Date: 2026-10-21
-PR: TBD
+PR: #2513
 Story: story-issue-2457 / gh:#2457
 
 ## Goalpost coming in

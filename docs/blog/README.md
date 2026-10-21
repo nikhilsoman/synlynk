@@ -1,6 +1,6 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
-| [279](./279-prTBD-grok-model-roster-2457.md) | Grok reports its own model roster into models.json | TBD | 2026-10-21 |
+| [279](./279-prTBD-grok-model-roster-2457.md) | Grok reports its own model roster into models.json | [#2513](https://github.com/nikhilsoman/synlynk/pull/2513) | 2026-10-21 |
 | [278](./278-pr2334-worktree-hygiene-audit-1487.md) | Worktree hygiene audit: archive before you prune | [#2334](https://github.com/nikhilsoman/synlynk/pull/2334) | 2026-10-15 |
 | [277](./277-pr2337-daemon-detached-child-self-health.md) | gh:#2261 — Catch a dead detached daemon before the backlog stalls | [#2337](https://github.com/nikhilsoman/synlynk/pull/2337) | 2026-10-15 |
 | [276](./276-pr2336-daemon-start-false-failure.md) | daemon start stopped crying wolf about stale log lines | [#2336](https://github.com/nikhilsoman/synlynk/pull/2336) | 2026-10-15 |
