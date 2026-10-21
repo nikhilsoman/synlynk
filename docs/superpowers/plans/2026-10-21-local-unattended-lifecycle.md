@@ -42,12 +42,12 @@
 - Preserve `LocalCredentialStore.get() -> str` and `is_configured() -> bool` for current consumers.
 - Keep `import_from_environment()` and `delete()` as independent legacy credential operations; lifecycle readiness, relay, and doctor must not use them.
 
-- [ ] **Step 1: Add failing settings-reader tests** for bootstrap-over-environment precedence, inherited `OMLX_BASE_PATH` fallback, default `~/.omlx`, absent file/key, malformed JSON, permission failure, and empty key. Assert errors are redacted and `is_configured()` is false for failures.
-- [ ] **Step 2: Run** `pytest tests/test_local_credentials.py -q` and confirm the new cases fail against the Keychain-only reader.
-- [ ] **Step 3: Implement active base-path resolution and memory-only `auth.api_key` reading** in `LocalCredentialStore`, following the installed oMLX wrapper’s precedence; do not log settings content or retain a second persistent copy.
-- [ ] **Step 4: Update doctor/auth guidance tests** so `local doctor` reports the active settings key state and 401 guidance does not recommend import as a lifecycle prerequisite. Preserve the legacy import command's independent behavior.
-- [ ] **Step 5: Run** `pytest tests/test_local_credentials.py tests/test_local_agent.py -q`; expect all credential and doctor/auth-message tests to pass.
-- [ ] **Step 6: Commit** as `fix: read local runtime key from oMLX settings`.
+- [x] **Step 1: Add failing settings-reader tests** for bootstrap-over-environment precedence, inherited `OMLX_BASE_PATH` fallback, default `~/.omlx`, absent file/key, malformed JSON, permission failure, and empty key. Assert errors are redacted and `is_configured()` is false for failures.
+- [x] **Step 2: Run** `pytest tests/test_local_credentials.py -q` and confirm the new cases fail against the Keychain-only reader.
+- [x] **Step 3: Implement active base-path resolution and memory-only `auth.api_key` reading** in `LocalCredentialStore`, following the installed oMLX wrapper’s precedence; do not log settings content or retain a second persistent copy.
+- [x] **Step 4: Update doctor/auth guidance tests** so `local doctor` reports the active settings key state and 401 guidance does not recommend import as a lifecycle prerequisite. Preserve the legacy import command's independent behavior.
+- [x] **Step 5: Run** `pytest tests/test_local_credentials.py tests/test_local_agent.py -q`; expect all credential and doctor/auth-message tests to pass.
+- [x] **Step 6: Commit** as `fix: read local runtime key from oMLX settings`.
 
 ### Task 2: Own the foreground oMLX process safely
 
@@ -59,12 +59,12 @@
 - Keep `LocalLifecycleManager.ensure_ready() -> LocalRuntimeResult`, `tick()`, and `stop_managed_service()` contracts.
 - Replace injectable service callbacks with foreground-process adapters that return/validate `(pid, process_start)` ownership; adapt fakes in tests.
 
-- [ ] **Step 1: Add failing process-ownership tests** for `omlx serve --host 127.0.0.1 --port 8000`, environment removal of both `OPENAI_API_KEY` and `OMLX_API_KEY`, no shell, no captured/persisted stdout or stderr, exact listener PID verification, and safe bind-race handling.
-- [ ] **Step 2: Add failing shutdown/reconciliation tests** proving only the recorded PID/start identity is signaled after 15 idle minutes, never call `omlx stop`, and leave operator-owned/replaced processes untouched after daemon restart or PID reuse.
-- [ ] **Step 3: Run** `pytest tests/test_local_lifecycle.py -q` and confirm the new tests fail against the app-managed lifecycle.
-- [ ] **Step 4: Implement foreground process launch and ownership state** in `LocalLifecycleManager`; persist the Synlynk supervisor launch-agent label separately from the oMLX child identity, and signal only the verified child PID.
-- [ ] **Step 5: Run** `pytest tests/test_local_lifecycle.py -q`; expect foreground start, bind race, idle stop, and reconciliation cases to pass.
-- [ ] **Step 6: Commit** as `fix: own local oMLX foreground process`.
+- [x] **Step 1: Add failing process-ownership tests** for `omlx serve --host 127.0.0.1 --port 8000`, environment removal of both `OPENAI_API_KEY` and `OMLX_API_KEY`, no shell, no captured/persisted stdout or stderr, exact listener PID verification, and safe bind-race handling.
+- [x] **Step 2: Add failing shutdown/reconciliation tests** proving only the recorded PID/start identity is signaled after 15 idle minutes, never call `omlx stop`, and leave operator-owned/replaced processes untouched after daemon restart or PID reuse.
+- [x] **Step 3: Run** `pytest tests/test_local_lifecycle.py -q` and confirm the new tests fail against the app-managed lifecycle.
+- [x] **Step 4: Implement foreground process launch and ownership state** in `LocalLifecycleManager`; persist the Synlynk supervisor launch-agent label separately from the oMLX child identity, and signal only the verified child PID.
+- [x] **Step 5: Run** `pytest tests/test_local_lifecycle.py -q`; expect foreground start, bind race, idle stop, and reconciliation cases to pass.
+- [x] **Step 6: Commit** as `fix: own local oMLX foreground process`.
 
 ### Task 3: Integrate credential-backed readiness and pilot fallback
 
@@ -80,11 +80,11 @@
 - `OmlxClient` and `LocalAuthBroker` continue to depend on `LocalCredentialStore.get()`; key material remains in memory only.
 - Preserve `prepare_local_pilot()` retry-once and frontier-fallback behavior and existing signed-receipt/pilot-ledger ordering.
 
-- [ ] **Step 1: Add failing integration tests** proving persistent-settings auth is used for readiness and relay, missing/invalid settings key retries once then falls back, no Local receipt/sample is created on failure, and deduplicated issue reporting remains redacted.
-- [ ] **Step 2: Run** `pytest tests/test_local_auth_proxy.py tests/test_daemon_local_lifecycle.py tests/test_local_pilot.py -q` and verify the credential/fallback cases fail before integration changes.
-- [ ] **Step 3: Update integration wiring** so managed startup and relay use the new reader, while a pre-running operator-owned service is only probed and never controlled.
-- [ ] **Step 4: Run** the same focused integration command and expect retry, fallback, relay authorization, receipt ordering, and ownership tests to pass.
-- [ ] **Step 5: Commit** as `fix: fail over safely when local readiness fails`.
+- [x] **Step 1: Add failing integration tests** proving persistent-settings auth is used for readiness and relay, missing/invalid settings key retries once then falls back, no Local receipt/sample is created on failure, and deduplicated issue reporting remains redacted.
+- [x] **Step 2: Run** `pytest tests/test_local_auth_proxy.py tests/test_daemon_local_lifecycle.py tests/test_local_pilot.py -q` and verify the credential/fallback cases fail before integration changes.
+- [x] **Step 3: Update integration wiring** so managed startup and relay use the new reader, while a pre-running operator-owned service is only probed and never controlled.
+- [x] **Step 4: Run** the same focused integration command and expect retry, fallback, relay authorization, receipt ordering, and ownership tests to pass.
+- [x] **Step 5: Commit** as `fix: fail over safely when local readiness fails`.
 
 ### Task 4: Verify release-level regression and host smoke criteria
 
@@ -95,8 +95,8 @@
 **Interfaces:**
 - No new production interfaces; this task verifies the cross-component behavior defined in Tasks 1-3.
 
-- [ ] **Step 1: Add any missing regression tests** for 24 GiB capacity truth, >=8 GiB memory gate, normal pressure, <=256 MiB swap growth, 10-second samples, existing 20% cohort and one-concurrency invariants, and `local doctor` independence from `OPENAI_API_KEY`.
-- [ ] **Step 2: Run focused suite** `pytest tests/test_local_credentials.py tests/test_local_agent.py tests/test_local_lifecycle.py tests/test_local_auth_proxy.py tests/test_daemon_local_lifecycle.py tests/test_local_pilot.py tests/test_local_pilot_ledger.py tests/test_local_agent_hardware.py -q`.
-- [ ] **Step 3: Run required isolated host smoke checks** for installed oMLX 0.5.3 settings-path parity, foreground start, exact model inventory, relay, 15-minute idle stop, and forced fallback; do not alter operator-owned service state.
-- [ ] **Step 4: Run** `git diff --check` and record any known unrelated/full-suite failures without claiming a clean full suite unless verified.
-- [ ] **Step 5: Commit** remaining test-only changes as `test: verify unattended local lifecycle gates`.
+- [x] **Step 1: Add any missing regression tests** for 24 GiB capacity truth, >=8 GiB memory gate, normal pressure, <=256 MiB swap growth, 10-second samples, existing 20% cohort and one-concurrency invariants, and `local doctor` independence from `OPENAI_API_KEY`.
+- [x] **Step 2: Run focused suite** `pytest tests/test_local_credentials.py tests/test_local_agent.py tests/test_local_lifecycle.py tests/test_local_auth_proxy.py tests/test_daemon_local_lifecycle.py tests/test_local_pilot.py tests/test_local_pilot_ledger.py tests/test_local_agent_hardware.py -q`.
+- [ ] **Step 3: Run required isolated host smoke checks** for installed oMLX 0.5.3 settings-path parity, foreground start, exact model inventory, relay, 15-minute idle stop, and forced fallback; do not alter operator-owned service state. **Deferred:** an operator-owned oMLX listener is already active (PID 1868) and Docker/OrbStack is stopped. Read-only authenticated `/v1/models` succeeded and showed the approved Ornith model; lifecycle start/stop, model load/unload, and Compose smoke were deliberately not run.
+- [x] **Step 4: Run** `git diff --check` and record any known unrelated/full-suite failures without claiming a clean full suite unless verified.
+- [x] **Step 5: Commit** remaining test-only changes as `test: verify unattended local lifecycle gates`.

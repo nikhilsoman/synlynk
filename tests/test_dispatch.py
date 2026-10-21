@@ -3087,6 +3087,53 @@ def test_matching_signed_resume_authorization_auto_routes_local(project_dir, mon
     assert receipt["effective_model"] == "ornith-approved"
 
 
+def test_local_readiness_failure_falls_back_without_cohort_receipt(project_dir, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import _get_db
+    from synlynk.local_lifecycle import LifecycleError
+
+    monkeypatch.setattr(dispatch_mod, "_read_local_fallback", lambda _path: "codex")
+    monkeypatch.setattr("synlynk.local_pilot._bucket", lambda _key: 1)
+    calls = []
+
+    def fail_readiness(*args):
+        calls.append(args)
+        raise LifecycleError("credential_unavailable", "persistent oMLX settings credential is unavailable")
+
+    monkeypatch.setattr("synlynk.local_lifecycle.prepare_local_pilot", fail_readiness)
+    monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda _root: {
+        "enabled": True, "share": 0.2, "max_concurrent": 1,
+        "qualified": True, "isolated": True, "qualified_models": ["ornith-approved"],
+    })
+    monkeypatch.setattr("synlynk.local_pilot_ledger.active_resume_authorization", lambda _conn: {
+        "authorization_id": "resume-1", "safety_watermark": 0,
+        "preflight_receipt_json": json.dumps({
+            "result": "passed", "requested_share": 0.2, "requested_max_concurrent": 1,
+            "resolved_model": "ornith-approved",
+        }),
+    })
+    monkeypatch.setattr("synlynk.local_agent.resolve_effective_local_model", lambda **_kwargs: {
+        "effective_model": "ornith-approved", "edit_format": "diff", "health": "available",
+    })
+
+    conn = _get_db()
+    try:
+        from synlynk.local_pilot_ledger import ensure_local_pilot_ledger
+        ensure_local_pilot_ledger(conn)
+        routed = dispatch_mod._resolve_dispatch_agent(
+            "auto", "test", conn, task="summarize focused output", role="dev",
+            pilot_class="test_summary", dispatch_key="local-readiness-fail",
+            scope_paths=["test.log"],
+        )
+        receipt = dispatch_mod.take_local_pilot_receipt()
+    finally:
+        conn.close()
+
+    assert calls
+    assert routed == "codex"
+    assert receipt is None
+
+
 def test_final_local_slot_claim_refuses_agent_concurrency_drift(project_dir, monkeypatch):
     """The operative capacity source cannot widen the signed one-job lane."""
     import synlynk.dispatch as dispatch_mod

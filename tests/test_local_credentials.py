@@ -90,7 +90,8 @@ def test_settings_credential_prefers_nonempty_app_bootstrap_over_environment(tmp
     bootstrap.write_text(str(bootstrap_base))
 
     store = LocalCredentialStore(
-        settings_path=None, environ={"OMLX_BASE_PATH": str(env_base)},
+        settings_path=None,
+        environ={"OMLX_BASE_PATH": str(env_base), "OPENAI_API_KEY": "frontier-key-must-not-win"},
         home=str(tmp_path), bootstrap_path=str(bootstrap),
     )
     assert store.get() == "bootstrap-key"

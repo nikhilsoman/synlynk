@@ -183,6 +183,28 @@ def test_memory_gate_rejects_swap_growth_and_unavailable_signals():
         check_memory_admission(before, None)
 
 
+def test_memory_gate_enforces_exact_capacity_pressure_and_sampling_boundaries():
+    from synlynk.local_lifecycle import require_memory_admission
+
+    before = HostMemorySnapshot(24 * 1024**3, 9 * 1024**3, "normal", 100 * 1024**2)
+    exactly_allowed = HostMemorySnapshot(
+        24 * 1024**3, 8 * 1024**3, "normal", 356 * 1024**2,
+    )
+    assert check_memory_admission(before, exactly_allowed) is None
+    with pytest.raises(LifecycleError) as pressure:
+        check_memory_admission(
+            before,
+            HostMemorySnapshot(24 * 1024**3, 8 * 1024**3, "warning", 100 * 1024**2),
+        )
+    assert pressure.value.reason_code == "memory_pressure"
+
+    snapshots = iter([before, exactly_allowed])
+    waits = []
+    result = require_memory_admission(lambda: next(snapshots), waits.append)
+    assert result == exactly_allowed
+    assert waits == [10]
+
+
 class FakeRuntimeClient:
     def __init__(self, models=None):
         self.models = list(models or [])
