@@ -6,7 +6,7 @@
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
 <p align="center">
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-4920%20collected-brightgreen" alt="Tests"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-4921%20collected-brightgreen" alt="Tests"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.25.1-blue" alt="Version"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
@@ -14,7 +14,7 @@
 
 Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. The Python CLI injects scoped project context into every dispatch, uses empirical harness allocation only after a harness has at least five completed, merged jobs for the relevant task type, and follows the documented interim policy until then. See the [empirical capability policy](docs/blog/244-chore-empirical-capability-policy.md) and [routing policy](.synlynk/policy.json). Synlynk also tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
-**v0.25.1:** Model catalog discovery — live per-harness model/rate/capability-tier probing persisted in state.db, 24h auto-refresh, and dispatch-time `--model` validation against the live catalog instead of a static, hand-maintained list, with 4920 tests collected.
+**v0.25.1:** Model catalog discovery — live per-harness model/rate/capability-tier probing persisted in state.db, 24h auto-refresh, and dispatch-time `--model` validation against the live catalog instead of a static, hand-maintained list, with 4921 tests collected.
 
 ## Documentation
 
