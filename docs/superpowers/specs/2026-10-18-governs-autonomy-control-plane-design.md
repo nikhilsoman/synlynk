@@ -203,12 +203,38 @@ The work plane may scale independently, but all workers operate under the contro
 - one isolated worktree/repository namespace per active task or attempt;
 - explicit leases for shared files, branches, environments, and scarce resources;
 - declared read/write sets where practical; dependency-aware scheduling and conflict detection;
-- per-project, goal, role, harness, and provider concurrency/rate limits with fair scheduling;
+- per-tenant, per-project, goal, role, harness, and provider concurrency/rate limits with fair scheduling — tenant is the outermost scoping boundary, so no fairness or scheduling decision made at the project/goal/role/harness/provider level may cross it;
 - bounded retries, cancellation propagation, heartbeats, and idempotent recovery;
 - integration tasks merge artifacts in dependency order; independent review and verification remain separate roles;
-- kill switch at project/goal and workspace level that prevents new admission and revokes outstanding grants according to policy.
+- kill switch at tenant, project/goal, and workspace level that prevents new admission and revokes outstanding grants according to policy.
 
 Agent-to-agent messages are advisory unless converted into validated control-plane state. Worker output cannot mutate authority, budget, or acceptance criteria. Parent coordinators remain accountable for decomposition quality, but task-level receipts preserve direct executor responsibility.
+
+### 5.9 External system integration points
+
+This design defers building enterprise-grade integrations but names the seams now so the core model does not have to be retrofitted later. Three points of the system are external-system-pluggable rather than fixed to the tools used during the single-workspace tranche (GitHub, local git identity):
+
+**Tracked-item adapter.** The Open stage (5.3) is defined in terms of a "deduplicated tracked item" with a goal link, acceptance criteria, and dependencies — not in terms of GitHub Issues specifically. Treat the binding between a tracked item and its system of record as an adapter: GitHub Issues/PRs is the first (and, for the single-workspace tranche, only) adapter implementation. An adapter's job is to normalize an external record (a GitHub issue, a Jira ticket, a ServiceNow request) into the Open-stage contract and to write GOVERNS-stage status back to that record via the outbox pattern (5.2) — never to become an alternate authority for stage state. #2413's canonical-state ownership is unaffected: adapters produce Open-stage admission candidates and receive status projections; they do not read or write ledger state directly.
+
+**Principal-resolution adapter.** Section 5.5 already separates authorizing principal, delegating coordinator, workspace-agent identity, execution harness, and credential principal. Treat *authorizing principal* resolution itself as adapter-bound rather than assuming a git/GitHub login: the first implementation resolves principals from local git identity and GitHub accounts; a later enterprise adapter resolves the same principal type from an identity provider (SAML/OIDC/SCIM-fed directory service) without changing the receipt schema, the grant model, or any downstream consumer of "authorizing principal." Open decision #7 (local identity/credential scope) is unchanged by this — it still governs what ships in the first vertical slice — but the interface boundary it operates inside is now explicit.
+
+**Retention and tenancy-scoped policy hook.** Open decision #8 (retention, redaction, and privacy policy for prompts, diffs, logs, receipts, and external identities) remains unresolved and is not being answered here. What changes is that any future answer must be expressible per tenant, not only globally: a receipt or provenance record carries enough structure (subject type, data-classification tag, originating adapter) that a tenant-specific retention/redaction policy can be applied without changing the receipt schema itself. No specific retention duration, redaction mechanism, or classification taxonomy is adopted by this document.
+
+None of the three adapters above are implemented in Phase 1 or Phase 2 of this design (section 7). Naming them now is a cost of a few paragraphs; discovering the need for them after Phase 2's vertical slice ships would require reopening the task contract, the identity model, and the receipt schema simultaneously.
+
+The same split — synlynk-exclusive authority/decision versus adapter-eligible content/evidence — recurs at every GOVERNS stage, not only Open:
+
+| Stage | Synlynk-exclusive core (cannot be delegated) | Adapter-eligible surface | Example external tools |
+|---|---|---|---|
+| Goal | Budget/authority ledger record; human-approval event | Outcome/success-measure content import | OKR tools (Aha!, Productboard, Jira Align) |
+| Open | Admission decision: dedup, goal link, risk classification | Tracked-item source | GitHub Issues, Jira, ServiceNow |
+| Visualize | Sign-off/approval evidence record (who, when, which revision) | Design-doc storage/collaboration | Confluence, Notion, Figma, RFC tools |
+| Execute | Task admission, leasing, grant issuance, budget reservation — the strong-consistency core of the whole system | None of substance. The artifacts touched (git, cloud infra) are the subject of execution, not an info adapter for the stage itself. | — |
+| Release | Merge-authority gate decision (policy check, independent-review requirement) | Evidence ingestion: check results, review approvals, scan results | GitHub Actions/CI, GitLab/Gerrit review, SAST/DAST scanners |
+| Notify | Receipt correctness/durability (must exist before notifying) | Outbound channel — almost the whole stage | Slack, email, PagerDuty, Jira comment, status page |
+| Sustain | Reconciliation/orphan-recovery logic against the canonical ledger (#2413's domain) | Follow-up item creation (loops back through Open's adapter); cost/audit export | ERP/billing export, SIEM/audit log export |
+
+Execute is deliberately the exception: it is the stage where an integrator might instinctively look for a plug point, and there is none at the stage-info level — admission, leasing, and budget reservation are exactly the strong-consistency boundary section 5.2 protects, and no external system (an ITSM automation, a Jira workflow trigger) may invoke Execute directly. Notify is the opposite extreme and the lowest-risk first integration target: the receipt is already synlynk-owned and durable before anything goes out, so pushing it to an enterprise customer's existing Slack/Jira is close to zero new control-plane risk. Sustain's follow-up-item creation closes the loop through the same Open-stage adapter that would have admitted a human-filed ticket, rather than using a separate code path.
 
 ## 6. Evidence-gated concurrency and cost promotion
 
