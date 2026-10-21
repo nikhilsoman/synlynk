@@ -40,6 +40,7 @@ class TestResolveDispatchAgent(unittest.TestCase):
         with patch.object(dispatch_mod, "_get_local_capability_score", return_value=cap_score), \
                 patch.object(dispatch_mod, "_read_local_fallback", return_value="agy"), \
                 patch.object(dispatch_mod, "_read_local_threshold", return_value=0.5), \
+                patch("synlynk.local_pilot_ledger.active_resume_authorization_matches_runtime", return_value=True), \
                 patch("synlynk.local_agent.resolve_effective_local_model", side_effect=resolve_model), \
                 patch("synlynk.local_pilot_ledger.load_pilot_status", return_value={
                     "historical": {"cohort": "historical", "accepted": 8, "eligible": 12},
@@ -48,7 +49,8 @@ class TestResolveDispatchAgent(unittest.TestCase):
                 }), \
                 patch("synlynk.local_pilot.load_pilot_runtime", return_value={
                     "enabled": True, "qualified": True, "isolated": True,
-                    "share": 0.2, "qualified_models": ["Ornith-1.0-9B-4bit"],
+                    "share": 0.2, "max_concurrent": 1,
+                    "qualified_models": ["Ornith-1.0-9B-4bit"],
                 }):
             return dispatch_mod._resolve_dispatch_agent(
                 requested, task_type, MagicMock(), task="summarize tests",
