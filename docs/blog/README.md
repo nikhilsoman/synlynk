@@ -516,6 +516,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [436](./436-pr2512-add-fail-closed-operational-resume-contr.md) | PR #2512 — add fail-closed operational resume control | [#2512](https://github.com/nikhilsoman/synlynk/pull/2512) | 2026-10-21 |
 | [437](./437-pr2514-enable-muse-review-capability-calibratio.md) | PR #2514 — enable Muse review capability calibration | [#2514](https://github.com/nikhilsoman/synlynk/pull/2514) | 2026-10-21 |
 | [438](./438-pr2515-extend-model-catalog-validation-to-grok-.md) | PR #2515 — extend model catalog validation to Grok and Codex (gh:#2291) | [#2515](https://github.com/nikhilsoman/synlynk/pull/2515) | 2026-10-21 |
+| [439](./439-pr2513-fill-grok-cli-roster-in-models-json-gh-2.md) | PR #2513 — fill Grok CLI roster in models.json (gh:#2457) | [#2513](https://github.com/nikhilsoman/synlynk/pull/2513) | 2026-10-21 |
 
 ## Per-PR Post Template
 

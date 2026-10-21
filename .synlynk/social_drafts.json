@@ -3070,5 +3070,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2515 \u2014 extend model catalog validation to Grok and Codex (gh:#2291) (PR #2515, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2515.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-21) - PR #2515\n- Merged improvements and fixes for PR #2515."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/439-pr2513-fill-grok-cli-roster-in-models-json-gh-2.md",
+    "title": "PR #2513 \u2014 fill Grok CLI roster in models.json (gh:#2457)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-21",
+    "pr": "#2513",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2513."
+    ],
+    "tweet": "\ud83d\ude80 PR #2513 \u2014 fill Grok CLI roster in models.json (gh:#2457) (PR #2513, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2513.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-21) - PR #2513\n- Merged improvements and fixes for PR #2513."
   }
 ]
