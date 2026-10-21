@@ -4069,9 +4069,17 @@ def heartbeat_claims_for_pid(pid: int, extend_seconds: int = 2700, conn=None) ->
             conn.close()
 
 
-def heartbeat_claims_by_story_ids(story_ids, extend_seconds: int = 2700, conn=None) -> int:
-    """Renew every active task_lease for the given story_ids. Returns count renewed."""
-    if not story_ids:
+def heartbeat_claims_by_story_ids(claim_leases: dict, extend_seconds: int = 2700, conn=None) -> int:
+    """Renew the active task_lease for each {story_id: lease_id} this checkout holds.
+
+    Renewal is scoped to the exact ``lease_id`` the marker was issued for, not
+    just the story_id. If another session force-took the story via
+    ``--override``, the active lease row now has a different lease_id; a
+    stale marker from the original checkout then renews zero rows instead of
+    silently extending the replacement claimant's lease (gh:#2511, found by
+    cross-harness review on PR #2524).
+    """
+    if not claim_leases:
         return 0
     owns_conn = False
     if conn is None:
@@ -4083,14 +4091,16 @@ def heartbeat_claims_by_story_ids(story_ids, extend_seconds: int = 2700, conn=No
         now = time.time()
         now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
         expires_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + extend_seconds))
-        placeholders = ",".join("?" * len(story_ids))
-        cur = conn.execute(
-            f"UPDATE task_leases SET heartbeat_at=?, expires_at=? "
-            f"WHERE story_id IN ({placeholders}) AND status='active'",
-            (now_str, expires_at, *story_ids),
-        )
+        renewed = 0
+        for story_id, lease_id in claim_leases.items():
+            cur = conn.execute(
+                "UPDATE task_leases SET heartbeat_at=?, expires_at=? "
+                "WHERE story_id=? AND lease_id=? AND status='active'",
+                (now_str, expires_at, story_id, lease_id),
+            )
+            renewed += cur.rowcount
         conn.commit()
-        return cur.rowcount
+        return renewed
     except sqlite3.OperationalError:
         return 0
     finally:
@@ -4196,7 +4206,7 @@ def cmd_story_claim(
     if result["acquired"]:
         from synlynk.session import _add_active_claim
         try:
-            _add_active_claim(story_id)
+            _add_active_claim(story_id, result["lease_id"])
         except OSError:
             pass
         print(f"\n  {_BOLD}synlynk story claim{_RESET}  story={story_id}  harness={effective_harness}  session={session_id}")

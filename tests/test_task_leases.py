@@ -125,7 +125,7 @@ def test_cross_process_heartbeat_handoff_still_blocks_second_claimant(db_conn):
     assert first["acquired"] is True
 
     heartbeat_count = heartbeat_claims_by_story_ids(
-        ["story-lease-1"], extend_seconds=600, conn=db_conn,
+        {"story-lease-1": first["lease_id"]}, extend_seconds=600, conn=db_conn,
     )
     assert heartbeat_count == 1
 
@@ -248,7 +248,11 @@ def test_story_done_clears_tracked_active_claim(db_conn, tmp_path, monkeypatch):
     from synlynk.session import _add_active_claim, _read_active_claims
     from synlynk.db import cmd_story_done
 
-    _add_active_claim("story-lease-1")
+    acquired = acquire_task_lease(
+        "story-lease-1", "claude:host:1", duration_seconds=600,
+        pid=os.getpid(), harness="claude", conn=db_conn,
+    )
+    _add_active_claim("story-lease-1", acquired["lease_id"])
     cmd_story_done("story-lease-1", conn=db_conn)
 
     assert "story-lease-1" not in _read_active_claims()
@@ -258,22 +262,54 @@ def test_heartbeat_by_story_ids_renews_across_simulated_process_boundary(db_conn
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk", exist_ok=True)
 
-    from synlynk.session import _add_active_claim, _read_active_claims
+    from synlynk.session import _add_active_claim, _read_active_claim_leases
     from synlynk.jobs import heartbeat_claims_by_story_ids, get_active_lease
 
     # Simulate the one-shot `story claim` process: takes the lease with its own PID,
     # then "exits" (we never heartbeat using that PID again in this test).
-    acquire_task_lease(
+    acquired = acquire_task_lease(
         "story-lease-1", "claude:host:555", duration_seconds=10,
         pid=999999, harness="claude", conn=db_conn,
     )
-    _add_active_claim("story-lease-1")
+    _add_active_claim("story-lease-1", acquired["lease_id"])
     before = get_active_lease("story-lease-1", conn=db_conn)
 
     time.sleep(1)
     # Simulate a later, unrelated `synlynk exec` process (different PID, same checkout):
-    count = heartbeat_claims_by_story_ids(_read_active_claims(), extend_seconds=120, conn=db_conn)
+    count = heartbeat_claims_by_story_ids(_read_active_claim_leases(), extend_seconds=120, conn=db_conn)
     assert count == 1
 
     after = get_active_lease("story-lease-1", conn=db_conn)
     assert after["heartbeat_at"] > before["heartbeat_at"]
+
+
+def test_stale_marker_does_not_heartbeat_replacement_lease_after_override(db_conn, tmp_path, monkeypatch):
+    # Reproduces the second cross-harness review finding on PR #2524: after
+    # claimant B force-takes the story via --override, claimant A's stale
+    # checkout marker (bound to A's now-superseded lease_id) must renew zero
+    # rows, not silently extend B's replacement lease.
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+
+    from synlynk.jobs import heartbeat_claims_by_story_ids, get_active_lease
+
+    claim_a = acquire_task_lease(
+        "story-lease-1", "claude:host:A", duration_seconds=600,
+        pid=os.getpid(), harness="claude", conn=db_conn,
+    )
+    assert claim_a["acquired"] is True
+    stale_marker = {"story-lease-1": claim_a["lease_id"]}
+
+    claim_b = acquire_task_lease(
+        "story-lease-1", "codex:host:B", duration_seconds=600,
+        pid=os.getpid(), harness="codex", override=True, conn=db_conn,
+    )
+    assert claim_b["acquired"] is True
+
+    before = get_active_lease("story-lease-1", conn=db_conn)
+    renewed = heartbeat_claims_by_story_ids(stale_marker, extend_seconds=600, conn=db_conn)
+    assert renewed == 0
+
+    after = get_active_lease("story-lease-1", conn=db_conn)
+    assert after["expires_at"] == before["expires_at"]
+    assert after["harness"] == "codex"

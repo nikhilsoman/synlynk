@@ -133,10 +133,10 @@ def test_execute_home_handover_releases_active_lease_and_claim(tmp_path, monkeyp
     conn.commit()
 
     real_leased_by = "claude:testhost:424242"
-    acquire_task_lease(
+    acquired = acquire_task_lease(
         "story-9012", real_leased_by, duration_seconds=600, pid=424242, harness="claude", conn=conn
     )
-    _add_active_claim("story-9012")
+    _add_active_claim("story-9012", acquired["lease_id"])
     assert "story-9012" in _read_active_claims()
 
     active_story_id = "story-9012"

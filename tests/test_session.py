@@ -38,17 +38,26 @@ def test_add_and_read_active_claim(tmp_path, monkeypatch):
     from synlynk.session import _add_active_claim, _read_active_claims
 
     monkeypatch.chdir(tmp_path)
-    _add_active_claim("story-a")
-    _add_active_claim("story-b")
+    _add_active_claim("story-a", "lease-aaa")
+    _add_active_claim("story-b", "lease-bbb")
 
     assert set(_read_active_claims()) == {"story-a", "story-b"}
+
+
+def test_read_active_claim_leases_returns_lease_id_binding(tmp_path, monkeypatch):
+    from synlynk.session import _add_active_claim, _read_active_claim_leases
+
+    monkeypatch.chdir(tmp_path)
+    _add_active_claim("story-a", "lease-aaa")
+
+    assert _read_active_claim_leases() == {"story-a": "lease-aaa"}
 
 
 def test_remove_active_claim(tmp_path, monkeypatch):
     from synlynk.session import _add_active_claim, _remove_active_claim, _read_active_claims
 
     monkeypatch.chdir(tmp_path)
-    _add_active_claim("story-a")
+    _add_active_claim("story-a", "lease-aaa")
     _remove_active_claim("story-a")
 
     assert _read_active_claims() == []
