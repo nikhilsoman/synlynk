@@ -15,10 +15,15 @@ from synlynk.migrations.m0020_quota_snapshots import MIGRATION as M0020
 from synlynk.migrations.m0021_harness_model_catalog import MIGRATION as M0021
 from synlynk.migrations.m0022_subscriptions_harness_name import MIGRATION as M0022
 from synlynk.migrations.m0023_cleanse_execution_log_models import MIGRATION as M0023
+from synlynk.migrations.m0024_local_pilot_ledger import MIGRATION as M0024
+from synlynk.migrations.m0025_local_pilot_review_selection import MIGRATION as M0025
+from synlynk.migrations.m0026_local_pilot_resume_authorization import MIGRATION as M0026
+from synlynk.migrations.m0027_local_pilot_resume_lifecycle_serialization import MIGRATION as M0027
+from synlynk.wal_ledger import write_transaction
 
 # Static, explicitly-imported registry. Append future Migration entries here
 # in ascending version order — no dynamic directory scanning.
-MIGRATIONS: list[Migration] = [M0016, M0017, M0018, M0019, M0020, M0021, M0022, M0023]
+MIGRATIONS: list[Migration] = [M0016, M0017, M0018, M0019, M0020, M0021, M0022, M0023, M0024, M0025, M0026, M0027]
 
 
 def _ensure_migration_history_table(conn: sqlite3.Connection) -> None:
@@ -41,6 +46,19 @@ def run_pending_migrations(conn: sqlite3.Connection) -> None:
         key=lambda m: m.version,
     )
     for migration in pending:
+        # Migration 24 deliberately avoids executescript, so its schema,
+        # version marker, and history entry can be committed atomically.
+        # Earlier migrations predate this contract and may use executescript.
+        if migration.version in {M0024.version, M0026.version}:
+            with write_transaction(conn):
+                migration.up(conn)
+                conn.execute(f"PRAGMA user_version = {migration.version}")
+                conn.execute(
+                    "INSERT OR REPLACE INTO migration_history (version, name, applied_at) VALUES (?, ?, ?)",
+                    (migration.version, migration.name, datetime.now(timezone.utc).isoformat()),
+                )
+            continue
+
         migration.up(conn)
         conn.execute(f"PRAGMA user_version = {migration.version}")
         conn.execute(

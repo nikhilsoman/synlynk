@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import subprocess
 import re
@@ -2416,6 +2417,339 @@ def test_local_pilot_dispatch_binds_frontier_fallback_and_marks_pilot_intent(
     assert seen["force_agent"] is True
     assert seen["local_pilot_requested"] is True
     assert seen["local_pilot_receipt"] is None
+
+
+def test_local_pilot_review_commands_parse_their_factual_review_inputs():
+    """Removing the command surface would make review controls unavailable to operators."""
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    status = parser.parse_args(["local", "pilot", "status", "--json"])
+    start = parser.parse_args(["local", "pilot", "review-start", "job-1"])
+    record = parser.parse_args(
+        ["local", "pilot", "record-review", "job-1", "--reviewer", "grok", "--verdict", "accept", "--rationale", "verified"]
+    )
+
+    assert (status.command, status.local_action, status.local_pilot_action, status.json_output) == (
+        "local", "pilot", "status", True,
+    )
+    assert (start.local_pilot_action, start.job_id) == ("review-start", "job-1")
+    assert (record.local_pilot_action, record.reviewer, record.verdict, record.rationale) == (
+        "record-review", "grok", "accept", "verified",
+    )
+
+
+def test_local_pilot_resume_command_requires_the_two_audit_references():
+    """Removing either reference would make an untraceable activation possible."""
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    parsed = parser.parse_args([
+        "local", "pilot", "resume", "--remediation-ref", "issue-2342",
+        "--verification-ref", "review-2349",
+    ])
+
+    assert parsed.local_pilot_action == "resume"
+    assert parsed.remediation_ref == "issue-2342"
+    assert parsed.verification_ref == "review-2349"
+    with pytest.raises(SystemExit):
+        parser.parse_args(["local", "pilot", "resume", "--remediation-ref", "issue-2342"])
+
+
+def test_local_pilot_resume_cli_refuses_noninteractive_confirmation(project_dir, monkeypatch):
+    """A piped invocation must not create an authorization or alter the disabled config."""
+    import sys
+    from synlynk.cli import main
+
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    with pytest.raises(ValueError, match="interactive terminal"):
+        main([
+            "local", "pilot", "resume", "--remediation-ref", "issue-2342",
+            "--verification-ref", "review-2349",
+        ])
+
+    workspace_path = project_dir / ".synlynk" / "workspace.json"
+    workspace = json.loads(workspace_path.read_text()) if workspace_path.exists() else {}
+    assert workspace.get("local_pilot", {}).get("enabled") is not True
+
+
+def test_local_pilot_resume_cli_requires_interactive_output(project_dir, monkeypatch):
+    """Redirected output prevents the operator from seeing the required approval summary."""
+    import sys
+    from synlynk.cli import main
+
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: False)
+
+    with pytest.raises(ValueError, match="interactive terminal"):
+        main([
+            "local", "pilot", "resume", "--remediation-ref", "issue-2342",
+            "--verification-ref", "review-2349",
+        ])
+
+
+def test_local_pilot_resume_cli_displays_status_and_preflight_before_confirmation(project_dir, monkeypatch, capsys):
+    """The confirmation must be informed by the exact current state and preflight receipt."""
+    import sys
+    from synlynk import local_agent
+    from synlynk.cli import main
+
+    sequence = []
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    monkeypatch.setattr(local_agent, "local_pilot_status", lambda: {"state": {"enabled": False}})
+
+    def fake_resume(_root, _conn, _remediation, _verification, confirm, render):
+        render({"result": "passed", "requested_share": .2, "requested_max_concurrent": 1})
+        sequence.append("preflight")
+        confirm("confirm")
+        sequence.append("confirm")
+        return {"authorization": {"state": "active"}}
+
+    monkeypatch.setattr(local_agent, "resume_local_pilot", fake_resume)
+    monkeypatch.setattr("builtins.input", lambda _: sequence.append("input") or "RESUME LOCAL PILOT")
+
+    main([
+        "local", "pilot", "resume", "--remediation-ref", "issue-2342",
+        "--verification-ref", "review-2349",
+    ])
+
+    output = capsys.readouterr().out
+    assert "Current Local pilot status" in output
+    assert '"result": "passed"' in output
+    assert sequence == ["preflight", "input", "confirm"]
+
+
+def test_local_pilot_status_cli_reports_live_configured_concurrency(project_dir, capsys):
+    """Changing the dispatch concurrency cap must change the operator status view."""
+    from synlynk.cli import main
+
+    (project_dir / ".agents").mkdir()
+    (project_dir / ".agents" / "local.json").write_text(
+        '{"max_concurrent": 3, "models": [{"id": "ornith-test", '
+        '"qualification": "qualified"}]}'
+    )
+
+    main(["local", "pilot", "status", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["cohorts"]["historical"] == {
+        "accepted": 8,
+        "cohort": "historical",
+        "eligible": 12,
+    }
+    assert payload["boundaries"] == {"max_concurrent": 3, "share": 0.2}
+    assert payload["state"] == {
+        "enabled": False,
+        "paused": True,
+        "reason": "disabled by configuration",
+    }
+    assert payload["model"] == {"qualified": True, "selected": "ornith-test"}
+    assert payload["proposal_35_eligible"] is False
+
+
+def test_local_pilot_status_cli_keeps_cohort_denominators_and_operational_mismatches_separate(
+    project_dir, monkeypatch, capsys
+):
+    """A status renderer must not merge cohorts or hide a blocked pilot behind secrets."""
+    from synlynk import local_agent
+    from synlynk.cli import main
+
+    (project_dir / ".agents").mkdir()
+    (project_dir / ".agents" / "local.json").write_text(
+        '{"endpoint": "http://127.0.0.1:8000", "max_concurrent": 1, '
+        '"models": [{"id": "ornith-test", "qualification": "qualified"}]}'
+    )
+    (project_dir / ".synlynk" / "workspace.json").write_text(
+        '{"local_pilot": {"enabled": false, "pause_reason": "preflight disagreement"}}'
+    )
+    monkeypatch.setattr(
+        local_agent,
+        "_health_check",
+        lambda *args, **kwargs: {"reachable": False, "status": "unauthenticated", "error": "HTTP 401"},
+    )
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    main(["local", "pilot", "status", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["cohorts"]["historical"] == {
+        "accepted": 8,
+        "cohort": "historical",
+        "eligible": 12,
+    }
+    assert payload["progress"] == {
+        "validation": {"accepted": 0, "required": 5},
+        "expansion": {"consecutive_accepted": 0, "required": 10},
+    }
+    assert payload["boundaries"] == {"max_concurrent": 1, "share": 0.2}
+    assert payload["state"] == {"enabled": False, "paused": True, "reason": "preflight disagreement"}
+    assert payload["model"] == {"qualified": True, "selected": "ornith-test"}
+    assert payload["proposal_35_eligible"] is False
+    assert payload["operational"] == {
+        "credentials": "missing",
+        "endpoint": "unauthenticated",
+        "model_qualification": "qualified",
+        "reservation": {"max_concurrent": 1, "running": 0, "state": "available"},
+        "runner": "unavailable",
+    }
+    assert "HTTP 401" not in json.dumps(payload)
+
+    main(["local", "pilot", "status"])
+
+    text = capsys.readouterr().out
+    assert "Historical evidence: 8/12" in text
+    assert "Validation: 0/5 accepted" in text
+    assert "Expansion: 0/10 consecutive accepted" in text
+    assert "Boundary: 20% cap; 1 concurrent" in text
+    assert "Pilot: paused (preflight disagreement)" in text
+    assert "Qualified Ornith model: ornith-test" in text
+    assert "35% proposal eligible: no" in text
+    assert "Operational mismatches: credentials=missing; endpoint=unauthenticated; runner=unavailable" in text
+
+
+def test_local_pilot_operations_runbook_preserves_human_approval_authority():
+    """A merge or evidence threshold must never authorize live Local work by itself."""
+    runbook = Path("docs/reference/local-harness-pilot-operations.md").read_text()
+
+    assert "#2342" in runbook
+    assert "#2349" in runbook
+    assert "Design approval" in runbook
+    assert "Operational-resume approval" in runbook
+    assert "Expansion approval" in runbook
+    assert "35% proposal is never automatic" in runbook
+    assert "no live work is authorized by code merge alone" in runbook
+    assert "only Nikhil's later operational-resume approval authorizes live samples" in runbook
+
+
+def test_local_pilot_review_start_cli_prints_the_factual_brief(monkeypatch, capsys):
+    """The CLI must expose only the factual review brief returned by its handler."""
+    from synlynk import local_agent
+    from synlynk.cli import main
+
+    brief = {
+        "job_id": "job-brief",
+        "reviewer": "grok",
+        "selection_reason": "selected grok as highest-ranked eligible frontier reviewer",
+        "task_intent": "Summarize test output",
+        "expected_factual_claims": ["names failures"],
+        "local_answer_log_reference": "logs/job-brief.log",
+        "automated_receipt_result": "passed",
+    }
+    monkeypatch.setattr(local_agent, "start_local_pilot_review", lambda job_id: brief)
+
+    main(["local", "pilot", "review-start", "job-brief"])
+
+    assert json.loads(capsys.readouterr().out) == brief
+
+
+def test_local_pilot_record_review_cli_records_the_handler_result(monkeypatch, capsys):
+    """A selected factual verdict must be passed through the public CLI unchanged."""
+    from synlynk import local_agent
+    from synlynk.cli import main
+
+    recorded = {"job_id": "job-review", "reviewer_harness": "grok", "quality_verdict": "accepted"}
+    monkeypatch.setattr(
+        local_agent,
+        "record_local_pilot_review",
+        lambda job_id, reviewer, verdict, rationale: recorded,
+    )
+
+    main([
+        "local", "pilot", "record-review", "job-review", "--reviewer", "grok",
+        "--verdict", "accept", "--rationale", "claims checked",
+    ])
+
+    assert json.loads(capsys.readouterr().out) == recorded
+
+
+def _seed_selected_local_pilot_review(job_id):
+    from synlynk import _get_db
+    from synlynk.local_pilot_ledger import (
+        ensure_local_pilot_ledger,
+        record_admission,
+        record_safety_outcome,
+        start_local_pilot_review,
+    )
+
+    conn = _get_db()
+    try:
+        ensure_local_pilot_ledger(conn)
+        record_admission(conn, {
+            "job_id": job_id,
+            "cohort": "validation",
+            "task_class": "test_summary",
+            "task_digest": f"digest-{job_id}",
+            "receipt": {"author_harness": "codex", "task_intent": "Check facts"},
+        })
+        record_safety_outcome(conn, job_id, "passed", "contained", {"safe": True})
+        start_local_pilot_review(conn, job_id)
+    finally:
+        conn.close()
+
+
+def test_local_pilot_record_review_cli_enforces_selected_once_quality_verdict(project_dir, capsys):
+    """The public CLI must enforce the real selected-reviewer and one-verdict rules."""
+    from synlynk.cli import main
+
+    _seed_selected_local_pilot_review("job-cli-review")
+    main([
+        "local", "pilot", "record-review", "job-cli-review", "--reviewer", "grok",
+        "--verdict", "accept", "--rationale", "claims checked",
+    ])
+    assert json.loads(capsys.readouterr().out)["quality_verdict"] == "accepted"
+
+    with pytest.raises(ValueError, match="already recorded"):
+        main([
+            "local", "pilot", "record-review", "job-cli-review", "--reviewer", "grok",
+            "--verdict", "reject", "--rationale", "changed mind",
+        ])
+
+    _seed_selected_local_pilot_review("job-cli-unselected")
+    with pytest.raises(ValueError, match="selected reviewer"):
+        main([
+            "local", "pilot", "record-review", "job-cli-unselected", "--reviewer", "claude",
+            "--verdict", "accept", "--rationale", "claims checked",
+        ])
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (("--reviewer", "claude", "--verdict", "accept", "--rationale", "checked"), "selected reviewer"),
+        (("--reviewer", "grok", "--verdict", "reject", "--rationale", "changed mind"), "already recorded"),
+    ],
+)
+def test_local_pilot_record_review_cli_refuses_handler_rejections(monkeypatch, arguments, message):
+    """Unselected reviewers and duplicate verdicts must remain visible CLI refusals."""
+    from synlynk import local_agent
+    from synlynk.cli import main
+
+    def refuse(*_args):
+        raise ValueError(f"reviewer is not the {message}")
+
+    monkeypatch.setattr(local_agent, "record_local_pilot_review", refuse)
+
+    with pytest.raises(ValueError, match=message):
+        main(["local", "pilot", "record-review", "job-review", *arguments])
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected"),
+    [
+        (("--reviewer", "grok", "--verdict", "maybe", "--rationale", "checked"), "invalid choice"),
+        (("--reviewer", "grok", "--verdict", "accept"), "--rationale"),
+    ],
+)
+def test_local_pilot_record_review_cli_refuses_invalid_or_incomplete_input(capsys, arguments, expected):
+    """Parser validation must refuse unsupported verdicts and a missing rationale."""
+    from synlynk.cli import main
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(["local", "pilot", "record-review", "job-review", *arguments])
+
+    assert exc_info.value.code == 2
+    assert expected in capsys.readouterr().err
 
 
 def test_cli_dispatch_infers_defaults_and_prints_one_line_preview(project_dir, capsys):

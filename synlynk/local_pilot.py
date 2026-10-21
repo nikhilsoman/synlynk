@@ -31,6 +31,8 @@ PILOT_CLASSES = frozenset(
 EXCLUDED_ROLES = frozenset({"architect", "pm", "tpm", "qa", "review"})
 APPROVED_SHARES = frozenset({0.20, 0.35, 0.50})
 MAX_SHARE = 0.50
+REBASELINE_SHARE = 0.20
+REBASELINE_PILOT_CLASSES = frozenset({"test_summary", "codepath_summary"})
 LOCAL_PILOT_COMPOSE = "docker/local-pilot.compose.yaml"
 _EXCLUDED_TASK_PATTERN = re.compile(
     r"\b(?:refactor|architecture|architectural|spec(?:ification)?|dependency|"
@@ -61,6 +63,18 @@ class PromotionDecision:
     next_share: float
     reason: str
     rollback_required: bool = False
+
+
+@dataclass(frozen=True)
+class RebaselineDecision:
+    """Fail-closed admission state for the separate Local re-baseline cohorts."""
+
+    allow_admission: bool
+    cohort: Optional[str]
+    share: float
+    pause_required: bool
+    proposal_35_eligible: bool
+    reason: str
 
 
 class LocalPilotSetupError(RuntimeError):
@@ -117,6 +131,7 @@ def evaluate_local_pilot(
     dispatch_key: Optional[str],
     task: str = "",
     scope_paths: Optional[list[str]] = None,
+    rebaseline: bool = False,
 ) -> LocalPilotDecision:
     """Decide whether an eligible dispatch belongs in the local pilot cohort.
 
@@ -132,6 +147,8 @@ def evaluate_local_pilot(
         return LocalPilotDecision(False, "isolated_runner_unavailable")
     if pilot_class not in PILOT_CLASSES:
         return LocalPilotDecision(False, "pilot_class_not_allowlisted")
+    if rebaseline and pilot_class not in REBASELINE_PILOT_CLASSES:
+        return LocalPilotDecision(False, "rebaseline_pilot_class_not_allowlisted")
     if (role or "").strip().lower() in EXCLUDED_ROLES:
         return LocalPilotDecision(False, "role_excluded", pilot_class=pilot_class)
     if requires_gh_write:
@@ -170,28 +187,77 @@ def evaluate_promotion_gate(
     memory_stable: bool,
     rollback_drill_passed: bool = False,
 ) -> PromotionDecision:
-    """Evaluate the evidence gates for 20% -> 35% -> 50% progression."""
-    if current_share not in APPROVED_SHARES:
-        return PromotionDecision(0.0, "current_share_not_an_approved_gate", True)
-    if serious_incidents > 0:
-        return PromotionDecision(0.0, "serious_incident_requires_frontier_rollback", True)
-    if eligible_jobs < 30:
-        return PromotionDecision(current_share, "insufficient_30_job_sample")
-    if accepted_jobs < 0 or accepted_jobs > eligible_jobs:
-        return PromotionDecision(current_share, "invalid_acceptance_counts")
-    if accepted_jobs / eligible_jobs < 0.90:
-        return PromotionDecision(0.0, "acceptance_below_90_percent", True)
-    if current_share == 0.20:
-        return PromotionDecision(0.35, "30_job_gate_passed")
-    if current_share == 0.35:
-        if eligible_jobs < 75:
-            return PromotionDecision(current_share, "insufficient_75_job_sample")
-        if not latency_stable or not memory_stable:
-            return PromotionDecision(0.0, "latency_or_memory_regression", True)
-        if not rollback_drill_passed:
-            return PromotionDecision(current_share, "rollback_drill_required")
-        return PromotionDecision(0.50, "75_job_gate_passed")
-    return PromotionDecision(current_share, "maximum_pilot_share_reached")
+    """Retired compatibility entry point; never grant automatic promotion.
+
+    Re-baseline evidence is cohort-specific and needs a separate human
+    approval after `evaluate_rebaseline` makes a proposal eligible.  Keeping
+    this callable avoids turning old consumers into an accidental fallback to
+    the obsolete 30/90-percent rules.
+    """
+    del (
+        current_share,
+        eligible_jobs,
+        accepted_jobs,
+        serious_incidents,
+        latency_stable,
+        memory_stable,
+        rollback_drill_passed,
+    )
+    return PromotionDecision(0.0, "promotion_gate_retired_use_evaluate_rebaseline", True)
+
+
+def evaluate_rebaseline(status: dict) -> RebaselineDecision:
+    """Evaluate the 5/5 validation and 10-consecutive expansion evidence.
+
+    The historical cohort intentionally does not participate in either
+    denominator.  This decision can make a 35% proposal eligible, but it
+    cannot alter the 20% Local allocation cap.
+    """
+    try:
+        validation = status["validation"]
+        expansion = status["expansion"]
+        safety_failed = int(validation["safety_failed"]) + int(expansion["safety_failed"])
+        validation_accepted = int(validation["accepted"])
+        validation_rejected = int(validation["rejected"])
+        expansion_consecutive = int(expansion["consecutive_accepted"])
+    except (KeyError, TypeError, ValueError):
+        return RebaselineDecision(
+            False, None, 0.20, True, False, "rebaseline_status_incomplete_requires_pause"
+        )
+
+    authorization = status.get("active_authorization")
+    active_authorization = (
+        authorization if isinstance(authorization, dict) and authorization.get("state") == "active" else None
+    )
+    if "historical_safety_failures" in status:
+        historical_safety_failures = int(status["historical_safety_failures"])
+        active_epoch_safety_failures = int(status.get("active_epoch_safety_failures", 0))
+        if historical_safety_failures > 0 and not active_authorization:
+            return RebaselineDecision(
+                False, None, 0.20, True, False, "operational_resume_required"
+            )
+        if active_authorization and active_epoch_safety_failures > 0:
+            return RebaselineDecision(
+                False, None, 0.20, True, False, "hard_safety_failure_requires_pause"
+            )
+    if safety_failed > 0:
+        return RebaselineDecision(
+            False, None, 0.20, True, False, "hard_safety_failure_requires_pause"
+        )
+    if validation_rejected > 0:
+        return RebaselineDecision(
+            False,
+            None,
+            0.20,
+            False,
+            False,
+            "validation_quality_rejection_requires_human_review",
+        )
+    if validation_accepted < 5:
+        return RebaselineDecision(True, "validation", 0.20, False, False, "validation_incomplete")
+    if expansion_consecutive >= 10:
+        return RebaselineDecision(True, "expansion", 0.20, False, True, "proposal_35_eligible")
+    return RebaselineDecision(True, "expansion", 0.20, False, False, "expansion_evidence_required")
 
 
 def build_isolated_compose_shell(
@@ -321,6 +387,7 @@ def load_pilot_runtime(repo_root: str) -> dict:
             and model.get("id")
             and model.get("qualification") == "qualified"
             and model.get("dispatch_eligible", True)
+            and str(model.get("id")).casefold().startswith("ornith")
         }
     except (OSError, json.JSONDecodeError, AttributeError):
         pass
@@ -328,7 +395,11 @@ def load_pilot_runtime(repo_root: str) -> dict:
     compose_path = os.path.join(repo_root, LOCAL_PILOT_COMPOSE)
     return {
         "enabled": settings.get("enabled") is True,
+        # The re-baseline never widens the historical pilot allocation.  A
+        # malformed or broader runtime value is returned for dispatch to
+        # reject, rather than normalized into an accidental admission.
         "share": settings.get("share", 0.0),
+        "max_concurrent": settings.get("max_concurrent"),
         "qualified": bool(qualified_models),
         "qualified_models": sorted(qualified_models),
         "isolated": os.path.isfile(compose_path) and shutil.which("docker") is not None,
