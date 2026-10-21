@@ -511,6 +511,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [432](./432-pr2487-restore-ambient-signal-handlers-after-cu.md) | PR #2487 — restore ambient signal handlers after curses initscr (#2486) | [#2487](https://github.com/nikhilsoman/synlynk/pull/2487) | 2026-10-20 |
 | [433](./433-pr2504-scaffold-enterprise-adapter-seams-in-gov.md) | PR #2504 — scaffold enterprise adapter seams in GOVERNS control-plane spec | [#2504](https://github.com/nikhilsoman/synlynk/pull/2504) | 2026-10-21 |
 | [434](./434-pr2507-skip-heavy-test-steps-for-docs-only-diff.md) | PR #2507 — skip heavy test steps for docs-only diffs (#2505) | [#2507](https://github.com/nikhilsoman/synlynk/pull/2507) | 2026-10-21 |
+| [435](./435-pr2510-preserve-dispatched-role-attribution.md) | PR #2510 — preserve dispatched role attribution | [#2510](https://github.com/nikhilsoman/synlynk/pull/2510) | 2026-10-21 |
 
 ## Per-PR Post Template
 

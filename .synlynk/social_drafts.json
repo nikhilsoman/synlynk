@@ -3006,5 +3006,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2507 \u2014 skip heavy test steps for docs-only diffs (#2505) (PR #2507, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2507.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-21) - PR #2507\n- Merged improvements and fixes for PR #2507."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/435-pr2510-preserve-dispatched-role-attribution.md",
+    "title": "PR #2510 \u2014 preserve dispatched role attribution",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-21",
+    "pr": "#2510",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2510."
+    ],
+    "tweet": "\ud83d\ude80 PR #2510 \u2014 preserve dispatched role attribution (PR #2510, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2510.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-21) - PR #2510\n- Merged improvements and fixes for PR #2510."
   }
 ]
