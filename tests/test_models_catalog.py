@@ -96,6 +96,76 @@ def test_project_catalog_resolves_codex_and_local_tiers(monkeypatch, tier, codex
     assert catalog["tiers"][tier]["local"] == "Ornith-1.0-9B-4bit"
 
 
+@pytest.mark.parametrize(
+    ("tier", "grok_model"),
+    (
+        ("fast", "grok-4.6"),
+        ("pro", "grok-4.7"),
+        ("reasoning", "grok-4.7"),
+    ),
+)
+def test_project_catalog_resolves_grok_tiers_from_cli_roster(monkeypatch, tier, grok_model):
+    """Grok dispatch tiers match the live `grok models` roster (gh:#2457).
+
+    `grok-4.7-build-fast` is a premium latency SKU (CLI: "2x the price"), not
+    the cheap/high-throughput fast tier. Reasoning is `reasoning_effort` on
+    `grok-4.7`, not a separate model id.
+    """
+    import synlynk
+
+    repo_root = Path(__file__).resolve().parents[1]
+    monkeypatch.setattr(synlynk, "_get_db", lambda: None)
+
+    catalog = load_model_catalog(repo_path=str(repo_root))
+    assert resolve_tier_model(tier, "grok", repo_path=str(repo_root)) == grok_model
+    assert catalog["tiers"][tier]["grok"] == grok_model
+
+
+def test_project_catalog_has_verified_grok_cli_roster_and_xai_rates():
+    """Live `grok models` roster + docs.x.ai standard (<200k) rates, 2026-10-21."""
+    repo_root = Path(__file__).resolve().parents[1]
+    catalog = load_model_catalog(repo_path=str(repo_root))
+    models = {model["model_id"]: model for model in catalog["models"]}
+
+    grok_ids = {
+        model_id for model_id, model in models.items() if model["harness"] == "grok"
+    }
+    assert grok_ids == {
+        "grok-4.7",
+        "grok-4.7-build-fast",
+        "grok-4.6",
+        "grok-4.5",
+    }
+    assert {
+        model_id: models[model_id]["rates"]
+        for model_id in ("grok-4.7", "grok-4.7-build-fast", "grok-4.6", "grok-4.5")
+    } == {
+        "grok-4.7": {
+            "input_per_1k": 0.002,
+            "output_per_1k": 0.006,
+            "cache_read_per_1k": 0.0005,
+        },
+        "grok-4.7-build-fast": {
+            "input_per_1k": 0.004,
+            "output_per_1k": 0.012,
+            "cache_read_per_1k": 0.001,
+        },
+        "grok-4.6": {
+            "input_per_1k": 0.002,
+            "output_per_1k": 0.006,
+            "cache_read_per_1k": 0.0005,
+        },
+        "grok-4.5": {
+            "input_per_1k": 0.002,
+            "output_per_1k": 0.006,
+            "cache_read_per_1k": 0.0003,
+        },
+    }
+    for model_id in grok_ids:
+        assert models[model_id]["context_window"] == 500000
+        assert models[model_id]["family"] == "grok-4"
+
+
 def test_project_catalog_has_verified_codex_rates_and_local_roster():
     repo_root = Path(__file__).resolve().parents[1]
     catalog = load_model_catalog(repo_path=str(repo_root))
