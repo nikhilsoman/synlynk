@@ -330,7 +330,8 @@ def test_prepare_local_pilot_holds_reservation_until_dispatch(monkeypatch):
     monkeypatch.setattr(local_lifecycle, "LocalLifecycleManager", lambda: manager)
     result = local_lifecycle.prepare_local_pilot("/repo", "dispatch-1", "test_summary")
     assert result.ready
-    assert manager.reservation == "dispatch-1"
+    import hashlib
+    assert manager.reservation == hashlib.sha256(b"dispatch-1").hexdigest()
 
 
 def test_local_failure_reporter_redacts_and_rate_limits(tmp_path):
@@ -347,3 +348,41 @@ def test_local_failure_reporter_redacts_and_rate_limits(tmp_path):
     assert "sk-secret" not in payload
     assert "token" not in payload
     assert '"outbox": true' in payload
+
+
+def test_local_failure_reporter_retries_pending_outbox(tmp_path):
+    from synlynk.local_failure_reporter import report_local_failure, retry_pending_local_failures
+
+    error = LifecycleError("omlx_unreachable", "safe failure")
+    path = str(tmp_path / "outbox.json")
+    assert not report_local_failure(error, path=path, now=1000, issue_writer=lambda *_: False)
+    calls = []
+    assert retry_pending_local_failures(
+        path=path, now=5000,
+        issue_writer=lambda fingerprint, err, version: calls.append((fingerprint, err, version)) or True,
+    ) == 1
+    assert len(calls) == 1
+    assert retry_pending_local_failures(path=path, now=9000, issue_writer=lambda *_: True) == 0
+
+
+def test_local_failure_reporter_scrubs_openai_key_from_gh(monkeypatch):
+    from synlynk import local_failure_reporter
+
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-secret")
+    seen = []
+
+    class Result:
+        returncode = 0
+        stdout = "[]"
+        stderr = ""
+
+    def run(args, **kwargs):
+        seen.append((args, kwargs))
+        return Result()
+
+    monkeypatch.setattr(local_failure_reporter.subprocess, "run", run)
+    error = LifecycleError("omlx_unreachable", "safe failure")
+    assert local_failure_reporter._write_issue("f" * 64, error, "0.5.3")
+    assert seen
+    assert all("OPENAI_API_KEY" not in item[1]["env"] for item in seen)
+    assert all("sk-secret" not in repr(item) for item in seen)

@@ -42,6 +42,7 @@ class TestResolveDispatchAgent(unittest.TestCase):
                 patch.object(dispatch_mod, "_read_local_threshold", return_value=0.5), \
                 patch("synlynk.local_pilot_ledger.active_resume_authorization_matches_runtime", return_value=True), \
                 patch("synlynk.local_agent.resolve_effective_local_model", side_effect=resolve_model), \
+                patch("synlynk.local_lifecycle.prepare_local_pilot", return_value=object()), \
                 patch("synlynk.local_pilot_ledger.load_pilot_status", return_value={
                     "historical": {"cohort": "historical", "accepted": 8, "eligible": 12},
                     "validation": {"accepted": 0, "rejected": 0, "safety_failed": 0},

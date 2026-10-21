@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import socket
@@ -213,17 +214,22 @@ class LocalRuntimeResult:
     owner_pid: int | None = None
 
 
+def reservation_id_for(dispatch_key: str) -> str:
+    return hashlib.sha256(dispatch_key.encode("utf-8")).hexdigest()
+
+
 def prepare_local_pilot(repo_root: str, dispatch_key: str, pilot_class: str) -> LocalRuntimeResult:
     """Make the approved Local runtime ready, retry once, and report redacted failure."""
     del repo_root  # Lifecycle ownership is host-global, not repository-local.
     if not dispatch_key or not pilot_class:
         raise LifecycleError("invalid_dispatch_context", "Local readiness requires a dispatch identity")
+    reservation_id = reservation_id_for(dispatch_key)
     manager = LocalLifecycleManager()
     last_error = None
     for _attempt in range(2):
         try:
             result = manager.ensure_ready()
-            manager.record_reservation_started(dispatch_key)
+            manager.record_reservation_started(reservation_id)
             return result
         except LifecycleError as exc:
             last_error = exc

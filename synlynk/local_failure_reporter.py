@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import time
+from contextlib import contextmanager
 
 from synlynk.local_lifecycle import LifecycleError, LIFECYCLE_MODEL_ID
 
@@ -18,6 +19,21 @@ def _state_path() -> str:
         os.path.expanduser("~"), "Library", "Application Support", "Synlynk",
         "local-failure-outbox.json",
     )
+
+
+@contextmanager
+def _locked(path: str):
+    import fcntl
+
+    lock_path = path + ".lock"
+    os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
 
 
 def _fingerprint(error: LifecycleError, version: str = "unknown") -> str:
@@ -64,10 +80,11 @@ def _write_issue(fingerprint: str, error: LifecycleError, version: str) -> bool:
         f"- oMLX version: `{version}`\n"
         f"- Approved model: `{LIFECYCLE_MODEL_ID}`\n"
     )
+    env = {key: value for key, value in os.environ.items() if key != "OPENAI_API_KEY"}
     search = subprocess.run(
         ["gh", "issue", "list", "--search", fingerprint[:12], "--state", "open",
          "--json", "number,title", "--limit", "20"],
-        capture_output=True, text=True, timeout=20,
+        capture_output=True, text=True, timeout=20, env=env,
     )
     if search.returncode == 0:
         try:
@@ -78,13 +95,13 @@ def _write_issue(fingerprint: str, error: LifecycleError, version: str) -> bool:
         if matches:
             result = subprocess.run(
                 ["gh", "issue", "comment", str(matches[0]["number"]), "--body", body],
-                capture_output=True, text=True, timeout=20,
+                capture_output=True, text=True, timeout=20, env=env,
             )
             return result.returncode == 0
     result = subprocess.run(
         ["gh", "issue", "create", "--title", title, "--body", body,
          "--label", "bug,local-runtime"], capture_output=True, text=True,
-        timeout=20,
+        timeout=20, env=env,
     )
     return result.returncode == 0
 
@@ -96,24 +113,54 @@ def report_local_failure(error: LifecycleError, *, path: str | None = None,
     path = path or _state_path()
     now = time.time() if now is None else now
     fingerprint = _fingerprint(error, version)
-    state = _read(path)
-    prior = state.get(fingerprint) or {}
-    if prior and now - float(prior.get("last_attempt", 0)) < REPORT_INTERVAL_SECONDS:
-        return False
-    event = {
-        "fingerprint": fingerprint, "phase": error.phase,
-        "reason_code": error.reason_code, "version": version,
-        "model_id": LIFECYCLE_MODEL_ID, "last_attempt": now,
-    }
+    with _locked(path):
+        state = _read(path)
+        prior = state.get(fingerprint) or {}
+        if prior and now - float(prior.get("last_attempt", 0)) < REPORT_INTERVAL_SECONDS:
+            return False
+        event = {
+            "fingerprint": fingerprint, "phase": error.phase,
+            "reason_code": error.reason_code, "version": version,
+            "model_id": LIFECYCLE_MODEL_ID, "last_attempt": now,
+        }
+        writer = issue_writer or _write_issue
+        try:
+            sent = bool(writer(fingerprint, error, version))
+        except Exception:
+            sent = False
+        event["outbox"] = not sent
+        state[fingerprint] = event
+        _write(path, state)
+        return sent
+
+
+def retry_pending_local_failures(*, path: str | None = None, now: float | None = None,
+                                 issue_writer=None) -> int:
+    """Retry one due outbox entry per daemon tick, serializing GitHub dedupe."""
+    path = path or _state_path()
+    now = time.time() if now is None else now
     writer = issue_writer or _write_issue
-    try:
-        sent = bool(writer(fingerprint, error, version))
-    except Exception:
-        sent = False
-    event["outbox"] = not sent
-    state[fingerprint] = event
-    _write(path, state)
-    return sent
+    with _locked(path):
+        state = _read(path)
+        for fingerprint, event in state.items():
+            if not isinstance(event, dict) or event.get("outbox") is not True:
+                continue
+            if now - float(event.get("last_attempt", 0)) < REPORT_INTERVAL_SECONDS:
+                continue
+            error = LifecycleError(
+                str(event.get("reason_code", "readiness_failed")),
+                "Local runtime readiness failed",
+                phase=str(event.get("phase", "readiness")),
+            )
+            try:
+                sent = bool(writer(fingerprint, error, str(event.get("version", "unknown"))))
+            except Exception:
+                sent = False
+            event["last_attempt"] = now
+            event["outbox"] = not sent
+            _write(path, state)
+            return int(sent)
+    return 0
 
 
 def outbox_status(*, path: str | None = None) -> dict:

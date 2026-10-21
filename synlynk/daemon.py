@@ -1205,6 +1205,8 @@ class SynlynkDaemon(WatchDaemon):
         """Supervise host-global Synlynk-owned oMLX idle state."""
         try:
             self.local_lifecycle_manager.tick()
+            from synlynk.local_failure_reporter import retry_pending_local_failures
+            retry_pending_local_failures()
         except Exception as exc:
             # Only classified fields are emitted; exception text may contain
             # endpoint or provider details and must never reach telemetry.

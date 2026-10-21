@@ -249,6 +249,17 @@ def take_local_pilot_receipt() -> Optional[dict]:
     return receipt
 
 
+def _release_local_reservation(reservation_id: str) -> None:
+    if not reservation_id:
+        return
+    try:
+        from synlynk.local_lifecycle import LocalLifecycleManager
+        LocalLifecycleManager().record_reservation_finished(reservation_id)
+    except Exception:
+        # A stale caller PID lease is reclaimed by the next supervisor tick.
+        pass
+
+
 def _log_routing_fallback(message: str, *, requested: str, actual: str) -> None:
     """Record a routing fallback in sentinel.md and for the upcoming job row.
 
@@ -381,9 +392,10 @@ def _resolve_dispatch_agent(
         _log_routing_fallback(message, requested="local", actual=fallback)
         return fallback
     try:
-        from synlynk.local_lifecycle import prepare_local_pilot
+        from synlynk.local_lifecycle import prepare_local_pilot, reservation_id_for
 
-        prepare_local_pilot(os.getcwd(), str(dispatch_key or task), pilot_class)
+        selected_dispatch_key = str(dispatch_key or task)
+        prepare_local_pilot(os.getcwd(), selected_dispatch_key, pilot_class)
     except Exception as exc:
         # Keep the cohort decision deterministic: a readiness failure always
         # returns to the frontier selected before Local was considered.
@@ -392,6 +404,7 @@ def _resolve_dispatch_agent(
         print(message)
         _log_routing_fallback(message, requested="local", actual=fallback)
         return fallback
+    reservation_id = reservation_id_for(selected_dispatch_key)
     try:
         from synlynk.local_agent import resolve_effective_local_model
 
@@ -401,6 +414,7 @@ def _resolve_dispatch_agent(
             require_live_inventory=True,
         )
     except Exception as exc:
+        _release_local_reservation(reservation_id)
         # Resolver diagnostics classify auth/inventory failures and never
         # include the configured credential. A failed preflight is a frontier
         # route, not a host-side local attempt.
@@ -409,6 +423,7 @@ def _resolve_dispatch_agent(
         _log_routing_fallback(message, requested="local", actual=fallback)
         return fallback
     if model_resolution["effective_model"] not in runtime["qualified_models"]:
+        _release_local_reservation(reservation_id)
         message = f"Routing to: {fallback} (resolved local model is not pilot-qualified)"
         print(message)
         _log_routing_fallback(message, requested="local", actual=fallback)
@@ -419,6 +434,7 @@ def _resolve_dispatch_agent(
         max_concurrent=1,
         effective_model=model_resolution["effective_model"],
     ):
+        _release_local_reservation(reservation_id)
         message = f"Routing to: {fallback} (local pilot: active resume authorization required)"
         print(message)
         _log_routing_fallback(message, requested="local", actual=fallback)
@@ -434,6 +450,7 @@ def _resolve_dispatch_agent(
         "dispatch_key_sha256": hashlib.sha256(
             str(dispatch_key or task).encode("utf-8")
         ).hexdigest(),
+        "reservation_id": reservation_id,
         "dispatch_key": str(dispatch_key or task),
         "task_sha256": hashlib.sha256(task.encode("utf-8")).hexdigest(),
         "role": role,
@@ -4147,6 +4164,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         fallback = (receipt or {}).get("frontier_fallback") or _read_local_fallback()
         if fallback == "local":
             raise RuntimeError("Local Pilot fallback cannot resolve to local")
+        if receipt:
+            reservation_id = receipt.get("reservation_id")
+            if not reservation_id:
+                from synlynk.local_lifecycle import reservation_id_for
+                reservation_id = reservation_id_for(str(story_id or issue or task))
+            _release_local_reservation(str(reservation_id))
         message = f"Routing to: {fallback} (local pilot: {reason})"
         print(message)
         _log_routing_fallback(message, requested="local", actual=fallback)
@@ -5340,8 +5363,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             from synlynk.local_lifecycle import LocalLifecycleManager
             lifecycle_manager = LocalLifecycleManager()
             lifecycle_manager.record_job_started(job_id, pid=proc.pid)
+            reservation_id = local_pilot_receipt.get("reservation_id") or hashlib.sha256(
+                str(story_id or issue or task).encode("utf-8")
+            ).hexdigest()
             lifecycle_manager.record_reservation_finished(
-                str(story_id or issue or task)
+                str(reservation_id)
             )
         except Exception:
             # The runner is already spawned. Stop it and roll back its pending

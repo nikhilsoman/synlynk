@@ -2905,7 +2905,10 @@ def test_local_pilot_dispatch_uses_isolated_runner_and_records_cohort_receipt(pr
         "result_receipt_file": job["log_file"] + ".pilot.json",
     }
     assert job["local_pilot_receipt"] == expected_receipt
-    assert leased == [(job["id"], 9998), ("released", "test-2")]
+    assert leased == [
+        (job["id"], 9998),
+        ("released", hashlib.sha256(b"test-2").hexdigest()),
+    ]
     assert job["local_model_receipt"]["pilot"] == expected_receipt
     from synlynk import _get_db
 
