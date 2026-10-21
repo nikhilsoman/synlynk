@@ -3920,9 +3920,17 @@ def acquire_task_lease(
     story_id: str,
     leased_by: str,
     duration_seconds: int = 1800,
+    pid: int = None,
+    harness: str = None,
+    override: bool = False,
     conn=None,
 ) -> dict:
-    """Acquire or extend a rolling lease on a story in state.db."""
+    """Acquire or extend a rolling lease on a story in state.db.
+
+    A live conflicting claim (unexpired TTL AND holder PID still alive) blocks
+    acquisition unless ``override=True``. A claim whose TTL expired OR whose
+    holder PID is dead is stale and does not block (gh:#2511).
+    """
     owns_conn = False
     if conn is None:
         from synlynk import _get_db
@@ -3933,17 +3941,23 @@ def acquire_task_lease(
     expires_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + duration_seconds))
     now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
     lease_id = f"lease-{hashlib.md5(f'{story_id}:{leased_by}:{now}'.encode()).hexdigest()[:8]}"
+    effective_pid = pid if pid is not None else os.getpid()
 
     try:
         row = conn.execute(
-            "SELECT lease_id, leased_by, expires_at FROM task_leases "
+            "SELECT lease_id, leased_by, pid, harness, expires_at FROM task_leases "
             "WHERE story_id=? AND status='active' ORDER BY rowid DESC LIMIT 1",
             (story_id,),
         ).fetchone()
 
         if row:
-            curr_id, curr_holder, curr_exp = row
-            if curr_exp < now_str or curr_holder == leased_by:
+            curr_id, curr_holder, curr_pid, curr_harness, curr_exp = row
+            is_expired = curr_exp < now_str
+            is_dead = not _pid_is_alive(curr_pid)
+            is_same_holder = curr_holder == leased_by
+            is_stale = is_expired or is_dead or is_same_holder
+
+            if is_stale or override:
                 conn.execute(
                     "UPDATE task_leases SET status='expired' WHERE lease_id=?",
                     (curr_id,),
@@ -3953,13 +3967,15 @@ def acquire_task_lease(
                     "acquired": False,
                     "reason": "already_leased",
                     "leased_by": curr_holder,
+                    "harness": curr_harness,
                     "expires_at": curr_exp,
                 }
 
         conn.execute(
-            """INSERT INTO task_leases (lease_id, story_id, leased_by, acquired_at, heartbeat_at, expires_at, status)
-               VALUES (?, ?, ?, ?, ?, ?, 'active')""",
-            (lease_id, story_id, leased_by, now_str, now_str, expires_at),
+            """INSERT INTO task_leases
+               (lease_id, story_id, leased_by, pid, harness, acquired_at, heartbeat_at, expires_at, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')""",
+            (lease_id, story_id, leased_by, effective_pid, harness, now_str, now_str, expires_at),
         )
         conn.execute(
             "UPDATE stories SET status='in_progress', readiness='in_progress' WHERE story_id=?",
@@ -3971,6 +3987,7 @@ def acquire_task_lease(
             "lease_id": lease_id,
             "story_id": story_id,
             "leased_by": leased_by,
+            "harness": harness,
             "expires_at": expires_at,
         }
     finally:

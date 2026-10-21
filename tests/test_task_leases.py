@@ -1,3 +1,5 @@
+import os
+
 import pytest
 import sqlite3
 import time
@@ -71,6 +73,49 @@ def test_release_task_lease(db_conn):
 
     row = db_conn.execute("SELECT status FROM stories WHERE story_id='story-lease-1'").fetchone()
     assert row[0] == "done"
+
+
+def test_dead_pid_claim_does_not_block_new_claim(db_conn):
+    # Simulate a crashed session: a PID that is guaranteed not to exist.
+    dead_pid = 999999
+    acquire_task_lease(
+        "story-lease-1", "claude:session-a", duration_seconds=600,
+        pid=dead_pid, harness="claude", conn=db_conn,
+    )
+
+    result = acquire_task_lease(
+        "story-lease-1", "codex:session-b", duration_seconds=600,
+        pid=os.getpid(), harness="codex", conn=db_conn,
+    )
+    assert result["acquired"] is True
+
+
+def test_live_pid_claim_blocks_new_claim_without_override(db_conn):
+    acquire_task_lease(
+        "story-lease-1", "claude:session-a", duration_seconds=600,
+        pid=os.getpid(), harness="claude", conn=db_conn,
+    )
+
+    conflict = acquire_task_lease(
+        "story-lease-1", "codex:session-b", duration_seconds=600,
+        pid=os.getpid(), harness="codex", conn=db_conn,
+    )
+    assert conflict["acquired"] is False
+    assert conflict["reason"] == "already_leased"
+    assert conflict["harness"] == "claude"
+
+
+def test_override_bypasses_live_claim(db_conn):
+    acquire_task_lease(
+        "story-lease-1", "claude:session-a", duration_seconds=600,
+        pid=os.getpid(), harness="claude", conn=db_conn,
+    )
+
+    result = acquire_task_lease(
+        "story-lease-1", "codex:session-b", duration_seconds=600,
+        pid=os.getpid(), harness="codex", override=True, conn=db_conn,
+    )
+    assert result["acquired"] is True
 
 
 def test_task_leases_table_has_pid_and_harness_columns(db_conn):
