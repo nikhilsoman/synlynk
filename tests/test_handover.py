@@ -95,6 +95,77 @@ def test_execute_home_handover_drain_flow(tmp_path, monkeypatch):
     assert is_harness_draining("claude", repo_path=tmp_path) is False
 
 
+def test_execute_home_handover_releases_active_lease_and_claim(tmp_path, monkeypatch):
+    """Full-integration note (gh:#2511): a real execute_home_handover() run resolves
+    its state.db through _project_root()'s canonical-identity machinery, which a
+    hand-rolled tmp_path .synlynk/state.db cannot stand in for (it raises
+    RuntimeError outside a real git worktree, or resolves to an unrelated
+    canonical path inside one) — exactly the class of error the surrounding
+    try/except Exception: pass in execute_home_handover is designed to absorb.
+    This test instead proves, directly and without mocking that machinery, that
+    the lookup-then-release logic execute_home_handover runs when active_story_id
+    is set — get_active_lease(active_story_id) to resolve the real leased_by
+    session id, then release_task_lease(active_story_id, that leased_by,
+    new_status=None), followed by _remove_active_claim(active_story_id) — behaves
+    correctly against a real task_leases row and a real active_claims.json file.
+
+    The lease is acquired with a realistic composite leased_by
+    ("claude:testhost:424242"), NOT the bare harness string "claude" that
+    current_home resolves to — matching production's cmd_story_claim, which sets
+    leased_by to f"{harness}:{hostname}:{pid}". This is deliberate: a bare
+    "claude" leased_by would accidentally match current_home and mask the exact
+    bug this test exists to catch (gh:#2511 follow-up) — execute_home_handover
+    once passed current_home directly as leased_by to release_task_lease, which
+    silently matched 0 rows against real leases since leased_by is never a bare
+    harness name in production."""
+    from synlynk import _get_db
+    from synlynk.jobs import acquire_task_lease, release_task_lease, get_active_lease
+    from synlynk.session import _add_active_claim, _read_active_claims, _remove_active_claim
+
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+
+    conn = _get_db(db_path=str(tmp_path / ".synlynk" / "test_handover_leases.db"))
+    conn.execute(
+        "INSERT INTO stories (story_id, title, role, stage, status, readiness) "
+        "VALUES ('story-9012', 'Lease Handover Story', 'dev', 'open', 'in_progress', 'in_progress')"
+    )
+    conn.commit()
+
+    real_leased_by = "claude:testhost:424242"
+    acquired = acquire_task_lease(
+        "story-9012", real_leased_by, duration_seconds=600, pid=424242, harness="claude", conn=conn
+    )
+    _add_active_claim("story-9012", acquired["lease_id"])
+    assert "story-9012" in _read_active_claims()
+
+    active_story_id = "story-9012"
+
+    # Same lookup-then-release logic execute_home_handover runs when
+    # active_story_id is truthy.
+    active_lease = get_active_lease(active_story_id, conn=conn)
+    assert active_lease is not None
+    assert active_lease["leased_by"] == real_leased_by  # not "claude"
+    release_task_lease(active_story_id, active_lease["leased_by"], new_status=None, conn=conn)
+    _remove_active_claim(active_story_id)
+
+    lease = get_active_lease("story-9012", conn=conn)
+    assert lease is None  # no active lease remains
+
+    row = conn.execute(
+        "SELECT status FROM task_leases WHERE story_id='story-9012' ORDER BY rowid DESC LIMIT 1"
+    ).fetchone()
+    assert row[0] == "released"
+
+    # new_status=None must not force the mid-flight story to 'done'.
+    story_status = conn.execute(
+        "SELECT status FROM stories WHERE story_id='story-9012'"
+    ).fetchone()
+    assert story_status[0] == "in_progress"
+
+    assert "story-9012" not in _read_active_claims()
+
+
 def test_execute_home_handover_prefers_load_config_over_stale_legacy_file(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk")
