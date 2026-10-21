@@ -3102,5 +3102,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2518 \u2014 complete LIVE-27 execution-log model cleanse (PR #2518, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2518.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-21) - PR #2518\n- Merged improvements and fixes for PR #2518."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/441-pr2524-story-home-claims-via-task-leases-extens.md",
+    "title": "PR #2524 \u2014 story home claims via task_leases extension (gh:#2511)",
+    "author": "nikhilsoman",
+    "date": "2026-10-21",
+    "pr": "#2524",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2524."
+    ],
+    "tweet": "\ud83d\ude80 PR #2524 \u2014 story home claims via task_leases extension (gh:#2511) (PR #2524, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2524.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-21) - PR #2524\n- Merged improvements and fixes for PR #2524."
   }
 ]
