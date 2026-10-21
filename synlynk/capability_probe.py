@@ -61,6 +61,15 @@ HARNESS_CAPABILITY_PROFILES: Dict[str, Dict[str, bool]] = {
         CAP_NET: True,
         CAP_REVIEW: True,
     },
+    # Provisionally enable calibration dispatches. Live TC-9 probes and
+    # capability_ratings measurements determine whether these stay enabled.
+    "muse": {
+        CAP_SHELL: True,
+        CAP_WORKSPACE_WRITE: True,
+        CAP_GH_WRITE: True,
+        CAP_NET: True,
+        CAP_REVIEW: True,
+    },
     "local": {
         CAP_SHELL: True,
         CAP_WORKSPACE_WRITE: True,
