@@ -2439,6 +2439,40 @@ def test_local_pilot_review_commands_parse_their_factual_review_inputs():
     )
 
 
+def test_local_pilot_resume_command_requires_the_two_audit_references():
+    """Removing either reference would make an untraceable activation possible."""
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    parsed = parser.parse_args([
+        "local", "pilot", "resume", "--remediation-ref", "issue-2342",
+        "--verification-ref", "review-2349",
+    ])
+
+    assert parsed.local_pilot_action == "resume"
+    assert parsed.remediation_ref == "issue-2342"
+    assert parsed.verification_ref == "review-2349"
+    with pytest.raises(SystemExit):
+        parser.parse_args(["local", "pilot", "resume", "--remediation-ref", "issue-2342"])
+
+
+def test_local_pilot_resume_cli_refuses_noninteractive_confirmation(project_dir, monkeypatch):
+    """A piped invocation must not create an authorization or alter the disabled config."""
+    import sys
+    from synlynk.cli import main
+
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    with pytest.raises(ValueError, match="interactive terminal"):
+        main([
+            "local", "pilot", "resume", "--remediation-ref", "issue-2342",
+            "--verification-ref", "review-2349",
+        ])
+
+    workspace_path = project_dir / ".synlynk" / "workspace.json"
+    workspace = json.loads(workspace_path.read_text()) if workspace_path.exists() else {}
+    assert workspace.get("local_pilot", {}).get("enabled") is not True
+
+
 def test_local_pilot_status_cli_reports_live_configured_concurrency(project_dir, capsys):
     """Changing the dispatch concurrency cap must change the operator status view."""
     from synlynk.cli import main

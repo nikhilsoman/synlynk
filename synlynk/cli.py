@@ -650,6 +650,11 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     local_pilot_record_parser.add_argument("--reviewer", required=True)
     local_pilot_record_parser.add_argument("--verdict", choices=["accept", "reject"], required=True)
     local_pilot_record_parser.add_argument("--rationale", required=True)
+    local_pilot_resume_parser = local_pilot_sub.add_parser(
+        "resume", help="Interactively preflight and resume the fixed Local validation lane"
+    )
+    local_pilot_resume_parser.add_argument("--remediation-ref", required=True)
+    local_pilot_resume_parser.add_argument("--verification-ref", required=True)
 
     gateway_parser = subparsers.add_parser("gateway", help="Manage external model gateways")
     gateway_sub = gateway_parser.add_subparsers(dest="gateway_cmd")
@@ -3380,6 +3385,7 @@ def main(argv=None) -> None:
             local_pilot_status,
             record_local_pilot_review,
             render_local_pilot_status,
+            resume_local_pilot,
             start_local_pilot_review,
         )
         if args.local_action == "doctor":
@@ -3393,6 +3399,18 @@ def main(argv=None) -> None:
                 payload = record_local_pilot_review(
                     args.job_id, args.reviewer, args.verdict, args.rationale
                 )
+            elif args.local_pilot_action == "resume":
+                if not sys.stdin.isatty():
+                    raise ValueError("Local pilot resume requires an interactive terminal")
+                from synlynk import _get_db
+
+                conn = _get_db()
+                try:
+                    payload = resume_local_pilot(
+                        os.getcwd(), conn, args.remediation_ref, args.verification_ref, input
+                    )
+                finally:
+                    conn.close()
             else:
                 local_pilot_parser.print_help()
                 return

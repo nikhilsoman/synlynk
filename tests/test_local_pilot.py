@@ -141,6 +141,125 @@ def test_historical_safety_failure_requires_an_active_resume_authorization():
     assert decision.reason == "operational_resume_required"
 
 
+def test_resume_preflight_fails_closed_for_config_runtime_or_reconciliation_debt(tmp_path, monkeypatch):
+    """A relaxed preflight branch could resume against unsafe state."""
+    import sqlite3
+    from synlynk import local_agent
+
+    repo = tmp_path / "repo"
+    (repo / ".synlynk").mkdir(parents=True)
+    (repo / ".agents").mkdir()
+    (repo / ".synlynk" / "workspace.json").write_text(
+        json.dumps({"local_pilot": {"enabled": False, "share": 0.20, "max_concurrent": 1}})
+    )
+    (repo / ".agents" / "local.json").write_text(json.dumps({"max_concurrent": 1}))
+    conn = sqlite3.connect(":memory:")
+    monkeypatch.setattr(local_agent, "load_pilot_runtime", lambda *_: {
+        "enabled": False, "share": 0.20, "qualified": True, "qualified_models": ["ornith-test"], "isolated": True,
+    })
+    monkeypatch.setattr(local_agent, "resolve_effective_local_model", lambda **_: {"resolved_model": "ornith-test"})
+    monkeypatch.setattr(local_agent, "_usable_compose_runner", lambda: True)
+
+    passed = local_agent.preflight_local_pilot_resume(str(repo), conn)
+    assert passed["result"] == "passed"
+
+    (repo / ".synlynk" / "workspace.json").write_text(
+        json.dumps({"local_pilot": {"enabled": False, "share": 0.35, "max_concurrent": 1}})
+    )
+    failed = local_agent.preflight_local_pilot_resume(str(repo), conn)
+    assert failed["result"] == "failed"
+    assert "config_share" in failed["failures"]
+
+
+def test_resume_preflight_reconciles_stranded_activation_without_inferring_config_approval(tmp_path):
+    """An activating record must become failed even when a config later looks enabled."""
+    import sqlite3
+    from synlynk import local_agent
+    from synlynk.local_pilot_ledger import ensure_local_pilot_ledger
+
+    repo = tmp_path / "repo"
+    (repo / ".synlynk").mkdir(parents=True)
+    (repo / ".synlynk" / "workspace.json").write_text(json.dumps({"local_pilot": {"enabled": False, "share": .2}}))
+    conn = sqlite3.connect(":memory:")
+    ensure_local_pilot_ledger(conn)
+    conn.execute(
+        "INSERT INTO local_pilot_resume_authorizations "
+        "(authorization_id, created_at, signed_payload_json, signed_payload_digest, config_fingerprint, "
+        "remediation_reference, verification_reference, safety_watermark, preflight_receipt_json, "
+        "preflight_receipt_digest, state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'activating')",
+        ("stranded", "now", "{}", "digest", "fingerprint", "fix", "verify", 0, "{}", "digest"),
+    )
+    conn.commit()
+
+    result = local_agent.preflight_local_pilot_resume(str(repo), conn)
+
+    assert result["result"] == "failed"
+    assert conn.execute(
+        "SELECT state FROM local_pilot_resume_authorizations WHERE authorization_id = 'stranded'"
+    ).fetchone()[0] == "failed"
+
+
+def test_pilot_resume_signs_and_activates_only_the_fixed_lane(tmp_path, monkeypatch):
+    """Changing the staged values or dispatching work would violate the recovery boundary."""
+    import sqlite3
+    from synlynk import local_agent, local_pilot_ledger
+
+    repo = tmp_path / "repo"
+    (repo / ".synlynk").mkdir(parents=True)
+    (repo / ".agents").mkdir()
+    (repo / ".synlynk" / "workspace.json").write_text(
+        json.dumps({"local_pilot": {"enabled": False, "share": 0.20, "max_concurrent": 1}})
+    )
+    (repo / ".agents" / "local.json").write_text(json.dumps({"max_concurrent": 1}))
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE daemon_jobs (status TEXT, agent TEXT)")
+    monkeypatch.setattr(local_agent, "load_pilot_runtime", lambda *_: {
+        "enabled": False, "share": 0.20, "qualified": True, "qualified_models": ["ornith-test"], "isolated": True,
+    })
+    monkeypatch.setattr(local_agent, "resolve_effective_local_model", lambda **_: {"resolved_model": "ornith-test"})
+    monkeypatch.setattr(local_agent, "_usable_compose_runner", lambda: True)
+    monkeypatch.setattr(local_agent, "_sign_resume_authorization", lambda _: "signed-by-test")
+    monkeypatch.setattr(local_pilot_ledger, "_verify_resume_signature", lambda *_: True)
+
+    result = local_agent.resume_local_pilot(
+        str(repo), conn, "issue-2342", "review-2349", lambda _: "RESUME LOCAL PILOT"
+    )
+
+    workspace = json.loads((repo / ".synlynk" / "workspace.json").read_text())
+    assert workspace["local_pilot"] == {"enabled": True, "share": 0.20, "max_concurrent": 1}
+    assert result["authorization"]["state"] == "active"
+    assert result["authorization"]["signed_payload_json"]
+    assert conn.execute("SELECT COUNT(*) FROM local_pilot_evidence").fetchone()[0] == 0
+
+
+def test_pilot_resume_refusal_or_missing_signing_key_leaves_config_disabled(tmp_path, monkeypatch):
+    """A declined or unsigned ceremony must not write an active authorization."""
+    import sqlite3
+    from synlynk import local_agent
+
+    repo = tmp_path / "repo"
+    (repo / ".synlynk").mkdir(parents=True)
+    (repo / ".agents").mkdir()
+    baseline = {"local_pilot": {"enabled": False, "share": 0.20, "max_concurrent": 1}}
+    (repo / ".synlynk" / "workspace.json").write_text(json.dumps(baseline))
+    (repo / ".agents" / "local.json").write_text(json.dumps({"max_concurrent": 1}))
+    conn = sqlite3.connect(":memory:")
+    monkeypatch.setattr(local_agent, "load_pilot_runtime", lambda *_: {
+        "enabled": False, "share": 0.20, "qualified": True, "qualified_models": ["ornith-test"], "isolated": True,
+    })
+    monkeypatch.setattr(local_agent, "resolve_effective_local_model", lambda **_: {"resolved_model": "ornith-test"})
+    monkeypatch.setattr(local_agent, "_usable_compose_runner", lambda: True)
+    monkeypatch.setattr(local_agent, "_identity_key_path", lambda: str(repo / "missing-identity.key"))
+
+    with pytest.raises(ValueError, match="confirmation"):
+        local_agent.resume_local_pilot(str(repo), conn, "fix", "verify", lambda _: "no")
+    with pytest.raises(ValueError, match="signing key"):
+        local_agent.resume_local_pilot(str(repo), conn, "fix", "verify", lambda _: "RESUME LOCAL PILOT")
+
+    assert json.loads((repo / ".synlynk" / "workspace.json").read_text()) == baseline
+    assert conn.execute("SELECT COUNT(*) FROM local_pilot_resume_authorizations").fetchone()[0] == 0
+
+
 def test_active_resume_authorization_uses_only_its_new_epoch_for_rebaseline():
     """The policy consumes the reset status arithmetic rather than old evidence."""
     decision = local_pilot.evaluate_rebaseline(
