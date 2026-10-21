@@ -23,7 +23,7 @@
 ## Review Focus
 
 - Missing, unreadable, malformed, or absent `auth.api_key` must fail closed without printing settings contents or the key.
-- The credential reader must match wrapper base-path resolution, including `~/Library/Application Support/oMLX/base-path`; test explicit `OMLX_BASE_PATH` precedence and fallback behavior.
+- The credential reader must match wrapper base-path resolution, including `~/Library/Application Support/oMLX/base-path`; a readable non-empty bootstrap overrides inherited `OMLX_BASE_PATH`, otherwise use inherited path then `~/.omlx`.
 - A running operator-owned endpoint and a bind race must never be claimed or stopped by Synlynk.
 - PID reuse, daemon restart, stale ownership, and lost process identity must never authorize signaling an unrelated process.
 - Legacy `local credentials import` must not be required; `local doctor` must describe the active oMLX settings credential state without exposing it or depending on `OPENAI_API_KEY`.
@@ -42,7 +42,7 @@
 - Preserve `LocalCredentialStore.get() -> str` and `is_configured() -> bool` for current consumers.
 - Keep `import_from_environment()` and `delete()` as independent legacy credential operations; lifecycle readiness, relay, and doctor must not use them.
 
-- [ ] **Step 1: Add failing settings-reader tests** for explicit `OMLX_BASE_PATH`, app bootstrap path, default `~/.omlx`, absent file/key, malformed JSON, permission failure, and empty key. Assert errors are redacted and `is_configured()` is false for failures.
+- [ ] **Step 1: Add failing settings-reader tests** for bootstrap-over-environment precedence, inherited `OMLX_BASE_PATH` fallback, default `~/.omlx`, absent file/key, malformed JSON, permission failure, and empty key. Assert errors are redacted and `is_configured()` is false for failures.
 - [ ] **Step 2: Run** `pytest tests/test_local_credentials.py -q` and confirm the new cases fail against the Keychain-only reader.
 - [ ] **Step 3: Implement active base-path resolution and memory-only `auth.api_key` reading** in `LocalCredentialStore`, following the installed oMLX wrapper’s precedence; do not log settings content or retain a second persistent copy.
 - [ ] **Step 4: Update doctor/auth guidance tests** so `local doctor` reports the active settings key state and 401 guidance does not recommend import as a lifecycle prerequisite. Preserve the legacy import command's independent behavior.
