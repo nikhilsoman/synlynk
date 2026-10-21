@@ -124,6 +124,16 @@ def test_task_leases_table_has_pid_and_harness_columns(db_conn):
     assert "harness" in cols
 
 
+def test_get_active_lease_includes_harness_and_pid(db_conn):
+    acquire_task_lease(
+        "story-lease-1", "claude:session-a", duration_seconds=600,
+        pid=os.getpid(), harness="claude", conn=db_conn,
+    )
+    lease = get_active_lease("story-lease-1", conn=db_conn)
+    assert lease["harness"] == "claude"
+    assert lease["pid"] == os.getpid()
+
+
 def test_reclaim_stranded_story_with_lease(db_conn):
     # Acquire lease
     acquire_task_lease("story-lease-1", "dead-worker", duration_seconds=60, conn=db_conn)

@@ -4065,7 +4065,7 @@ def get_active_lease(story_id: str, conn=None) -> Optional[dict]:
 
     try:
         row = conn.execute(
-            "SELECT lease_id, story_id, leased_by, acquired_at, heartbeat_at, expires_at, status "
+            "SELECT lease_id, story_id, leased_by, pid, harness, acquired_at, heartbeat_at, expires_at, status "
             "FROM task_leases WHERE story_id=? AND status='active' ORDER BY rowid DESC LIMIT 1",
             (story_id,),
         ).fetchone()
@@ -4075,10 +4075,12 @@ def get_active_lease(story_id: str, conn=None) -> Optional[dict]:
             "lease_id": row[0],
             "story_id": row[1],
             "leased_by": row[2],
-            "acquired_at": row[3],
-            "heartbeat_at": row[4],
-            "expires_at": row[5],
-            "status": row[6],
+            "pid": row[3],
+            "harness": row[4],
+            "acquired_at": row[5],
+            "heartbeat_at": row[6],
+            "expires_at": row[7],
+            "status": row[8],
         }
     finally:
         if owns_conn:
