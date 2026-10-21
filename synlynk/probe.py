@@ -1001,6 +1001,8 @@ def _run_tc9(
         cli_bin = "agy" if shutil.which("agy") else "antigravity"
     elif harness_name == "grok":
         cli_bin = "grok"
+    elif harness_name == "muse":
+        cli_bin = "muse"
 
     bin_path = shutil.which(cli_bin)
     if not bin_path:
@@ -1212,6 +1214,44 @@ def _run_tc9(
                 "passed": True,
                 "can_gh_write": True,
                 "mechanism": "direct_cli",
+                "error": "",
+            })
+    elif harness_name == "muse":
+        if live:
+            try:
+                proc = subprocess.run(
+                    [cli_bin, "exec", "--json", "--approval-mode", "never", cmd_str],
+                    **run_kwargs,
+                )
+                output = ((proc.stdout or "") + (proc.stderr or "")).strip()
+                if proc.returncode == 0:
+                    res.update({
+                        "passed": True,
+                        "can_gh_write": True,
+                        "mechanism": "direct_cli",
+                        "output": output,
+                    })
+                else:
+                    res.update({
+                        "passed": False,
+                        "can_gh_write": False,
+                        "mechanism": "execution_failed",
+                        "error": output or f"Muse exited with code {proc.returncode}",
+                        "output": output,
+                    })
+            except Exception as exc:
+                res.update({
+                    "passed": False,
+                    "can_gh_write": False,
+                    "mechanism": "execution_failed",
+                    "error": str(exc),
+                })
+        else:
+            res.update({
+                "passed": True,
+                "can_gh_write": True,
+                "mechanism": "not_live_tested",
+                "note": "Non-live probe; run with live=True for an authoritative result.",
                 "error": "",
             })
     else:

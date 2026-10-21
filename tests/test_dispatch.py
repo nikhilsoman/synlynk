@@ -1,4 +1,5 @@
 import hashlib
+import json
 import os
 import sqlite3
 import subprocess
@@ -2840,8 +2841,12 @@ def test_local_pilot_dispatch_uses_isolated_runner_and_records_cohort_receipt(pr
     monkeypatch.setattr("synlynk.harness_adapters.registry.get_adapter", lambda agent: adapter)
     monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda root: {
         "enabled": True, "qualified": True, "isolated": True,
-        "share": 0.2, "qualified_models": ["ornith"],
+        "share": 0.2, "max_concurrent": 1, "qualified_models": ["ornith"],
     })
+    monkeypatch.setattr(
+        "synlynk.local_pilot_ledger.active_resume_authorization_matches_runtime",
+        lambda _conn, **_kwargs: True,
+    )
     runner_calls = []
 
     def fake_build(**kwargs):
@@ -2887,10 +2892,276 @@ def test_local_pilot_dispatch_uses_isolated_runner_and_records_cohort_receipt(pr
     assert "GH_TOKEN" not in spawned[0][1]["env"]
     expected_receipt = {
         **{key: value for key, value in receipt_payload.items() if key != "dispatch_key"},
+        "cohort": "validation",
+        "admission_id": job["id"],
+        "receipt_digest": job["local_pilot_receipt"]["receipt_digest"],
         "result_receipt_file": job["log_file"] + ".pilot.json",
     }
     assert job["local_pilot_receipt"] == expected_receipt
     assert job["local_model_receipt"]["pilot"] == expected_receipt
+    from synlynk import _get_db
+
+    conn = _get_db()
+    try:
+        evidence = conn.execute(
+            "SELECT cohort, task_class, safety_verdict, quality_verdict "
+            "FROM local_pilot_evidence WHERE job_id = ?",
+            (job["id"],),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert evidence == ("validation", "test_summary", "pending", "pending")
+
+
+def test_disabled_local_pilot_uses_frontier_without_creating_ledger_evidence(project_dir, monkeypatch):
+    """A disabled runtime must not consume a re-baseline sample."""
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import _get_db
+
+    conn = _get_db()
+    try:
+        monkeypatch.setattr(dispatch_mod, "_read_local_fallback", lambda _path: "codex")
+        monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda _root: {
+            "enabled": False, "qualified": True, "isolated": True,
+            "share": 0.2, "qualified_models": ["ornith"],
+        })
+
+        routed = dispatch_mod._resolve_dispatch_agent(
+            "auto", "test", conn, task="summarize focused test output", role="dev",
+            pilot_class="test_summary", dispatch_key="disabled-pilot", scope_paths=["test.log"],
+        )
+        evidence_count = conn.execute("SELECT COUNT(*) FROM local_pilot_evidence").fetchone()[0]
+    finally:
+        conn.close()
+
+    assert routed == "codex"
+    assert evidence_count == 0
+
+
+def test_enabled_local_pilot_without_active_resume_authorization_falls_back(project_dir, monkeypatch):
+    """A config switch alone is never an operational-resume authority."""
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import _get_db
+
+    monkeypatch.setattr(dispatch_mod, "_read_local_fallback", lambda _path: "codex")
+    monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda _root: {
+        "enabled": True, "share": 0.2, "max_concurrent": 1,
+        "qualified": True, "isolated": True, "qualified_models": ["ornith"],
+    })
+    monkeypatch.setattr("synlynk.local_agent.resolve_effective_local_model", lambda **_kwargs: {
+        "effective_model": "ornith", "edit_format": "diff", "health": "available",
+    })
+
+    conn = _get_db()
+    try:
+        from synlynk.local_pilot_ledger import ensure_local_pilot_ledger
+        ensure_local_pilot_ledger(conn)
+        routed = dispatch_mod._resolve_dispatch_agent(
+            "auto", "test", conn, task="summarize focused output", role="dev",
+            pilot_class="test_summary", dispatch_key="local-5", scope_paths=["test.log"],
+        )
+    finally:
+        conn.close()
+
+    assert routed == "codex"
+
+
+def test_active_resume_authorization_with_concurrency_config_drift_falls_back(project_dir, monkeypatch):
+    """Changing the one-job cap after approval must invalidate Local admission."""
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import _get_db
+
+    monkeypatch.setattr(dispatch_mod, "_read_local_fallback", lambda _path: "codex")
+    monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda _root: {
+        "enabled": True, "share": 0.2, "max_concurrent": 2,
+        "qualified": True, "isolated": True, "qualified_models": ["ornith"],
+    })
+    monkeypatch.setattr("synlynk.local_pilot_ledger.active_resume_authorization", lambda _conn: {
+        "authorization_id": "resume-1",
+        "safety_watermark": 0,
+        "preflight_receipt_json": json.dumps({
+            "result": "passed", "requested_share": 0.2, "requested_max_concurrent": 1,
+        }),
+    })
+    monkeypatch.setattr("synlynk.local_agent.resolve_effective_local_model", lambda **_kwargs: {
+        "effective_model": "ornith", "edit_format": "diff", "health": "available",
+    })
+
+    conn = _get_db()
+    try:
+        from synlynk.local_pilot_ledger import ensure_local_pilot_ledger
+        ensure_local_pilot_ledger(conn)
+        routed = dispatch_mod._resolve_dispatch_agent(
+            "auto", "test", conn, task="summarize focused output", role="dev",
+            pilot_class="test_summary", dispatch_key="local-5", scope_paths=["test.log"],
+        )
+    finally:
+        conn.close()
+
+    assert routed == "codex"
+
+
+def test_resume_authorization_requires_the_preflight_selected_model(project_dir, monkeypatch):
+    """Another qualified Ornith model is not an approved replacement."""
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import _get_db
+
+    monkeypatch.setattr(dispatch_mod, "_read_local_fallback", lambda _path: "codex")
+    monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda _root: {
+        "enabled": True, "share": 0.2, "max_concurrent": 1,
+        "qualified": True, "isolated": True,
+        "qualified_models": ["ornith-approved", "ornith-other"],
+    })
+    monkeypatch.setattr("synlynk.local_pilot_ledger.active_resume_authorization", lambda _conn: {
+        "authorization_id": "resume-1", "safety_watermark": 0,
+        "preflight_receipt_json": json.dumps({
+            "result": "passed", "requested_share": 0.2, "requested_max_concurrent": 1,
+            "resolved_model": "ornith-approved",
+        }),
+    })
+    monkeypatch.setattr("synlynk.local_agent.resolve_effective_local_model", lambda **_kwargs: {
+        "effective_model": "ornith-other", "edit_format": "diff", "health": "available",
+    })
+
+    conn = _get_db()
+    try:
+        from synlynk.local_pilot_ledger import ensure_local_pilot_ledger
+        ensure_local_pilot_ledger(conn)
+        routed = dispatch_mod._resolve_dispatch_agent(
+            "auto", "test", conn, task="summarize focused output", role="dev",
+            pilot_class="test_summary", dispatch_key="local-5", scope_paths=["test.log"],
+        )
+    finally:
+        conn.close()
+
+    assert routed == "codex"
+
+
+def test_matching_signed_resume_authorization_auto_routes_local(project_dir, monkeypatch):
+    """A valid active authority and its exact preflight model admit the pilot lane."""
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import _get_db
+
+    monkeypatch.setattr(dispatch_mod, "_read_local_fallback", lambda _path: "codex")
+    monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda _root: {
+        "enabled": True, "share": 0.2, "max_concurrent": 1,
+        "qualified": True, "isolated": True, "qualified_models": ["ornith-approved"],
+    })
+    monkeypatch.setattr("synlynk.local_pilot_ledger.active_resume_authorization", lambda _conn: {
+        "authorization_id": "resume-1", "safety_watermark": 0,
+        "preflight_receipt_json": json.dumps({
+            "result": "passed", "requested_share": 0.2, "requested_max_concurrent": 1,
+            "resolved_model": "ornith-approved",
+        }),
+    })
+    monkeypatch.setattr("synlynk.local_agent.resolve_effective_local_model", lambda **_kwargs: {
+        "effective_model": "ornith-approved", "edit_format": "diff", "health": "available",
+    })
+
+    conn = _get_db()
+    try:
+        from synlynk.local_pilot_ledger import ensure_local_pilot_ledger
+        ensure_local_pilot_ledger(conn)
+        routed = dispatch_mod._resolve_dispatch_agent(
+            "auto", "test", conn, task="summarize focused output", role="dev",
+            pilot_class="test_summary", dispatch_key="local-5", scope_paths=["test.log"],
+        )
+        receipt = dispatch_mod.take_local_pilot_receipt()
+    finally:
+        conn.close()
+
+    assert routed == "local"
+    assert receipt["effective_model"] == "ornith-approved"
+
+
+def test_final_local_slot_claim_refuses_agent_concurrency_drift(project_dir, monkeypatch):
+    """The operative capacity source cannot widen the signed one-job lane."""
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.harness_adapters.local import LocalAdapter
+
+    policy_dir = project_dir / ".agents"
+    policy_dir.mkdir()
+    (policy_dir / "local.json").write_text(
+        '{"endpoint":"http://127.0.0.1:8000","pinned_model":"ornith",'
+        '"max_concurrent":2,"models":[{"id":"ornith","pinned":true,"edit_format":"diff"}]}'
+    )
+    monkeypatch.setattr("synlynk.local_agent._health_check", lambda *_args, **_kwargs: {
+        "reachable": True, "status": "healthy", "available_models": ["ornith"],
+    })
+    monkeypatch.setattr("synlynk.harness_adapters.registry.get_adapter", lambda _agent: LocalAdapter())
+    monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda _root: {
+        "enabled": True, "share": 0.2, "max_concurrent": 1,
+        "qualified": True, "isolated": True, "qualified_models": ["ornith"],
+    })
+    monkeypatch.setattr(
+        "synlynk.local_pilot_ledger.active_resume_authorization_matches_runtime",
+        lambda _conn, **_kwargs: True,
+    )
+    monkeypatch.setattr(dispatch_mod, "_read_local_fallback", lambda _path=None: "codex")
+    captured = {}
+    original_dispatch = dispatch_mod.dispatch_agent
+
+    def intercept_dispatch(agent, *args, **kwargs):
+        if agent == "codex":
+            captured.update(kwargs)
+            return {"agent": "codex"}
+        return original_dispatch(agent, *args, **kwargs)
+
+    monkeypatch.setattr(dispatch_mod, "dispatch_agent", intercept_dispatch)
+    receipt = dispatch_mod._seal_local_pilot_receipt({
+        "route_local": True, "reason": "eligible_local_cohort", "pilot_class": "test_summary",
+        "share": 0.2, "bucket": 137, "dispatch_key": "test-2",
+        "dispatch_key_sha256": hashlib.sha256(b"test-2").hexdigest(),
+        "task_sha256": hashlib.sha256(b"summarize focused test output").hexdigest(),
+        "role": "dev", "scope_paths": ["test.log"], "requested_model": None,
+        "effective_model": "ornith", "qualified_models": ["ornith"],
+    })
+
+    result = dispatch_mod.dispatch_agent(
+        "local", "summarize focused test output", story_id="test-2", role="dev",
+        skip_preflight=True, context_mode="none", scope_paths=["test.log"],
+        local_pilot_receipt=receipt, local_pilot_requested=True,
+    )
+
+    assert result == {"agent": "codex"}
+    assert captured["local_pilot_requested"] is False
+
+
+def test_local_frontier_fallback_preserves_pr_context(project_dir, monkeypatch):
+    """The fallback must retain PR-scoped policy and worktree context."""
+    import synlynk.dispatch as dispatch_mod
+
+    monkeypatch.setattr(dispatch_mod, "_read_local_fallback", lambda _path=None: "codex")
+    monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda _root: {
+        "enabled": True, "share": 0.2, "max_concurrent": 1,
+        "qualified": True, "isolated": True, "qualified_models": ["ornith"],
+    })
+    captured = {}
+    original_dispatch = dispatch_mod.dispatch_agent
+
+    def intercept_dispatch(agent, *args, **kwargs):
+        if agent == "codex":
+            captured.update(kwargs)
+            return {"agent": "codex"}
+        return original_dispatch(agent, *args, **kwargs)
+
+    monkeypatch.setattr(dispatch_mod, "dispatch_agent", intercept_dispatch)
+    receipt = dispatch_mod._seal_local_pilot_receipt({
+        "route_local": True, "reason": "eligible_local_cohort", "pilot_class": "test_summary",
+        "share": 0.2, "bucket": 1, "dispatch_key": "story-77",
+        "dispatch_key_sha256": hashlib.sha256(b"story-77").hexdigest(),
+        "task_sha256": "wrong-task-digest", "role": "dev", "scope_paths": ["test.log"],
+        "requested_model": None, "qualified_models": ["ornith"], "effective_model": "ornith",
+    })
+
+    result = dispatch_mod.dispatch_agent(
+        "local", "summarize focused output", story_id="story-77", pr=77, role="dev",
+        scope_paths=["test.log"], local_pilot_receipt=receipt, local_pilot_requested=True,
+    )
+
+    assert result == {"agent": "codex"}
+    assert captured["pr"] == 77
 
 
 def test_local_pilot_rejects_forged_and_cross_story_replayed_receipts(project_dir, monkeypatch):

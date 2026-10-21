@@ -59,6 +59,11 @@ _PERMISSION_TO_TOOL_MAP = {
 # Explicit grant required to enable Codex workspace network egress.
 _CODEX_NETWORK_PERMISSION = "run:install"
 
+# Measured 2026-10-14 from capability_ratings (14-day AVG(quality), n>=5).
+# This is the shared routing source for GitHub-write dispatch and independent
+# Local-pilot review selection; consumers must not duplicate this ranking.
+GH_WRITE_HARNESS_PRIORITY = ("codex", "grok", "claude", "agy")
+
 # Known baseline capabilities per agent CLI.
 # Roles: "architect" (design/docs), "builder" (implement), "verifier" (test/review),
 # "pm" (program management/deploy — Claude-only, per CLAUDE.md role split)

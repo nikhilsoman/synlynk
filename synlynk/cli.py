@@ -635,6 +635,26 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         default=False,
         help="Detect hardware tier and write pinned_model to .agents/local.json",
     )
+    local_pilot_parser = local_sub.add_parser("pilot", help="Inspect and review Local pilot evidence")
+    local_pilot_sub = local_pilot_parser.add_subparsers(dest="local_pilot_action")
+    local_pilot_status_parser = local_pilot_sub.add_parser("status", help="Show Local pilot cohorts and controls")
+    local_pilot_status_parser.add_argument("--json", action="store_true", dest="json_output")
+    local_pilot_start_parser = local_pilot_sub.add_parser(
+        "review-start", help="Create the selected reviewer factual brief"
+    )
+    local_pilot_start_parser.add_argument("job_id")
+    local_pilot_record_parser = local_pilot_sub.add_parser(
+        "record-review", help="Record the selected reviewer factual verdict"
+    )
+    local_pilot_record_parser.add_argument("job_id")
+    local_pilot_record_parser.add_argument("--reviewer", required=True)
+    local_pilot_record_parser.add_argument("--verdict", choices=["accept", "reject"], required=True)
+    local_pilot_record_parser.add_argument("--rationale", required=True)
+    local_pilot_resume_parser = local_pilot_sub.add_parser(
+        "resume", help="Interactively preflight and resume the fixed Local validation lane"
+    )
+    local_pilot_resume_parser.add_argument("--remediation-ref", required=True)
+    local_pilot_resume_parser.add_argument("--verification-ref", required=True)
 
     gateway_parser = subparsers.add_parser("gateway", help="Manage external model gateways")
     gateway_sub = gateway_parser.add_subparsers(dest="gateway_cmd")
@@ -3360,9 +3380,50 @@ def main(argv=None) -> None:
         else:
             cmd_governs(full=getattr(args, "full", False))
     elif args.command == "local":
-        from synlynk.local_agent import cmd_local_doctor
+        from synlynk.local_agent import (
+            cmd_local_doctor,
+            local_pilot_status,
+            record_local_pilot_review,
+            render_local_pilot_resume_preflight,
+            render_local_pilot_status,
+            resume_local_pilot,
+            start_local_pilot_review,
+        )
         if args.local_action == "doctor":
             sys.exit(cmd_local_doctor(init=args.init))
+        elif args.local_action == "pilot":
+            if args.local_pilot_action == "status":
+                payload = local_pilot_status()
+            elif args.local_pilot_action == "review-start":
+                payload = start_local_pilot_review(args.job_id)
+            elif args.local_pilot_action == "record-review":
+                payload = record_local_pilot_review(
+                    args.job_id, args.reviewer, args.verdict, args.rationale
+                )
+            elif args.local_pilot_action == "resume":
+                if not sys.stdin.isatty() or not sys.stdout.isatty():
+                    raise ValueError("Local pilot resume requires an interactive terminal")
+                from synlynk import _get_db
+
+                conn = _get_db()
+                try:
+                    print("Current Local pilot status:")
+                    print(json.dumps(local_pilot_status(), indent=2, sort_keys=True))
+                    payload = resume_local_pilot(
+                        os.getcwd(), conn, args.remediation_ref, args.verification_ref, input,
+                        lambda preflight: print(render_local_pilot_resume_preflight(preflight)),
+                    )
+                finally:
+                    conn.close()
+            else:
+                local_pilot_parser.print_help()
+                return
+            if getattr(args, "json_output", False):
+                print(json.dumps(payload, sort_keys=True))
+            elif args.local_pilot_action == "status":
+                print(render_local_pilot_status(payload))
+            else:
+                print(json.dumps(payload, indent=2, sort_keys=True))
         else:
             help_parsers.get("local", parser).print_help()
     elif args.command == "gateway":

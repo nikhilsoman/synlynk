@@ -55,6 +55,31 @@ def test_tc9_codex_dry_and_live(monkeypatch):
             assert res_live["mechanism"] == "verified_sandbox_execution"
 
 
+def test_tc9_muse_uses_noninteractive_gh_write_adapter(monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda bin_name: "/usr/local/bin/muse")
+    with patch("synlynk.probe._run_tc6", return_value={"passed": True, "error": "", "output": "ok"}):
+        dry_result = _run_tc9("muse", live=False)
+        assert dry_result["passed"] is True
+        assert dry_result["can_gh_write"] is True
+        assert dry_result["mechanism"] == "not_live_tested"
+
+        mock_proc = MagicMock(returncode=0, stdout="gh pr list output", stderr="")
+        with patch("subprocess.run", return_value=mock_proc) as run:
+            live_result = _run_tc9("muse", live=True)
+
+    assert live_result["passed"] is True
+    assert live_result["can_gh_write"] is True
+    assert live_result["mechanism"] == "direct_cli"
+    assert run.call_args.args[0] == [
+        "muse",
+        "exec",
+        "--json",
+        "--approval-mode",
+        "never",
+        "gh pr list --limit 1",
+    ]
+
+
 def test_tc9_grok_sandbox_denied(monkeypatch):
     monkeypatch.setattr("shutil.which", lambda bin_name: "/usr/local/bin/grok")
     with patch("synlynk.probe._run_tc6", return_value={"passed": True, "error": "", "output": "ok"}):
