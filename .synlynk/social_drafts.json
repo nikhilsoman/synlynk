@@ -2974,5 +2974,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2487 \u2014 restore ambient signal handlers after curses initscr (#2486) (PR #2487, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2487.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-20) - PR #2487\n- Merged improvements and fixes for PR #2487."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/433-pr2504-scaffold-enterprise-adapter-seams-in-gov.md",
+    "title": "PR #2504 \u2014 scaffold enterprise adapter seams in GOVERNS control-plane spec",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-21",
+    "pr": "#2504",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2504."
+    ],
+    "tweet": "\ud83d\ude80 PR #2504 \u2014 scaffold enterprise adapter seams in GOVERNS control-plane spec (PR #2504, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2504.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-21) - PR #2504\n- Merged improvements and fixes for PR #2504."
   }
 ]

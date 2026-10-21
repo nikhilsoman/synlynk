@@ -509,6 +509,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [430](./430-pr2484-formalize-canonical-roadmap-reconciliati.md) | PR #2484 — formalize canonical roadmap reconciliation and schedule | [#2484](https://github.com/nikhilsoman/synlynk/pull/2484) | 2026-10-20 |
 | [431](./431-pr2485-sync-accumulated-local-cost-log-entries-.md) | PR #2485 — sync accumulated local cost-log entries into costs.md | [#2485](https://github.com/nikhilsoman/synlynk/pull/2485) | 2026-10-20 |
 | [432](./432-pr2487-restore-ambient-signal-handlers-after-cu.md) | PR #2487 — restore ambient signal handlers after curses initscr (#2486) | [#2487](https://github.com/nikhilsoman/synlynk/pull/2487) | 2026-10-20 |
+| [433](./433-pr2504-scaffold-enterprise-adapter-seams-in-gov.md) | PR #2504 — scaffold enterprise adapter seams in GOVERNS control-plane spec | [#2504](https://github.com/nikhilsoman/synlynk/pull/2504) | 2026-10-21 |
 
 ## Per-PR Post Template
 
