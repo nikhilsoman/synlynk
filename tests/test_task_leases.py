@@ -148,3 +148,19 @@ def test_reclaim_stranded_story_with_lease(db_conn):
 
     active_lease = get_active_lease("story-lease-1", conn=db_conn)
     assert active_lease is None
+
+
+def test_heartbeat_all_claims_for_pid(db_conn):
+    acquire_task_lease(
+        "story-lease-1", "claude:host:999", duration_seconds=10,
+        pid=os.getpid(), harness="claude", conn=db_conn,
+    )
+    before = get_active_lease("story-lease-1", conn=db_conn)
+
+    time.sleep(1)
+    from synlynk.jobs import heartbeat_claims_for_pid
+    count = heartbeat_claims_for_pid(os.getpid(), extend_seconds=120, conn=db_conn)
+    assert count == 1
+
+    after = get_active_lease("story-lease-1", conn=db_conn)
+    assert after["heartbeat_at"] > before["heartbeat_at"]

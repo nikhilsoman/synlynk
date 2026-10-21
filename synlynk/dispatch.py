@@ -5705,6 +5705,11 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
 
     if generate_context:
         generate_context()
+    try:
+        from synlynk.jobs import heartbeat_claims_for_pid
+        heartbeat_claims_for_pid(os.getpid())
+    except Exception:
+        pass
     cmd_args = _inject_grok_rules(cmd_args)
     if check_budgets:
         check_budgets()

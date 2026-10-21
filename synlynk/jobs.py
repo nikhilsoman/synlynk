@@ -4025,6 +4025,31 @@ def renew_task_lease(
             conn.close()
 
 
+def heartbeat_claims_for_pid(pid: int, extend_seconds: int = 2700, conn=None) -> int:
+    """Renew every active task_lease held by the given PID. Returns count renewed."""
+    owns_conn = False
+    if conn is None:
+        from synlynk import _get_db
+        conn = _get_db()
+        owns_conn = True
+
+    try:
+        now = time.time()
+        now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
+        expires_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + extend_seconds))
+        cur = conn.execute(
+            "UPDATE task_leases SET heartbeat_at=?, expires_at=? WHERE pid=? AND status='active'",
+            (now_str, expires_at, pid),
+        )
+        conn.commit()
+        return cur.rowcount
+    except sqlite3.OperationalError:
+        return 0
+    finally:
+        if owns_conn:
+            conn.close()
+
+
 def release_task_lease(
     story_id: str,
     leased_by: str,
