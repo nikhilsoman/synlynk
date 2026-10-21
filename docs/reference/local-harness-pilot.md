@@ -31,13 +31,18 @@ recommended share to the frontier (0%).
 
 Pilot Aider runs use `docker/local-pilot.compose.yaml`: Aider is on an
 internal-only Docker network; its sole peer is a relay with a fixed destination
-of the host credential broker over a mounted Unix socket. Aider receives a credential-scanned copy of only
+of a per-job host credential broker over loopback TCP. The host broker binds only
+to `127.0.0.1` on an ephemeral port. The relay alone also joins a dedicated bridge
+network so it can reach `host.docker.internal`; it forwards only to that broker port.
+Aider remains attached only to the internal network, so it cannot reach the host
+broker directly or use the relay for arbitrary destinations. The relay is a
+non-privileged fixed-destination forwarder. Aider receives a credential-scanned copy of only
 explicitly scoped files in a disposable scratch repository, not the job
 worktree or its Git metadata. Out-of-scope tracked and untracked files are not
 copied into the model's view. Only validated in-scope edits are applied back
-to the disposable job worktree. The Aider container gets only
-`OPENAI_API_KEY`. It does not receive GitHub tokens, SSH credentials, or the
-host home directory. The API base inside Aider is rewritten to
+to the disposable job worktree. The Aider container receives an inert API-key
+placeholder, but no host credentials, GitHub tokens, SSH credentials, or host
+home directory. The API base inside Aider is rewritten to
 `http://omlx:8000/v1`. Aider is given only an inert placeholder API key; the
 host broker discards it and injects the Keychain credential. A Docker, Compose,
 authentication, or isolation setup failure never falls back to host Aider
@@ -86,10 +91,9 @@ service, run `synlynk local lifecycle stop`. A running operator-owned service
 is never stopped by either command.
 
 The pilot remains at 20%, one concurrent Local job, and isolated execution.
-Before enabling automatic start/load on a host, verify the exact oMLX 0.5.3
-contract, Keychain access, and Docker socket relay using the controlled host
-smoke test in the lifecycle plan. Do not use a real dispatch as a smoke test
-until these checks pass.
+The host TCP broker and relay topology are covered by the opt-in test
+`SYNLYNK_RUN_LOCAL_PILOT_RELAY_INTEGRATION=1 pytest tests/test_local_pilot_relay_integration.py -q`.
+Do not use a real dispatch as a smoke test until this Docker-backed check passes.
 
 To stop Local Pilot routing immediately, set `local_pilot.enabled` to `false`
 in `.synlynk/workspace.json`. To roll back the cohort without changing the

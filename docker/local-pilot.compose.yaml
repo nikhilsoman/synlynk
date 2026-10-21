@@ -8,8 +8,14 @@ services:
     image: synlynk-local-pilot-relay:1
     command:
       - TCP-LISTEN:8000,fork,reuseaddr
-      - UNIX-CONNECT:/run/synlynk/relay.sock
+      - TCP:host.docker.internal:${PILOT_RELAY_PORT:?PILOT_RELAY_PORT is required}
     restart: "no"
+    healthcheck:
+      test: ["CMD", "socat", "-T", "2", "-u", "/dev/null", "TCP:host.docker.internal:${PILOT_RELAY_PORT}"]
+      interval: 1s
+      timeout: 2s
+      retries: 10
+      start_period: 1s
     read_only: true
     cap_drop: [ALL]
     security_opt:
@@ -17,13 +23,10 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=8m
     user: "${PILOT_UID:?}:${PILOT_GID:?}"
-    volumes:
-      - type: bind
-        source: ${PILOT_RELAY_SOCKET:?PILOT_RELAY_SOCKET is required}
-        target: /run/synlynk/relay.sock
     networks:
       local-pilot:
         aliases: [omlx]
+      host-access: {}
 
   aider:
     build:
@@ -54,3 +57,5 @@ services:
 networks:
   local-pilot:
     internal: true
+  host-access:
+    driver: bridge

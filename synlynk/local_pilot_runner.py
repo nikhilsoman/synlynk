@@ -226,10 +226,7 @@ def run_isolated_dispatch(
     scratch = scratch_context.name
     log_handle = open(log_file, "wb")
     redactor = _SecretRedactor(api_key.encode("utf-8"), log_handle)
-    short_tmp = "/private/tmp" if os.path.isdir("/private/tmp") else tempfile.gettempdir()
-    relay_directory = tempfile.mkdtemp(prefix="synlynk-relay-", dir=short_tmp)
-    relay_socket = os.path.join(relay_directory, "relay.sock")
-    auth_relay = LocalAuthBroker(relay_socket, api_key)
+    auth_relay = LocalAuthBroker(api_key)
 
     def stop_child(signum, _frame):
         if child is not None and child.poll() is None:
@@ -244,14 +241,16 @@ def run_isolated_dispatch(
         if find_sensitive_worktree_paths(source_worktree):
             raise RuntimeError("source worktree contains credential-like paths")
         _scoped_file_copy(source_worktree, scratch, scope_paths)
-        auth_relay.start()
-        env["PILOT_RELAY_SOCKET"] = relay_socket
+        relay_port = auth_relay.start()
+        env["PILOT_RELAY_PORT"] = str(relay_port)
         expanded_scope = _expanded_scope(scratch, scope_paths, require_existing=True)
         if not expanded_scope:
             raise RuntimeError("Local Pilot scope resolved to no files")
         env["PILOT_WORKTREE"] = scratch
         compose_started = True  # also clean up partial `up` failures
-        relay = _run_captured(prefix + ["up", "--detach", "omlx-relay"], env)
+        relay = _run_captured(
+            prefix + ["up", "--detach", "--wait", "--wait-timeout", "15", "omlx-relay"], env
+        )
         if relay.returncode != 0:
             redactor.write(relay.stdout + relay.stderr)
             output_code = relay.returncode
@@ -351,7 +350,6 @@ def run_isolated_dispatch(
             scratch_context.cleanup()
         except OSError:
             compose_cleanup_ok = False
-        shutil.rmtree(relay_directory, ignore_errors=True)
         receipt["rollback_verified"] = (
             compose_cleanup_ok
             and not os.path.exists(scratch)

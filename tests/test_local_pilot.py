@@ -535,16 +535,23 @@ def test_isolated_compose_builder_does_not_require_environment_key(tmp_path, mon
     assert "--openai-api-key" in command
 
 
-def test_real_compose_uses_private_unix_relay_and_no_host_key_environment():
+def test_real_compose_uses_fixed_host_tcp_relay_and_no_host_key_environment():
     from pathlib import Path
 
     compose = Path(__file__).resolve().parents[1] / "docker" / "local-pilot.compose.yaml"
     content = compose.read_text()
-    assert "UNIX-CONNECT:/run/synlynk/relay.sock" in content
-    assert "PILOT_RELAY_SOCKET" in content
+    assert "TCP:host.docker.internal:${PILOT_RELAY_PORT" in content
+    assert "PILOT_RELAY_PORT" in content
     assert "OPENAI_API_KEY" not in content
-    assert "host.docker.internal" not in content
-    assert "upstream" not in content
+    relay, remainder = content.split("  aider:", 1)
+    aider = remainder.split("\nnetworks:", 1)[0]
+    assert "host-access" in relay
+    assert "host-access" not in aider
+    assert "local-pilot:" in relay
+    assert "internal: true" in content
+    assert "cap_drop: [ALL]" in relay
+    assert "no-new-privileges:true" in relay
+    assert "TCP:host.docker.internal:${PILOT_RELAY_PORT}" in relay
 
 
 def test_sensitive_files_are_rejected_before_the_worktree_is_mounted(tmp_path, monkeypatch):
@@ -609,15 +616,15 @@ def test_isolated_runner_cleans_up_compose_and_redacts_persisted_logs(tmp_path, 
     relay_calls = []
 
     class FakeAuthRelay:
-        def __init__(self, socket_path, credential):
-            relay_calls.append(("init", socket_path, credential))
-            self.socket_path = socket_path
+        def __init__(self, credential):
+            relay_calls.append(("init", credential))
 
         def start(self):
-            relay_calls.append(("start", self.socket_path))
+            relay_calls.append(("start",))
+            return 45678
 
         def close(self):
-            relay_calls.append(("close", self.socket_path))
+            relay_calls.append(("close",))
 
     monkeypatch.setattr(local_pilot_runner, "LocalAuthBroker", FakeAuthRelay)
     monkeypatch.setattr(
@@ -698,7 +705,7 @@ def test_isolated_runner_cleans_up_compose_and_redacts_persisted_logs(tmp_path, 
         {"id": "job-test", "task": task, "local_pilot_receipt": admission}, receipt
     ) is None
     assert compose_envs[0]["PILOT_WORKTREE"] != str(source)
-    assert compose_envs[0]["PILOT_RELAY_SOCKET"] == relay_calls[0][1]
+    assert compose_envs[0]["PILOT_RELAY_PORT"] == "45678"
     assert relay_calls[1][0] == "start"
     assert relay_calls[-1][0] == "close"
     assert scratch_entries[0] == [".git", "test.log"]
@@ -713,5 +720,5 @@ def test_isolated_runner_cleans_up_compose_and_redacts_persisted_logs(tmp_path, 
         "--message-file", "/dev/stdin",
         "--read", "test.log",
     ]
-    assert compose_calls[0][5:8] == ["job-test", "up", "--detach"]
+    assert compose_calls[0][5:12] == ["job-test", "up", "--detach", "--wait", "--wait-timeout", "15", "omlx-relay"]
     assert compose_calls[-1][-2:] == ["down", "--remove-orphans"]
