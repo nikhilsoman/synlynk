@@ -6,6 +6,7 @@ import json
 import hashlib
 import os
 import re
+import signal
 import socket
 import shutil
 import subprocess
@@ -278,18 +279,40 @@ def _probe_local_endpoint(endpoint: str = "http://127.0.0.1:8000") -> bool:
         return False
 
 
-def _run_omlx_command(action: str) -> None:
-    if action not in {"start", "stop"}:
-        raise LifecycleError("unsupported_omlx_command", "oMLX command is not allowed", phase="service")
+def _start_omlx_foreground():
     executable = shutil.which("omlx")
     if not executable:
         raise LifecycleError("omlx_not_installed", "oMLX executable is unavailable", phase="service")
-    env = {key: value for key, value in os.environ.items() if key != "OPENAI_API_KEY"}
+    env = {
+        key: value for key, value in os.environ.items()
+        if key not in {"OPENAI_API_KEY", "OMLX_API_KEY"}
+    }
     try:
-        subprocess.run([executable, action, "--timeout", "30"], check=True,
-                       capture_output=True, text=True, timeout=40, env=env)
+        process = subprocess.Popen(
+            [executable, "serve", "--host", "127.0.0.1", "--port", "8000"],
+            shell=False, env=env, stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True, close_fds=True,
+        )
     except Exception:
-        raise LifecycleError("omlx_service_command_failed", f"oMLX {action} command failed", phase="service") from None
+        raise LifecycleError("omlx_service_start_failed", "could not launch foreground oMLX", phase="service") from None
+    process_start = _process_start_identity(process.pid)
+    if process_start is None:
+        raise LifecycleError("process_identity_unavailable", "cannot verify foreground oMLX identity", phase="ownership")
+    return int(process.pid), float(process_start)
+
+
+def _terminate_owned_process(pid: int, process_start: float) -> bool:
+    """Signal only the exact process instance previously verified as ours."""
+    if _process_start_identity(int(pid)) != float(process_start):
+        return False
+    try:
+        os.kill(int(pid), signal.SIGTERM)
+        return True
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return False
 
 
 class LocalLifecycleManager:
@@ -311,8 +334,8 @@ class LocalLifecycleManager:
         self.lock_path = lock_path or os.path.join(app_support, "local-runtime.lock")
         self.endpoint_probe = endpoint_probe or (lambda: _probe_local_endpoint(endpoint))
         self.process_identity = process_identity or _listening_process_identity
-        self.start_service = start_service or (lambda: _run_omlx_command("start"))
-        self.stop_service = stop_service or (lambda: _run_omlx_command("stop"))
+        self.start_service = start_service or _start_omlx_foreground
+        self.stop_service = stop_service or _terminate_owned_process
         self.clock = clock or time.time
         self.sleeper = sleeper or time.sleep
         self.process_identity_alive = process_identity_alive or self._identity_alive
@@ -392,7 +415,7 @@ class LocalLifecycleManager:
 
     def _owned_identity(self, state: dict) -> dict | None:
         ownership = state.get("ownership")
-        if not ownership:
+        if not ownership or ownership.get("owner_kind") != "synlynk_foreground":
             return None
         try:
             current = self.process_identity()
@@ -452,16 +475,24 @@ class LocalLifecycleManager:
             self.memory_admission()
             self.client.installed_version()
             requested_at = float(self.clock())
-            self.start_service()
+            spawned_identity = self.start_service()
+            if (not spawned_identity or len(spawned_identity) != 2
+                    or int(spawned_identity[0]) <= 0):
+                raise LifecycleError("process_identity_unavailable", "cannot verify foreground oMLX identity", phase="ownership")
+            spawned_identity = (int(spawned_identity[0]), float(spawned_identity[1]))
             if not self._wait_for_endpoint():
+                self.stop_service(*spawned_identity)
                 raise LifecycleError("omlx_start_timeout", "oMLX did not become reachable after start", phase="service")
             identity = self.process_identity()
-            if not identity or float(identity[1]) < requested_at:
+            if not identity or (int(identity[0]), float(identity[1])) != spawned_identity:
+                self.stop_service(*spawned_identity)
                 raise LifecycleError("ownership_ambiguous", "cannot prove Synlynk owns the started oMLX process", phase="ownership")
             pid, process_start = int(identity[0]), float(identity[1])
             ownership = {
                 "pid": pid,
                 "process_start": process_start,
+                "owner_kind": "synlynk_foreground",
+                "supervisor_label": "com.synlynk.daemon",
                 "generation": uuid.uuid4().hex,
                 "model_id": LIFECYCLE_MODEL_ID,
             }
@@ -529,7 +560,7 @@ class LocalLifecycleManager:
             # Revalidate PID and start identity immediately before stop.
             if self._owned_identity(state) is None:
                 return False
-            self.stop_service()
+            self.stop_service(int(ownership["pid"]), float(ownership["process_start"]))
             state.pop("ownership", None)
             state.pop("model_id", None)
             state["active_jobs"] = {}
