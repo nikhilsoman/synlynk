@@ -83,6 +83,30 @@ def test_missing_persistent_settings_key_is_classified_without_network_request(m
     assert error.value.phase == "authentication"
 
 
+def test_missing_settings_key_prevents_foreground_service_start(tmp_path):
+    from synlynk.local_credentials import CredentialUnavailable
+
+    class MissingSettingsCredential:
+        def get(self):
+            raise CredentialUnavailable("oMLX settings credential is unavailable")
+
+    starts = []
+    endpoints = iter([False])
+    manager = LocalLifecycleManager(
+        client=OmlxClient("http://127.0.0.1:8000", MissingSettingsCredential()),
+        credential_store=MissingSettingsCredential(),
+        state_path=str(tmp_path / "local-runtime.json"),
+        lock_path=str(tmp_path / "local-runtime.lock"),
+        endpoint_probe=lambda: next(endpoints, False),
+        memory_admission=lambda: None,
+        start_service=lambda: starts.append(True),
+    )
+    with pytest.raises(LifecycleError) as error:
+        manager.ensure_ready()
+    assert error.value.reason_code == "credential_unavailable"
+    assert starts == []
+
+
 def test_model_allowlist_rejects_everything_except_ornith():
     client = OmlxClient("http://127.0.0.1:8000", Credentials())
     with pytest.raises(LifecycleError, match="approved Ornith model"):
@@ -236,6 +260,7 @@ def make_manager(tmp_path, *, client=None, endpoint_probe=None, identity=None,
         endpoint_probe = lambda: next(probes, True)
     return LocalLifecycleManager(
         client=client or FakeRuntimeClient(),
+        credential_store=Credentials(),
         state_path=str(tmp_path / "local-runtime.json"),
         lock_path=str(tmp_path / "local-runtime.lock"),
         endpoint_probe=endpoint_probe,

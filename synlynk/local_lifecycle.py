@@ -483,6 +483,18 @@ class LocalLifecycleManager:
             # whose PID/start identity no longer matches.
             if ownership is None:
                 state.pop("ownership", None)
+            try:
+                self.credential_store.get()
+            except CredentialError as exc:
+                reason = (
+                    "unsupported_platform"
+                    if isinstance(exc, UnsupportedCredentialPlatform)
+                    else "credential_unavailable"
+                )
+                raise LifecycleError(
+                    reason, "persistent oMLX settings credential is unavailable",
+                    phase="authentication",
+                ) from None
             self.memory_admission()
             self.client.installed_version()
             requested_at = float(self.clock())
