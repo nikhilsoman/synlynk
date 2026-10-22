@@ -12,6 +12,7 @@ from synlynk.job_truth import (
     legacy_unknown_contract,
     record_evidence_and_reconcile,
     ensure_effect_contract,
+    ensure_terminal_outbox,
     validate_terminal_writer_manifest,
 )
 
@@ -31,6 +32,7 @@ CREATE TABLE job_evidence (
 );
 CREATE TABLE job_terminal_decision (
  job_id TEXT NOT NULL, status TEXT NOT NULL, exit_code INTEGER, verification_state TEXT NOT NULL,
+ effect_state TEXT NOT NULL DEFAULT 'unknown',
  primary_evidence_id TEXT, evidence_snapshot_json TEXT NOT NULL, decision_reason TEXT NOT NULL,
  decided_at TEXT NOT NULL, decided_by TEXT NOT NULL, revision INTEGER NOT NULL,
  contract_version INTEGER NOT NULL, follow_up TEXT NOT NULL, PRIMARY KEY(job_id, revision)
@@ -49,10 +51,10 @@ def db():
     return conn
 
 
-def review_contract(job_id="job-726172fb"):
+def review_contract(job_id="job-726172fb", *, started_at="2099-10-03T10:00:00+00:00"):
     return build_github_effect_contract(
         job_id, operation="review", target="pr:1947", expected_actor="qa",
-        expected_sha="abc123", started_at="2026-10-03T10:00:00+00:00",
+        expected_sha="abc123", started_at=started_at,
     )
 
 
@@ -65,6 +67,79 @@ def test_merge_contract_uses_merge_kind_and_predicates():
     assert contract["required_predicates"] == {
         "target_match": True, "actor_match": True, "sha_match": True,
     }
+
+
+def test_contract_persists_utc_verification_deadline():
+    contract = review_contract(started_at="2026-10-03T10:00:00+00:00")
+
+    assert contract["verification_deadline_at"] == "2026-10-03T10:05:00+00:00"
+
+    conn = db()
+    stored = ensure_effect_contract(conn, {
+        "id": contract["job_id"], "requires_gh_write": True,
+        "gh_write_expect": "review", "gh_write_target": "pr:1947",
+        "gh_write_author": "qa", "started_at": "2026-10-03T10:00:00+00:00",
+    })
+    assert stored["verification_deadline_at"] == "2026-10-03T10:05:00+00:00"
+
+
+def test_legacy_null_deadline_remains_unknown():
+    contract = legacy_unknown_contract("legacy", started_at="2026-10-03T10:00:00+00:00")
+    assert contract["verification_deadline_at"] is None
+
+    result = decide_job_outcome(
+        contract,
+        [{"kind": "observer_error", "result": "unknown"}],
+        deadline_expired=True,
+    )
+    assert result.status == "unknown"
+    assert result.effect_state == "unknown"
+    assert result.required_follow_up == "manual_review"
+
+
+def test_reconcile_applies_persisted_verification_deadline_automatically():
+    conn = db()
+    contract = review_contract(
+        "job-expired", started_at="2026-10-03T10:00:00+00:00"
+    )
+
+    result = record_evidence_and_reconcile(
+        conn,
+        "job-expired",
+        {"kind": "github_effect", "result": "unknown", "source": "gh"},
+        contract=contract,
+    )
+
+    assert result.status == "failed_verification"
+    assert result.required_follow_up == "manual_review"
+
+
+def test_outbox_backfill_waits_for_process_cleanup_resolution():
+    conn = db()
+    conn.execute(
+        "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, process_state TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs VALUES ('job-cleanup-pending', 'cleanup_unverified')"
+    )
+    conn.commit()
+    contract = legacy_unknown_contract("job-cleanup-pending")
+    record_evidence_and_reconcile(
+        conn,
+        "job-cleanup-pending",
+        {
+            "kind": "cancelled",
+            "result": "true",
+            "source": "test",
+            "event_id": "cancelled",
+        },
+        contract=contract,
+        terminal_ready=False,
+        update_compatibility=False,
+    )
+
+    assert ensure_terminal_outbox(conn) == 0
+    assert conn.execute("SELECT COUNT(*) FROM job_terminal_outbox").fetchone()[0] == 0
 
 
 def test_verified_merge_effect_completes_job():
@@ -80,6 +155,7 @@ def test_verified_merge_effect_completes_job():
     }])
     assert result.status == "completed"
     assert result.verification_state == "verified"
+    assert result.effect_state == "verified"
 
 
 def test_closed_status_alias_map_and_truth_table():
@@ -92,7 +168,8 @@ def test_closed_status_alias_map_and_truth_table():
         {"evidence_id": "receipt-1", "kind": "task_receipt", "result": "false"},
     ])
     assert result == CompletionDecision(
-        "completed", "verified", "contract_effect_verified", evidence_ids=("remote-1", "receipt-1"),
+        "completed", "verified", "contract_effect_verified", effect_state="verified",
+        evidence_ids=("remote-1", "receipt-1"),
         warnings=("receipt_absent",),
     )
 
@@ -117,6 +194,39 @@ def test_contract_predicate_mismatch_cannot_complete(predicate):
     assert result.reason_code == "contract_predicate_mismatch"
 
 
+def test_later_complete_predicate_event_resolves_effect():
+    contract = review_contract()
+    result = decide_job_outcome(contract, [
+        {"kind": "github_effect", "result": "true", "causal_match": True,
+         "target_match": True, "actor_match": False, "sha_match": True},
+        {"kind": "github_effect", "result": "true", "causal_match": True,
+         "target_match": True, "actor_match": True, "sha_match": True},
+    ])
+
+    assert result.status == "completed"
+    assert result.effect_state == "verified"
+
+
+def test_remote_effect_can_satisfy_contract():
+    result = decide_job_outcome(review_contract(), [{
+        "kind": "remote_effect", "result": "true", "causal_match": True,
+        "target_match": True, "actor_match": True, "sha_match": True,
+    }])
+
+    assert (result.status, result.effect_state) == ("completed", "verified")
+
+
+def test_verifier_exception_records_unknown_effect():
+    result = decide_job_outcome(
+        review_contract(),
+        [{"kind": "observer_error", "result": "unknown", "reason": "API unavailable"}],
+        deadline_expired=True,
+    )
+
+    assert result.effect_state == "unknown"
+    assert result.required_follow_up == "manual_review"
+
+
 def test_unresolved_contract_predicate_is_not_terminal():
     contract = review_contract()
     result = decide_job_outcome(contract, [{"kind": "github_effect", "result": "true", "causal_match": True}])
@@ -128,6 +238,7 @@ def test_unknown_contract_is_explicit_and_never_green():
     result = decide_job_outcome(legacy_unknown_contract("legacy"), [{"kind": "process_exit", "result": "true"}])
     assert result.status == "unknown"
     assert result.reason_code == "unknown_contract"
+    assert result.effect_state == "unknown"
 
 
 def test_job_2158_verified_remote_effect_overrides_unknown_contract():
@@ -143,9 +254,40 @@ def test_job_2158_verified_remote_effect_overrides_unknown_contract():
     )
 
     assert result == CompletionDecision(
-        "completed", "verified", "contract_effect_verified", "none",
+        "completed", "verified", "contract_effect_verified", effect_state="verified",
         evidence_ids=("gh-2158-merge",),
     )
+
+
+@pytest.mark.parametrize(
+    ("kind", "status", "reason"),
+    [
+        ("timeout", "timed_out", "timeout_with_verified_effect"),
+        ("cancelled", "cancelled", "cancellation_with_verified_effect"),
+        ("zombie", "killed_zombie", "zombie_with_verified_effect"),
+    ],
+)
+def test_verified_remote_effect_preserves_forced_process_outcome(kind, status, reason):
+    result = decide_job_outcome(
+        review_contract("job-forced-effect"),
+        [
+            {"evidence_id": "process", "kind": kind, "result": "true"},
+            {
+                "evidence_id": "remote",
+                "kind": "remote_effect",
+                "result": "true",
+                "causal_match": True,
+                "target_match": True,
+                "actor_match": True,
+                "sha_match": True,
+            },
+        ],
+    )
+
+    assert result.status == status
+    assert result.reason_code == reason
+    assert result.effect_state == "verified"
+    assert result.verification_state == "verified"
 
 
 def test_duplicate_evidence_is_idempotent_and_correction_is_revision():
@@ -169,6 +311,63 @@ def test_duplicate_evidence_is_idempotent_and_correction_is_revision():
     assert event[0] == "job-terminal-decision.v1"
     assert event[1] == 2
     assert '"decision_status":"completed"' in event[2]
+
+
+def test_same_kind_event_is_deduplicated_across_observers():
+    conn = db()
+    contract = review_contract("job-shared-observation")
+    observation = {
+        "kind": "github_effect",
+        "result": "unknown",
+        "event_id": "github:review:1947:abc123",
+    }
+
+    record_evidence_and_reconcile(
+        conn, contract["job_id"], dict(observation, source="daemon"), contract=contract,
+    )
+    record_evidence_and_reconcile(
+        conn, contract["job_id"], dict(observation, source="terminal-json"), contract=contract,
+    )
+
+    rows = conn.execute(
+        "SELECT evidence_id, source FROM job_evidence WHERE job_id=?",
+        (contract["job_id"],),
+    ).fetchall()
+    assert len(rows) == 1
+    assert rows[0][0].startswith("evidence-github_effect-")
+
+
+def test_nested_reconciliation_does_not_own_outer_transaction():
+    conn = db()
+    contract = review_contract("job-nested")
+    conn.execute("BEGIN")
+
+    result = record_evidence_and_reconcile(
+        conn,
+        contract["job_id"],
+        {"kind": "github_effect", "result": "unknown", "source": "gh", "event_id": "nested"},
+        contract=contract,
+        manage_transaction=False,
+    )
+
+    assert result.effect_state == "verifying"
+    assert conn.in_transaction is True
+    conn.rollback()
+    assert conn.execute("SELECT COUNT(*) FROM job_evidence").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize(
+    ("legacy", "canonical"),
+    [
+        ("done", "completed"),
+        ("failed_unverified", "failed_verification"),
+        ("succeeded_gh_write_failed", "failed_verification"),
+    ],
+)
+def test_legacy_status_aliases_project_without_error(legacy, canonical):
+    from synlynk.job_truth import canonical_status
+
+    assert canonical_status(legacy) == canonical
 
 
 def test_nonterminal_decision_does_not_enter_cost_audit_outbox():
@@ -279,6 +478,22 @@ def test_terminal_writer_manifest_covers_reclaim_path():
         "entrypoint": "reclaim_stranded_stories",
         "adapter": "_settle_daemon_job_terminal",
     }
+
+
+def test_terminal_writer_manifest_covers_every_required_terminal_path():
+    import synlynk.job_truth as job_truth
+
+    assert {
+        "flat_file_stall",
+        "flat_file_reconciliation",
+        "daemon_reconciliation",
+        "terminal_json_reconciliation",
+        "zombie_reaper",
+        "circuit_breaker",
+        "cancellation",
+        "stranded_story_reclaimer",
+    } <= set(job_truth.TERMINAL_WRITER_MANIFEST)
+    job_truth.validate_terminal_writer_manifest()
 
 
 def test_parity_fixture_matches_both_legacy_reconciliation_paths():

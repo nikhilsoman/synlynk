@@ -2,21 +2,13 @@
 
 import os
 import time
-import signal
 import sys
-import tempfile
-import time
 import subprocess
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from synlynk.jobs import STATUS_CIRCUIT_BREAKER_TRIPPED
-from synlynk.circuit_breaker import (
-    CircuitBreakerResult,
-    _resolve_circuit_breaker_limits,
-    evaluate_job_circuit_breaker,
-)
+from synlynk.circuit_breaker import evaluate_job_circuit_breaker
 from synlynk.dispatch import _start_dispatch_circuit_breaker_watchdog
 from synlynk.sentinel import _read_active_sentinel_alerts
 
@@ -223,7 +215,8 @@ def test_circuit_breaker_trips_on_token_limit_breach(tmp_path, monkeypatch):
     )
 
     assert res.tripped is True
-    assert res.process_killed is True
+    assert res.process_killed is False
+    assert job["process_state"] == "cleanup_unverified"
     assert job["status"] == STATUS_CIRCUIT_BREAKER_TRIPPED
     assert "token" in res.reason.lower() or "runaway" in res.reason.lower()
     assert len(killed_pids) >= 1
@@ -269,7 +262,8 @@ def test_circuit_breaker_trips_on_cost_limit_breach(tmp_path, monkeypatch):
     )
 
     assert res.tripped is True
-    assert res.process_killed is True
+    assert res.process_killed is False
+    assert job["process_state"] == "cleanup_unverified"
     assert job["status"] == STATUS_CIRCUIT_BREAKER_TRIPPED
     assert "cost" in res.reason.lower()
 
@@ -309,6 +303,25 @@ def test_dispatch_watchdog_kills_inflight_cost_runaway_without_daemon(tmp_path, 
         "circuit_breaker": {"max_job_tokens": 1_000_000, "max_job_cost_usd": 1.50},
     }
 
+    from synlynk.process_lifecycle import TerminationResult
+    monkeypatch.setattr(
+        "synlynk.circuit_breaker.capture_termination_domain",
+        lambda proc: {
+            "version": 1, "kind": "host_process_group", "leader_pid": proc.pid,
+            "pgid": proc.pid, "leader_identity": {"start_time": "launch"},
+            "dispatcher_pgid": 99,
+        },
+    )
+    monkeypatch.setattr(
+        "synlynk.circuit_breaker.terminate_job_domain",
+        lambda domain, **kwargs: (
+            setattr(process, "terminated", True)
+            or TerminationResult(
+                "stopped_verified", True, "host_process_group", "forced_stop_verified"
+            )
+        ),
+    )
+
     _start_dispatch_circuit_breaker_watchdog(process, job, config)
     time.sleep(0.02)
     log_file.write_text("Input tokens: 400000\nOutput tokens: 100000\n")
@@ -320,6 +333,39 @@ def test_dispatch_watchdog_kills_inflight_cost_runaway_without_daemon(tmp_path, 
     assert process.terminated is True
     assert job["status"] == STATUS_CIRCUIT_BREAKER_TRIPPED
     assert job["exit_code"] == -9
+
+
+def test_kill_process_tree_popen_path_uses_verified_domain(monkeypatch):
+    import synlynk.circuit_breaker as circuit_breaker
+    from synlynk.process_lifecycle import TerminationResult
+
+    class Process:
+        pid = 24680
+
+    domain = {
+        "version": 1, "kind": "host_process_group", "leader_pid": 24680,
+        "pgid": 24680, "leader_identity": {"start_time": "launch"},
+        "dispatcher_pgid": 99,
+    }
+    seen = []
+    monkeypatch.setattr(
+        circuit_breaker,
+        "capture_termination_domain",
+        lambda process: domain,
+    )
+    monkeypatch.setattr(
+        circuit_breaker,
+        "terminate_job_domain",
+        lambda value, **kwargs: seen.append(value) or TerminationResult(
+            "cleanup_unverified", False, "host_process_group", "leader_identity_mismatch"
+        ),
+    )
+
+    killed, method = circuit_breaker._kill_process_tree(24680, process=Process())
+
+    assert seen == [domain]
+    assert killed is False
+    assert "leader_identity_mismatch" in method
 
 
 def test_circuit_breaker_respects_tier_overrides(tmp_path, monkeypatch):
@@ -427,7 +473,8 @@ def test_log_size_runaway_trips_with_zero_extracted_tokens(tmp_path, monkeypatch
     )
 
     assert res.tripped is True
-    assert res.process_killed is True
+    assert res.process_killed is False
+    assert job["process_state"] == "cleanup_unverified"
     assert job["status"] == STATUS_CIRCUIT_BREAKER_TRIPPED
     assert "log size runaway" in res.reason.lower()
     assert "extracted tokens" in res.reason.lower()

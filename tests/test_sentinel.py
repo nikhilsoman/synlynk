@@ -167,6 +167,7 @@ def test_issue_1531_cached_input_inflation_is_actionable(tmp_path):
 
 def test_active_job_circuit_breaker_terminates_zero_file_job(tmp_path, monkeypatch):
     from synlynk.sentinel import enforce_job_circuit_breaker
+    from synlynk.process_lifecycle import TerminationResult
 
     class Process:
         pid = 321
@@ -178,6 +179,19 @@ def test_active_job_circuit_breaker_terminates_zero_file_job(tmp_path, monkeypat
     process = Process()
     job = {"id": "job-runaway", "in_tokens": 500_000, "out_tokens": 1, "files_touched": 0}
     monkeypatch.setattr("synlynk.sentinel.process_identity_check", lambda pid, expected: "safe to kill")
+    monkeypatch.setattr(
+        "synlynk.sentinel.capture_termination_domain",
+        lambda proc: {"version": 1, "kind": "host_process_group"},
+    )
+    monkeypatch.setattr(
+        "synlynk.sentinel.terminate_job_domain",
+        lambda domain: (
+            process.terminate()
+            or TerminationResult(
+                "stopped_verified", True, "host_process_group", "graceful_stop_verified"
+            )
+        ),
+    )
     assert enforce_job_circuit_breaker(job, process, sentinel_path=str(tmp_path / "sentinel.md"))
     assert process.terminated
     assert job["status"] == "stalled_aborted"
@@ -224,6 +238,32 @@ def test_circuit_breaker_skips_kill_when_pid_identity_fails(tmp_path, monkeypatc
         assert enforce_job_circuit_breaker(job, sentinel_path=str(tmp_path / "sentinel.md"))
     kill.assert_not_called()
     assert "PID recycled, skipped kill" in job["circuit_breaker_reason"]
+
+
+def test_sentinel_retains_actionable_alert_when_cleanup_unverified(tmp_path, monkeypatch):
+    import synlynk.sentinel as sentinel
+    from synlynk.process_lifecycle import TerminationResult
+
+    sentinel_path = tmp_path / "sentinel.md"
+    monkeypatch.setattr(
+        sentinel,
+        "terminate_job_domain",
+        lambda domain, **kwargs: TerminationResult(
+            "cleanup_unverified", True, "host_process_group", "inspection_error"
+        ),
+    )
+    job = {
+        "id": "job-orphan", "in_tokens": 500_000, "out_tokens": 1,
+        "files_touched": 0,
+        "termination_domain": {"version": 1, "kind": "host_process_group"},
+    }
+
+    assert sentinel.enforce_job_circuit_breaker(
+        job, sentinel_path=str(sentinel_path)
+    )
+    assert job["process_state"] == "cleanup_unverified"
+    alerts = sentinel._read_active_sentinel_alerts(str(sentinel_path))
+    assert any(alert["code"] == "CLEANUP_UNVERIFIED" for alert in alerts)
 
 
 def test_check_token_bloat_triggers_on_high_token_per_file_ratio(tmp_path):

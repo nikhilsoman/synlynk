@@ -25,6 +25,9 @@ def _check_field(data: dict, key: str, spec: dict, path: str, errors: list) -> N
     enum = spec.get("enum")
     if enum and value not in enum:
         errors.append(f"{path}{key}: value {value!r} not in allowed set {enum}")
+    minimum = spec.get("minimum")
+    if minimum is not None and isinstance(value, (int, float)) and value < minimum:
+        errors.append(f"{path}{key}: value {value!r} must be >= {minimum}")
     nested = spec.get("fields")
     if nested and isinstance(value, dict):
         validate_fields(value, nested, path=f"{path}{key}.", errors=errors)
@@ -67,6 +70,8 @@ WORKSPACE_SCHEMA = {
         "repo_id": {"type": str},
         "dr_sync_path": {"type": str},
         "mode": {"type": str, "enum": ["solo", "team"]},
+        "termination_grace_seconds": {"type": (int, float), "minimum": 0},
+        "cleanup_verification_timeout_seconds": {"type": (int, float), "minimum": 0},
     }
 }
 
