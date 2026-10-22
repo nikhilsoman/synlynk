@@ -3150,5 +3150,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2536 \u2014 activate synchronized daily release schedule (PR #2536, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2536.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-22) - PR #2536\n- Merged improvements and fixes for PR #2536."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/444-pr2539-make-job-terminal-state-reflect-process-.md",
+    "title": "PR #2539 \u2014 make job terminal state reflect process truth",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-22",
+    "pr": "#2539",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2539."
+    ],
+    "tweet": "\ud83d\ude80 PR #2539 \u2014 make job terminal state reflect process truth (PR #2539, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2539.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-22) - PR #2539\n- Merged improvements and fixes for PR #2539."
   }
 ]
