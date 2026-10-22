@@ -1968,6 +1968,7 @@ def test_mark_daemon_job_terminal_routes_through_canonical_settlement(project_di
     assert calls[0] == ("resolve", "job-canonical", domain)
     assert calls[1][1][1:3] == ("job-canonical", "timed_out")
     assert calls[1][2]["process_state"] == "stopped_verified"
+    assert calls[1][2]["effect_state"] == "not_required"
     conn.close()
 
 
@@ -2792,8 +2793,13 @@ def test_auto_reap_job_from_sentinel(project_dir):
     row = conn.execute(
         "SELECT status, exit_code FROM daemon_jobs WHERE job_id='job-ad59d3ea'"
     ).fetchone()
+    effect_state = conn.execute(
+        "SELECT effect_state FROM job_terminal_decision "
+        "WHERE job_id='job-ad59d3ea' ORDER BY revision DESC LIMIT 1"
+    ).fetchone()[0]
     conn.close()
     assert row == ("timed_out", -9)
+    assert effect_state == "not_required"
 
 
 def test_write_sentinel_stall_auto_reaps(project_dir, monkeypatch):

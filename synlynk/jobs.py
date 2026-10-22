@@ -3693,6 +3693,7 @@ def mark_daemon_job_terminal(
     status: str = "timed_out",
     exit_code: int = -9,
     completed_at: Optional[str] = None,
+    effect_state: Optional[str] = None,
 ) -> bool:
     """Mark a *running* daemon_jobs row terminal. Returns True if a row changed.
 
@@ -3705,12 +3706,13 @@ def mark_daemon_job_terminal(
     now = completed_at or time.strftime("%Y-%m-%dT%H:%M:%S")
     try:
         row = conn.execute(
-            "SELECT status, termination_domain_json FROM daemon_jobs WHERE job_id=?",
+            "SELECT status, termination_domain_json, requires_gh_write "
+            "FROM daemon_jobs WHERE job_id=?",
             (job_id,),
         ).fetchone()
     except sqlite3.OperationalError:
         row = conn.execute(
-            "SELECT status, NULL FROM daemon_jobs WHERE job_id=?", (job_id,)
+            "SELECT status, NULL, 0 FROM daemon_jobs WHERE job_id=?", (job_id,)
         ).fetchone()
     if not row or row[0] != STATUS_RUNNING:
         return False
@@ -3719,6 +3721,8 @@ def mark_daemon_job_terminal(
     process_state = _resolve_persisted_termination_domain(
         conn, job_id, row[1], config
     )
+    if effect_state is None:
+        effect_state = "unknown" if bool(row[2]) else "not_required"
     return _settle_daemon_job_terminal(
         conn,
         job_id,
@@ -3728,7 +3732,7 @@ def mark_daemon_job_terminal(
         only_running=True,
         release_reservation=True,
         process_state=process_state,
-        effect_state="unknown",
+        effect_state=effect_state,
     )
 
 
@@ -3800,7 +3804,13 @@ def auto_reap_job_from_sentinel(code: str, message: str) -> Optional[str]:
         if conn.in_transaction:
             conn.commit()
         if mark_daemon_job_terminal(
-            conn, job_id, status=status, exit_code=terminal_exit_code
+            conn,
+            job_id,
+            status=status,
+            exit_code=terminal_exit_code,
+            effect_state=_effect_state_after_verification(
+                verified, bool(requires_gh_write)
+            ),
         ):
             conn.commit()
             return job_id
