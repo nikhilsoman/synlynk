@@ -1944,15 +1944,30 @@ def test_mark_daemon_job_terminal_routes_through_canonical_settlement(project_di
 
     conn = _get_db()
     _seed_daemon_job(conn, "job-canonical", agent="codex")
+    domain = {"version": 1, "kind": "host_process_group", "pgid": 123}
+    conn.execute(
+        "UPDATE daemon_jobs SET termination_domain_json=? WHERE job_id='job-canonical'",
+        (json.dumps(domain),),
+    )
+    conn.commit()
     calls = []
     monkeypatch.setattr(
         jobs_mod,
+        "_resolve_persisted_termination_domain",
+        lambda conn, job_id, raw, config: (
+            calls.append(("resolve", job_id, json.loads(raw))) or "stopped_verified"
+        ),
+    )
+    monkeypatch.setattr(
+        jobs_mod,
         "_settle_daemon_job_terminal",
-        lambda *args, **kwargs: calls.append((args, kwargs)) or True,
+        lambda *args, **kwargs: calls.append(("settle", args, kwargs)) or True,
     )
 
     assert jobs_mod.mark_daemon_job_terminal(conn, "job-canonical") is True
-    assert calls and calls[0][0][1:3] == ("job-canonical", "timed_out")
+    assert calls[0] == ("resolve", "job-canonical", domain)
+    assert calls[1][1][1:3] == ("job-canonical", "timed_out")
+    assert calls[1][2]["process_state"] == "stopped_verified"
     conn.close()
 
 
@@ -2004,6 +2019,52 @@ def test_mark_daemon_job_terminal_leaves_queued_job_unchanged(project_dir):
         "WHERE job_id='job-queued'"
     ).fetchone()
     assert row == ("queued", None, None)
+    assert conn.execute(
+        "SELECT COUNT(*) FROM job_evidence WHERE job_id='job-queued'"
+    ).fetchone()[0] == 0
+    assert conn.execute(
+        "SELECT COUNT(*) FROM job_terminal_decision WHERE job_id='job-queued'"
+    ).fetchone()[0] == 0
+    conn.close()
+
+
+def test_daemon_circuit_breaker_receives_persisted_termination_domain(
+    project_dir, monkeypatch
+):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+    from synlynk.circuit_breaker import CircuitBreakerResult
+
+    conn = sl._get_db()
+    _seed_daemon_job(conn, "job-cb-domain", agent="codex", pid=424242)
+    domain = {
+        "version": 1,
+        "kind": "host_process_group",
+        "leader_pid": 424242,
+        "pgid": 424242,
+        "dispatcher_pgid": 99,
+    }
+    conn.execute(
+        "UPDATE daemon_jobs SET termination_domain_json=? WHERE job_id='job-cb-domain'",
+        (json.dumps(domain),),
+    )
+    conn.commit()
+    seen = []
+    original_pkg = jobs_mod._pkg
+
+    def pkg(name, *args):
+        if name == "evaluate_job_circuit_breaker":
+            return lambda job, config, sentinel: (
+                seen.append(job) or CircuitBreakerResult(tripped=False)
+            )
+        return original_pkg(name, *args)
+
+    monkeypatch.setattr(jobs_mod, "_pkg", pkg)
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: True)
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    assert seen[0]["termination_domain"] == domain
     conn.close()
 
 

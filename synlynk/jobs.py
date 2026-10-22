@@ -3704,24 +3704,31 @@ def mark_daemon_job_terminal(
         return False
     now = completed_at or time.strftime("%Y-%m-%dT%H:%M:%S")
     try:
-        from synlynk.job_truth import record_evidence_and_reconcile
-        record_evidence_and_reconcile(
-            conn,
-            job_id,
-            {
-                "kind": "timeout" if status == "timed_out" else "legacy_terminal_status",
-                "result": "true",
-                "source": "zombie_reaper",
-                "event_id": f"zombie:{job_id}:{now}:{status}",
-                "observed_at": now,
-                "exit_code": exit_code,
-            },
-            update_compatibility=False,
-        )
-    except (sqlite3.OperationalError, ValueError):
-        conn.rollback()
+        row = conn.execute(
+            "SELECT status, termination_domain_json FROM daemon_jobs WHERE job_id=?",
+            (job_id,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        row = conn.execute(
+            "SELECT status, NULL FROM daemon_jobs WHERE job_id=?", (job_id,)
+        ).fetchone()
+    if not row or row[0] != STATUS_RUNNING:
+        return False
+    load_config_fn = _pkg("load_config")
+    config = load_config_fn() if load_config_fn else {}
+    process_state = _resolve_persisted_termination_domain(
+        conn, job_id, row[1], config
+    )
     return _settle_daemon_job_terminal(
-        conn, job_id, status, exit_code, now, only_running=True
+        conn,
+        job_id,
+        status,
+        exit_code,
+        now,
+        only_running=True,
+        release_reservation=True,
+        process_state=process_state,
+        effect_state="unknown",
     )
 
 
@@ -3788,6 +3795,10 @@ def auto_reap_job_from_sentinel(code: str, message: str) -> Optional[str]:
         ):
             status, terminal_exit_code = "done", 0
 
+        # Effect verification may update retry counters.  Finish that small
+        # transaction before process signaling/inspection begins.
+        if conn.in_transaction:
+            conn.commit()
         if mark_daemon_job_terminal(
             conn, job_id, status=status, exit_code=terminal_exit_code
         ):
@@ -5240,6 +5251,13 @@ def _reconcile_daemon_jobs() -> None:
                     cb_job["pid_identity"] = json.loads(pid_identity_json) if pid_identity_json else None
                 except (TypeError, ValueError):
                     cb_job["pid_identity"] = None
+                try:
+                    cb_job["termination_domain"] = (
+                        json.loads(termination_domain_json)
+                        if termination_domain_json else None
+                    )
+                except (TypeError, ValueError):
+                    cb_job["termination_domain"] = None
                 cb_res = evaluate_cb(cb_job, config, ".synlynk/sentinel.md")
                 if _circuit_breaker_requires_terminal(cb_res):
                     # Only a confirmed process termination belongs to the
