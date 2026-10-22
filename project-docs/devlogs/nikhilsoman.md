@@ -2235,3 +2235,30 @@ implementation dispatched, external messages sent, or policy changed.
   11 passed.
 [@codex]
 
+## 2026-10-22 — Daily stable release rebaseline
+
+- Replaced the October 20 spaced-gate proposal with a proposed calendar-daily
+  stable tag stream from `v0.25.2` (October 23) through `v0.27.5` (November 6,
+  gated Developer Preview); there are no RC/DEV/PROD side channels.
+- Added a mandatory start-of-day dependency sweep over the scheduled tickets,
+  goal/epic links, issue comments, linked PRs, plans, adjacent past work, and
+  current bug/tech-debt inventory; each finding must be included, separately
+  ticketed, deferred with a reason, or proven fixed/superseded.
+- Added an acceleration rule: move evidence-ready work forward immediately,
+  preserve dependency/semver order, and update the schedule rather than wait
+  for a date. No tag may bypass review, evidence, or human release authority.
+- Reaffirmed deferrals for Local, OpenRouter, swarms/Gateway, crawler/GTM, and
+  public-announcement work; Muse remains a required early core harness.
+- Readiness snapshot: `synlynk status` reports 98 worktrees (19 flagged stale),
+  an overdue capability sweep and smoke test, Codex unavailable, and Muse
+  unsupported/uncalibrated; `synlynk watch status` reports stopped. These are
+  baseline findings for the first dependency sweep, not root-cause conclusions.
+- `synlynk release --check-docs` leaves the command-documentation gate red:
+  `docs/reference/commands.md` is stale. Linked this finding to existing
+  sparse-checkout/docs issue #2320 rather than creating a duplicate issue.
+- Updated canonical schedule only; state DB, GitHub milestones, and parent
+  #2458 remain to be synchronized after review/merge. Preserved the user's
+  dirty `project-docs/costs.md` in the main checkout. Session cost was not
+  independently available from this environment; no amount was invented.
+[@codex]
+
