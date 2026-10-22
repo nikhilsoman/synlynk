@@ -957,7 +957,8 @@ def test_dispatch_gitstateverified_job_stall_clean_worktree_still_kills(git_work
 
     assert result is True
     assert job["status"] == "failed"
-    assert killed == [(job["pid"], signal.SIGKILL)]
+    assert killed[0] == (job["pid"], signal.SIGTERM)
+    assert killed[-1] == (job["pid"], signal.SIGKILL)
 
 
 def test_dispatch_gitstateverified_job_reconciliation_tags_harness_internal_timeout(git_worktree_repo, monkeypatch):
@@ -1011,7 +1012,8 @@ def test_dispatch_gitstateverified_job_stall_stale_nonempty_log_still_kills(git_
 
     assert result is True
     assert job["status"] == "failed"
-    assert killed == [(job["pid"], signal.SIGKILL)]
+    assert killed[0] == (job["pid"], signal.SIGTERM)
+    assert killed[-1] == (job["pid"], signal.SIGKILL)
 
 
 def test_dispatch_gitstateverified_job_stall_fresh_nonempty_log_not_killed(git_worktree_repo, monkeypatch, tmp_path):
