@@ -32,7 +32,11 @@ from synlynk.container_exec import (
     resolve_container_image,
     wrap as wrap_container,
 )
-from synlynk.process_lifecycle import capture_termination_domain
+from synlynk.process_lifecycle import (
+    TerminationResult,
+    capture_termination_domain,
+    terminate_job_domain,
+)
 
 _ORG_ROLE_TO_BASELINE_ROLE = {
     "dev": "builder",
@@ -1647,20 +1651,57 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
     if stale_minutes < timeout:
         return False
 
-    def kill_stalled_process() -> Tuple[bool, bool]:
-        """Kill only the process whose dispatch-time identity still matches."""
-        pid = job.get("pid")
-        if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
-            return False, False
-        try:
-            if process_identity_check(pid, job.get("pid_identity")) != "safe to kill":
-                return False, True
-            os.kill(pid, signal.SIGKILL)
-            return True, False
-        except ProcessLookupError:
-            return False, False
-        except (PermissionError, TypeError, ValueError, OSError):
-            return False, False
+    def terminate_stalled_process() -> TerminationResult:
+        """Terminate only the persisted dispatch-owned domain."""
+        domain = job.get("termination_domain")
+        if isinstance(domain, str):
+            try:
+                domain = json.loads(domain)
+            except (TypeError, json.JSONDecodeError):
+                domain = None
+        if not isinstance(domain, dict):
+            pid = job.get("pid")
+            identity_verified = (
+                isinstance(pid, int)
+                and not isinstance(pid, bool)
+                and process_identity_check(pid, job.get("pid_identity")) == "safe to kill"
+            )
+            domain = {
+                "version": 1,
+                "kind": "legacy_process",
+                "leader_pid": pid,
+                "leader_identity": job.get("pid_identity"),
+                "identity_verified": identity_verified,
+            }
+        job.setdefault("lifecycle_evidence", []).append({
+            "kind": "cleanup", "process_state": "stop_requested",
+            "observed_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        })
+        job["process_state"] = "stop_requested"
+        result = terminate_job_domain(
+            domain,
+            grace_seconds=float(config.get("termination_grace_seconds", 5) or 0),
+        )
+        if result.process_state == "stopped_verified" and _has_unresolved_child_job(job.get("id")):
+            result = TerminationResult(
+                "cleanup_unverified", result.attempted, result.method,
+                "active_child_job", result.evidence,
+            )
+        job["process_state"] = result.process_state
+        job["cleanup_result"] = {
+            "process_state": result.process_state,
+            "attempted": result.attempted,
+            "method": result.method,
+            "reason_code": result.reason_code,
+            "evidence": list(result.evidence),
+        }
+        job["lifecycle_evidence"].append({
+            "kind": "cleanup", "process_state": result.process_state,
+            "reason_code": result.reason_code,
+            "evidence": list(result.evidence),
+            "observed_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        })
+        return result
 
     if job.get("requires_gh_write"):
         target = job.get("gh_write_target")
@@ -1691,7 +1732,9 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
             )
             return False
         if verified is False:
-            killed, kill_skipped = kill_stalled_process()
+            cleanup = terminate_stalled_process()
+            killed = cleanup.process_state == "stopped_verified"
+            kill_skipped = not cleanup.attempted
             if kill_skipped:
                 job["pid_identity_kill_skipped"] = True
             job["status"] = "failed"
@@ -1741,7 +1784,9 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
         )
         return False
 
-    killed, kill_skipped = kill_stalled_process()
+    cleanup = terminate_stalled_process()
+    killed = cleanup.process_state == "stopped_verified"
+    kill_skipped = not cleanup.attempted
     if kill_skipped:
         job["pid_identity_kill_skipped"] = True
 
@@ -1761,6 +1806,51 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
         f"Job {job.get('id')} on agent '{agent}' is awaiting handoff to another agent.",
         sentinel_path,
     )
+    return True
+
+
+def _has_unresolved_child_job(parent_job_id: str | None) -> bool:
+    if not parent_job_id:
+        return False
+    load_jobs = _pkg("_load_jobs")
+    if not load_jobs:
+        return False
+    try:
+        children = [
+            item for item in load_jobs()
+            if item.get("parent_job_id") == parent_job_id
+        ]
+    except Exception:
+        return True
+    unresolved_states = {"unknown", "running", "stop_requested", "cleanup_unverified"}
+    return any(
+        child.get("process_state", "unknown") in unresolved_states
+        for child in children
+    )
+
+
+_HELD_LOCAL_PILOT_CONTROLS: list = []
+
+
+def _release_local_pilot_control_after_cleanup(process, control, domain, job: dict) -> bool:
+    """Release Local admission control only after its process group is verified stopped."""
+    try:
+        process.wait()
+    except (AttributeError, OSError):
+        pass
+    result = terminate_job_domain(domain)
+    job["process_state"] = result.process_state
+    job["cleanup_result"] = {
+        "process_state": result.process_state,
+        "attempted": result.attempted,
+        "method": result.method,
+        "reason_code": result.reason_code,
+        "evidence": list(result.evidence),
+    }
+    if result.process_state != "stopped_verified":
+        _HELD_LOCAL_PILOT_CONTROLS.append(control)
+        return False
+    control.__exit__(None, None, None)
     return True
 
 
@@ -5344,13 +5434,13 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             pytest_shim_dir.cleanup()
         if local_slot_claimed:
             dconn.rollback()
+        if local_pilot_control is not None:
+            local_pilot_control.__exit__(None, None, None)
+            local_pilot_control = None
         raise
     finally:
         if stderr_handle is not None:
             stderr_handle.close()
-        if local_pilot_control is not None:
-            local_pilot_control.__exit__(None, None, None)
-            local_pilot_control = None
 
     if hasattr(proc, "wait"):
         threading.Thread(
@@ -5425,6 +5515,20 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     pid_identity = termination_domain.get("leader_identity") or capture_process_identity(
         proc.pid, proc
     )
+    process_state = (
+        "running"
+        if termination_domain.get("kind") in {"host_process_group", "container"}
+        else "cleanup_unverified"
+    )
+    cleanup_deadline_at = None
+    if process_state == "cleanup_unverified":
+        cleanup_timeout = float(
+            fence_config.get("cleanup_verification_timeout_seconds", 300) or 300
+        )
+        cleanup_deadline_at = time.strftime(
+            "%Y-%m-%dT%H:%M:%SZ",
+            time.gmtime(time.time() + max(0.0, cleanup_timeout)),
+        )
     job = {
         "id": job_id,
         "agent": agent,
@@ -5438,8 +5542,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "pid_identity": pid_identity,
         "termination_domain": termination_domain,
         "parent_job_id": parent_job_id,
-        "cleanup_deadline_at": None,
-        "process_state": "unknown",
+        "cleanup_deadline_at": cleanup_deadline_at,
+        "process_state": process_state,
         "log_file": log_file,
         "prompt_file": prompt_file,
         "context_file": context_file if context_mode != "none" else "",
@@ -5721,6 +5825,14 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn.close()
             except Exception:
                 pass
+
+    if local_pilot_control is not None:
+        threading.Thread(
+            target=_release_local_pilot_control_after_cleanup,
+            args=(proc, local_pilot_control, termination_domain, job),
+            daemon=True,
+        ).start()
+        local_pilot_control = None
 
     log_telemetry = _pkg("log_telemetry_event")
     if log_telemetry:

@@ -10,7 +10,12 @@ from typing import Any, Callable, Mapping
 
 from synlynk.container_exec import inspect_container as _inspect_container
 from synlynk.container_exec import stop_container as _stop_container
-from synlynk.sentinel import capture_process_identity
+
+
+def capture_process_identity(pid: int, process=None):
+    from synlynk.sentinel import capture_process_identity as capture
+
+    return capture(pid, process)
 
 
 @dataclass(frozen=True)
@@ -173,14 +178,21 @@ def terminate_job_domain(
     domain: Mapping[str, Any],
     *,
     grace_seconds: float = 5.0,
-    inspect_process_group: Callable[[Mapping[str, Any]], Any] = _default_inspect_process_group,
-    signal_process_group: Callable[[int, int], None] = _default_signal_process_group,
-    stop_container: Callable[[str, float], Any] = _stop_container,
-    inspect_container: Callable[[str], Any] = _inspect_container,
-    sleep: Callable[[float], None] = time.sleep,
+    inspect_process_group: Callable[[Mapping[str, Any]], Any] | None = None,
+    signal_process_group: Callable[[int, int], None] | None = None,
+    stop_container: Callable[[str, float], Any] | None = None,
+    inspect_container: Callable[[str], Any] | None = None,
+    sleep: Callable[[float], None] | None = None,
     platform_name: str | None = None,
+    signal_process: Callable[[int, int], None] | None = None,
 ) -> TerminationResult:
     """Stop an owned domain and report success only after observing it stopped."""
+    inspect_process_group = inspect_process_group or _default_inspect_process_group
+    signal_process_group = signal_process_group or _default_signal_process_group
+    stop_container = stop_container or _stop_container
+    inspect_container = inspect_container or _inspect_container
+    sleep = sleep or time.sleep
+    signal_process = signal_process or os.kill
     evidence: list[Mapping[str, Any]] = []
     kind = domain.get("kind")
     grace = max(0.0, float(grace_seconds))
@@ -207,6 +219,25 @@ def terminate_job_domain(
         if after.get("state") == "stopped":
             return _result("stopped_verified", True, "container", "container_stopped", evidence)
         return _result("cleanup_unverified", True, "container", "container_still_running", evidence)
+
+    if kind == "legacy_process":
+        pid = domain.get("leader_pid")
+        if isinstance(pid, bool) or not isinstance(pid, int) or pid in (0, 1) or pid < 0:
+            return _result("cleanup_unverified", False, "legacy_process", "unsafe_leader_pid", evidence)
+        if not domain.get("identity_verified"):
+            return _result("cleanup_unverified", False, "legacy_process", "leader_identity_unverified", evidence)
+        try:
+            signal_process(pid, signal.SIGTERM)
+            if grace:
+                sleep(grace)
+            signal_process(pid, 0)
+            signal_process(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            return _result("cleanup_unverified", True, "legacy_process", "leader_stopped_descendants_unknown", evidence)
+        except Exception as exc:
+            evidence.append({"phase": "legacy_signal", "state": "error", "reason": type(exc).__name__})
+            return _result("cleanup_unverified", True, "legacy_process", "legacy_cleanup_unverified", evidence)
+        return _result("cleanup_unverified", True, "legacy_process", "descendants_unverified", evidence)
 
     if kind != "host_process_group":
         return _result("cleanup_unverified", False, "none", str(domain.get("reason_code") or "unknown_domain"), evidence)

@@ -7,14 +7,13 @@ Tripped <=> Tokens(Job) >= T_max or Cost(Job) >= C_max
 from __future__ import annotations
 
 import os
-import signal
 import subprocess
 import time
-import traceback
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
 from synlynk.jobs import STATUS_CIRCUIT_BREAKER_TRIPPED
+from synlynk.process_lifecycle import capture_termination_domain, terminate_job_domain
 from synlynk.sentinel import (
     _write_sentinel_alert,
     log_telemetry_event,
@@ -90,47 +89,34 @@ def _kill_process_tree(
     process=None,
     skip_identity_check: bool = False,
     grace_period_seconds: float = 0.5,
+    termination_domain: Optional[dict] = None,
 ) -> Tuple[bool, str]:
-    """Safely terminate runaway process tree with SIGTERM escalated to SIGKILL."""
-    if process is not None:
+    """Compatibility adapter around verified termination-domain cleanup."""
+    domain = termination_domain
+    if domain is None and process is not None:
+        domain = capture_termination_domain(process)
+    if domain is None:
+        if not pid:
+            return False, "no_pid"
         try:
-            process.terminate()
-            time.sleep(min(0.2, grace_period_seconds))
-            if getattr(process, "poll", lambda: None)() is None:
-                process.kill()
-            return True, "SIGTERM+SIGKILL"
-        except Exception:
-            pass
-
-    if not pid:
-        return False, "no_pid"
-
-    try:
-        pid = int(pid)
-    except (TypeError, ValueError):
-        return False, "invalid_pid"
-
-    if not skip_identity_check:
-        check = process_identity_check(pid, expected_identity)
-        if check != "safe to kill":
-            return False, f"PID recycled, skipped kill ({check})"
-
-    try:
-        # Step 1: Send SIGTERM
-        os.kill(pid, signal.SIGTERM)
-        time.sleep(grace_period_seconds)
-        
-        # Step 2: If still alive, escalate to SIGKILL
-        try:
-            os.kill(pid, 0)
-            os.kill(pid, signal.SIGKILL)
-            return True, "SIGKILL"
-        except (ProcessLookupError, OSError):
-            return True, "SIGTERM"
-    except (ProcessLookupError, OSError):
-        return True, "SIGTERM"
-    except Exception as exc:
-        return False, f"kill_failed: {exc}"
+            pid = int(pid)
+        except (TypeError, ValueError):
+            return False, "invalid_pid"
+        identity_verified = skip_identity_check or (
+            process_identity_check(pid, expected_identity) == "safe to kill"
+        )
+        domain = {
+            "version": 1,
+            "kind": "legacy_process",
+            "leader_pid": pid,
+            "leader_identity": expected_identity,
+            "identity_verified": identity_verified,
+        }
+    result = terminate_job_domain(domain, grace_seconds=grace_period_seconds)
+    return (
+        result.process_state == "stopped_verified",
+        f"{result.process_state}:{result.method}:{result.reason_code}",
+    )
 
 
 def _worktree_branch_is_stable(worktree_path: Optional[str], expected_branch: Optional[str]) -> bool:
@@ -261,9 +247,21 @@ def evaluate_job_circuit_breaker(
         job.get("pid_identity"),
         process=process,
         skip_identity_check=skip_identity_check_for_test,
+        termination_domain=job.get("termination_domain"),
     )
 
-    if not killed:
+    cleanup_unverified = kill_method.startswith("cleanup_unverified:")
+    job["process_state"] = "stopped_verified" if killed else "cleanup_unverified"
+    job.setdefault("lifecycle_evidence", []).extend([
+        {"kind": "cleanup", "process_state": "stop_requested"},
+        {
+            "kind": "cleanup",
+            "process_state": job["process_state"],
+            "reason_code": kill_method,
+        },
+    ])
+
+    if not killed and not cleanup_unverified:
         log_telemetry_event({
             "type": "circuit_breaker_post_exit_warning",
             "job_id": job.get("id"),
@@ -297,9 +295,19 @@ def evaluate_job_circuit_breaker(
     _write_sentinel_alert(
         "CRITICAL",
         "TOKEN_CIRCUIT_BREAKER_TRIPPED",
-        f"Job {job.get('id')} on agent '{job.get('agent')}' terminated by in-flight circuit breaker ({reason}).",
+        f"Job {job.get('id')} on agent '{job.get('agent')}' tripped the in-flight "
+        f"circuit breaker ({reason}); process cleanup "
+        f"{'verified' if killed else 'remains unverified'}.",
         sentinel_file,
     )
+    if not killed:
+        _write_sentinel_alert(
+            "CRITICAL",
+            "CLEANUP_UNVERIFIED",
+            f"Job {job.get('id')} circuit-breaker cleanup remains unverified "
+            f"({kill_method}); operator follow-up is required.",
+            sentinel_file,
+        )
 
     # 8. Structured Telemetry
     log_telemetry_event({
