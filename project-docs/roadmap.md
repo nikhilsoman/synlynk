@@ -426,7 +426,10 @@ Canonical release epic #2473. Goals: goal-9ef9a965, goal-85656c82. Onboarding ga
 
 ## v0.28.0 — Swarms and Universal Gateway [planned] (target: 2027-03-26)
 
-Canonical release epic #2474. Goals: goal-256d17d6, goal-8d34c416, goal-005ea87d. Scheduled release gate: 2027-03-26; bounded swarm, gateway, lease, budget, containment, and evidence controls required. No phase is ready until story and ticket linkage are complete.
+Canonical release epic #2474. Goals: goal-256d17d6, goal-8d34c416, goal-005ea87d, goal-680faab0. Scheduled release gate: 2027-03-26; bounded swarm, gateway, lease, budget, containment, and evidence controls required. No phase is ready until story and ticket linkage are complete.
+
+- [ ] `synlynk work` autonomous story pickup loop (goal-680faab0, held pending decision)
+  Design approved: `docs/superpowers/specs/2026-10-22-synlynk-work-loop-design.md`. Grew out of a rejected new-collaborator-onboarding proposal (GitHub-ticket + Agy free-text execution — rejected for prompt-injection risk). Reuses the `task_leases` claim mechanism (gh:#2511) and `story_governs_linkage` gate for swarm-safe, unattended pickup of GOVERNS-linked stories across humans and harnesses. **Held at Nikhil's request (2026-10-22) — not yet planned or dispatched.**
 
 
 ## v0.28.1 — Capability crawler, index, and GTM [planned] (target: 2027-04-09)
