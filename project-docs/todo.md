@@ -1119,7 +1119,8 @@ Executor har [backend] <!-- id:story-adhoc-1788746039 -->
 - [ ] Sentinel lifecycle hygiene: deduplicate alerts and enforce actionable health gates [testing] <!-- id:story-issue-1488 -->
 - [ ] Triage 40 unmerged or dirty worktrees [docs] <!-- id:story-issue-1479 -->
 - [ ] fix(selftest): probe cold source ledger before live dispatch [testing] <!-- id:story-issue-1490 -->
-- [ ] Perf: Remediate 12-minute test suite runtime (drop EOL Python 3.8, add pytest-xdist, mock selftest probe cascade, lazy-load CLI) [testing] <!-- id:story-057d4312 -->
+- [x] Perf: Remediate 12-minute test suite runtime (drop EOL Python 3.8, add pytest-xdist, mock selftest probe cascade, lazy-load CLI) [testing] <!-- id:story-057d4312 -->
+- [ ] CI runtime: retarget rc1 <180s bar off closed #1492, demote 3.10 legs, blocked on #2527 (#2529) [testing] <!-- id:story-63df4546 -->
 - [ ] fix(sentinel): unify alert persistence and expiry (#1488) [testing] <!-- id:story-issue-1493 -->
 - [ ] test: minimal Python function for capability calibration (job-b60fc2e1) [testing] <!-- id:story-issue-1477 -->
 - [ ] test: QA advanced flaky-integration regression strategy [testing] <!-- id:story-issue-1478 -->

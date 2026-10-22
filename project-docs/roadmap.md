@@ -256,7 +256,7 @@ Named release v0.20.0. BS-6 visualizer, unattended milestone loop, deep scan bri
 
 ## v1.0.0-rc1 — 15-Minute First Win Field Trials & Zero-Risk Install [planned] (target: 2026-10-31)
 
-pipx distribution, 15-min wow journey across 3 target repos, browser Vizor onboarding, autonomous goal brainstorm, test suite runtime remediation (#1492). Aligned with 1.0.0 Developer Preview date.
+pipx distribution, 15-min wow journey across 3 target repos, browser Vizor onboarding, autonomous goal brainstorm, CI runtime bar (#2529). Aligned with 1.0.0 Developer Preview date.
 
 - [ ] Zero-Risk Packaging & Standalone Distribution (pipx) (P0)
   Single-command installable package without environment conflicts
@@ -264,8 +264,8 @@ pipx distribution, 15-min wow journey across 3 target repos, browser Vizor onboa
   Evidence-backed architecture, health, and risks brief without human steering
 - [ ] 15-Minute Time-to-Wow Field Trials Across 3 Target Repos (P0)
   End-to-end trials measuring install-to-first-PR in <15 minutes
-- [ ] Test Suite Runtime Remediation (#1492) (P0)
-  pytest-xdist parallel test execution to drop CI runtime below 180s
+- [ ] CI Runtime: Retarget rc1 Bar Off Closed #1492 (#2529) (P0)
+  ubuntu/macos 3.12 pytest already under 180s (134s/128s); demote 3.10 legs to non-blocking/nightly, blocked on #2527 temp-dir race fix first. #1492 itself stays closed (done 2026-09-10 via #1544, re-confirmed by fresh review 2026-10-22).
 
 ## v0.21.0 — Autonomous Multi-Home & Teams Relay Mesh [shipped] (target: 2026-09-23)
 
