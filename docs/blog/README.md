@@ -520,6 +520,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [440](./440-pr2518-complete-live-27-execution-log-model-cle.md) | PR #2518 — complete LIVE-27 execution-log model cleanse | [#2518](https://github.com/nikhilsoman/synlynk/pull/2518) | 2026-10-21 |
 | [441](./441-pr2524-story-home-claims-via-task-leases-extens.md) | PR #2524 — story home claims via task_leases extension (gh:#2511) | [#2524](https://github.com/nikhilsoman/synlynk/pull/2524) | 2026-10-21 |
 | [442](./442-pr2534-rebaseline-daily-stable-release-schedule.md) | PR #2534 — rebaseline daily stable release schedule | [#2534](https://github.com/nikhilsoman/synlynk/pull/2534) | 2026-10-22 |
+| [443](./443-pr2536-activate-synchronized-daily-release-sche.md) | PR #2536 — activate synchronized daily release schedule | [#2536](https://github.com/nikhilsoman/synlynk/pull/2536) | 2026-10-22 |
 
 ## Per-PR Post Template
 

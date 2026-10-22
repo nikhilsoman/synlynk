@@ -3134,5 +3134,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2534 \u2014 rebaseline daily stable release schedule (PR #2534, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2534.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-22) - PR #2534\n- Merged improvements and fixes for PR #2534."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/443-pr2536-activate-synchronized-daily-release-sche.md",
+    "title": "PR #2536 \u2014 activate synchronized daily release schedule",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-22",
+    "pr": "#2536",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2536."
+    ],
+    "tweet": "\ud83d\ude80 PR #2536 \u2014 activate synchronized daily release schedule (PR #2536, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2536.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-22) - PR #2536\n- Merged improvements and fixes for PR #2536."
   }
 ]
