@@ -1,6 +1,6 @@
 # Job Terminal Process and Outcome Truth — Design
 
-**Status:** Draft for independent Architect review; not approved for implementation  
+**Status:** Approved by Nikhil on 2026-10-22; implementation plan in progress
 **Tracking:** [#2530](https://github.com/synlynk/synlynk/issues/2530), v0.25.2 stability gate [#2465](https://github.com/synlynk/synlynk/issues/2465)
 
 ## Intent
@@ -85,12 +85,12 @@ The incident recorded in #2530 reports a Grok job whose GitHub comment landed al
 
 Use deterministic subprocess fixtures for process-group ownership and termination, and fakes for container/local-pilot termination domains. On non-POSIX hosts, assert explicit cleanup uncertainty when a safe termination primitive is unavailable. Unit-test evidence precedence and retry/deadline behavior through `job_truth`; integration-test both flat-file and daemon reconciliation against the same evidence matrix. Include races between late exit markers, process cleanup, transaction boundaries, and reconciliation. Test verifier exceptions as `observer_error`, not effect absence. Never depend on live GitHub writes in tests; mock verifier outcomes and assert the persisted process/effect state pair.
 
-## Open design questions for Architect review
+## Approved design decisions
 
-1. What is the maximum cleanup-uncertainty age and which audited operator action resolves it? Capacity must not be released automatically while a worker might still be live; an operator override must record the accepted risk and actor.
-2. Keep cleanup uncertainty as process-axis state/evidence (`cleanup_unverified`) rather than adding a canonical job status, unless the cost-outbox impact of changing `TERMINAL_STATUSES` is explicitly analyzed.
-3. The existing GitHub verifier is not sufficient unchanged: the implementation must persist/load deadlines, define unknown-contract expiry, correct predicate/event matching, and unify observer-error evidence. Should that contract fix live in #2530 or a directly adjacent prerequisite story?
-4. Confirm the compatibility/migration approach for `failed_unverified` and `succeeded_gh_write_failed`, which live writers emit but `canonical_status` currently rejects.
+1. Keep process cleanup and effect verification as separate axes; cleanup uncertainty does not invent a new terminal status.
+2. Include the contract/deadline/predicate corrections in #2530 because they are required to make its reported status mismatch truthful.
+3. Never auto-release capacity while the worker may still execute. An audited operator action may resolve aged cleanup uncertainty and must record the actor and reason.
+4. Normalize `failed_unverified` and `succeeded_gh_write_failed` with an explicit compatibility/migration policy before routing all writers through `canonical_status`.
 
 ## Rollout and migration
 
