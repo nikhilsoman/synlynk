@@ -2007,7 +2007,7 @@ def test_mark_daemon_job_terminal_leaves_queued_job_unchanged(project_dir):
     conn.close()
 
 
-def test_reconcile_releases_reservation_on_settlement(project_dir, monkeypatch):
+def test_reconcile_holds_reservation_without_persisted_process_domain(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.jobs as jobs_mod
 
@@ -2033,7 +2033,7 @@ def test_reconcile_releases_reservation_on_settlement(project_dir, monkeypatch):
     status = conn.execute(
         "SELECT status FROM harness_reservations WHERE id=?", (rid,)
     ).fetchone()[0]
-    assert status == "released"
+    assert status == "open"
 
 
 def test_terminal_settlement_holds_reservation_until_cleanup_is_verified(project_dir):
@@ -2068,6 +2068,43 @@ def test_terminal_settlement_holds_reservation_until_cleanup_is_verified(project
     ).project_job_status(conn, "job-cleanup-unknown")
     assert projection["process_state"] == "cleanup_unverified"
     assert projection["effect_state"] == "not_verified"
+    deadline = conn.execute(
+        "SELECT cleanup_deadline_at FROM daemon_jobs WHERE job_id='job-cleanup-unknown'"
+    ).fetchone()[0]
+    assert deadline is not None
+    conn.close()
+
+
+def test_losing_terminal_settlement_does_not_append_truth_ledger(project_dir):
+    import synlynk as sl
+    from synlynk.jobs import _settle_daemon_job_terminal
+
+    conn = sl._get_db()
+    _seed_daemon_job(conn, "job-cas-ledger", agent="codex", pid=999999)
+    conn.execute(
+        "UPDATE daemon_jobs SET terminal_claim_token='winner' WHERE job_id='job-cas-ledger'"
+    )
+    conn.commit()
+
+    assert not _settle_daemon_job_terminal(
+        conn,
+        "job-cas-ledger",
+        "killed_zombie",
+        -9,
+        "2026-10-22T10:00:00+00:00",
+        terminal_claim_token="loser",
+        process_state="stopped_verified",
+        effect_state="unknown",
+    )
+    assert conn.execute(
+        "SELECT COUNT(*) FROM job_evidence WHERE job_id='job-cas-ledger'"
+    ).fetchone()[0] == 0
+    assert conn.execute(
+        "SELECT COUNT(*) FROM job_terminal_decision WHERE job_id='job-cas-ledger'"
+    ).fetchone()[0] == 0
+    assert conn.execute(
+        "SELECT COUNT(*) FROM job_terminal_outbox WHERE job_id='job-cas-ledger'"
+    ).fetchone()[0] == 0
     conn.close()
 
 
@@ -4747,10 +4784,14 @@ def test_null_pid_zombie_is_reaped_with_leaked_worktree(tmp_path, project_dir):
     row = conn.execute(
         "SELECT status, exit_code FROM daemon_jobs WHERE job_id='job-null-pid'"
     ).fetchone()
+    process_state = conn.execute(
+        "SELECT process_state FROM daemon_jobs WHERE job_id='job-null-pid'"
+    ).fetchone()[0]
     conn.close()
 
     assert row == ("killed_zombie", -9)
-    assert not wt.exists()
+    assert wt.exists()
+    assert process_state == "cleanup_unverified"
 
 
 def test_verified_gh_write_zombie_is_completed_without_reaping_worktree(

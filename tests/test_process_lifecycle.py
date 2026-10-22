@@ -1,4 +1,7 @@
 import signal
+import os
+import subprocess
+import sys
 
 import pytest
 
@@ -59,6 +62,39 @@ def test_capture_host_domain_binds_group_to_launch_identity(monkeypatch):
         "dispatcher_pgid": 99,
         "parent_job_id": "job-parent",
     }
+
+
+@pytest.mark.skipif(os.name != "posix", reason="process groups require POSIX")
+def test_wrapper_exit_does_not_hide_live_same_group_child():
+    wrapper = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "import subprocess,sys,time; "
+            "subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)']); "
+            "time.sleep(0.2)",
+        ],
+        start_new_session=True,
+    )
+    domain = {
+        "version": 1,
+        "kind": "host_process_group",
+        "leader_pid": wrapper.pid,
+        "pgid": os.getpgid(wrapper.pid),
+        "leader_identity": {},
+        "dispatcher_pgid": os.getpgrp(),
+    }
+    wrapper.wait(timeout=5)
+    try:
+        result = terminate_job_domain(domain, grace_seconds=0.2)
+        assert result.process_state == "stopped_verified"
+        assert result.attempted is True
+        assert any(item.get("leader_exited") for item in result.evidence)
+    finally:
+        try:
+            os.killpg(domain["pgid"], signal.SIGKILL)
+        except ProcessLookupError:
+            pass
 
 
 @pytest.mark.parametrize(
@@ -151,6 +187,42 @@ def test_cleanup_inspection_error_expires_to_unknown():
     assert result.process_state == "cleanup_unverified"
     assert result.reason_code == "inspection_error"
     assert signals == []
+
+
+def test_cleanup_inspector_exception_is_retried_and_normalized():
+    attempts = []
+
+    def inspect(domain):
+        attempts.append(domain)
+        if len(attempts) == 1:
+            raise RuntimeError("temporary observer failure")
+        return {"state": "stopped", "identity_match": True}
+
+    result = terminate_job_domain(
+        host_domain(),
+        grace_seconds=0,
+        inspect_process_group=inspect,
+        signal_process_group=lambda pgid, sig: pytest.fail("must not signal"),
+        sleep=lambda seconds: None,
+    )
+
+    assert result.process_state == "stopped_verified"
+    assert len(attempts) == 2
+    assert result.evidence[0]["state"] == "error"
+    assert result.evidence[0]["reason"] == "RuntimeError"
+
+
+def test_cleanup_inspector_exception_does_not_escape_after_retry():
+    result = terminate_job_domain(
+        host_domain(),
+        grace_seconds=0,
+        inspect_process_group=lambda domain: (_ for _ in ()).throw(RuntimeError("boom")),
+        signal_process_group=lambda pgid, sig: pytest.fail("must not signal"),
+        sleep=lambda seconds: None,
+    )
+
+    assert result.process_state == "cleanup_unverified"
+    assert result.reason_code == "inspection_error"
 
 
 def test_non_posix_cleanup_is_explicitly_unverified():

@@ -12,7 +12,7 @@ import subprocess
 import sys
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
 
@@ -28,6 +28,7 @@ from synlynk.gh_verify import (
     github_branch_effect_verified,
 )
 from synlynk._lazy import pkg as _pkg
+from synlynk.process_lifecycle import terminate_job_domain
 
 
 _BOLD = "[1m"
@@ -3300,7 +3301,7 @@ _UNRESOLVED_PROCESS_STATES = {
 
 
 def _terminal_process_state(
-    conn, job_id: str, observed_state: str = "stopped_verified"
+    conn, job_id: str, observed_state: str = "cleanup_unverified"
 ) -> str:
     """Refuse verified-stop projection while this job or a child is unresolved."""
     if observed_state != "stopped_verified":
@@ -3324,6 +3325,25 @@ def _terminal_process_state(
         # caller's observed state until their migration adds lifecycle columns.
         pass
     return "stopped_verified"
+
+
+def _resolve_persisted_termination_domain(
+    conn, job_id: str, termination_domain_json: Optional[str], config: Dict[str, Any]
+) -> str:
+    """Inspect/stop the immutable launch domain before publishing terminal truth."""
+    try:
+        domain = json.loads(termination_domain_json) if termination_domain_json else {}
+    except (TypeError, ValueError):
+        domain = {}
+    if not isinstance(domain, dict) or not domain:
+        observed = "cleanup_unverified"
+    else:
+        result = terminate_job_domain(
+            domain,
+            grace_seconds=float(config.get("termination_grace_seconds", 5) or 0),
+        )
+        observed = result.process_state
+    return _terminal_process_state(conn, job_id, observed)
 
 
 def _persist_daemon_job_terminal(
@@ -3416,6 +3436,23 @@ def _settle_daemon_job_terminal(
     # retained during the pilot, while the append-only ledger records the
     # evidence and the oracle's canonical shadow decision.
     try:
+        settled = _persist_daemon_job_terminal(
+            conn,
+            job_id,
+            status,
+            exit_code,
+            completed_at,
+            only_running=only_running,
+            terminal_claim_token=terminal_claim_token,
+            evidence_strength=evidence_strength,
+        )
+        if not settled:
+            if had_transaction:
+                conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+            else:
+                conn.rollback()
+            return False
         try:
             from synlynk.job_truth import canonical_status, record_evidence_and_reconcile
             terminal_ready = (
@@ -3427,6 +3464,10 @@ def _settle_daemon_job_terminal(
                 canonical_legacy_status = canonical_status(status)
             except ValueError:
                 canonical_legacy_status = status
+            retry_exhausted = (
+                canonical_legacy_status == STATUS_FAILED_VERIFICATION
+                and effect_state == "unknown"
+            )
             forced_kind = {
                 "timed_out": "timeout",
                 "cancelled": "cancelled",
@@ -3449,6 +3490,7 @@ def _settle_daemon_job_terminal(
                     update_compatibility=False,
                     manage_transaction=False,
                     terminal_ready=terminal_ready,
+                    retry_exhausted=retry_exhausted,
                 )
             if effect_state in {"verified", "not_verified", "unknown"}:
                 effect_result = {
@@ -3475,6 +3517,7 @@ def _settle_daemon_job_terminal(
                     update_compatibility=False,
                     manage_transaction=False,
                     terminal_ready=terminal_ready,
+                    retry_exhausted=retry_exhausted,
                 )
             record_evidence_and_reconcile(
                 conn,
@@ -3491,6 +3534,7 @@ def _settle_daemon_job_terminal(
                 update_compatibility=False,
                 manage_transaction=False,
                 terminal_ready=terminal_ready,
+                retry_exhausted=retry_exhausted,
             )
             if effect_state is not None:
                 conn.execute(
@@ -3502,22 +3546,27 @@ def _settle_daemon_job_terminal(
             # Unmigrated fixture databases are still supported by the
             # compatibility path; the next migration creates/backfills the ledger.
             pass
-        settled = _persist_daemon_job_terminal(
-            conn,
-            job_id,
-            status,
-            exit_code,
-            completed_at,
-            only_running=only_running,
-            terminal_claim_token=terminal_claim_token,
-            evidence_strength=evidence_strength,
-        )
         if settled and process_state is not None:
             try:
-                conn.execute(
-                    "UPDATE daemon_jobs SET process_state=? WHERE job_id=?",
-                    (process_state, job_id),
-                )
+                if process_state == "cleanup_unverified":
+                    load_config_fn = _pkg("load_config")
+                    config = load_config_fn() if load_config_fn else {}
+                    timeout = float(
+                        config.get("cleanup_verification_timeout_seconds", 300) or 300
+                    )
+                    deadline = (
+                        datetime.now(timezone.utc) + timedelta(seconds=max(0, timeout))
+                    ).isoformat()
+                    conn.execute(
+                        "UPDATE daemon_jobs SET process_state=?, "
+                        "cleanup_deadline_at=COALESCE(cleanup_deadline_at, ?) WHERE job_id=?",
+                        (process_state, deadline, job_id),
+                    )
+                else:
+                    conn.execute(
+                        "UPDATE daemon_jobs SET process_state=? WHERE job_id=?",
+                        (process_state, job_id),
+                    )
             except sqlite3.OperationalError:
                 # Compatibility fixture/legacy DB; migration adds this axis.
                 pass
@@ -5156,7 +5205,7 @@ def _reconcile_daemon_jobs() -> None:
     rows = conn.execute(
         "SELECT job_id, agent, story_id, task, pid, started_at, completed_at, log_path, "
         "dispatch_context, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect, "
-        "worktree_path, worktree_branch, pid_identity "
+        "worktree_path, worktree_branch, pid_identity, termination_domain_json "
         "FROM daemon_jobs WHERE status='running'"
     ).fetchall()
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -5165,7 +5214,8 @@ def _reconcile_daemon_jobs() -> None:
     try:
         for (job_id, agent, story_id, task, pid, started_at, completed_at, log_path,
              dispatch_context, requires_gh_write, gh_write_target, gh_write_author,
-             gh_write_expect, persisted_worktree_path, persisted_worktree_branch, pid_identity_json) in rows:
+             gh_write_expect, persisted_worktree_path, persisted_worktree_branch, pid_identity_json,
+             termination_domain_json) in rows:
             try:
                 job_base_sha = _daemon_job_base_sha(conn, job_id)
                 # Invariant 2 must be enforced by the daemon's own polling
@@ -5255,6 +5305,13 @@ def _reconcile_daemon_jobs() -> None:
                 if not exited:
                     continue
 
+                # This may signal, sleep, inspect a runtime, or call a container
+                # engine.  It intentionally runs before settlement opens its
+                # write transaction.
+                terminal_process_state = _resolve_persisted_termination_domain(
+                    conn, job_id, termination_domain_json, config
+                )
+
                 exit_code = None
                 exit_file = None
                 exit_marker_present = False
@@ -5330,7 +5387,7 @@ def _reconcile_daemon_jobs() -> None:
                     settled = _settle_daemon_job_terminal(
                         conn, job_id, status, exit_code, now, release_reservation=True,
                         evidence_strength=("github" if gh_write_verified_str in ("true", "false") else "unknown"),
-                        process_state=_terminal_process_state(conn, job_id),
+                        process_state=terminal_process_state,
                         effect_state=_effect_state_after_verification(
                             gh_write_verified_str, bool(requires_gh_write)
                         ),
@@ -5470,7 +5527,7 @@ def _reconcile_daemon_jobs() -> None:
                             conn, job_id, zombie_status, zombie_exit_code, now,
                             only_running=True, terminal_claim_token=terminal_claim_token,
                             evidence_strength=("github" if gh_write_verified_str in ("true", "false") else "unknown"),
-                            process_state=_terminal_process_state(conn, job_id),
+                            process_state=terminal_process_state,
                             effect_state=_effect_state_after_verification(
                                 gh_write_verified_str, bool(requires_gh_write)
                             ),
@@ -5478,7 +5535,7 @@ def _reconcile_daemon_jobs() -> None:
                         if (
                             settled
                             and zombie_status == "killed_zombie"
-                            and _terminal_process_state(conn, job_id) == "stopped_verified"
+                            and terminal_process_state == "stopped_verified"
                         ):
                             _reap_zombie_worktree(job_id, log_path, conn=conn)
                         if settled:
@@ -5635,7 +5692,7 @@ def _reconcile_daemon_jobs() -> None:
                 settled = _settle_daemon_job_terminal(
                     conn, job_id, status, exit_code, now, release_reservation=True,
                     evidence_strength=("github" if gh_write_verified_str in ("true", "false") else "local"),
-                    process_state=_terminal_process_state(conn, job_id),
+                    process_state=terminal_process_state,
                     effect_state=_effect_state_after_verification(
                         gh_write_verified_str, bool(requires_gh_write)
                     ),

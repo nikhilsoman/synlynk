@@ -12,6 +12,7 @@ from synlynk.job_truth import (
     legacy_unknown_contract,
     record_evidence_and_reconcile,
     ensure_effect_contract,
+    ensure_terminal_outbox,
     validate_terminal_writer_manifest,
 )
 
@@ -50,10 +51,10 @@ def db():
     return conn
 
 
-def review_contract(job_id="job-726172fb"):
+def review_contract(job_id="job-726172fb", *, started_at="2099-10-03T10:00:00+00:00"):
     return build_github_effect_contract(
         job_id, operation="review", target="pr:1947", expected_actor="qa",
-        expected_sha="abc123", started_at="2026-10-03T10:00:00+00:00",
+        expected_sha="abc123", started_at=started_at,
     )
 
 
@@ -69,7 +70,7 @@ def test_merge_contract_uses_merge_kind_and_predicates():
 
 
 def test_contract_persists_utc_verification_deadline():
-    contract = review_contract()
+    contract = review_contract(started_at="2026-10-03T10:00:00+00:00")
 
     assert contract["verification_deadline_at"] == "2026-10-03T10:05:00+00:00"
 
@@ -94,6 +95,51 @@ def test_legacy_null_deadline_remains_unknown():
     assert result.status == "unknown"
     assert result.effect_state == "unknown"
     assert result.required_follow_up == "manual_review"
+
+
+def test_reconcile_applies_persisted_verification_deadline_automatically():
+    conn = db()
+    contract = review_contract(
+        "job-expired", started_at="2026-10-03T10:00:00+00:00"
+    )
+
+    result = record_evidence_and_reconcile(
+        conn,
+        "job-expired",
+        {"kind": "github_effect", "result": "unknown", "source": "gh"},
+        contract=contract,
+    )
+
+    assert result.status == "failed_verification"
+    assert result.required_follow_up == "manual_review"
+
+
+def test_outbox_backfill_waits_for_process_cleanup_resolution():
+    conn = db()
+    conn.execute(
+        "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, process_state TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs VALUES ('job-cleanup-pending', 'cleanup_unverified')"
+    )
+    conn.commit()
+    contract = legacy_unknown_contract("job-cleanup-pending")
+    record_evidence_and_reconcile(
+        conn,
+        "job-cleanup-pending",
+        {
+            "kind": "cancelled",
+            "result": "true",
+            "source": "test",
+            "event_id": "cancelled",
+        },
+        contract=contract,
+        terminal_ready=False,
+        update_compatibility=False,
+    )
+
+    assert ensure_terminal_outbox(conn) == 0
+    assert conn.execute("SELECT COUNT(*) FROM job_terminal_outbox").fetchone()[0] == 0
 
 
 def test_verified_merge_effect_completes_job():

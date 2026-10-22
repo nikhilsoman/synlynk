@@ -174,6 +174,22 @@ def _result(
     )
 
 
+def _inspect_with_retry(callback, target, *, sleep, retry_delay: float):
+    """Normalize observer failures and retry once within the caller's bound."""
+    observations = []
+    for attempt in range(2):
+        try:
+            observation = _observation(callback(target))
+        except Exception as exc:
+            observation = {"state": "error", "reason": type(exc).__name__}
+        observations.append(observation)
+        if observation.get("state") != "error" or attempt == 1:
+            return observation, observations
+        if retry_delay:
+            sleep(retry_delay)
+    return observations[-1], observations
+
+
 def terminate_job_domain(
     domain: Mapping[str, Any],
     *,
@@ -203,8 +219,10 @@ def terminate_job_domain(
         container_id = str(domain.get("container_id") or "").strip()
         if not container_id:
             return _result("cleanup_unverified", False, "container", "container_identity_unavailable", evidence)
-        before = _observation(inspect_container(container_id))
-        evidence.append({"phase": "before_stop", **before})
+        before, attempts = _inspect_with_retry(
+            inspect_container, container_id, sleep=sleep, retry_delay=min(grace, 0.1)
+        )
+        evidence.extend({"phase": "before_stop", **item} for item in attempts)
         if before.get("state") == "stopped":
             return _result("stopped_verified", False, "container", "already_stopped", evidence)
         if before.get("state") != "running":
@@ -214,8 +232,10 @@ def terminate_job_domain(
         except Exception as exc:
             evidence.append({"phase": "stop", "state": "error", "reason": type(exc).__name__})
             return _result("cleanup_unverified", True, "container", "container_stop_failed", evidence)
-        after = _observation(inspect_container(container_id))
-        evidence.append({"phase": "after_stop", **after})
+        after, attempts = _inspect_with_retry(
+            inspect_container, container_id, sleep=sleep, retry_delay=min(grace, 0.1)
+        )
+        evidence.extend({"phase": "after_stop", **item} for item in attempts)
         if after.get("state") == "stopped":
             return _result("stopped_verified", True, "container", "container_stopped", evidence)
         return _result("cleanup_unverified", True, "container", "container_still_running", evidence)
@@ -260,8 +280,10 @@ def terminate_job_domain(
     if unsafe:
         return _result("cleanup_unverified", False, "host_process_group", "unsafe_process_group", evidence)
 
-    before = _observation(inspect_process_group(domain))
-    evidence.append({"phase": "before_signal", **before})
+    before, attempts = _inspect_with_retry(
+        inspect_process_group, domain, sleep=sleep, retry_delay=min(grace, 0.1)
+    )
+    evidence.extend({"phase": "before_signal", **item} for item in attempts)
     if before.get("state") == "stopped":
         return _result("stopped_verified", False, "host_process_group", "already_stopped", evidence)
     if before.get("state") == "identity_mismatch" or before.get("identity_match") is False:
@@ -278,8 +300,10 @@ def terminate_job_domain(
         return _result("cleanup_unverified", True, "host_process_group", "signal_failed", evidence)
     if grace:
         sleep(grace)
-    after_term = _observation(inspect_process_group(domain))
-    evidence.append({"phase": "after_sigterm", **after_term})
+    after_term, attempts = _inspect_with_retry(
+        inspect_process_group, domain, sleep=sleep, retry_delay=min(grace, 0.1)
+    )
+    evidence.extend({"phase": "after_sigterm", **item} for item in attempts)
     if after_term.get("state") == "stopped":
         return _result("stopped_verified", True, "host_process_group", "graceful_stop_verified", evidence)
     if after_term.get("state") != "running" or after_term.get("identity_match") is False:
@@ -293,8 +317,10 @@ def terminate_job_domain(
     except Exception as exc:
         evidence.append({"phase": "sigkill", "state": "error", "reason": type(exc).__name__})
         return _result("cleanup_unverified", True, "host_process_group", "signal_failed", evidence)
-    after_kill = _observation(inspect_process_group(domain))
-    evidence.append({"phase": "after_sigkill", **after_kill})
+    after_kill, attempts = _inspect_with_retry(
+        inspect_process_group, domain, sleep=sleep, retry_delay=min(grace, 0.1)
+    )
+    evidence.extend({"phase": "after_sigkill", **item} for item in attempts)
     if after_kill.get("state") == "stopped":
         return _result("stopped_verified", True, "host_process_group", "forced_stop_verified", evidence)
     return _result("cleanup_unverified", True, "host_process_group", "termination_unverified", evidence)

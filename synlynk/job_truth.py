@@ -390,7 +390,15 @@ def record_evidence_and_reconcile(
         for item in rows:
             try: item.update(json.loads(item.pop("payload_json") or "{}"))
             except (TypeError, json.JSONDecodeError): pass
-        decision = decide_job_outcome(contract_row, rows, retry_exhausted=retry_exhausted, deadline_expired=deadline_expired)
+        deadline_expired = deadline_expired or _deadline_has_expired(
+            contract_row.get("verification_deadline_at")
+        )
+        decision = decide_job_outcome(
+            contract_row,
+            rows,
+            retry_exhausted=retry_exhausted,
+            deadline_expired=deadline_expired,
+        )
         latest = conn.execute("SELECT revision, status, decision_reason FROM job_terminal_decision WHERE job_id=? ORDER BY revision DESC LIMIT 1", (job_id,)).fetchone()
         if latest and (latest[1], latest[2]) == (decision.status, decision.reason_code):
             if manage_transaction:
@@ -559,11 +567,30 @@ def _append_terminal_outbox(
 
 def ensure_terminal_outbox(conn: sqlite3.Connection) -> int:
     """Backfill missing terminal decision events without changing decisions."""
-    rows = conn.execute(
-        """SELECT job_id, revision, status, decision_reason, decided_at, contract_version
-           FROM job_terminal_decision WHERE status NOT IN ('unknown', 'verifying')
-           ORDER BY decided_at, job_id, revision"""
-    ).fetchall()
+    has_jobs = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='daemon_jobs'"
+    ).fetchone()
+    job_columns = (
+        {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+        if has_jobs else set()
+    )
+    if "process_state" in job_columns:
+        rows = conn.execute(
+            """SELECT d.job_id, d.revision, d.status, d.decision_reason,
+                      d.decided_at, d.contract_version
+               FROM job_terminal_decision d
+               LEFT JOIN daemon_jobs j ON j.job_id=d.job_id
+               WHERE d.status NOT IN ('unknown', 'verifying')
+                 AND (j.job_id IS NULL OR j.process_state IN
+                      ('stopped_verified', 'cleanup_overridden'))
+               ORDER BY d.decided_at, d.job_id, d.revision"""
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """SELECT job_id, revision, status, decision_reason, decided_at, contract_version
+               FROM job_terminal_decision WHERE status NOT IN ('unknown', 'verifying')
+               ORDER BY decided_at, job_id, revision"""
+        ).fetchall()
     inserted = 0
     own_transaction = not conn.in_transaction
     if own_transaction:
