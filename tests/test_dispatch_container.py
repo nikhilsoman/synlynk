@@ -162,6 +162,47 @@ def test_dispatch_flag_overrides_baseline_and_defaults_to_host():
         assert "container_image" not in baseline, name
 
 
+def test_container_wrap_uses_unique_cidfile(tmp_path):
+    from synlynk.container_exec import wrap
+
+    repo = _repo(tmp_path / "repo")
+    cidfile = tmp_path / "job.cid"
+    argv, _client, _cwd = wrap(
+        ["sh", "-c", "true"],
+        {"HOME": "/Users/me"},
+        str(repo),
+        "example-test/runner:stub",
+        docker_bin="/usr/bin/docker",
+        cidfile=str(cidfile),
+    )
+
+    index = argv.index("--cidfile")
+    assert argv[index + 1] == str(cidfile)
+
+
+def test_lifecycle_config_defaults_are_valid_and_non_destructive():
+    from synlynk import _apply_workspace_defaults
+    from synlynk.config_schema import WORKSPACE_SCHEMA, validate
+
+    config = {"schema_version": 1, "workspace_id": "existing"}
+    result = _apply_workspace_defaults(config)
+
+    assert result["termination_grace_seconds"] == 5
+    assert result["cleanup_verification_timeout_seconds"] == 300
+    assert result["workspace_id"] == "existing"
+    lifecycle_config = {
+        "schema_version": 1,
+        "termination_grace_seconds": result["termination_grace_seconds"],
+        "cleanup_verification_timeout_seconds": result["cleanup_verification_timeout_seconds"],
+    }
+    assert validate(lifecycle_config, WORKSPACE_SCHEMA) == []
+    lifecycle_config["termination_grace_seconds"] = -1
+    assert any(
+        "termination_grace_seconds" in error
+        for error in validate(lifecycle_config, WORKSPACE_SCHEMA)
+    )
+
+
 def test_dispatch_parser_accepts_container_image_without_a_default():
     from synlynk.cli import build_parser
 

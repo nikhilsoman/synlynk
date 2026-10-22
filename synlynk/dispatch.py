@@ -26,7 +26,13 @@ from synlynk._constants import (
 )
 from synlynk._lazy import pkg as _pkg
 from synlynk.harness_adapters.base import PermissionEnforcementError
-from synlynk.container_exec import ContainerExecError, resolve_container_image, wrap as wrap_container
+from synlynk.container_exec import (
+    ContainerExecError,
+    read_container_id,
+    resolve_container_image,
+    wrap as wrap_container,
+)
+from synlynk.process_lifecycle import capture_termination_domain
 
 _ORG_ROLE_TO_BASELINE_ROLE = {
     "dev": "builder",
@@ -5245,6 +5251,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     spawn_cwd = worktree_path
     stderr_target = subprocess.DEVNULL
     stderr_handle = None
+    container_cidfile = None
     isolated_local_pilot = bool(local_pilot_receipt)
     if isolated_local_pilot:
         from synlynk.local_pilot import build_isolated_compose_shell
@@ -5308,12 +5315,14 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 "docker is not on PATH; refusing to fall back to a host subprocess"
             )
         try:
+            container_cidfile = log_file + ".cid"
             spawn_cmd, spawn_env, spawn_cwd = wrap_container(
                 spawn_cmd,
                 proc_env,
                 worktree_path,
                 container_image,
                 docker_bin=docker_bin,
+                cidfile=container_cidfile,
             )
         except Exception:
             if pytest_shim_dir is not None:
@@ -5405,14 +5414,17 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             "result_receipt_file": log_file + ".pilot.json",
         }
 
-    pid_identity = capture_process_identity(proc.pid, proc)
-    termination_domain = {
-        "version": 1,
-        "kind": "unknown",
-        "leader_pid": proc.pid,
-        "leader_identity": pid_identity,
-        "reason_code": "termination_domain_capture_pending",
-    }
+    container_id = read_container_id(container_cidfile) if container_cidfile else None
+    termination_domain = capture_termination_domain(
+        proc,
+        container_id=container_id,
+        parent_job_id=parent_job_id,
+    )
+    if container_cidfile:
+        termination_domain["cidfile"] = container_cidfile
+    pid_identity = termination_domain.get("leader_identity") or capture_process_identity(
+        proc.pid, proc
+    )
     job = {
         "id": job_id,
         "agent": agent,
