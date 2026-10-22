@@ -1,68 +1,117 @@
 # Canonical Release Execution Schedule
 
-**Effective date:** 2026-10-20
-**Authority:** `dec-f8835ba3`, roadmap parent #2458, and user approval on 2026-10-20
-**Status:** Active execution contract
+**Effective date:** 2026-10-22
+**Authority:** `dec-f8835ba3`, roadmap parent #2458, and user approval on 2026-10-22
+**Status:** Proposed amendment; activates after merge and state/issue/milestone synchronization
 
-**Capacity-first amendment:** User-authorized 2026-10-20. Canonical release
-headers for v0.25.2 and v0.25.3 were synchronized after verified snapshot
-`pre-capacity-first-roadmap-amendment-2026-10-20-20261020T045537Z.db`
-(`1d107610467a50adfb566f4e21ab30f068ad21935b1a8d5806a820610702ca39`).
+**Rebaseline:** This amendment supersedes the 2026-10-20 dated schedule. The
+release families and their purpose remain canonical, while the daily stable
+release stream and Dev Preview gate move forward. Local, OpenRouter, swarms,
+Universal Gateway, capability-crawler/GTM, and public-announcement work are
+not Dev Preview prerequisites. Muse remains an early core-harness dependency.
 
 ## Operating rule
 
-The dates below are hard release-gate dates. A release may be marked `shipped`
-only when its defined evidence gate passes. Missing a gate does not silently
-move downstream work: the release remains `planned`, its parent epic receives
-a blocker rollup within one business day, and the revised date requires an
-explicit decision comment on #2458.
+The dates below are hard daily release gates for the single public stable
+stream. There is no separate RC/DEV/PROD channel. A tag may be cut only when
+that day's evidence gate passes. Missing a gate does not silently move
+downstream work: record the blocker on #2458 within one day, keep the affected
+release planned, and publish a revised date there. Never tag an unverified or
+known-unsafe build merely to preserve the calendar.
 
-Developer Preview is deliberately not dated. It remains a decision after the
-v0.29.0 consolidation gate.
+The target is one named stable tag per calendar day. The schedule is also
+acceleratable: dates are not a minimum wait. When a gate passes early, start
+the next day's dependency sweep immediately and pull its work forward. If more
+than one independent gate is ready, it may be bundled into the next stable
+tag or released as an additional strictly ordered stable tag; do not wait for
+the original date. Acceleration may not bypass dependencies, evidence, review,
+the first Dev Preview acceptance gate, or human release authority.
 
 ## Calendar and gates
 
-| Release | Gate date | Delivery gate |
+| Stable tag | Gate date | Delivery gate |
 | --- | --- | --- |
-| v0.25.2 | 2026-11-06 | All supported models resolve and dispatch correctly; Local Ornith is live in an isolated, one-at-a-time, 20% implementation pilot; Muse has authenticated low-privilege execution onboarding and a current model roster; capacity availability is explicit. |
-| v0.25.3 | 2026-11-20 | GitHub-write, approval, provenance, and cost/quota-trust contracts fail closed and are auditable; capacity and billing records reconcile to evidence. |
-| v0.25.4 | 2026-12-04 | One canonical state/projection path, DR evidence, release integrity, and review findings closed or explicitly deferred. |
-| v0.26.0 | 2026-12-18 | Daemon restart, cancellation, recovery, scan containment, and replay journeys are evidence-tested. |
-| v0.26.1 | 2027-01-08 | Workspace-agent charters, authority, SOPs, and operational ownership are signed off and exercised. |
-| v0.26.2 | 2027-01-22 | Containment and approval controls pass before any autonomous execution expansion. |
-| v0.27.0 | 2027-02-05 | VS Code client is publicly listed; OpenVSX publication, install, upgrade, and dispatch smoke tests pass. |
-| v0.27.1 | 2027-02-19 | Five independent fresh-project journeys reach first verified dispatch in under 15 minutes. |
-| v0.27.2 | 2027-03-05 | Marketplace/distribution installation, update, rollback, and support runbooks are verified. |
-| v0.28.0 | 2027-03-26 | Bounded swarms and Universal Gateway run with lease, budget, containment, and evidence controls. |
-| v0.28.1 | 2027-04-09 | Capability crawler/index publishes reproducible, privacy-safe, sample-floor-gated evidence and GTM surface. |
-| v0.29.0 | 2027-04-23 | Every residual candidate is promoted, archived, or explicitly held; a human makes the Developer Preview decision. |
+| v0.25.2 | 2026-10-23 | Accumulated-PR reconciliation and first stable baseline. Resolve or explicitly gate dispatch-truth/process-lifecycle (#2530) and worktree-generated-doc safety (#2532) before autonomous work is relied upon. |
+| v0.25.3 | 2026-10-24 | Muse is authenticated, model-allowlisted, low-privilege, and usable for roadmap work; model catalog, capability, and cost evidence is validated across core harnesses. No review/deploy/GitHub-write authority is implied. |
+| v0.25.4 | 2026-10-25 | Job status and completion evidence are accurate and auditable, including GH-write outcomes; address or disposition #2138, #2139, #2309, and #2530 against current code. |
+| v0.25.5 | 2026-10-26 | Release and CI integrity: address the self-test cleanup race/flakiness (#2527/#2526), concurrent release-doc count drift (#2522), and stale generated command docs/sparse-checkout false blockers (#2320), or record verified non-blocking dispositions. |
+| v0.25.6 | 2026-10-27 | GOVERNS/model/cost/job-truth stability review closed; all selected stories have goal, release epic, and current delivery ticket; residual model correctness issues are fixed or explicitly held. |
+| v0.26.0 | 2026-10-28 | Daemon reliability: restart, cancellation, recovery, scan containment, replay, and stop idempotence are evidence-tested. Revalidate #2464 and #1884; #2477 is closed and must not be reopened without new reproduction. |
+| v0.26.1 | 2026-10-29 | Workspace-agent charters, authority, SOPs, and GOVERNS adherence are signed off and exercised; address #2305 where it blocks enforceable role procedures. |
+| v0.26.2 | 2026-10-30 | Safe autonomous operations: claims/leases are enforced at work-start paths (#2511/#2528); approval, containment, audit, and recovery controls pass before broader autonomous execution. |
+| v0.26.3 | 2026-10-31 | End-to-end autonomous operating day: workspace-agent roles plan, claim, dispatch, monitor, recover, and produce truthful evidence for a bounded roadmap task. Revalidate #2262 and adjacent job-orphan issues. |
+| v0.27.0 | 2026-11-01 | VS Code/OpenVSX distribution gate: listing/publication, install, update, and dispatch smoke tests pass (#2103). |
+| v0.27.1 | 2026-11-02 | Quickstart/onboarding first win: fresh-project journeys reach a verified first dispatch in under 15 minutes; revise #1515/#2472 scope to exclude deferred public announcement requirements. |
+| v0.27.2 | 2026-11-03 | Onboarding clarity and recovery: install/update failure paths, prerequisites, harness choice, and common errors are explained and verified end-to-end. |
+| v0.27.3 | 2026-11-04 | Cross-harness first-win verification, including Muse; five independent fresh-project journeys pass from install to useful, evidence-backed result. |
+| v0.27.4 | 2026-11-05 | Full Dev Preview acceptance run: GOVERNS, model catalog/capability/cost, job status truth, workspace-agent autonomy, and quickstart/onboarding pass together. |
+| v0.27.5 | 2026-11-06 | **Developer Preview stable release**, only if the v0.27.4 acceptance evidence is green and no unresolved release-blocking Sev1/Sev2 defect remains. |
+
+Post-Preview ordering remains canonical but is deliberately undated until the
+first preview is stable: v0.28.0 swarms/Universal Gateway; v0.28.1 capability
+crawler/index and GTM; v0.29.0 residual backlog disposition. Local and
+OpenRouter remain deferred candidates, not gates for this stream. Public
+announcement/blog work is not a release blocker; per-PR blog generation stays
+retired.
+
+## Readiness snapshot at rebaseline
+
+The 2026-10-22 `synlynk status` snapshot reports 98 local worktrees with 19
+flagged stale, capability sweep overdue by 400 jobs, smoke test overdue, Codex
+unavailable, and Muse unsupported with zero measured capacity. `synlynk watch
+status` reports stopped. These are observed signals to refresh and disposition,
+not diagnoses. The first daily dependency sweep must verify each against the
+current environment. Audit worktrees non-destructively; do not run cleanup or a
+live self-test while the #2527 self-test race remains unresolved. Do not count
+Muse as roadmap capacity until authenticated onboarding and capability
+evidence are current.
 
 ## Mandatory schedule controls
 
-1. **Capacity safety:** v0.25.2 may enlist Local only with the qualified
-   Ornith model, an isolated worktree/container boundary, one concurrent
-   dispatch, a successful live preflight, and a maximum 20% implementation
-   cohort. Muse may be enlisted only for authenticated, model-allowlisted,
-   low-privilege execution. Neither harness receives review, deploy, or
-   GitHub-write authority until its role-specific capability evidence passes.
-2. **2026-10-27 ticket lock:** every active delivery story selected for
-   v0.25.2--v0.28.1 has one current GitHub delivery ticket and one release
-   parent epic. Related legacy stories may share an outcome-sized ticket, but
-   may not enter `ready` without that ticket.
-3. **Every pickup:** revalidate the issue, comments, linked PRs, current
-   `origin/main`, tests, source spec/plan, and the release gate. Start a new
-   worktree from current `origin/main`; do not revive or rebase a dormant
-   branch until its unique diff has been reviewed.
-4. **Every Friday gate:** post a status, evidence links, changed ticket count,
-   blockers, and next-week commitment on #2458.
-5. **No auto-promotion:** a stale plan, an old green test, or a merged PR is
-   not evidence that the release gate is complete.
+1. **Start-of-day dependency sweep (before implementation or tag work):**
+   inspect the scheduled stories and their goals/parent epics, issue comments,
+   linked and overlapping PRs, `origin/main`, specs/plans, and cross-release
+   dependencies. Revalidate stale branches and tests; identify adjacent past
+   work that can be safely completed in the same change; and scan open bugs,
+   live issues, and tech-debt for directly relevant blockers or low-risk,
+   complementary fixes. Check current `synlynk status`, daemon/watch state,
+   capability-sweep freshness, and a non-destructive worktree audit; do not
+   run cleanup or live self-tests concurrently with active scratch work.
+   Record each candidate as `include today`, `separate
+   ticket/release`, `deferred`, or `already fixed/superseded`, with evidence.
+2. **Scope rule:** pull an adjacent fix into today's work only when it is
+   reproducible or otherwise evidenced, shares the affected code/path, has a
+   bounded review/test surface, and does not introduce unrelated authority or
+   release risk. Sev1/release-integrity issues block affected tags; other
+   deferrals need a ticket, owner/release, and reason. Do not let the sweep
+   turn into unbounded cleanup.
+3. **Ticket lock:** by 2026-10-27, every selected delivery story must have a
+   goal, one release parent epic, and a current GitHub delivery ticket. Each
+   of the existing 94 ticketless candidates must be freshness-checked and
+   either mapped to a release-family with goal/epic/ticket links or explicitly
+   deferred/archived with rationale. The old allocation table is a starting
+   index, not authority to implement stale or out-of-scope work.
+4. **Daily closeout:** record the sweep disposition, shipped tag or missed
+   gate, linked evidence, changed ticket count, new/closed defects, and next
+   day's dependency in #2458. Do not wait for Friday to report a material
+   blocker.
+5. **No auto-promotion:** a stale plan, old green test, closed PR, or
+   accumulated branch is not evidence that a release gate is complete.
+6. **Acceleration:** if all dependencies and evidence for a later gate are
+   already satisfied, move it forward after that day's sweep, update the
+   release tickets and #2458 schedule, and preserve semver order. Work can
+   advance early; tags never advance without the same quality, review, and
+   acceptance gates.
 
-## Proposed placement of the 94 ticketless candidate stories
+## Existing placement index for the 94 ticketless candidates
 
-This is a scheduling allocation, not an approval to implement every item. The
-ticket-lock pass groups related IDs under outcome-sized delivery tickets and
-archives candidates that fail the freshness check.
+This is the pre-rebaseline allocation, retained as an audit index rather than
+a current commitment. It is not approval to implement every item. The daily
+dependency sweeps must inspect story content and reassign eligible items to
+the revised release families; Local, OpenRouter, swarms/Gateway, crawler/GTM,
+and public-announcement items remain deferred unless separately approved.
+By the ticket lock, every candidate receives a linked goal/epic/ticket or an
+explicit deferred/archive disposition.
 
 | Release | Candidates | Allocation |
 | --- | ---: | --- |
@@ -79,30 +128,51 @@ archives candidates that fail the freshness check.
 | v0.28.1 | 3 | `story-0ab760c5`, `story-33ab504a`, `story-c8e2b987` |
 | v0.29.0 | 18 | `story-ffb0f3e6`, `story-1aab8f81`, `story-54d83487`, `story-6c5ff44e`, `story-b4b1167e`, `story-0127066f`, `story-2348ac34`, `story-541995f4`, `story-b75cb3e7`, `story-4fe0a8bf`, `story-5ef38956`, `story-f4dbf2ce`, `story-2161a277`, `story-565bf96f`, `story-631a6a86`, `story-e3a3170a`, `story-028d26d9`, `story-f6782d57` |
 
-## Required additions to make the release promises truthful
+## Required bug and tech-debt reconciliation
 
-- **v0.25.2:** live issue #1767 (explicit-model fallback) must be linked or
-  superseded after reproduction. Promote Local parent #2342 and pilot #2349
-  to this release with #2347, #211, #2048, and #2407 assessed as pilot
-  blockers. Add #2457 (Muse model roster) and the low-privilege subset of
-  #2445 (Muse capability profile/probe) to this release. The Local endpoint,
-  reservation, and pilot-state records must agree before any capacity is
-  counted.
-- **v0.25.3:** `story-d84372cd` is the shipped federated-quota mechanism, but
-  needs an outcome ticket for live freshness, source authentication,
-  calibration fallback, and reconciliation. Cost/accounting defects #481 and
-  #510 need outcome tickets if still reproducible.
-- **v0.25.4:** live DR validation #1686 and current architectural-review epic
-  #2384 require canonical child stories.
-- **v0.26.0:** live issues #2464 and #2477 are mandatory daemon-reliability
-  tickets; #2463 is triaged here unless reproduction proves it is model-only.
-- **v0.27.0:** #2103 covers the already-merged VS Code client and remaining
-  marketplace/OpenVSX listing gate. It is not complete until installation and
-  update smoke evidence exists.
-- **v0.27.2:** add explicit marketplace package, signing, discovery, update,
-  rollback, and support tickets; the two inherited stories are only enablers.
-- **v0.28.1:** recreate a current child ticket under #2475 for the approved
-  Capability Index/Crawler design, because its former parent #2431 is closed.
+- **First stability releases:** #2530 (false failure/orphan process) and
+  #2532 (worktree generated-doc write target) are direct job-truth and data
+  integrity risks. Include regression evidence before autonomous dispatch is
+  relied upon. #2527/#2526, #2522, and #2320 are CI/release reliability items.
+  `synlynk release --check-docs` currently reports
+  `docs/reference/commands.md` stale; this needs a ticket-linked resolution
+  before the release check is green. Close issues only after reproducing the
+  race or verifying a fix on current main.
+- **Model/catalog/cost:** revalidate #2441 and #2448--#2450 against merged
+  work before adding tickets. The recent model-catalog PRs may resolve parts
+  of this cohort; close or narrow only from current-code/test evidence. #1767
+  (explicit-model fallback) is included only if still reproducible. Quota
+  freshness/calibration may be deferred; missing/unknown data must remain
+  explicit rather than presented as a valid estimate.
+- **Muse:** #2457 and the low-privilege profile/probe scope of #2445 remain
+  early capacity work. Refresh #2444/#2446 from current main. Muse review,
+  deploy, and GitHub-write permissions remain disabled without separate
+  capability evidence. Current `synlynk status` reports Muse as `unsupported`
+  with no rated capability/capacity; do not count Muse as available until its
+  onboarding and capability evidence are verified on the target environment.
+- **Job truth:** revalidate #2138, #2139, #2309, #2438, and #2530. Fix active
+  false terminal states, missing terminal evidence, or orphaned processes;
+  archive/supersede only defects proven fixed.
+- **Daemon/CI:** #2464, #1884, #2407, #2526, and #2527 are first-order
+  candidates for the daemon/stability gates and must be reproduced against
+  current main. #2477 is closed; do not carry its old work into this schedule
+  without new evidence.
+- **GOVERNS/autonomy:** #2305, #2511, #2528, and #2262 must be checked for
+  overlap with current charter, claims, and daemon-autonomy implementation.
+  The claim mechanism must be wired into actual work-start paths before it is
+  treated as a collision-control gate.
+- **PR queue:** refresh unique diffs only. #2444/#2446 are Muse candidates;
+  #2523 is a release-doc candidate subject to #2522; duplicate/dirty followups
+  #2519/#2521, #2516/#2520 and stale PRs require issue-comment and diff review
+  before disposition. #2533/#2408 are Local work and deferred. #2175's
+  per-PR blog convention is retired; public announcement work is not a Dev
+  Preview gate.
+- **Deferred after the first preview:** Local relay/pilot (#2525/#2533),
+  OpenRouter (#2210 and related provider work), swarm/Kubernetes (#2367 and
+  #2474), crawler/index/GTM (#2475), public announcement requirements, and
+  unrelated code-intelligence or marketplace expansion. Bring forward only
+  with a user-approved scope change or if a daily sweep finds a direct safety
+  dependency.
 
 ## Artifact and planning policy
 
