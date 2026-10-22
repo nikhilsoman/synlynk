@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
+import subprocess
+import time
 
 
 class ContainerExecError(RuntimeError):
@@ -95,6 +98,55 @@ def client_env(env: dict) -> dict:
     return client
 
 
+def read_container_id(cidfile: str | None, *, attempts: int = 100, delay: float = 0.01) -> str:
+    if not cidfile:
+        return ""
+    for _attempt in range(max(1, attempts)):
+        try:
+            with open(cidfile, encoding="utf-8") as handle:
+                value = handle.read().strip()
+            if value:
+                return value
+        except OSError:
+            pass
+        if delay:
+            time.sleep(delay)
+    return ""
+
+
+def inspect_container(container_id: str) -> dict[str, str]:
+    docker = shutil.which("docker")
+    if not docker:
+        return {"state": "error", "reason": "docker_unavailable"}
+    completed = subprocess.run(
+        [docker, "inspect", "--format", "{{.State.Running}}", container_id],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        combined = f"{completed.stdout}\n{completed.stderr}".lower()
+        if "no such" in combined or "not found" in combined:
+            return {"state": "stopped"}
+        return {"state": "error", "reason": "docker_inspect_failed"}
+    return {"state": "running" if completed.stdout.strip().lower() == "true" else "stopped"}
+
+
+def stop_container(container_id: str, grace_seconds: float) -> None:
+    docker = shutil.which("docker")
+    if not docker:
+        raise ContainerExecError("docker is not on PATH")
+    timeout = str(max(0, int(grace_seconds)))
+    completed = subprocess.run(
+        [docker, "stop", "--time", timeout, container_id],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise ContainerExecError(completed.stderr.strip() or "docker stop failed")
+
+
 def wrap(
     cmd,
     env,
@@ -104,6 +156,7 @@ def wrap(
     docker_bin: str | None = None,
     uid: int | None = None,
     gid: int | None = None,
+    cidfile: str | None = None,
 ):
     """Return ``(argv, client_env, cwd)`` for a host or containerized spawn."""
     if image is None:
@@ -134,6 +187,8 @@ def wrap(
         "-w",
         worktree,
     ]
+    if cidfile:
+        argv.extend(["--cidfile", os.path.abspath(cidfile)])
     for mount in git_mounts(worktree):
         argv.extend(["-v", f"{mount}:{mount}"])
     for key, value in harness_env(env).items():

@@ -1379,11 +1379,41 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
             except sqlite3.OperationalError:
                 pass
         daemon_job_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+        terminal_decision_cols = {
+            row[1] for row in conn.execute("PRAGMA table_info(job_terminal_decision)")
+        }
+        if "effect_state" not in terminal_decision_cols:
+            try:
+                conn.execute(
+                    "ALTER TABLE job_terminal_decision "
+                    "ADD COLUMN effect_state TEXT NOT NULL DEFAULT 'unknown'"
+                )
+            except sqlite3.OperationalError:
+                pass
         if "type_id" not in daemon_job_cols:
             try:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN type_id TEXT")
             except sqlite3.OperationalError:
                 pass
+        for lifecycle_column, lifecycle_definition in (
+            ("termination_domain_json", "TEXT"),
+            ("parent_job_id", "TEXT"),
+            ("cleanup_deadline_at", "TEXT"),
+            (
+                "process_state",
+                "TEXT NOT NULL DEFAULT 'unknown' CHECK (process_state IN "
+                "('unknown', 'running', 'stop_requested', 'stopped_verified', "
+                "'cleanup_unverified', 'cleanup_overridden'))",
+            ),
+        ):
+            if lifecycle_column not in daemon_job_cols:
+                try:
+                    conn.execute(
+                        f"ALTER TABLE daemon_jobs ADD COLUMN "
+                        f"{lifecycle_column} {lifecycle_definition}"
+                    )
+                except sqlite3.OperationalError:
+                    pass
         if "handoff_count" not in daemon_job_cols:
             try:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN handoff_count INTEGER NOT NULL DEFAULT 0")

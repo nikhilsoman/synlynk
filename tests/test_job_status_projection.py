@@ -122,6 +122,67 @@ def test_projection_supports_tuple_rows_and_restores_connection_factory():
     assert conn.row_factory is None
 
 
+def test_projection_exposes_independent_process_and_effect_states(project_dir):
+    import synlynk
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        ("job-axes", "codex", "task", "timed_out", "2026-10-03T10:00:00+00:00"),
+    )
+    conn.execute(
+        "INSERT INTO job_terminal_decision "
+        "(job_id, status, verification_state, effect_state, evidence_snapshot_json, "
+        "decision_reason, decided_at, decided_by, revision, contract_version, follow_up) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-axes", "timed_out", "verified", "verified", "[]",
+         "timeout_with_verified_effect", "2026-10-03T10:01:00+00:00",
+         "test", 1, 1, "none"),
+    )
+    conn.commit()
+
+    conn.execute(
+        "UPDATE daemon_jobs SET process_state='running' WHERE job_id='job-axes'"
+    )
+    projection = project_job_status(conn, "job-axes")
+
+    assert projection["process_state"] == "running"
+    assert projection["effect_state"] == "verified"
+    assert projection["legacy_status"] == "timed_out"
+    conn.close()
+
+
+def test_projection_distinguishes_operator_override_from_verified_stop(project_dir):
+    import synlynk
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, process_state, enqueued_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("job-override-axis", "codex", "task", "failed", "cleanup_overridden",
+         "2026-10-22T10:00:00+00:00"),
+    )
+    conn.execute(
+        "INSERT INTO job_terminal_decision "
+        "(job_id, status, verification_state, effect_state, evidence_snapshot_json, "
+        "decision_reason, decided_at, decided_by, revision, contract_version, follow_up) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-override-axis", "failed", "unknown", "unknown", "[]",
+         "verification_budget_exhausted", "2026-10-22T10:01:00+00:00",
+         "test", 1, 1, "manual_review"),
+    )
+    conn.commit()
+
+    projection = project_job_status(conn, "job-override-axis")
+
+    assert projection["process_state"] == "cleanup_overridden"
+    assert projection["process_stop_verified"] is False
+    assert projection["cleanup_risk_accepted"] is True
+    assert projection["effect_state"] == "unknown"
+    conn.close()
+
+
 def test_jobs_json_uses_the_public_tuple_backed_db_connection(tmp_path, monkeypatch, capsys):
     import synlynk
 

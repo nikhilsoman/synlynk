@@ -1085,6 +1085,7 @@ _WORKSPACE_KEYS = [
     "dispatch_mode", "fenced_commands", "nudges", "exec_timeout_minutes",
     "stall_timeout_minutes", "review_stall_timeout_minutes", "swarm_runners",
     "last_housekeeping_date", "features", "repo_id", "dr_sync_path", "mode",
+    "termination_grace_seconds", "cleanup_verification_timeout_seconds",
 ]
 _BILLING_KEYS = ["budget", "harness_billing", "payment_models", "capability_sweep"]
 _POLICY_MIGRATED_KEYS = ["qa_gate_mode", "roles", "story_classification", "sentinel"]
@@ -1118,6 +1119,8 @@ def _apply_workspace_defaults(config: dict) -> dict:
         "stall_timeout_minutes": 30,
         "swarm_runners": {"default": "local", "enabled": ["local"], "timeout_seconds": 900},
         "review_stall_timeout_minutes": 90,
+        "termination_grace_seconds": 5,
+        "cleanup_verification_timeout_seconds": 300,
         "agents": {},
         "features": {},
         "repo_id": None,

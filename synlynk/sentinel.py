@@ -8,12 +8,13 @@ import tempfile
 import time
 import traceback
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
 
-_REAL_POPEN_TYPE = subprocess.Popen
-
 from synlynk._constants import QUOTA_PATTERNS
+from synlynk.process_lifecycle import capture_termination_domain, terminate_job_domain
+
+_REAL_POPEN_TYPE = subprocess.Popen
 
 _SENTINEL_ALERT_RE = re.compile(
     r"^- \[(?P<severity>[A-Z]+)\] \[(?P<timestamp>[^\]]+)\] "
@@ -301,7 +302,6 @@ def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path:
             )
             output = _rewrite_sentinel_alerts(existing, alerts, identity, replacement)
         else:
-            ts = now.strftime('%Y-%m-%d %H:%M:%S UTC')
             output = existing
             if "# Sentinel Alerts" not in output:
                 output = "# Sentinel Alerts\n" + output
@@ -835,39 +835,67 @@ def enforce_job_circuit_breaker(job: dict, process=None, *, sentinel_path: Optio
         reason = f"${cost:.2f} cost"
     if reason is None:
         return False
-    proc = process
-    kill_skipped = False
-    if proc is None and job.get("pid"):
-        pid = int(job["pid"])
+    domain = job.get("termination_domain")
+    if not isinstance(domain, dict) and process is not None:
+        domain = capture_termination_domain(process)
+    if not isinstance(domain, dict):
+        pid = job.get("pid")
+        identity_verified = False
         try:
-            if process_identity_check(pid, job.get("pid_identity")) == "safe to kill":
-                os.kill(pid, 15)
-            else:
-                kill_skipped = True
-        except (ProcessLookupError, PermissionError, TypeError, ValueError, OSError):
+            identity_verified = (
+                int(pid) > 1
+                and process_identity_check(int(pid), job.get("pid_identity")) == "safe to kill"
+            )
+        except (TypeError, ValueError):
             pass
-    elif proc is not None:
-        pid = getattr(proc, "pid", None)
-        try:
-            if pid is not None and process_identity_check(pid, job.get("pid_identity")) == "safe to kill":
-                proc.terminate()
-            else:
-                kill_skipped = True
-        except (AttributeError, OSError):
-            try:
-                if process_identity_check(int(proc.pid), job.get("pid_identity")) == "safe to kill":
-                    os.kill(int(proc.pid), 15)
-                else:
-                    kill_skipped = True
-            except (AttributeError, OSError, TypeError, ValueError):
-                pass
-    if kill_skipped:
-        reason = f"{reason}; PID recycled, skipped kill"
+        domain = {
+            "version": 1,
+            "kind": "legacy_process",
+            "leader_pid": pid,
+            "leader_identity": job.get("pid_identity"),
+            "identity_verified": identity_verified,
+        }
+    job["process_state"] = "stop_requested"
+    job.setdefault("lifecycle_evidence", []).append({
+        "kind": "cleanup", "process_state": "stop_requested",
+    })
+    cleanup = terminate_job_domain(domain)
+    job["process_state"] = cleanup.process_state
+    job["cleanup_result"] = {
+        "process_state": cleanup.process_state,
+        "attempted": cleanup.attempted,
+        "method": cleanup.method,
+        "reason_code": cleanup.reason_code,
+        "evidence": list(cleanup.evidence),
+    }
+    job["lifecycle_evidence"].append({
+        "kind": "cleanup",
+        "process_state": cleanup.process_state,
+        "reason_code": cleanup.reason_code,
+    })
+    if cleanup.process_state != "stopped_verified":
+        legacy_identity_warning = (
+            "; PID recycled, skipped kill"
+            if cleanup.reason_code == "leader_identity_unverified"
+            else ""
+        )
+        reason = (
+            f"{reason}{legacy_identity_warning}; cleanup unverified "
+            f"({cleanup.reason_code})"
+        )
     job["status"] = "stalled_aborted"
     job["exit_code"] = -15
     job["circuit_breaker_reason"] = reason
     job["stack_trace"] = "".join(traceback.format_stack(limit=20))
     _write_sentinel_alert("CRITICAL", "CIRCUIT_BREAKER", f"Job {job.get('id', '')}: {reason}.", sentinel_path)
+    if cleanup.process_state != "stopped_verified":
+        _write_sentinel_alert(
+            "CRITICAL",
+            "CLEANUP_UNVERIFIED",
+            f"Job {job.get('id', '')} may still be executing after Sentinel cleanup "
+            f"({cleanup.reason_code}); operator follow-up is required.",
+            sentinel_path,
+        )
     log_telemetry_event({"type": "circuit_breaker", "job_id": job.get("id"),
                          "reason": reason, "stack_trace": job["stack_trace"]})
     return True
