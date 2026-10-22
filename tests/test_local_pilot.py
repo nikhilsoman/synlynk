@@ -637,6 +637,7 @@ def test_isolated_runner_cleans_up_compose_and_redacts_persisted_logs(tmp_path, 
         compose_calls.append(argv)
         compose_envs.append(dict(env))
         assert "OPENAI_API_KEY" not in env
+        assert "OMLX_API_KEY" not in env
         if env.get("PILOT_WORKTREE"):
             scratch_entries.append(sorted(os.listdir(env["PILOT_WORKTREE"])))
             scratch_files.append(sorted(
@@ -675,7 +676,11 @@ def test_isolated_runner_cleans_up_compose_and_redacts_persisted_logs(tmp_path, 
             b"Summarize the focused test result."
         ).hexdigest(), effective_model="ornith",
         scope_paths=["test.log"], aider_args=["--model", "openai/ornith"],
-        env={"PATH": "/usr/bin", "OPENAI_API_KEY": "test-secret"},
+        env={
+            "PATH": "/usr/bin",
+            "OPENAI_API_KEY": "test-secret",
+            "OMLX_API_KEY": "omlx-secret",
+        },
     )
     assert result == 0
     assert log.read_text() == "completion [REDACTED] ok\n"

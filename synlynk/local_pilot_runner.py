@@ -184,6 +184,7 @@ def run_isolated_dispatch(
 ) -> int:
     env = dict(os.environ if env is None else env)
     env.pop("OPENAI_API_KEY", None)
+    env.pop("OMLX_API_KEY", None)
     from synlynk.local_credentials import LocalCredentialStore
     api_key = LocalCredentialStore().get()
     aider_args = ensure_inert_aider_key(list(aider_args))
