@@ -3031,19 +3031,19 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
         raise SystemExit(1)
 
 def _resolved_docs_dir() -> str:
-    """Absolute project-docs directory for generated writes.
+    """Absolute project-docs directory for the current Git checkout.
 
     ``_docs_dir()`` returns the workspace.json value as configured, normally
-    the relative string ``project-docs``. Joining that with the process cwd
-    writes into whichever dispatch worktree happens to be current (#2237).
-    Generated docs belong to the shared project root.
+    the relative string ``project-docs``. Generated docs are tracked per
+    checkout, so resolve relative paths against the current worktree root;
+    shared state DB resolution remains on ``_project_root()``.
     """
-    from synlynk import _docs_dir, _project_root
+    from synlynk import _docs_dir, _working_tree_root
 
     docs_dir = _docs_dir()
     if docs_dir and not os.path.isabs(docs_dir):
         try:
-            docs_dir = os.path.join(_project_root(), docs_dir)
+            docs_dir = os.path.join(_working_tree_root(), docs_dir)
         except Exception:
             return docs_dir
     return docs_dir
@@ -3055,16 +3055,17 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
         DB_PATH,
         _dr_sync,
         _is_migrated,
-        _project_root,
         _synlynk_project_docs_dir,
+        _working_tree_root,
     )
 
     def _is_tracked(path: str) -> bool:
         try:
-            relative = os.path.relpath(path, _project_root())
+            root = _working_tree_root()
+            relative = os.path.relpath(path, root)
             result = subprocess.run(
                 ["git", "ls-files", "--error-unmatch", "--", relative],
-                cwd=_project_root(),
+                cwd=root,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 check=False,

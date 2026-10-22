@@ -291,6 +291,27 @@ def _project_root() -> str:
     return os.getcwd()
 
 
+def _working_tree_root() -> str:
+    """Return the root of the current checkout, not its shared Git directory."""
+    import subprocess
+
+    try:
+        root = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+        if root:
+            return os.path.abspath(root)
+    except Exception as exc:
+        if os.environ.get("SYNLYNK_ALLOW_CWD_FALLBACK") == "1":
+            return os.getcwd()
+        raise RuntimeError(
+            "could not resolve git worktree root; refusing to write generated "
+            "project docs relative to an unknown checkout"
+        ) from exc
+    return os.getcwd()
+
+
 def _get_project_root() -> str:
     """Backwards-compatible alias for callers that expect a root helper."""
     return _project_root()

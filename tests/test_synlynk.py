@@ -5142,25 +5142,8 @@ def test_cmd_story_create_generates_todo_md(project_dir):
     assert "Auto-sync check" in todo
 
 
-def test_generate_todo_md_does_not_write_to_dispatch_worktree(project_dir, tmp_path, monkeypatch):
-    """Generated docs resolve to the shared project root, not the caller cwd."""
-    import synlynk as sl
-
-    job_worktree = tmp_path / "job-worktree"
-    (job_worktree / "project-docs").mkdir(parents=True)
-    job_todo = job_worktree / "project-docs" / "todo.md"
-    job_todo.write_text("job worktree content\n")
-    monkeypatch.setattr(sl, "_project_root", lambda: str(project_dir))
-    monkeypatch.chdir(job_worktree)
-
-    sl.cmd_story_create("Shared-root generated doc")
-
-    assert job_todo.read_text() == "job worktree content\n"
-    assert "Shared-root generated doc" in (project_dir / "project-docs" / "todo.md").read_text()
-
-
-def test_generate_todo_md_real_worktree_does_not_rewrite_job_copy(git_worktree_repo, tmp_path, monkeypatch):
-    """#2237: a linked dispatch worktree keeps its own project-docs/todo.md."""
+def test_generate_todo_md_writes_only_to_current_worktree(git_worktree_repo, tmp_path, monkeypatch):
+    """Generated docs update the calling worktree, not its shared main checkout."""
     import subprocess
     import synlynk as sl
 
@@ -5171,17 +5154,18 @@ def test_generate_todo_md_real_worktree_does_not_rewrite_job_copy(git_worktree_r
         cwd=repo, capture_output=True, check=True,
     )
     job_todo = job / "project-docs" / "todo.md"
-    original = job_todo.read_text()
-    monkeypatch.chdir(job)
+    main_todo = repo / "project-docs" / "todo.md"
+    original = main_todo.read_text()
+    monkeypatch.chdir(job / "project-docs")
 
-    sl.cmd_story_create("Must not land in the job worktree")
+    sl.cmd_story_create("Generated docs stay in the calling worktree")
 
-    assert job_todo.read_text() == original
-    assert "Must not land in the job worktree" in (repo / "project-docs" / "todo.md").read_text()
+    assert "Generated docs stay in the calling worktree" in job_todo.read_text()
+    assert main_todo.read_text() == original
 
 
-def test_rotate_project_doc_does_not_archive_into_job_worktree(git_worktree_repo, tmp_path, monkeypatch):
-    """#2237: roadmap/costs/memory rotation must not write via the cwd-relative docs dir."""
+def test_rotate_project_doc_archives_in_current_worktree(git_worktree_repo, tmp_path, monkeypatch):
+    """Archived generated docs stay with the worktree that triggered rotation."""
     import subprocess
     import synlynk.db as db
 
@@ -5195,8 +5179,8 @@ def test_rotate_project_doc_does_not_archive_into_job_worktree(git_worktree_repo
 
     db._rotate_project_doc("costs", [{"n": 1}, {"n": 2}], keep_n=1)
 
-    assert not (job / "project-docs" / "archive").exists()
-    assert (repo / "project-docs" / "archive").is_dir()
+    assert (job / "project-docs" / "archive").is_dir()
+    assert not (repo / "project-docs" / "archive").exists()
 
 
 def test_import_todo_to_stories_imports_unchecked_lines(project_dir):
