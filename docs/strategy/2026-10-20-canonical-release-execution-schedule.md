@@ -2,7 +2,7 @@
 
 **Effective date:** 2026-10-22
 **Authority:** `dec-f8835ba3`, roadmap parent #2458, and user approval on 2026-10-22
-**Status:** Proposed amendment; becomes the active execution contract when merged
+**Status:** Proposed amendment; activates after merge and state/issue/milestone synchronization
 
 **Rebaseline:** This amendment supersedes the 2026-10-20 dated schedule. The
 release families and their purpose remain canonical, while the daily stable
