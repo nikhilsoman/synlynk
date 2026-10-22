@@ -193,4 +193,3 @@
 - [ ] **Step 4: Run static checks** `ruff check synlynk tests` and `git diff --check`.
 - [ ] **Step 5: Verify the acceptance matrix** against every numbered criterion in the spec and attach results to #2530.
 - [ ] **Step 6: Commit** remaining test-only work as `test: verify job terminal truth end to end`.
-
