@@ -154,6 +154,7 @@ def test_version_validation_accepts_only_verified_omlx_053():
 def test_omlx_subprocess_does_not_receive_api_key(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-do-not-leak")
     monkeypatch.setenv("OMLX_API_KEY", "omlx-do-not-leak")
+    monkeypatch.setattr("synlynk.local_lifecycle.shutil.which", lambda _name: "/usr/bin/omlx")
     seen = {}
 
     def run(args, **kwargs):
