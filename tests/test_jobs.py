@@ -2129,6 +2129,151 @@ def test_terminal_settlement_does_not_commit_callers_transaction(project_dir):
     conn.close()
 
 
+def test_cleanup_resolve_cli_requires_acknowledgement_and_reason():
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    parsed = parser.parse_args([
+        "jobs", "cleanup-resolve", "job-uncertain",
+        "--accept-risk", "--reason", "operator inspected host",
+    ])
+
+    assert parsed.jobs_cmd == "cleanup-resolve"
+    assert parsed.job_id == "job-uncertain"
+    assert parsed.accept_risk is True
+    assert parsed.reason == "operator inspected host"
+
+
+@pytest.mark.parametrize(
+    ("accept_risk", "reason", "expected"),
+    [
+        (False, "operator inspected host", "--accept-risk"),
+        (True, "", "--reason"),
+        (True, "   ", "--reason"),
+    ],
+)
+def test_cleanup_resolve_rejects_missing_operator_confirmation(
+    project_dir, capsys, accept_risk, reason, expected
+):
+    from synlynk.jobs import cmd_jobs_cleanup_resolve
+
+    assert cmd_jobs_cleanup_resolve(
+        "job-uncertain", accept_risk=accept_risk, reason=reason
+    ) == 2
+    assert expected in capsys.readouterr().err
+
+
+def test_cleanup_resolve_rejects_unknown_job_and_early_override(project_dir, capsys):
+    import synlynk as sl
+    from synlynk.jobs import cmd_jobs_cleanup_resolve
+
+    assert cmd_jobs_cleanup_resolve(
+        "job-missing", accept_risk=True, reason="checked"
+    ) == 1
+    assert "not found" in capsys.readouterr().err
+
+    conn = sl._get_db()
+    _seed_daemon_job(conn, "job-too-early", agent="codex", pid=999999)
+    conn.execute(
+        "UPDATE daemon_jobs SET process_state='cleanup_unverified', cleanup_deadline_at=? "
+        "WHERE job_id='job-too-early'",
+        ("2026-10-22T10:05:00+00:00",),
+    )
+    conn.commit()
+    conn.close()
+
+    assert cmd_jobs_cleanup_resolve(
+        "job-too-early",
+        accept_risk=True,
+        reason="checked",
+        now="2026-10-22T10:04:59+00:00",
+    ) == 1
+    assert "not available until" in capsys.readouterr().err
+
+
+def test_cleanup_resolve_audits_override_releases_capacity_and_is_idempotent(
+    project_dir, capsys
+):
+    import synlynk as sl
+    from synlynk.jobs import _settle_daemon_job_terminal, cmd_jobs_cleanup_resolve
+
+    conn = sl._get_db()
+    rid = sl._open_reservation(
+        conn, "codex", 4_000, scope="adhoc", job_id="job-aged-cleanup"
+    )
+    _seed_daemon_job(conn, "job-aged-cleanup", agent="codex", pid=999999)
+    conn.execute(
+        "UPDATE daemon_jobs SET cleanup_deadline_at=? WHERE job_id='job-aged-cleanup'",
+        ("2026-10-22T10:05:00+00:00",),
+    )
+    conn.commit()
+    assert _settle_daemon_job_terminal(
+        conn,
+        "job-aged-cleanup",
+        "failed",
+        1,
+        "2026-10-22T10:00:00+00:00",
+        release_reservation=True,
+        process_state="cleanup_unverified",
+        effect_state="unknown",
+    )
+    conn.close()
+
+    assert cmd_jobs_cleanup_resolve(
+        "job-aged-cleanup",
+        accept_risk=True,
+        reason="host reboot independently confirmed",
+        now="2026-10-22T10:05:01+00:00",
+        actor="test-operator",
+    ) == 0
+
+    conn = sl._get_db()
+    assert conn.execute(
+        "SELECT process_state FROM daemon_jobs WHERE job_id='job-aged-cleanup'"
+    ).fetchone()[0] == "cleanup_overridden"
+    assert conn.execute(
+        "SELECT status FROM harness_reservations WHERE id=?", (rid,)
+    ).fetchone()[0] == "released"
+    event = conn.execute(
+        "SELECT process_result_json, occurred_at FROM job_lifecycle_event "
+        "WHERE job_id='job-aged-cleanup' AND event_type='correction'"
+    ).fetchone()
+    payload = json.loads(event[0])
+    assert payload == {
+        "accept_risk": True,
+        "actor": "test-operator",
+        "previous_process_state": "cleanup_unverified",
+        "process_state": "cleanup_overridden",
+        "reason": "host reboot independently confirmed",
+    }
+    assert event[1] == "2026-10-22T10:05:01+00:00"
+    effect_before = conn.execute(
+        "SELECT effect_state FROM job_terminal_decision "
+        "WHERE job_id='job-aged-cleanup' ORDER BY revision DESC LIMIT 1"
+    ).fetchone()[0]
+    conn.close()
+    assert effect_before == "unknown"
+
+    assert cmd_jobs_cleanup_resolve(
+        "job-aged-cleanup",
+        accept_risk=True,
+        reason="repeat",
+        now="2026-10-22T10:06:00+00:00",
+        actor="test-operator",
+    ) == 0
+    conn = sl._get_db()
+    assert conn.execute(
+        "SELECT COUNT(*) FROM job_lifecycle_event WHERE job_id='job-aged-cleanup' "
+        "AND event_type='correction'"
+    ).fetchone()[0] == 1
+    assert conn.execute(
+        "SELECT effect_state FROM job_terminal_decision "
+        "WHERE job_id='job-aged-cleanup' ORDER BY revision DESC LIMIT 1"
+    ).fetchone()[0] == "unknown"
+    conn.close()
+    assert "cleanup_overridden" in capsys.readouterr().out
+
+
 def test_reconcile_scope_review_uses_persisted_task_type_before_prompt_fallback(
     project_dir, monkeypatch
 ):

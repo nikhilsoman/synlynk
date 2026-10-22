@@ -1,6 +1,7 @@
 """synlynk jobs: job store, reconciliation (CLI-dispatch and daemon paths), fleet routing."""
 
 import fnmatch
+import getpass
 import hashlib
 import inspect
 import json
@@ -6035,6 +6036,138 @@ def cmd_jobs_reconcile_truth(job_id: str, evidence_json: str | None = None) -> i
         return 0
     except (ValueError, TypeError, sqlite3.Error) as exc:
         print(f"manual reconciliation failed: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        conn.close()
+
+
+def cmd_jobs_cleanup_resolve(
+    job_id: str,
+    *,
+    accept_risk: bool = False,
+    reason: str | None = None,
+    now: str | None = None,
+    actor: str | None = None,
+) -> int:
+    """Audit an operator's acceptance of aged, unresolved process cleanup."""
+    if not accept_risk:
+        print("cleanup-resolve requires --accept-risk", file=sys.stderr)
+        return 2
+    reason = (reason or "").strip()
+    if not reason:
+        print("cleanup-resolve requires a non-empty --reason", file=sys.stderr)
+        return 2
+
+    occurred_at = now or datetime.now().astimezone().isoformat()
+    observed_now = _parse_iso8601(occurred_at)
+    if observed_now is None:
+        print("cleanup-resolve received an invalid timestamp", file=sys.stderr)
+        return 1
+    actor = actor or getpass.getuser()
+    conn = _pkg("_get_db")()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT process_state, cleanup_deadline_at, "
+            "COALESCE(harness, agent, 'unknown'), COALESCE(role, 'unknown') "
+            "FROM daemon_jobs WHERE job_id=?",
+            (job_id,),
+        ).fetchone()
+        if not row:
+            conn.rollback()
+            print(f"cleanup-resolve: job {job_id} not found", file=sys.stderr)
+            return 1
+        process_state, deadline_value, harness, role = row
+        if process_state == "cleanup_overridden":
+            conn.rollback()
+            from synlynk.job_status_projection import project_job_status
+            projection = project_job_status(conn, job_id)
+            print(json.dumps({
+                "job_id": job_id,
+                "process_state": projection["process_state"],
+                "process_stop_verified": projection["process_stop_verified"],
+                "cleanup_risk_accepted": projection["cleanup_risk_accepted"],
+                "effect_state": projection["effect_state"],
+                "idempotent": True,
+            }, sort_keys=True))
+            return 0
+        if process_state != "cleanup_unverified":
+            conn.rollback()
+            print(
+                f"cleanup-resolve: job {job_id} is {process_state!r}, not cleanup_unverified",
+                file=sys.stderr,
+            )
+            return 1
+        deadline = _parse_iso8601(deadline_value)
+        if deadline is None:
+            conn.rollback()
+            print(
+                f"cleanup-resolve: job {job_id} has no valid cleanup deadline",
+                file=sys.stderr,
+            )
+            return 1
+        if observed_now < deadline:
+            conn.rollback()
+            print(
+                f"cleanup-resolve is not available until {deadline.isoformat()}",
+                file=sys.stderr,
+            )
+            return 1
+
+        contract = conn.execute(
+            "SELECT contract_id, contract_version FROM job_effect_contract WHERE job_id=?",
+            (job_id,),
+        ).fetchone()
+        contract_id, contract_version = contract if contract else ("unknown_contract", 1)
+        sequence = conn.execute(
+            "SELECT COALESCE(MAX(sequence), -1) + 1 FROM job_lifecycle_event WHERE job_id=?",
+            (job_id,),
+        ).fetchone()[0]
+        process_result = {
+            "accept_risk": True,
+            "actor": actor,
+            "previous_process_state": process_state,
+            "process_state": "cleanup_overridden",
+            "reason": reason,
+        }
+        conn.execute(
+            "INSERT INTO job_lifecycle_event "
+            "(event_id, job_id, contract_id, contract_version, event_type, sequence, "
+            "harness, role, process_result_json, evidence_refs_json, occurred_at, "
+            "schema_version, compatibility, accepted, rejection_reason) "
+            "VALUES (?, ?, ?, ?, 'correction', ?, ?, ?, ?, '[]', ?, "
+            "'lifecycle.v1', 0, 1, NULL)",
+            (
+                f"cleanup-override:{job_id}", job_id, contract_id,
+                int(contract_version or 1), int(sequence), harness or "unknown",
+                role or "unknown", json.dumps(process_result, sort_keys=True), occurred_at,
+            ),
+        )
+        conn.execute(
+            "UPDATE daemon_jobs SET process_state='cleanup_overridden' "
+            "WHERE job_id=? AND process_state='cleanup_unverified'",
+            (job_id,),
+        )
+        _release_daemon_job_reservation(
+            conn, job_id, process_state="cleanup_overridden"
+        )
+        conn.commit()
+
+        from synlynk.job_status_projection import project_job_status
+        projection = project_job_status(conn, job_id)
+        print(json.dumps({
+            "job_id": job_id,
+            "process_state": projection["process_state"],
+            "process_stop_verified": projection["process_stop_verified"],
+            "cleanup_risk_accepted": projection["cleanup_risk_accepted"],
+            "effect_state": projection["effect_state"],
+            "actor": actor,
+            "reason": reason,
+        }, sort_keys=True))
+        return 0
+    except sqlite3.Error as exc:
+        conn.rollback()
+        print(f"cleanup-resolve failed: {exc}", file=sys.stderr)
         return 1
     finally:
         conn.close()
