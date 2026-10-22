@@ -1,7 +1,7 @@
 # Codex Home Conductor Launch Profile — Design
 
 Date: 2026-10-23
-Status: Draft — awaiting sign-off from Nikhil Soman
+Status: Approved by Nikhil Soman, 2026-10-23
 Decision: `dec-264bd6e3` (`project-docs/decisions/2026-10-22-how-should-synlynk-fix-role-scoped-githu.md`), gh:#2096
 
 ---
@@ -129,4 +129,4 @@ Rollback mechanics: simply do not launch `codex` with the `-c` overrides in §4.
 
 ## 9. Sign-off
 
-Requires Nikhil Soman's explicit approval, per the Brainstorm-First and Design → Plan → Build sequence in this project's `CLAUDE.md`, before any implementation ticket is opened. No implementation is authorized by this spec or by the underlying decision `dec-264bd6e3`.
+Approved by Nikhil Soman, 2026-10-23. This approval covers the design in this spec only. It does not itself open an implementation ticket, change any code or config, or alter #681 or the review-worker sandbox — those remain separate, explicitly-requested next steps per the Design → Plan → Build sequence in this project's `CLAUDE.md`. No implementation is authorized by this spec or by the underlying decision `dec-264bd6e3`.
