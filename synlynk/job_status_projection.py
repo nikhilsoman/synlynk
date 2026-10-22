@@ -159,6 +159,8 @@ def _project_job_status(conn, job_id: str) -> dict[str, Any]:
         "schema": PROJECTION_SCHEMA,
         "job_id": job_id,
         "status": canonical,
+        "process_state": daemon.get("process_state", "unknown") if daemon else "unknown",
+        "effect_state": latest.get("effect_state", latest.get("verification_state", "unknown")) if latest else "unknown",
         "legacy_status": legacy,
         "legacy_alias": STATUS_ALIASES.get(str(legacy).lower()) if legacy else None,
         "lifecycle_state": "terminal" if latest and canonical not in {"verifying", "unknown"} else ("verifying" if latest else "unobserved"),

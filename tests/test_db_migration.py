@@ -212,3 +212,33 @@ def test_fresh_db_has_unpushed_branch_check_attempts_column(tmp_path, monkeypatc
     cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
 
     assert "unpushed_branch_check_attempts" in cols
+
+
+def test_job_terminal_decision_effect_state_migrates_conservatively(tmp_path, monkeypatch):
+    import sqlite3
+    from synlynk import db
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE job_terminal_decision ("
+        "job_id TEXT NOT NULL, status TEXT NOT NULL, verification_state TEXT NOT NULL, "
+        "decision_reason TEXT NOT NULL, revision INTEGER NOT NULL, "
+        "PRIMARY KEY(job_id, revision))"
+    )
+    conn.execute(
+        "INSERT INTO job_terminal_decision VALUES (?, ?, ?, ?, ?)",
+        ("legacy-job", "completed", "verified", "legacy", 1),
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+
+    migrated = db._get_db()
+    columns = {row[1] for row in migrated.execute("PRAGMA table_info(job_terminal_decision)")}
+
+    assert "effect_state" in columns
+    assert migrated.execute(
+        "SELECT effect_state FROM job_terminal_decision WHERE job_id='legacy-job'"
+    ).fetchone()[0] == "unknown"
+    migrated.close()

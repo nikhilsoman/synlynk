@@ -256,6 +256,7 @@ CREATE TABLE IF NOT EXISTS job_terminal_decision (
     status TEXT NOT NULL,
     exit_code INTEGER,
     verification_state TEXT NOT NULL,
+    effect_state TEXT NOT NULL DEFAULT 'unknown',
     primary_evidence_id TEXT,
     evidence_snapshot_json TEXT NOT NULL DEFAULT '[]',
     decision_reason TEXT NOT NULL,

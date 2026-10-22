@@ -1379,6 +1379,17 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
             except sqlite3.OperationalError:
                 pass
         daemon_job_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+        terminal_decision_cols = {
+            row[1] for row in conn.execute("PRAGMA table_info(job_terminal_decision)")
+        }
+        if "effect_state" not in terminal_decision_cols:
+            try:
+                conn.execute(
+                    "ALTER TABLE job_terminal_decision "
+                    "ADD COLUMN effect_state TEXT NOT NULL DEFAULT 'unknown'"
+                )
+            except sqlite3.OperationalError:
+                pass
         if "type_id" not in daemon_job_cols:
             try:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN type_id TEXT")

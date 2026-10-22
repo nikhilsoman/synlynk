@@ -11,7 +11,7 @@ import hashlib
 import sqlite3
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Iterable, Mapping
 
@@ -44,6 +44,8 @@ STATUS_ALIASES = {
     "access_denied": "permission_denied",
     "killed_by_breaker": "circuit_breaker_tripped",
     "done": "completed",
+    "failed_unverified": "failed_verification",
+    "succeeded_gh_write_failed": "failed_verification",
 }
 
 TERMINAL_WRITER_MANIFEST = {
@@ -100,6 +102,7 @@ class CompletionDecision:
     status: str
     verification_state: str
     reason_code: str
+    effect_state: str = "unknown"
     required_follow_up: str = "none"
     evidence_ids: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
@@ -142,6 +145,10 @@ def build_github_effect_contract(
         raise ValueError("receipt_policy must be required, optional, or waived")
     if local_change_policy not in {"required", "optional", "forbidden"}:
         raise ValueError("local_change_policy must be required, optional, or forbidden")
+    deadline_seconds = int(verification_deadline_seconds)
+    if deadline_seconds < 0:
+        raise ValueError("verification_deadline_seconds must be non-negative")
+    deadline_base = _parse_utc(started_at) if started_at else datetime.now(timezone.utc)
     return {
         "contract_id": f"contract-{uuid.uuid4().hex}",
         "job_id": job_id,
@@ -150,7 +157,8 @@ def build_github_effect_contract(
         "expect": "effect_verified",
         "local_change_policy": local_change_policy,
         "receipt_policy": receipt_policy,
-        "verification_deadline_seconds": int(verification_deadline_seconds),
+        "verification_deadline_seconds": deadline_seconds,
+        "verification_deadline_at": (deadline_base + timedelta(seconds=deadline_seconds)).isoformat(),
         "contract_version": int(contract_version),
         "started_at": started_at,
         "expected_actor": expected_actor,
@@ -169,6 +177,7 @@ def legacy_unknown_contract(job_id: str, *, started_at: str | None = None) -> di
         "kind": "unknown_contract", "target": None, "expect": "unknown",
         "local_change_policy": "optional", "receipt_policy": "optional",
         "verification_deadline_seconds": 300, "contract_version": 1,
+        "verification_deadline_at": None,
         "started_at": started_at, "expected_actor": None, "expected_sha": None,
         "required_predicates": {},
     }
@@ -217,52 +226,74 @@ def decide_job_outcome(
         for name, required in (contract.get("required_predicates") or {}).items()
         if required
     }
-    predicate_mismatch = any(
-        any(e.get(name) is False for e in remote if e.get("result") == "true")
-        for name in required_predicates
-    )
-    predicate_unknown = any(
-        not any(e.get(name) is True for e in remote if e.get("result") == "true")
-        for name in required_predicates
-    )
+    causal_remote = [
+        e for e in remote
+        if e.get("result") == "true" and e.get("causal_match", True)
+    ]
     verified_remote = any(
-        e.get("result") == "true"
-        and e.get("causal_match", True)
-        and not predicate_mismatch
-        and not predicate_unknown
-        for e in remote
+        all(e.get(name) is True for name in required_predicates)
+        for e in causal_remote
     )
     if verified_remote:
         warnings = ("receipt_absent",) if any(e.get("kind") == "task_receipt" and e.get("result") == "false" for e in rows) else ()
-        return CompletionDecision("completed", "verified", "contract_effect_verified", "none", ids, warnings)
+        return CompletionDecision(
+            "completed", "verified", "contract_effect_verified",
+            effect_state="verified", evidence_ids=ids, warnings=warnings,
+        )
     if contract.get("kind") == "unknown_contract":
-        return CompletionDecision("unknown", "unknown", "unknown_contract", "manual_review", ids)
+        return CompletionDecision(
+            "unknown", "unknown", "unknown_contract", effect_state="unknown",
+            required_follow_up="manual_review", evidence_ids=ids,
+        )
+    predicate_mismatch = any(
+        any(e.get(name) is False for name in required_predicates)
+        for e in causal_remote
+    )
+    predicate_unknown = bool(remote) and not predicate_mismatch
     if remote and predicate_mismatch:
         if deadline_expired or retry_exhausted:
-            return CompletionDecision("failed_verification", "failed", "contract_predicate_mismatch", "manual_review", ids)
-        return CompletionDecision("verifying", "unknown", "contract_predicate_mismatch", "retry_verification", ids)
+            return CompletionDecision(
+                "failed_verification", "failed", "contract_predicate_mismatch",
+                effect_state="not_verified", required_follow_up="manual_review", evidence_ids=ids,
+            )
+        return CompletionDecision(
+            "verifying", "unknown", "contract_predicate_mismatch",
+            effect_state="verifying", required_follow_up="retry_verification", evidence_ids=ids,
+        )
     if remote and predicate_unknown:
         if deadline_expired or retry_exhausted:
-            return CompletionDecision("failed_verification", "failed", "contract_predicate_unresolved", "manual_review", ids)
-        return CompletionDecision("verifying", "unknown", "contract_predicate_unresolved", "retry_verification", ids)
+            return CompletionDecision(
+                "failed_verification", "unknown", "contract_predicate_unresolved",
+                effect_state="unknown", required_follow_up="manual_review", evidence_ids=ids,
+            )
+        return CompletionDecision(
+            "verifying", "unknown", "contract_predicate_unresolved",
+            effect_state="verifying", required_follow_up="retry_verification", evidence_ids=ids,
+        )
     if any(e.get("kind") == "circuit_breaker" and e.get("result") == "true" and e.get("process_live_at_observation", True) for e in rows):
-        return CompletionDecision("circuit_breaker_tripped", "failed", "circuit_breaker_killed_live_process", "none", ids)
+        return CompletionDecision("circuit_breaker_tripped", "failed", "circuit_breaker_killed_live_process", effect_state="verifying", evidence_ids=ids)
     for kind, status, reason in (("cancelled", "cancelled", "explicit_cancellation"), ("timeout", "timed_out", "timeout_observed"), ("zombie", "killed_zombie", "zombie_reaped")):
         if matches(kind):
-            return CompletionDecision(status, "failed", reason, "none", ids)
+            return CompletionDecision(status, "failed", reason, effect_state="verifying", evidence_ids=ids)
     if matches("permission_denied") and not remote:
-        return CompletionDecision("permission_denied", "failed", "verified_permission_denial", "none", ids)
+        return CompletionDecision("permission_denied", "failed", "verified_permission_denial", effect_state="not_verified", evidence_ids=ids)
     if any(e.get("result") == "unknown" for e in rows) or (remote and not matches("github_effect")):
         if deadline_expired or retry_exhausted:
-            return CompletionDecision("failed_verification", "failed", "verification_budget_exhausted", "manual_review", ids)
-        return CompletionDecision("verifying", "unknown", "effect_verification_pending", "retry_verification", ids)
+            return CompletionDecision(
+                "failed_verification", "unknown", "verification_budget_exhausted",
+                effect_state="unknown", required_follow_up="manual_review", evidence_ids=ids,
+            )
+        return CompletionDecision(
+            "verifying", "unknown", "effect_verification_pending",
+            effect_state="verifying", required_follow_up="retry_verification", evidence_ids=ids,
+        )
     if any(e.get("kind") == "effect" and e.get("result") == "false" for e in rows):
         if contract.get("local_change_policy") == "optional":
-            return CompletionDecision("completed_without_changes", "verified", "explicit_allowed_no_change", "none", ids)
-        return CompletionDecision("failed_noop_denied", "failed", "required_effect_absent", "none", ids)
+            return CompletionDecision("completed_without_changes", "verified", "explicit_allowed_no_change", effect_state="not_required", evidence_ids=ids)
+        return CompletionDecision("failed_noop_denied", "failed", "required_effect_absent", effect_state="not_verified", evidence_ids=ids)
     if any(e.get("kind") == "process_exit" and e.get("result") == "false" for e in rows):
-        return CompletionDecision("failed", "failed", "process_exit_nonzero", "none", ids)
-    return CompletionDecision("verifying", "unknown", "insufficient_evidence", "retry_verification", ids)
+        return CompletionDecision("failed", "failed", "process_exit_nonzero", effect_state="verifying", evidence_ids=ids)
+    return CompletionDecision("verifying", "unknown", "insufficient_evidence", effect_state="verifying", required_follow_up="retry_verification", evidence_ids=ids)
 
 
 def record_evidence_and_reconcile(
@@ -275,9 +306,11 @@ def record_evidence_and_reconcile(
     deadline_expired: bool = False,
     decided_by: str = "job_truth.v1",
     update_compatibility: bool = True,
+    manage_transaction: bool = True,
 ) -> CompletionDecision:
     """Append one observation and atomically persist the next decision revision."""
-    conn.execute("BEGIN IMMEDIATE")
+    if manage_transaction:
+        conn.execute("BEGIN IMMEDIATE")
     try:
         row = conn.execute("SELECT * FROM job_effect_contract WHERE job_id=?", (job_id,)).fetchone()
         if row is None:
@@ -305,14 +338,17 @@ def record_evidence_and_reconcile(
         decision = decide_job_outcome(contract_row, rows, retry_exhausted=retry_exhausted, deadline_expired=deadline_expired)
         latest = conn.execute("SELECT revision, status, decision_reason FROM job_terminal_decision WHERE job_id=? ORDER BY revision DESC LIMIT 1", (job_id,)).fetchone()
         if latest and (latest[1], latest[2]) == (decision.status, decision.reason_code):
-            conn.commit(); return decision
+            if manage_transaction:
+                conn.commit()
+            return decision
         revision = (latest[0] if latest else 0) + 1
         conn.execute("""INSERT INTO job_terminal_decision
-            (job_id, status, exit_code, verification_state, primary_evidence_id,
+            (job_id, status, exit_code, verification_state, effect_state, primary_evidence_id,
              evidence_snapshot_json, decision_reason, decided_at, decided_by,
              revision, contract_version, follow_up)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (
             job_id, decision.status, evidence.get("exit_code"), decision.verification_state,
+            decision.effect_state,
             decision.evidence_ids[-1] if decision.evidence_ids else evidence_id,
             json.dumps(list(decision.evidence_ids)), decision.reason_code, _now(), decided_by,
             revision, contract_row.get("contract_version", 1), decision.required_follow_up))
@@ -329,15 +365,33 @@ def record_evidence_and_reconcile(
         # Compatibility projection only: the decision ledger remains authoritative.
         if update_compatibility and conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='daemon_jobs'").fetchone():
             conn.execute("UPDATE daemon_jobs SET status=?, exit_code=COALESCE(?, exit_code), completed_at=COALESCE(completed_at, ?) WHERE job_id=?", (decision.status, evidence.get("exit_code"), _now(), job_id))
-        conn.commit()
+        if manage_transaction:
+            conn.commit()
         return decision
     except Exception:
-        conn.rollback()
+        if manage_transaction:
+            conn.rollback()
         raise
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _parse_utc(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _deadline_has_expired(value: str | None) -> bool:
+    if not value:
+        return False
+    try:
+        return datetime.now(timezone.utc) >= _parse_utc(value)
+    except (TypeError, ValueError):
+        return False
 
 
 def _append_terminal_outbox(
@@ -444,6 +498,7 @@ def _contract_fingerprint(value: Mapping[str, Any]) -> str:
         for key in ("job_id", "kind", "target", "expect", "local_change_policy",
                     "receipt_policy", "contract_version", "started_at", "expected_actor")
     }
+    normalized["verification_deadline_at"] = value.get("verification_deadline_at")
     normalized["required_predicates"] = value.get("required_predicates")
     if normalized["required_predicates"] is None:
         raw = value.get("required_predicates_json", "{}")
