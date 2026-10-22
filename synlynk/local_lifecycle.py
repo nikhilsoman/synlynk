@@ -29,6 +29,15 @@ SUPPORTED_OMLX_VERSION = "0.5.3"
 MIN_AVAILABLE_BYTES = 8 * 1024**3
 MAX_SWAP_GROWTH_BYTES = 256 * 1024**2
 _MEMORY_SAMPLE_SECONDS = 10
+_SENSITIVE_CHILD_ENV_KEYS = {"OPENAI_API_KEY", "OMLX_API_KEY"}
+
+
+def _host_subprocess_env() -> dict[str, str]:
+    """Copy the host environment without forwarding model credentials to helpers."""
+    return {
+        key: value for key, value in os.environ.items()
+        if key not in _SENSITIVE_CHILD_ENV_KEYS
+    }
 
 
 class LifecycleError(RuntimeError):
@@ -49,7 +58,7 @@ class HostMemorySnapshot:
 
 
 def _run_host_command(args: list[str], timeout: float = 5) -> str:
-    env = {key: value for key, value in os.environ.items() if key != "OPENAI_API_KEY"}
+    env = _host_subprocess_env()
     try:
         result = subprocess.run(args, check=True, capture_output=True, text=True,
                                 timeout=timeout, env=env)
@@ -151,7 +160,7 @@ class OmlxClient:
         executable = shutil.which("omlx")
         if not executable:
             raise LifecycleError("omlx_not_installed", "oMLX executable is unavailable", phase="version")
-        env = {key: value for key, value in os.environ.items() if key != "OPENAI_API_KEY"}
+        env = _host_subprocess_env()
         try:
             result = subprocess.run([executable, "--version"], check=True, capture_output=True,
                                     text=True, timeout=5, env=env)
@@ -275,7 +284,7 @@ def prepare_local_pilot(repo_root: str, dispatch_key: str, pilot_class: str) -> 
 
 def _process_start_identity(pid: int) -> float | None:
     """Return a process start timestamp suitable for guarding against PID reuse."""
-    env = {key: value for key, value in os.environ.items() if key != "OPENAI_API_KEY"}
+    env = _host_subprocess_env()
     try:
         result = subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)], check=True,
                                 capture_output=True, text=True, timeout=5, env=env)
@@ -286,7 +295,7 @@ def _process_start_identity(pid: int) -> float | None:
 
 
 def _listening_process_identity() -> tuple[int, float] | None:
-    env = {key: value for key, value in os.environ.items() if key != "OPENAI_API_KEY"}
+    env = _host_subprocess_env()
     try:
         result = subprocess.run(["lsof", "-nP", "-tiTCP:8000", "-sTCP:LISTEN"],
                                 check=True, capture_output=True, text=True, timeout=5, env=env)
@@ -312,10 +321,7 @@ def _start_omlx_foreground():
     executable = shutil.which("omlx")
     if not executable:
         raise LifecycleError("omlx_not_installed", "oMLX executable is unavailable", phase="service")
-    env = {
-        key: value for key, value in os.environ.items()
-        if key not in {"OPENAI_API_KEY", "OMLX_API_KEY"}
-    }
+    env = _host_subprocess_env()
     try:
         process = subprocess.Popen(
             [executable, "serve", "--host", "127.0.0.1", "--port", "8000"],
@@ -327,6 +333,24 @@ def _start_omlx_foreground():
         raise LifecycleError("omlx_service_start_failed", "could not launch foreground oMLX", phase="service") from None
     process_start = _process_start_identity(process.pid)
     if process_start is None:
+        try:
+            if process.poll() is None:
+                process.terminate()
+        except Exception:
+            pass
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            try:
+                process.kill()
+            except Exception:
+                pass
+            try:
+                process.wait(timeout=5)
+            except Exception:
+                pass
+        except Exception:
+            pass
         raise LifecycleError("process_identity_unavailable", "cannot verify foreground oMLX identity", phase="ownership")
     return int(process.pid), float(process_start)
 

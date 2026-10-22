@@ -23,6 +23,12 @@ class Credentials:
         return "sk-do-not-leak"
 
 
+@pytest.fixture(autouse=True)
+def mock_macos_host_platform(monkeypatch):
+    """Lifecycle manager unit tests use mocked macOS host adapters on every OS."""
+    monkeypatch.setattr("synlynk.local_lifecycle.sys.platform", "darwin")
+
+
 def test_model_api_uses_authenticated_model_specific_paths(monkeypatch):
     seen = []
 
@@ -147,6 +153,7 @@ def test_version_validation_accepts_only_verified_omlx_053():
 
 def test_omlx_subprocess_does_not_receive_api_key(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-do-not-leak")
+    monkeypatch.setenv("OMLX_API_KEY", "omlx-do-not-leak")
     seen = {}
 
     def run(args, **kwargs):
@@ -158,6 +165,31 @@ def test_omlx_subprocess_does_not_receive_api_key(monkeypatch):
     client.installed_version()
     assert "sk-do-not-leak" not in repr(seen["args"])
     assert "sk-do-not-leak" not in repr(seen["env"])
+    assert "OPENAI_API_KEY" not in seen["env"]
+    assert "OMLX_API_KEY" not in seen["env"]
+
+
+def test_local_lifecycle_host_helpers_do_not_forward_runtime_keys(monkeypatch):
+    import synlynk.local_lifecycle as lifecycle
+
+    monkeypatch.setenv("OPENAI_API_KEY", "frontier-secret")
+    monkeypatch.setenv("OMLX_API_KEY", "omlx-secret")
+    seen = []
+
+    def run(args, **kwargs):
+        seen.append((args, kwargs))
+        stdout = "4321\n" if args[0] == "lsof" else "Sat Oct 18 07:32:45 2026\n"
+        return Mock(returncode=0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(lifecycle.subprocess, "run", run)
+    assert lifecycle._run_host_command(["sysctl", "-n", "hw.memsize"]) == "Sat Oct 18 07:32:45 2026\n"
+    assert lifecycle._process_start_identity(4321) is not None
+    monkeypatch.setattr(lifecycle, "_process_start_identity", lambda _pid: 1000.0)
+    assert lifecycle._listening_process_identity() == (4321, 1000.0)
+
+    assert len(seen) == 3
+    assert all("OPENAI_API_KEY" not in item[1]["env"] for item in seen)
+    assert all("OMLX_API_KEY" not in item[1]["env"] for item in seen)
 
 
 def test_foreground_server_launch_uses_sanitized_serve_process(monkeypatch):
@@ -186,6 +218,37 @@ def test_foreground_server_launch_uses_sanitized_serve_process(monkeypatch):
     assert seen["stdin"] is seen["stdout"] is seen["stderr"]
     assert "OPENAI_API_KEY" not in seen["env"]
     assert "OMLX_API_KEY" not in seen["env"]
+
+
+def test_foreground_child_is_terminated_and_reaped_when_identity_is_unavailable(monkeypatch):
+    from synlynk.local_lifecycle import _start_omlx_foreground
+
+    class Process:
+        pid = 4321
+        terminated = False
+        waited = False
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            self.terminated = True
+
+        def wait(self, timeout=None):
+            self.waited = True
+            return 0
+
+    process = Process()
+    monkeypatch.setattr("synlynk.local_lifecycle.shutil.which", lambda _name: "/opt/homebrew/bin/omlx")
+    monkeypatch.setattr("synlynk.local_lifecycle.subprocess.Popen", lambda *_args, **_kwargs: process)
+    monkeypatch.setattr("synlynk.local_lifecycle._process_start_identity", lambda _pid: None)
+
+    with pytest.raises(LifecycleError) as error:
+        _start_omlx_foreground()
+
+    assert error.value.reason_code == "process_identity_unavailable"
+    assert process.terminated
+    assert process.waited
 
 
 def test_verified_process_termination_checks_start_identity(monkeypatch):
@@ -299,6 +362,14 @@ def make_manager(tmp_path, *, client=None, endpoint_probe=None, identity=None,
         memory_admission=memory_admission or (lambda: None),
         current_process_identity=current_process_identity or (lambda: (9999, 1000.0)),
     )
+
+
+def test_manager_rejects_automatic_local_lifecycle_off_macos(tmp_path, monkeypatch):
+    monkeypatch.setattr("synlynk.local_lifecycle.sys.platform", "linux")
+    manager = make_manager(tmp_path)
+    with pytest.raises(LifecycleError) as error:
+        manager.ensure_ready()
+    assert error.value.reason_code == "unsupported_platform"
 
 
 def test_manager_starts_absent_runtime_loads_ornith_and_persists_ownership(tmp_path):
@@ -554,6 +625,7 @@ def test_local_failure_reporter_scrubs_openai_key_from_gh(monkeypatch):
     from synlynk import local_failure_reporter
 
     monkeypatch.setenv("OPENAI_API_KEY", "sk-secret")
+    monkeypatch.setenv("OMLX_API_KEY", "omlx-secret")
     seen = []
 
     class Result:
@@ -570,4 +642,5 @@ def test_local_failure_reporter_scrubs_openai_key_from_gh(monkeypatch):
     assert local_failure_reporter._write_issue("f" * 64, error, "0.5.3")
     assert seen
     assert all("OPENAI_API_KEY" not in item[1]["env"] for item in seen)
+    assert all("OMLX_API_KEY" not in item[1]["env"] for item in seen)
     assert all("sk-secret" not in repr(item) for item in seen)

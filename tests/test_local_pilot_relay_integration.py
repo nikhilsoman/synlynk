@@ -151,7 +151,17 @@ def test_relay_routes_only_allowlisted_requests_and_aider_network_cannot_bypass_
             ["docker", *prefix, "up", "--detach", "--wait", "--wait-timeout", "15", "omlx-relay"],
             env=env, capture_output=True, text=True, timeout=30, check=False,
         )
-        assert failed_start.returncode != 0
+        if failed_start.returncode == 0:
+            container_id = _docker([*prefix, "ps", "-q", "omlx-relay"]).stdout.strip()
+            health = _docker([
+                "inspect", "--format",
+                "{{.State.Health.Status}} {{range .State.Health.Log}}{{.ExitCode}}:{{.Output}} {{end}}",
+                container_id,
+            ], check=False).stdout.strip()
+            pytest.fail(
+                "unauthorized upstream unexpectedly became ready; "
+                f"compose={failed_start.stdout + failed_start.stderr!r}; health={health!r}"
+            )
         assert "not healthy" in failed_start.stdout + failed_start.stderr
     finally:
         subprocess.run(["docker", *prefix, "down", "--remove-orphans"], env=env,

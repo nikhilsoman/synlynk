@@ -1,6 +1,6 @@
 # Unattended Local Ornith Lifecycle Design
 
-**Date:** 2026-10-21  
+**Date:** 2026-10-21
 **Status:** Approved by Nikhil on 2026-10-21; runtime ownership and credential-source amendments proposed 2026-10-21, awaiting sign-off
 **Extends:** `docs/superpowers/specs/2026-10-16-local-harness-operationalization-design.md`
 **Release:** v0.25.2 fleet capacity recovery

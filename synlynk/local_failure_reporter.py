@@ -9,7 +9,7 @@ import subprocess
 import time
 from contextlib import contextmanager
 
-from synlynk.local_lifecycle import LifecycleError, LIFECYCLE_MODEL_ID
+from synlynk.local_lifecycle import LifecycleError, LIFECYCLE_MODEL_ID, _host_subprocess_env
 
 REPORT_INTERVAL_SECONDS = 3600
 
@@ -80,7 +80,7 @@ def _write_issue(fingerprint: str, error: LifecycleError, version: str) -> bool:
         f"- oMLX version: `{version}`\n"
         f"- Approved model: `{LIFECYCLE_MODEL_ID}`\n"
     )
-    env = {key: value for key, value in os.environ.items() if key != "OPENAI_API_KEY"}
+    env = _host_subprocess_env()
     search = subprocess.run(
         ["gh", "issue", "list", "--search", fingerprint[:12], "--state", "open",
          "--json", "number,title", "--limit", "20"],
