@@ -2237,7 +2237,7 @@ implementation dispatched, external messages sent, or policy changed.
 
 ## 2026-10-22 — Daily stable release rebaseline
 
-- Replaced the October 20 spaced-gate proposal with a proposed calendar-daily
+- Replaced the October 20 spaced-gate proposal with an active calendar-daily
   stable tag stream from `v0.25.2` (October 23) through `v0.27.5` (November 6,
   gated Developer Preview); there are no RC/DEV/PROD side channels.
 - Added a mandatory start-of-day dependency sweep over the scheduled tickets,
@@ -2256,9 +2256,17 @@ implementation dispatched, external messages sent, or policy changed.
 - `synlynk release --check-docs` leaves the command-documentation gate red:
   `docs/reference/commands.md` is stale. Linked this finding to existing
   sparse-checkout/docs issue #2320 rather than creating a duplicate issue.
-- Updated canonical schedule only; state DB, GitHub milestones, and parent
-  #2458 remain to be synchronized after review/merge. Preserved the user's
-  dirty `project-docs/costs.md` in the main checkout. Session cost was not
-  independently available from this environment; no amount was invented.
+- PR #2534 merged after independent review, the required PR check, QA approval,
+  policy authorization, and green CI. Synchronized all 18 GitHub milestones:
+  15 daily gates are dated October 23-November 6; post-Preview #10-#12 are
+  intentionally undated. Updated the canonical state roadmap and re-scoped
+  release epics #2465-#2473; marked legacy `1.0.0`, `v1.0.0-preview`, and
+  `v1.0.0-rc1` preview arcs superseded. Parent #2458 now records the active
+  schedule and milestone map. Tracked generated-roadmap/status mirror is in a
+  follow-up PR. Filed #2535 for the missing governed phase-update/reassignment
+  path, required to disposition legacy phase placements by the Oct 27 ticket
+  lock; no direct state-DB edits were made. Preserved the user's dirty
+  `project-docs/costs.md` in the main checkout. Session cost was not
+  independently available; no amount was invented.
 [@codex]
 

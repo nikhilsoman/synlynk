@@ -2,13 +2,16 @@
 
 **Effective date:** 2026-10-22
 **Authority:** `dec-f8835ba3`, roadmap parent #2458, and user approval on 2026-10-22
-**Status:** Proposed amendment; activates after merge and state/issue/milestone synchronization
+**Status:** Active as of 2026-10-22; PR #2534 is merged and roadmap state, release epics, milestones, and parent #2458 are synchronized
 
 **Rebaseline:** This amendment supersedes the 2026-10-20 dated schedule. The
 release families and their purpose remain canonical, while the daily stable
 release stream and Dev Preview gate move forward. Local, OpenRouter, swarms,
 Universal Gateway, capability-crawler/GTM, and public-announcement work are
 not Dev Preview prerequisites. Muse remains an early core-harness dependency.
+The legacy Developer Preview arcs `1.0.0`, `v1.0.0-preview`, and
+`v1.0.0-rc1` are superseded; `v0.27.5` is the sole Dev Preview tag in this
+schedule. The separate future `v1.0.0` GA arc is unchanged.
 
 ## Operating rule
 
@@ -89,8 +92,10 @@ evidence are current.
    goal, one release parent epic, and a current GitHub delivery ticket. Each
    of the existing 94 ticketless candidates must be freshness-checked and
    either mapped to a release-family with goal/epic/ticket links or explicitly
-   deferred/archived with rationale. The old allocation table is a starting
-   index, not authority to implement stale or out-of-scope work.
+   deferred/archived with rationale. Use #2535 to update or reassign existing
+   roadmap phase rows; do not edit canonical SQLite rows directly. The old
+   allocation table is a starting index, not authority to implement stale or
+   out-of-scope work.
 4. **Daily closeout:** record the sweep disposition, shipped tag or missed
    gate, linked evidence, changed ticket count, new/closed defects, and next
    day's dependency in #2458. Do not wait for Friday to report a material

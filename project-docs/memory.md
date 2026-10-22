@@ -236,6 +236,10 @@
   without waiting for its scheduled date, but no quality or human release gate
   is bypassed. Local, OpenRouter, swarms, Universal Gateway, crawler/GTM, and
   public announcement work are deferred; Muse is an early required core
-  harness. The 2026-10-20 schedule and its 94-story placement are superseded
-  by the rebaseline once its schedule PR merges. [@nikhilsoman]
+  harness. PR #2534 is merged; the canonical roadmap, release epics, 18
+  milestones, and parent #2458 now mirror the active daily schedule. Legacy
+  `1.0.0` preview, `v1.0.0-preview`, and `v1.0.0-rc1` arcs are superseded;
+  the separate future `v1.0.0` GA arc remains distinct. Ticket #2535 tracks
+  the missing governed phase-update path for legacy placement cleanup by the
+  Oct 27 ticket lock. [@nikhilsoman]
 
