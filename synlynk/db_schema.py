@@ -188,6 +188,15 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     depends_on   TEXT NOT NULL DEFAULT '[]',
     pid          INTEGER,
     pid_identity TEXT,
+    termination_domain_json TEXT,
+    parent_job_id TEXT,
+    cleanup_deadline_at TEXT,
+    process_state TEXT NOT NULL DEFAULT 'unknown' CHECK (
+        process_state IN (
+            'unknown', 'running', 'stop_requested', 'stopped_verified',
+            'cleanup_unverified', 'cleanup_overridden'
+        )
+    ),
     enqueued_at  TEXT NOT NULL,
     started_at   TEXT,
     completed_at TEXT,

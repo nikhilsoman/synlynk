@@ -142,9 +142,12 @@ def test_projection_exposes_independent_process_and_effect_states(project_dir):
     )
     conn.commit()
 
+    conn.execute(
+        "UPDATE daemon_jobs SET process_state='running' WHERE job_id='job-axes'"
+    )
     projection = project_job_status(conn, "job-axes")
 
-    assert projection["process_state"] == "unknown"
+    assert projection["process_state"] == "running"
     assert projection["effect_state"] == "verified"
     assert projection["legacy_status"] == "timed_out"
     conn.close()

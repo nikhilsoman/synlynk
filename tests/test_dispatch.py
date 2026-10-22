@@ -3918,6 +3918,63 @@ def test_dispatch_agent_populates_harness_and_role_in_daemon_jobs(project_dir, m
     assert row == ("codex", "codex", "dev")
 
 
+def test_dispatch_persists_lifecycle_metadata_and_parent_linkage(project_dir, monkeypatch):
+    import json
+    import os
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+
+    class FakeProc:
+        pid = 12345
+
+    def fake_popen(*args, **kwargs):
+        captured["env"] = kwargs["env"]
+        return FakeProc()
+
+    monkeypatch.setattr(sl, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setenv("SYNLYNK_JOB_ID", "job-parent")
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(
+        dispatch_mod,
+        "capture_process_identity",
+        lambda pid, proc=None: {"pid": pid, "start_time": "launch"},
+    )
+    monkeypatch.setattr(
+        sl,
+        "_preflight_dispatch",
+        lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {
+            "passed": True, "sentinel": None, "reason": None,
+        },
+    )
+
+    job = sl.dispatch_agent(
+        "codex", "nested task", role="dev", force_agent=True, context_mode="none"
+    )
+
+    assert job["parent_job_id"] == "job-parent"
+    assert job["process_state"] == "unknown"
+    assert job["termination_domain"]["version"] == 1
+    assert job["termination_domain"]["kind"] == "unknown"
+    assert captured["env"]["SYNLYNK_JOB_ID"] == job["id"]
+    assert captured["env"]["SYNLYNK_PARENT_JOB_ID"] == "job-parent"
+    saved = next(item for item in sl._load_jobs() if item["id"] == job["id"])
+    assert saved["termination_domain"] == job["termination_domain"]
+    assert saved["parent_job_id"] == "job-parent"
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT process_state, termination_domain_json, parent_job_id, cleanup_deadline_at "
+        "FROM daemon_jobs WHERE job_id=?",
+        (job["id"],),
+    ).fetchone()
+    conn.close()
+    assert row[0] == "unknown"
+    assert json.loads(row[1]) == job["termination_domain"]
+    assert row[2:] == ("job-parent", None)
+
+
 def test_dispatch_cost_capture_preserves_explicit_role_across_same_story_dispatches(
     project_dir, monkeypatch
 ):

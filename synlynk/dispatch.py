@@ -1285,6 +1285,8 @@ _ENV_ALLOWLIST_BASE = [
     "GIT_COMMITTER_EMAIL",
     "GIT_SSH_COMMAND",
     "SOURCE_DATE_EPOCH",
+    "SYNLYNK_JOB_ID",
+    "SYNLYNK_PARENT_JOB_ID",
 ]
 
 
@@ -5106,6 +5108,16 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         story_id,
         agent_role=resolved_agent_role,
     )
+    parent_job_id = (
+        os.environ.get("SYNLYNK_JOB_ID")
+        or os.environ.get("SYNLYNK_PARENT_JOB_ID")
+        or None
+    )
+    proc_env["SYNLYNK_JOB_ID"] = job_id
+    if parent_job_id:
+        proc_env["SYNLYNK_PARENT_JOB_ID"] = parent_job_id
+    else:
+        proc_env.pop("SYNLYNK_PARENT_JOB_ID", None)
     if worktree_path and "SOURCE_DATE_EPOCH" not in proc_env:
         epoch = get_worktree_epoch(worktree_path)
         if epoch:
@@ -5214,6 +5226,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             "worktree_path": "TEXT",
             "worktree_branch": "TEXT",
             "pid_identity": "TEXT",
+            "termination_domain_json": "TEXT",
+            "parent_job_id": "TEXT",
+            "cleanup_deadline_at": "TEXT",
+            "process_state": "TEXT NOT NULL DEFAULT 'unknown'",
         })
         dconn.execute(
             "INSERT OR IGNORE INTO daemon_jobs "
@@ -5389,6 +5405,14 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             "result_receipt_file": log_file + ".pilot.json",
         }
 
+    pid_identity = capture_process_identity(proc.pid, proc)
+    termination_domain = {
+        "version": 1,
+        "kind": "unknown",
+        "leader_pid": proc.pid,
+        "leader_identity": pid_identity,
+        "reason_code": "termination_domain_capture_pending",
+    }
     job = {
         "id": job_id,
         "agent": agent,
@@ -5399,7 +5423,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "task": task,
         "cycle": cycle,
         "pid": proc.pid,
-        "pid_identity": capture_process_identity(proc.pid, proc),
+        "pid_identity": pid_identity,
+        "termination_domain": termination_domain,
+        "parent_job_id": parent_job_id,
+        "cleanup_deadline_at": None,
+        "process_state": "unknown",
         "log_file": log_file,
         "prompt_file": prompt_file,
         "context_file": context_file if context_mode != "none" else "",
@@ -5521,6 +5549,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 "worktree_path": "TEXT",
                 "worktree_branch": "TEXT",
                 "pid_identity": "TEXT",
+                "termination_domain_json": "TEXT",
+                "parent_job_id": "TEXT",
+                "cleanup_deadline_at": "TEXT",
+                "process_state": "TEXT NOT NULL DEFAULT 'unknown'",
             })
             existing = dconn.execute(
                 "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
@@ -5530,7 +5562,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dispatch_context = _dispatch_context()
                 dconn.execute(
                     "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, "
-                    "log_path=?, worktree_path=?, worktree_branch=?, pid_identity=?, agent=?, harness=?, role=?, task=?, story_id=?, "
+                    "log_path=?, worktree_path=?, worktree_branch=?, pid_identity=?, termination_domain_json=?, "
+                    "parent_job_id=?, cleanup_deadline_at=?, process_state=?, "
+                    "agent=?, harness=?, role=?, task=?, story_id=?, "
                     "model_tier=?, impact_score=?, requested_model=?, resolved_model=?, "
                     "dispatch_context=COALESCE(dispatch_context, ?), "
                     "context_mode=?, context_bytes=?, "
@@ -5549,6 +5583,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         worktree_path,
                         worktree_branch,
                         json.dumps(job.get("pid_identity")) if job.get("pid_identity") else None,
+                        json.dumps(job["termination_domain"], sort_keys=True),
+                        parent_job_id,
+                        job["cleanup_deadline_at"],
+                        job["process_state"],
                         agent,
                         agent,
                         resolved_agent_role or None,
@@ -5581,11 +5619,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn.execute(
                     "INSERT OR REPLACE INTO daemon_jobs "
                     "(job_id, agent, harness, role, task, story_id, status, priority, depends_on, pid, pid_identity, "
+                    "termination_domain_json, parent_job_id, cleanup_deadline_at, process_state, "
                     "enqueued_at, started_at, log_path, worktree_path, worktree_branch, dispatch_context, context_mode, context_bytes, session_id, "
                     "agent_id, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect, "
                     "model_tier, impact_score, requested_model, resolved_model, "
                     "requested_harness, actual_harness, fallback_reason, task_type, task_type_explicit, purpose) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -5598,6 +5637,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         "[]",
                         proc.pid,
                         json.dumps(job.get("pid_identity")) if job.get("pid_identity") else None,
+                        json.dumps(job["termination_domain"], sort_keys=True),
+                        parent_job_id,
+                        job["cleanup_deadline_at"],
+                        job["process_state"],
                         job["started_at"],
                         job["started_at"],
                         log_file,
