@@ -1607,7 +1607,8 @@ def test_check_job_stall_uses_review_timeout_without_changing_default(
     assert result is expected_killed
     assert bool(killed) is expected_killed
     if expected_killed:
-        assert killed == [(12345, signal.SIGKILL)]
+        assert killed[0] == (12345, signal.SIGTERM)
+        assert job["process_state"] == "cleanup_unverified"
     else:
         assert job["status"] == "running"
 
@@ -1653,6 +1654,117 @@ def test_check_job_stall_kills_when_gh_write_verified_false(project_dir, monkeyp
     assert stalled is True
     assert job["status"] == "failed"
     assert job.get("gh_write_verified") == "false"
+
+
+def test_check_job_stall_records_verified_domain_cleanup(tmp_path, monkeypatch):
+    import time as _time
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.process_lifecycle import TerminationResult
+
+    log_file = tmp_path / "job.log"
+    log_file.write_text("")
+    old_mtime = _time.time() - 3600
+    os.utime(log_file, (old_mtime, old_mtime))
+    domain = {
+        "version": 1, "kind": "host_process_group", "leader_pid": 12345,
+        "pgid": 12345, "leader_identity": {"start_time": "launch"},
+        "dispatcher_pgid": 99,
+    }
+    calls = []
+    monkeypatch.setattr(
+        dispatch_mod,
+        "terminate_job_domain",
+        lambda value, **kwargs: calls.append(value) or TerminationResult(
+            "stopped_verified", True, "host_process_group", "forced_stop_verified",
+            ({"phase": "after_sigkill", "state": "stopped"},),
+        ),
+    )
+    import synlynk as sl
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: None)
+    job = {
+        "id": "job-domain", "agent": "codex", "status": "running",
+        "pid": 12345, "log_file": str(log_file), "termination_domain": domain,
+    }
+
+    assert dispatch_mod._check_job_stall(
+        job, {"stall_timeout_minutes": 30}, str(tmp_path / "sentinel.md")
+    )
+    assert calls == [domain]
+    assert job["process_state"] == "stopped_verified"
+    assert [item["process_state"] for item in job["lifecycle_evidence"][:2]] == [
+        "stop_requested", "stopped_verified",
+    ]
+
+
+def test_local_pilot_lock_released_only_after_verified_domain_stop(monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.process_lifecycle import TerminationResult
+
+    events = []
+
+    class Process:
+        def wait(self):
+            events.append("waited")
+
+    class Lock:
+        def __exit__(self, *args):
+            events.append("released")
+
+    monkeypatch.setattr(
+        dispatch_mod,
+        "terminate_job_domain",
+        lambda domain, **kwargs: events.append("verified") or TerminationResult(
+            "stopped_verified", False, "host_process_group", "already_stopped"
+        ),
+    )
+    job = {"process_state": "running"}
+
+    assert dispatch_mod._release_local_pilot_control_after_cleanup(
+        Process(), Lock(), {"kind": "host_process_group"}, job
+    ) is True
+    assert events == ["waited", "verified", "released"]
+    assert job["process_state"] == "stopped_verified"
+
+
+def test_parent_cleanup_remains_unverified_while_child_job_is_running(
+    tmp_path, monkeypatch,
+):
+    import time as _time
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.process_lifecycle import TerminationResult
+
+    monkeypatch.chdir(tmp_path)
+    log_file = tmp_path / "parent.log"
+    log_file.write_text("")
+    os.utime(log_file, (_time.time() - 3600, _time.time() - 3600))
+    sl._save_jobs([{
+        "id": "job-child", "parent_job_id": "job-parent",
+        "status": "running", "process_state": "running",
+    }])
+    monkeypatch.setattr(
+        dispatch_mod,
+        "terminate_job_domain",
+        lambda domain, **kwargs: TerminationResult(
+            "stopped_verified", True, "host_process_group", "forced_stop_verified"
+        ),
+    )
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: None)
+    job = {
+        "id": "job-parent", "agent": "codex", "status": "running",
+        "pid": 12345, "log_file": str(log_file),
+        "termination_domain": {
+            "version": 1, "kind": "host_process_group", "leader_pid": 12345,
+            "pgid": 12345, "leader_identity": {"start_time": "launch"},
+            "dispatcher_pgid": 99,
+        },
+    }
+
+    assert dispatch_mod._check_job_stall(
+        job, {"stall_timeout_minutes": 30}, str(tmp_path / "sentinel.md")
+    )
+    assert job["process_state"] == "cleanup_unverified"
+    assert job["cleanup_result"]["reason_code"] == "active_child_job"
 
 
 @pytest.mark.parametrize("requires_gh_write", [True, False])
@@ -3916,6 +4028,64 @@ def test_dispatch_agent_populates_harness_and_role_in_daemon_jobs(project_dir, m
     ).fetchone()
     conn.close()
     assert row == ("codex", "codex", "dev")
+
+
+def test_dispatch_persists_lifecycle_metadata_and_parent_linkage(project_dir, monkeypatch):
+    import json
+    import os
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+
+    class FakeProc:
+        pid = 12345
+
+    def fake_popen(*args, **kwargs):
+        captured["env"] = kwargs["env"]
+        return FakeProc()
+
+    monkeypatch.setattr(sl, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setenv("SYNLYNK_JOB_ID", "job-parent")
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(
+        dispatch_mod,
+        "capture_process_identity",
+        lambda pid, proc=None: {"pid": pid, "start_time": "launch"},
+    )
+    monkeypatch.setattr(
+        sl,
+        "_preflight_dispatch",
+        lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {
+            "passed": True, "sentinel": None, "reason": None,
+        },
+    )
+
+    job = sl.dispatch_agent(
+        "codex", "nested task", role="dev", force_agent=True, context_mode="none"
+    )
+
+    assert job["parent_job_id"] == "job-parent"
+    assert job["process_state"] == "cleanup_unverified"
+    assert job["termination_domain"]["version"] == 1
+    assert job["termination_domain"]["kind"] == "unknown"
+    assert captured["env"]["SYNLYNK_JOB_ID"] == job["id"]
+    assert captured["env"]["SYNLYNK_PARENT_JOB_ID"] == "job-parent"
+    saved = next(item for item in sl._load_jobs() if item["id"] == job["id"])
+    assert saved["termination_domain"] == job["termination_domain"]
+    assert saved["parent_job_id"] == "job-parent"
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT process_state, termination_domain_json, parent_job_id, cleanup_deadline_at "
+        "FROM daemon_jobs WHERE job_id=?",
+        (job["id"],),
+    ).fetchone()
+    conn.close()
+    assert row[0] == "cleanup_unverified"
+    assert json.loads(row[1]) == job["termination_domain"]
+    assert row[2] == "job-parent"
+    assert row[3] is not None
 
 
 def test_dispatch_cost_capture_preserves_explicit_role_across_same_story_dispatches(

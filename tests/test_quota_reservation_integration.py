@@ -61,6 +61,14 @@ def test_full_reserve_dispatch_settle_release_cycle(project_dir, monkeypatch):
 
     _fake_dispatch_success(monkeypatch, sl)
     monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    # This integration test exercises reservation settlement, not process
+    # teardown. Model the external teardown observer proving the owned job
+    # domain is stopped; without that proof the reservation must stay held.
+    monkeypatch.setattr(
+        jobs_mod,
+        "_resolve_persisted_termination_domain",
+        lambda *_args, **_kwargs: "stopped_verified",
+    )
     monkeypatch.setattr(sl, "extract_tokens", lambda log_text, agent=None: (0, 0))
     monkeypatch.setattr(sl, "extract_model_version", lambda log_text, agent=None: "unknown")
     monkeypatch.setattr(sl, "update_costs", lambda *args, **kwargs: None)
