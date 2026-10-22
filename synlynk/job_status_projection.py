@@ -177,7 +177,9 @@ def _project_job_status(conn, job_id: str) -> dict[str, Any]:
     }
 
 
-def record_shadow_comparison(conn, job_id: str) -> dict[str, Any]:
+def record_shadow_comparison(
+    conn, job_id: str, *, manage_transaction: bool = True
+) -> dict[str, Any]:
     projection = project_job_status(conn, job_id)
     shadow = projection["shadow_comparison"]
     conn.execute(
@@ -186,7 +188,8 @@ def record_shadow_comparison(conn, job_id: str) -> dict[str, Any]:
         "SELECT ?, ?, ?, ?, ?, harness, ?, CURRENT_TIMESTAMP FROM daemon_jobs WHERE job_id=?",
         (job_id, shadow["legacy_status"], shadow["oracle_status"], shadow["reason_code"], int(shadow["disagreement"]), projection["contract"].get("kind"), job_id),
     )
-    conn.commit()
+    if manage_transaction:
+        conn.commit()
     return shadow
 
 

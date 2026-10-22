@@ -2036,6 +2036,99 @@ def test_reconcile_releases_reservation_on_settlement(project_dir, monkeypatch):
     assert status == "released"
 
 
+def test_terminal_settlement_holds_reservation_until_cleanup_is_verified(project_dir):
+    import synlynk as sl
+    from synlynk.jobs import _settle_daemon_job_terminal
+
+    conn = sl._get_db()
+    rid = sl._open_reservation(
+        conn, "codex", 4_000, scope="adhoc", job_id="job-cleanup-unknown"
+    )
+    _seed_daemon_job(conn, "job-cleanup-unknown", agent="codex", pid=999999)
+
+    assert _settle_daemon_job_terminal(
+        conn,
+        "job-cleanup-unknown",
+        "failed",
+        1,
+        "2026-10-22T10:00:00+00:00",
+        release_reservation=True,
+        process_state="cleanup_unverified",
+        effect_state="not_verified",
+    )
+
+    assert conn.execute(
+        "SELECT process_state FROM daemon_jobs WHERE job_id='job-cleanup-unknown'"
+    ).fetchone()[0] == "cleanup_unverified"
+    assert conn.execute(
+        "SELECT status FROM harness_reservations WHERE id=?", (rid,)
+    ).fetchone()[0] == "open"
+    projection = __import__(
+        "synlynk.job_status_projection", fromlist=["project_job_status"]
+    ).project_job_status(conn, "job-cleanup-unknown")
+    assert projection["process_state"] == "cleanup_unverified"
+    assert projection["effect_state"] == "not_verified"
+    conn.close()
+
+
+@pytest.mark.parametrize("process_state", ["stopped_verified", "cleanup_overridden"])
+def test_terminal_settlement_releases_reservation_for_resolved_cleanup(
+    project_dir, process_state
+):
+    import synlynk as sl
+    from synlynk.jobs import _settle_daemon_job_terminal
+
+    job_id = f"job-{process_state}"
+    conn = sl._get_db()
+    rid = sl._open_reservation(conn, "codex", 4_000, scope="adhoc", job_id=job_id)
+    _seed_daemon_job(conn, job_id, agent="codex", pid=999999)
+
+    assert _settle_daemon_job_terminal(
+        conn,
+        job_id,
+        "done",
+        0,
+        "2026-10-22T10:01:00+00:00",
+        release_reservation=True,
+        process_state=process_state,
+        effect_state="verified",
+    )
+
+    assert conn.execute(
+        "SELECT status FROM harness_reservations WHERE id=?", (rid,)
+    ).fetchone()[0] == "released"
+    conn.close()
+
+
+def test_terminal_settlement_does_not_commit_callers_transaction(project_dir):
+    import synlynk as sl
+    from synlynk.jobs import _settle_daemon_job_terminal
+
+    conn = sl._get_db()
+    _seed_daemon_job(conn, "job-outer-transaction", agent="codex", pid=999999)
+    conn.execute("BEGIN")
+
+    assert _settle_daemon_job_terminal(
+        conn,
+        "job-outer-transaction",
+        "failed",
+        1,
+        "2026-10-22T10:02:00+00:00",
+        process_state="stopped_verified",
+        effect_state="not_verified",
+    )
+    assert conn.in_transaction is True
+
+    conn.rollback()
+    assert conn.execute(
+        "SELECT status, process_state FROM daemon_jobs WHERE job_id='job-outer-transaction'"
+    ).fetchone() == ("running", "unknown")
+    assert conn.execute(
+        "SELECT COUNT(*) FROM job_evidence WHERE job_id='job-outer-transaction'"
+    ).fetchone()[0] == 0
+    conn.close()
+
+
 def test_reconcile_scope_review_uses_persisted_task_type_before_prompt_fallback(
     project_dir, monkeypatch
 ):

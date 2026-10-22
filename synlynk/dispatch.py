@@ -1966,11 +1966,15 @@ def _run_dispatch_gate(job: dict, gate_suite_cmd: str) -> Optional[dict]:
         match = re.search(pattern, combined)
         return int(match.group(1)) if match else 0
 
-    return {
-        "passed": _count(r"(\d+)\s+passed"),
-        "failed": _count(r"(\d+)\s+failed"),
-        "skipped": _count(r"(\d+)\s+skipped"),
-    }
+    passed = _count(r"(\d+)\s+passed")
+    failed = _count(r"(\d+)\s+failed")
+    skipped = _count(r"(\d+)\s+skipped")
+    # A gate command can fail before pytest emits its normal summary (missing
+    # interpreter dependency, collection error, signal, etc.).  A non-zero
+    # command must still fail closed instead of looking like a zero-test pass.
+    if result.returncode != 0 and failed == 0:
+        failed = 1
+    return {"passed": passed, "failed": failed, "skipped": skipped}
 
 
 def _check_dispatch_base_still_fresh(job: dict, repo_path: Optional[str] = None) -> bool:

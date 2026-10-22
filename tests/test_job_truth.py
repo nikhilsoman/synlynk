@@ -236,6 +236,30 @@ def test_duplicate_evidence_is_idempotent_and_correction_is_revision():
     assert '"decision_status":"completed"' in event[2]
 
 
+def test_same_kind_event_is_deduplicated_across_observers():
+    conn = db()
+    contract = review_contract("job-shared-observation")
+    observation = {
+        "kind": "github_effect",
+        "result": "unknown",
+        "event_id": "github:review:1947:abc123",
+    }
+
+    record_evidence_and_reconcile(
+        conn, contract["job_id"], dict(observation, source="daemon"), contract=contract,
+    )
+    record_evidence_and_reconcile(
+        conn, contract["job_id"], dict(observation, source="terminal-json"), contract=contract,
+    )
+
+    rows = conn.execute(
+        "SELECT evidence_id, source FROM job_evidence WHERE job_id=?",
+        (contract["job_id"],),
+    ).fetchall()
+    assert len(rows) == 1
+    assert rows[0][0].startswith("evidence-github_effect-")
+
+
 def test_nested_reconciliation_does_not_own_outer_transaction():
     conn = db()
     contract = review_contract("job-nested")
@@ -377,6 +401,22 @@ def test_terminal_writer_manifest_covers_reclaim_path():
         "entrypoint": "reclaim_stranded_stories",
         "adapter": "_settle_daemon_job_terminal",
     }
+
+
+def test_terminal_writer_manifest_covers_every_required_terminal_path():
+    import synlynk.job_truth as job_truth
+
+    assert {
+        "flat_file_stall",
+        "flat_file_reconciliation",
+        "daemon_reconciliation",
+        "terminal_json_reconciliation",
+        "zombie_reaper",
+        "circuit_breaker",
+        "cancellation",
+        "stranded_story_reclaimer",
+    } <= set(job_truth.TERMINAL_WRITER_MANIFEST)
+    job_truth.validate_terminal_writer_manifest()
 
 
 def test_parity_fixture_matches_both_legacy_reconciliation_paths():

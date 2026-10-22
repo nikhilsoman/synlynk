@@ -3360,52 +3360,88 @@ def _settle_daemon_job_terminal(
     terminal_claim_token=_UNSET_TERMINAL_CLAIM,
     release_reservation: bool = False,
     evidence_strength: str = "local",
+    process_state: Optional[str] = None,
+    effect_state: Optional[str] = None,
 ) -> bool:
-    """Persist and commit a daemon terminal transition atomically for callers."""
+    """Atomically persist already-observed process, effect, and capacity facts."""
+    had_transaction = conn.in_transaction
+    savepoint = f"settle_{uuid.uuid4().hex}"
+    if had_transaction:
+        conn.execute(f"SAVEPOINT {savepoint}")
+    else:
+        conn.execute("BEGIN IMMEDIATE")
     # PR1 shared decision entry point.  The compatibility status projection is
     # retained during the pilot, while the append-only ledger records the
     # evidence and the oracle's canonical shadow decision.
     try:
-        from synlynk.job_truth import record_evidence_and_reconcile
-        record_evidence_and_reconcile(
+        try:
+            from synlynk.job_truth import canonical_status, record_evidence_and_reconcile
+            try:
+                canonical_legacy_status = canonical_status(status)
+            except ValueError:
+                canonical_legacy_status = status
+            record_evidence_and_reconcile(
+                conn,
+                job_id,
+                {
+                    "kind": "legacy_terminal_status",
+                    "result": "true",
+                    "source": "daemon_reconciliation",
+                    "event_id": f"terminal:{job_id}:{completed_at}:{canonical_legacy_status}",
+                    "observed_at": completed_at,
+                    "exit_code": exit_code,
+                    "legacy_status": canonical_legacy_status,
+                },
+                update_compatibility=False,
+                manage_transaction=False,
+            )
+            if effect_state is not None:
+                conn.execute(
+                    "UPDATE job_terminal_decision SET effect_state=? "
+                    "WHERE job_id=? AND revision=(SELECT MAX(revision) FROM job_terminal_decision WHERE job_id=?)",
+                    (effect_state, job_id, job_id),
+                )
+        except (sqlite3.OperationalError, ValueError):
+            # Unmigrated fixture databases are still supported by the
+            # compatibility path; the next migration creates/backfills the ledger.
+            pass
+        settled = _persist_daemon_job_terminal(
             conn,
             job_id,
-            {
-                "kind": "legacy_terminal_status",
-                "result": "true",
-                "source": "daemon_reconciliation",
-                "event_id": f"terminal:{job_id}:{completed_at}:{status}",
-                "observed_at": completed_at,
-                "exit_code": exit_code,
-                "legacy_status": status,
-            },
-            update_compatibility=False,
+            status,
+            exit_code,
+            completed_at,
+            only_running=only_running,
+            terminal_claim_token=terminal_claim_token,
+            evidence_strength=evidence_strength,
         )
-    except (sqlite3.OperationalError, ValueError):
-        # Unmigrated fixture databases are still supported by the compatibility
-        # path; the next migration creates/backfills the ledger.
-        conn.rollback()
-    settled = _persist_daemon_job_terminal(
-        conn,
-        job_id,
-        status,
-        exit_code,
-        completed_at,
-        only_running=only_running,
-        terminal_claim_token=terminal_claim_token,
-        evidence_strength=evidence_strength,
-    )
-    conn.commit()
+        if settled and process_state is not None:
+            conn.execute(
+                "UPDATE daemon_jobs SET process_state=? WHERE job_id=?",
+                (process_state, job_id),
+            )
+        if settled and release_reservation:
+            _release_daemon_job_reservation(conn, job_id, process_state=process_state)
+        if had_transaction:
+            conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            conn.commit()
+    except Exception:
+        if had_transaction:
+            conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            conn.rollback()
+        raise
     if settled:
         try:
             from synlynk.job_status_projection import record_shadow_comparison
-            record_shadow_comparison(conn, job_id)
+            record_shadow_comparison(conn, job_id, manage_transaction=not had_transaction)
         except (sqlite3.OperationalError, ValueError):
             # Unmigrated fixture databases are still supported by the legacy
             # terminal path; the next migration creates the shadow table.
-            conn.rollback()
-    if settled and release_reservation:
-        _release_daemon_job_reservation(conn, job_id)
+            if not had_transaction:
+                conn.rollback()
     if settled:
         try:
             agent_row = conn.execute(
@@ -3482,17 +3518,22 @@ def _post_claim_zombie_evidence_is_valid(
     return bool(_has_leaked_worktree(job_id, log_path) or pid is None)
 
 
-def _release_daemon_job_reservation(conn, job_id: str) -> None:
-    """Release the open reservation associated with a terminal daemon job."""
-    release_fn = _pkg("_release_reservation")
-    if not release_fn:
+def _release_daemon_job_reservation(
+    conn, job_id: str, *, process_state: Optional[str]
+) -> None:
+    """Release capacity only after cleanup is verified or explicitly overridden."""
+    if process_state not in {"stopped_verified", "cleanup_overridden"}:
         return
     reservation = conn.execute(
         "SELECT id FROM harness_reservations WHERE job_id=? AND status='open'",
         (job_id,),
     ).fetchone()
     if reservation:
-        release_fn(conn, reservation[0])
+        conn.execute(
+            "UPDATE harness_reservations SET status='released', released_at=CURRENT_TIMESTAMP "
+            "WHERE id=? AND status='open'",
+            (reservation[0],),
+        )
 
 
 def mark_daemon_job_terminal(
@@ -3898,6 +3939,8 @@ def reclaim_stranded_stories(
                                 137,
                                 terminal_at,
                                 only_running=True,
+                                process_state="stopped_verified",
+                                effect_state="unknown",
                             )
                     conn.execute(
                         "UPDATE stories SET status='ready', readiness='ready' WHERE story_id=?",
@@ -4393,6 +4436,9 @@ def _reconcile_terminal_jobs_json(conn) -> int:
         if _settle_daemon_job_terminal(
             conn, job_id, status, exit_code, completed_at, only_running=False,
             evidence_strength=evidence_strength,
+            effect_state=_effect_state_after_verification(
+                verified, bool(requires_gh_write)
+            ),
         ):
             repaired += 1
             emit_event(
@@ -4669,6 +4715,19 @@ def _terminal_status_after_verification(
     if requires_gh_write and verified_str == "unknown":
         return STATUS_FAILED_VERIFICATION, exit_code if exit_code not in (None, 0) else 1
     return status, exit_code
+
+
+def _effect_state_after_verification(
+    verified_str: Optional[str], requires_gh_write: bool
+) -> str:
+    """Project the independent requested-effect axis from an external check."""
+    if not requires_gh_write:
+        return "not_required"
+    if verified_str == "true":
+        return "verified"
+    if verified_str == "false":
+        return "not_verified"
+    return "unknown"
 
 
 def _unpushed_branch_retry_pending(conn, job_id: str, pre_guard_status: str, post_guard_status: str) -> bool:
@@ -5045,6 +5104,8 @@ def _reconcile_daemon_jobs() -> None:
                         cb_job.get("exit_code", -9),
                         ended_at,
                         release_reservation=True,
+                        process_state=cb_job.get("process_state", "cleanup_unverified"),
+                        effect_state="unknown",
                     )
                     if settled:
                         cost_recorded = _ensure_daemon_job_cost_entry(
@@ -5163,6 +5224,10 @@ def _reconcile_daemon_jobs() -> None:
                     settled = _settle_daemon_job_terminal(
                         conn, job_id, status, exit_code, now, release_reservation=True,
                         evidence_strength=("github" if gh_write_verified_str in ("true", "false") else "unknown"),
+                        process_state="stopped_verified",
+                        effect_state=_effect_state_after_verification(
+                            gh_write_verified_str, bool(requires_gh_write)
+                        ),
                     )
                     if not settled:
                         # Another actor already committed a terminal status.
@@ -5299,6 +5364,10 @@ def _reconcile_daemon_jobs() -> None:
                             conn, job_id, zombie_status, zombie_exit_code, now,
                             only_running=True, terminal_claim_token=terminal_claim_token,
                             evidence_strength=("github" if gh_write_verified_str in ("true", "false") else "unknown"),
+                            process_state="stopped_verified",
+                            effect_state=_effect_state_after_verification(
+                                gh_write_verified_str, bool(requires_gh_write)
+                            ),
                         )
                         if settled and zombie_status == "killed_zombie":
                             _reap_zombie_worktree(job_id, log_path, conn=conn)
@@ -5456,6 +5525,10 @@ def _reconcile_daemon_jobs() -> None:
                 settled = _settle_daemon_job_terminal(
                     conn, job_id, status, exit_code, now, release_reservation=True,
                     evidence_strength=("github" if gh_write_verified_str in ("true", "false") else "local"),
+                    process_state="stopped_verified",
+                    effect_state=_effect_state_after_verification(
+                        gh_write_verified_str, bool(requires_gh_write)
+                    ),
                 )
                 if not settled:
                     # Another reconciler/sentinel won the terminal-state
@@ -5598,7 +5671,8 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                 dep_statuses = {r[0]: r[1] for r in dep_rows}
                 if any(dep_statuses.get(d) == "failed" for d in deps):
                     _settle_daemon_job_terminal(
-                        conn, job_id, "failed", 1, now, only_running=False
+                        conn, job_id, "failed", 1, now, only_running=False,
+                        process_state="stopped_verified", effect_state="not_required",
                     )
                     continue
                 done_ids = {jid for jid, st in dep_statuses.items() if st == "done"}
@@ -5647,7 +5721,8 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                 # Preflight/worktree/unknown-harness failures: fail the queue row so
                 # the daemon does not spin forever on an unlaunchable job.
                 _settle_daemon_job_terminal(
-                    conn, job_id, "failed", 1, now, only_running=False
+                    conn, job_id, "failed", 1, now, only_running=False,
+                    process_state="stopped_verified", effect_state="not_required",
                 )
                 continue
 

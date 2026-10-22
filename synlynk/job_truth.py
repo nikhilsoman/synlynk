@@ -49,6 +49,11 @@ STATUS_ALIASES = {
 }
 
 TERMINAL_WRITER_MANIFEST = {
+    "flat_file_stall": {
+        "module": "synlynk.dispatch",
+        "entrypoint": "_check_job_stall",
+        "adapter": "terminate_job_domain",
+    },
     "flat_file_reconciliation": {
         "entrypoint": "_reconcile_jobs_unlocked",
         "adapter": "_record_job_truth_shadow",
@@ -65,6 +70,15 @@ TERMINAL_WRITER_MANIFEST = {
         "entrypoint": "mark_daemon_job_terminal",
         "adapter": "_settle_daemon_job_terminal",
     },
+    "circuit_breaker": {
+        "module": "synlynk.circuit_breaker",
+        "entrypoint": "evaluate_job_circuit_breaker",
+        "adapter": "_kill_process_tree",
+    },
+    "cancellation": {
+        "entrypoint": "mark_daemon_job_terminal",
+        "adapter": "_settle_daemon_job_terminal",
+    },
     "stranded_story_reclaimer": {
         "entrypoint": "reclaim_stranded_stories",
         "adapter": "_settle_daemon_job_terminal",
@@ -78,13 +92,17 @@ TERMINAL_WRITER_MANIFEST = {
 
 def validate_terminal_writer_manifest() -> None:
     """Fail closed if a registered terminal writer bypasses the oracle adapter."""
+    import importlib
     import inspect
     from synlynk import jobs
 
     for name, registration in TERMINAL_WRITER_MANIFEST.items():
-        entrypoint = getattr(jobs, registration["entrypoint"], None)
+        module = importlib.import_module(registration.get("module", "synlynk.jobs"))
+        entrypoint = getattr(module, registration["entrypoint"], None)
         adapter = registration["adapter"]
-        adapter_fn = getattr(jobs, adapter, None)
+        adapter_fn = getattr(module, adapter, None)
+        if adapter_fn is None:
+            adapter_fn = getattr(jobs, adapter, None)
         if adapter == "record_evidence_and_reconcile":
             adapter_fn = record_evidence_and_reconcile
         if entrypoint is None or adapter_fn is None:
@@ -320,14 +338,25 @@ def record_evidence_and_reconcile(
             stored = _contract_row(row)
             if _contract_fingerprint(stored) != _contract_fingerprint(contract):
                 raise ValueError(f"effect contract for {job_id} is immutable")
-        evidence_id = str(evidence.get("evidence_id") or f"evidence-{uuid.uuid4().hex}")
-        source = str(evidence.get("source", "unknown")); attempt = int(evidence.get("attempt", 1) or 1)
-        event_id = str(evidence.get("event_id") or evidence_id)
+        kind = str(evidence.get("kind", "observer_error"))
+        implicit_event = {
+            key: value for key, value in evidence.items()
+            if key not in {"evidence_id", "source", "observed_at"}
+        }
+        event_id = str(
+            evidence.get("event_id")
+            or "implicit:" + hashlib.sha256(
+                json.dumps(implicit_event, sort_keys=True, default=str).encode("utf-8")
+            ).hexdigest()
+        )
+        evidence_id = str(evidence.get("evidence_id") or _stable_evidence_id(job_id, kind, event_id))
+        source = str(evidence.get("source", "unknown"))
+        attempt = int(evidence.get("attempt", 1) or 1)
         conn.execute("""INSERT OR IGNORE INTO job_evidence
             (evidence_id, job_id, kind, result, observed_at, source, payload_json,
              confidence, attempt, event_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (
-            evidence_id, job_id, evidence.get("kind", "observer_error"), evidence.get("result", "unknown"),
+            evidence_id, job_id, kind, evidence.get("result", "unknown"),
             evidence.get("observed_at") or _now(), source, json.dumps(dict(evidence), sort_keys=True),
             evidence.get("confidence", "medium"), attempt, event_id))
         contract_row = _contract_row(conn.execute("SELECT * FROM job_effect_contract WHERE job_id=?", (job_id,)).fetchone())
@@ -376,6 +405,12 @@ def record_evidence_and_reconcile(
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _stable_evidence_id(job_id: str, kind: str, event_id: str) -> str:
+    """Identify one observed event independently of which reconciler saw it."""
+    digest = hashlib.sha256(f"{job_id}\0{kind}\0{event_id}".encode("utf-8")).hexdigest()
+    return f"evidence-{kind}-{digest[:32]}"
 
 
 def _parse_utc(value: str) -> datetime:
