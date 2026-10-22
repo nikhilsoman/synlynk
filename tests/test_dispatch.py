@@ -2655,14 +2655,14 @@ def test_dispatch_emits_model_and_effort_flags(project_dir, monkeypatch):
     dispatch_mod.dispatch_agent(
         agent="agy",
         task="write docs",
-        model="gemini-3.1-pro-high",
+        model="gemini-3.8-flash-high",
         effort="high",
         skip_preflight=True,
         context_mode="none",
     )
 
     shell_cmd = recorded_cmd[0][2]
-    assert "--model gemini-3.1-pro-high" in shell_cmd
+    assert "--model gemini-3.8-flash-high" in shell_cmd
     assert "--effort high" in shell_cmd
 
 

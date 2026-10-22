@@ -2165,6 +2165,19 @@ implementation dispatched, external messages sent, or policy changed.
   result is claimed yet; merge the reviewed fix, then retry one scoped task.
 [@codex]
 
+## 2026-10-21 — LIVE-27 complete execution-log retirement (#2447)
+
+- Found the canonical database still had two of the original 75 execution-log
+  rows marked `stale` after migration 23; this left the issue's all-75-row
+  acceptance criterion incomplete.
+- Added migration 28 to mark every remaining non-deprecated
+  `discovery_source='execution_log'` row as `deprecated`, preserving all rows
+  for auditability and leaving curated rows untouched.
+- Applied the migration to the canonical `/Users/nikhilsoman/.synlynk/workspaces/synlynk/state.db`:
+  2 rows changed, 75 total execution-log rows deprecated, integrity check `ok`.
+- Focused LIVE-27/model-catalog tests: 85 passed.
+[@codex]
+
 ## 2026-10-17 — LIVE-25 Local Pilot fallback isolation boundary
 
 - Investigated a denied pilot task (`task_text_excluded`) that reached

@@ -366,6 +366,7 @@ Canonical release epic #2465. Goals: goal-3ef62232, goal-005ea87d. Scheduled gat
   Delivery story is goal-3ef62232 and ticket #2291. Exit: supported harnesses reject stale explicit model IDs before a provider call.
 - [ ] Canonical harness-model data cleanup (#2447) (P0) <!-- story:story-f5d725cc -->
   Delivery story is goal-3ef62232 and ticket #2447. Exit: corrupted execution-log rows cannot contaminate harness model state.
+  Migration 28 applied to canonical state.db; all 75 execution-log rows are deprecated and retained for auditability. PR pending review.
 - [ ] Model candidate ingestion and freshness reliability (#2448) (P0) <!-- story:story-60eea2c4 -->
   Delivery story is goal-3ef62232 and ticket #2448. Exit: ingestion and timestamps preserve an auditable current catalog.
 - [ ] Authoritative resolution and catalog allowlist (#2449) (P0) <!-- story:story-a846f2a5 -->

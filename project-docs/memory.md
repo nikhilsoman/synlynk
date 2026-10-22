@@ -225,6 +225,7 @@
   with no changed paths. [@codex]
 - **2026-10-19 [LIVE-27] Dynamic Model Catalog Ingestion & Invariant Boundaries:** Dynamic model discovery functions (such as `sync_harness_models_window()`) must never blindly insert raw strings from execution logs into canonical catalog tables (`harness_models`). All ingested models must validate against harness baselines/allowlists, and must never overwrite or tie-break against authoritative curated/CLI discoveries. Bulk operations must not assign uniform `CURRENT_TIMESTAMP` timestamps that break `ORDER BY discovered_at DESC` resolution. Catalog resolution must prioritize authoritative discovery sources (`curated` > `cli` > `config` > `execution_log`) and fall back cleanly to static curated tier configurations. [@agy]
 - **2026-10-19 [LIVE-27] Canonical cleanse:** Migration 23 deprecates every malformed or non-current `execution_log` model in `harness_models` using the shared `is_plausible_model_id()` and `_curated_model_ids()` predicates. It preserves authoritative and valid execution-log rows, is idempotent, and has been applied to the canonical state database. [@codex]
+- **2026-10-21 [LIVE-27] Complete retirement:** Migration 28 deprecates every remaining non-deprecated `execution_log` row, including stale-but-plausible observations, so the full 75-row incident set cannot participate in resolution. Rows remain in place as audit history. [@codex]
 
 ## 2026-10-21 — Unattended Local runtime credential handling [@codex]
 

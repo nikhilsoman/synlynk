@@ -1563,6 +1563,11 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     story_reclaim_parser = story_sub.add_parser("reclaim", help="Reclaim orphaned in_progress stories")
     story_reclaim_parser.add_argument("--max-age", type=int, default=30, help="Maximum age in minutes (default: 30)")
     story_reclaim_parser.add_argument("--dry-run", action="store_true", help="Print stranded stories without modifying")
+    story_claim_parser = story_sub.add_parser("claim", help="Take an interactive home claim on a story (gh:#2511)")
+    story_claim_parser.add_argument("story_id")
+    story_claim_parser.add_argument("--harness", default=None, help="Harness identity; auto-detected if omitted")
+    story_claim_parser.add_argument("--duration", type=int, default=2700, help="Claim TTL in seconds (default: 45min)")
+    story_claim_parser.add_argument("--override", action="store_true", help="Force-take the claim even if another live session holds it")
 
     pm_parser = subparsers.add_parser("pm", help="PM agent commands")
     pm_subparsers = pm_parser.add_subparsers(dest="pm_command")
@@ -3020,6 +3025,14 @@ def main(argv=None) -> None:
         elif args.story_action == "reclaim":
             from synlynk.jobs import cmd_story_reclaim
             cmd_story_reclaim(max_age_minutes=getattr(args, "max_age", 30), dry_run=getattr(args, "dry_run", False))
+        elif args.story_action == "claim":
+            from synlynk.jobs import cmd_story_claim
+            sys.exit(cmd_story_claim(
+                args.story_id,
+                harness=getattr(args, "harness", None),
+                duration_seconds=getattr(args, "duration", 2700),
+                override=getattr(args, "override", False),
+            ))
     elif args.command == "pm" and args.pm_command == "sweep":
         from synlynk.pm_agent import cmd_pm_sweep
 

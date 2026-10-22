@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "as_of": "2026-10-20",
+  "as_of": "2026-10-21",
   "tiers": {
     "fast": {
       "claude": "claude-haiku-4-5-20251001",
@@ -221,28 +221,56 @@
       "entitlement_tier": "included_in_base"
     },
     {
+      "model_id": "grok-4.7",
+      "family": "grok-4",
+      "harness": "grok",
+      "context_window": 500000,
+      "max_output": 0,
+      "rates": {
+        "input_per_1k": 0.002,
+        "output_per_1k": 0.006,
+        "cache_read_per_1k": 0.0005
+      },
+      "entitlement_tier": "metered_extra_usage_only"
+    },
+    {
+      "model_id": "grok-4.7-build-fast",
+      "family": "grok-4",
+      "harness": "grok",
+      "context_window": 500000,
+      "max_output": 0,
+      "rates": {
+        "input_per_1k": 0.004,
+        "output_per_1k": 0.012,
+        "cache_read_per_1k": 0.001
+      },
+      "entitlement_tier": "metered_extra_usage_only"
+    },
+    {
       "model_id": "grok-4.6",
       "family": "grok-4",
       "harness": "grok",
-      "context_window": 131072,
-      "max_output": 8192,
+      "context_window": 500000,
+      "max_output": 0,
       "rates": {
-        "input_per_1k": 0.0002,
-        "output_per_1k": 0.0008
+        "input_per_1k": 0.002,
+        "output_per_1k": 0.006,
+        "cache_read_per_1k": 0.0005
       },
       "entitlement_tier": "included_in_base"
     },
     {
-      "model_id": "grok-4.7",
+      "model_id": "grok-4.5",
       "family": "grok-4",
       "harness": "grok",
-      "context_window": 131072,
-      "max_output": 16384,
+      "context_window": 500000,
+      "max_output": 0,
       "rates": {
-        "input_per_1k": 0.003,
-        "output_per_1k": 0.012
+        "input_per_1k": 0.002,
+        "output_per_1k": 0.006,
+        "cache_read_per_1k": 0.0003
       },
-      "entitlement_tier": "metered_extra_usage_only"
+      "entitlement_tier": "included_in_base"
     }
   ]
 }

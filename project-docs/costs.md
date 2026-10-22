@@ -1456,3 +1456,5 @@
 | agy | $20.00 | $19.7711 | $96.8936 | $77.1225 |
 | grok | $30.00 | $180.7917 | $132.4392 | $-48.3525 |
 | **Total** | **$90.00** | **$281.1610** | **$2115.6290** | **$1834.4680** |
+
+| 2026-10-21 14:15 | codex | gpt-5.3-codex | 0 | 0 | $0.0000 [sub] (API: $0.0000) | estimated_manual | story-issue-2447 | LIVE-27 remediation follow-up: migration 28, canonical state application, and focused verification; interactive cost unavailable |
