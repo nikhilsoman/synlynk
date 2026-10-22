@@ -3418,6 +3418,11 @@ def _settle_daemon_job_terminal(
     try:
         try:
             from synlynk.job_truth import canonical_status, record_evidence_and_reconcile
+            terminal_ready = (
+                None
+                if process_state is None
+                else process_state in {"stopped_verified", "cleanup_overridden"}
+            )
             try:
                 canonical_legacy_status = canonical_status(status)
             except ValueError:
@@ -3443,6 +3448,7 @@ def _settle_daemon_job_terminal(
                     },
                     update_compatibility=False,
                     manage_transaction=False,
+                    terminal_ready=terminal_ready,
                 )
             if effect_state in {"verified", "not_verified", "unknown"}:
                 effect_result = {
@@ -3468,6 +3474,7 @@ def _settle_daemon_job_terminal(
                     effect_evidence,
                     update_compatibility=False,
                     manage_transaction=False,
+                    terminal_ready=terminal_ready,
                 )
             record_evidence_and_reconcile(
                 conn,
@@ -3483,6 +3490,7 @@ def _settle_daemon_job_terminal(
                 },
                 update_compatibility=False,
                 manage_transaction=False,
+                terminal_ready=terminal_ready,
             )
             if effect_state is not None:
                 conn.execute(
@@ -6254,6 +6262,8 @@ def cmd_jobs_cleanup_resolve(
         _release_daemon_job_reservation(
             conn, job_id, process_state="cleanup_overridden"
         )
+        from synlynk.job_truth import ensure_latest_terminal_outbox
+        ensure_latest_terminal_outbox(conn, job_id)
         conn.commit()
 
         from synlynk.job_status_projection import project_job_status

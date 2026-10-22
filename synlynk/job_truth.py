@@ -350,6 +350,7 @@ def record_evidence_and_reconcile(
     decided_by: str = "job_truth.v1",
     update_compatibility: bool = True,
     manage_transaction: bool = True,
+    terminal_ready: bool | None = None,
 ) -> CompletionDecision:
     """Append one observation and atomically persist the next decision revision."""
     if manage_transaction:
@@ -406,7 +407,9 @@ def record_evidence_and_reconcile(
             decision.evidence_ids[-1] if decision.evidence_ids else evidence_id,
             json.dumps(list(decision.evidence_ids)), decision.reason_code, _now(), decided_by,
             revision, contract_row.get("contract_version", 1), decision.required_follow_up))
-        if decision.status in TERMINAL_STATUSES:
+        if decision.status in TERMINAL_STATUSES and _terminal_outbox_allowed(
+            conn, job_id, terminal_ready
+        ):
             _append_terminal_outbox(
                 conn, job_id=job_id, revision=revision, status=decision.status,
                 decision_reason=decision.reason_code,
@@ -426,6 +429,44 @@ def record_evidence_and_reconcile(
         if manage_transaction:
             conn.rollback()
         raise
+
+
+def _terminal_outbox_allowed(
+    conn: sqlite3.Connection, job_id: str, terminal_ready: bool | None
+) -> bool:
+    """Gate terminal publication on resolved process ownership when available."""
+    if terminal_ready is not None:
+        return terminal_ready
+    try:
+        row = conn.execute(
+            "SELECT process_state FROM daemon_jobs WHERE job_id=?", (job_id,)
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return True
+    if not row:
+        return True
+    return row[0] in {"stopped_verified", "cleanup_overridden"}
+
+
+def ensure_latest_terminal_outbox(conn: sqlite3.Connection, job_id: str) -> bool:
+    """Publish an idempotent terminal event after cleanup becomes resolved."""
+    latest = conn.execute(
+        "SELECT revision, status, decision_reason, decided_at, contract_version "
+        "FROM job_terminal_decision WHERE job_id=? ORDER BY revision DESC LIMIT 1",
+        (job_id,),
+    ).fetchone()
+    if not latest or latest[1] not in TERMINAL_STATUSES:
+        return False
+    _append_terminal_outbox(
+        conn,
+        job_id=job_id,
+        revision=latest[0],
+        status=latest[1],
+        decision_reason=latest[2],
+        decided_at=latest[3],
+        effect_contract_version=latest[4],
+    )
+    return True
 
 
 def _now() -> str:

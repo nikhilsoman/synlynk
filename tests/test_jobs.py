@@ -2274,6 +2274,53 @@ def test_cleanup_resolve_audits_override_releases_capacity_and_is_idempotent(
     assert "cleanup_overridden" in capsys.readouterr().out
 
 
+def test_cleanup_resolve_publishes_deferred_terminal_outbox(project_dir):
+    import synlynk as sl
+    from synlynk.job_truth import ensure_effect_contract
+    from synlynk.jobs import _settle_daemon_job_terminal, cmd_jobs_cleanup_resolve
+
+    conn = sl._get_db()
+    _seed_daemon_job(conn, "job-deferred-outbox", agent="codex", pid=999999)
+    ensure_effect_contract(conn, {
+        "id": "job-deferred-outbox",
+        "requires_gh_write": True,
+        "gh_write_expect": "comment",
+        "gh_write_target": "issue:2530",
+        "started_at": "2026-10-22T10:00:00+00:00",
+    })
+    conn.execute(
+        "UPDATE daemon_jobs SET cleanup_deadline_at=? WHERE job_id='job-deferred-outbox'",
+        ("2026-10-22T10:05:00+00:00",),
+    )
+    conn.commit()
+    assert _settle_daemon_job_terminal(
+        conn,
+        "job-deferred-outbox",
+        "done",
+        0,
+        "2026-10-22T10:00:00+00:00",
+        process_state="cleanup_unverified",
+        effect_state="verified",
+    )
+    assert conn.execute(
+        "SELECT COUNT(*) FROM job_terminal_outbox WHERE job_id='job-deferred-outbox'"
+    ).fetchone()[0] == 0
+    conn.close()
+
+    assert cmd_jobs_cleanup_resolve(
+        "job-deferred-outbox",
+        accept_risk=True,
+        reason="host inspected",
+        now="2026-10-22T10:05:01+00:00",
+        actor="operator",
+    ) == 0
+    conn = sl._get_db()
+    assert conn.execute(
+        "SELECT COUNT(*) FROM job_terminal_outbox WHERE job_id='job-deferred-outbox'"
+    ).fetchone()[0] == 1
+    conn.close()
+
+
 def test_wrapper_exit_with_live_child_and_verified_effect_keeps_capacity_reserved(
     project_dir, monkeypatch
 ):
@@ -2336,6 +2383,9 @@ def test_wrapper_exit_with_live_child_and_verified_effect_keeps_capacity_reserve
     evidence = conn.execute(
         "SELECT kind, result FROM job_evidence WHERE job_id='job-wrapper' ORDER BY kind"
     ).fetchall()
+    outbox_count = conn.execute(
+        "SELECT COUNT(*) FROM job_terminal_outbox WHERE job_id='job-wrapper'"
+    ).fetchone()[0]
     conn.close()
 
     assert parent == ("done", "cleanup_unverified")
@@ -2343,6 +2393,7 @@ def test_wrapper_exit_with_live_child_and_verified_effect_keeps_capacity_reserve
     assert reservation == "open"
     assert projection["effect_state"] == "verified"
     assert projection["process_stop_verified"] is False
+    assert outbox_count == 0
     assert ("remote_effect", "true") in evidence
     assert ("legacy_terminal_status", "true") in evidence
 
