@@ -123,13 +123,14 @@
 **Interfaces:**
 - `_check_job_stall` invokes `terminate_job_domain` and records `process_state` / cleanup evidence; it does not directly set a terminal status after merely sending a signal.
 - `_kill_process_tree` becomes a compatibility adapter to `terminate_job_domain`; the `Popen` path receives no identity bypass.
+- Sentinel verifies the owned termination domain after requesting cleanup; it reports cleanup as verified only after observing the domain stopped, otherwise it records `cleanup_unverified` and raises/retains an actionable alert.
 - The Local pilot control lock remains held until the child process group is verified stopped; it does not define an alternate worker process identity.
 
-- [ ] **Step 1: Add failing regressions** for stall-killing a parent with a child, circuit-breaker `Popen` identity verification, container cleanup after client loss, Local pilot lock retention until verified stop, and Sentinel's orphan cleanup path.
+- [ ] **Step 1: Add failing regressions** for stall-killing a parent with a child, circuit-breaker `Popen` identity verification, container cleanup after client loss, Local pilot lock retention until verified stop, and Sentinel's orphan cleanup path. Assert Sentinel does not treat a signal request or wrapper exit as verified cleanup, and retains an actionable alert when termination cannot be confirmed.
 - [ ] **Step 2: Run** `pytest -q tests/test_dispatch.py tests/test_circuit_breaker.py tests/test_reconcile_circuit_breaker.py tests/test_dispatch_container.py tests/test_local_pilot_ledger.py tests/test_sentinel.py`; confirm the regression cases fail.
 - [ ] **Step 3: Capture termination domains at spawn** and persist `process_state='running'` only after identity capture result is recorded.
 - [ ] **Step 4: Replace direct PID kills** in stall and circuit-breaker flows with `terminate_job_domain`; persist stop-requested and final cleanup evidence separately.
-- [ ] **Step 5: Replace direct PID signaling** in Sentinel orphan-cleanup paths with the shared helper, preserving existing alerts and reporting identity/observer uncertainty explicitly.
+- [ ] **Step 5: Replace direct PID signaling** in Sentinel orphan-cleanup paths with the shared helper. Require post-signal termination-domain observation before recording verified cleanup; preserve/raise an actionable alert for identity or observer uncertainty.
 - [ ] **Step 6: Ensure child jobs inherit and persist parent linkage**; a parent cannot report full cleanup while any recorded child remains running or unresolved.
 - [ ] **Step 7: Move external operations outside DB transactions**; signal/stop/inspect first, then persist process state and reservation changes.
 - [ ] **Step 8: Run** the focused tests from Step 2; expect all cleanup paths to use the shared helper.
@@ -192,4 +193,5 @@
 - [ ] **Step 3: Run the full repository suite** with `pytest -q`; report any pre-existing sparse-checkout failures separately and do not waive failures introduced by this branch.
 - [ ] **Step 4: Run static checks** `ruff check synlynk tests` and `git diff --check`.
 - [ ] **Step 5: Verify the acceptance matrix** against every numbered criterion in the spec and attach results to #2530.
-- [ ] **Step 6: Commit** remaining test-only work as `test: verify job terminal truth end to end`.
+- [ ] **Step 6: Verify Sentinel cleanup truth independently**: signal-requested, leader-exited/child-live, observer-error, and domain-stopped cases must project respectively as unverified, unverified, unverified, and verified; confirm unresolved cases remain visible as actionable Sentinel alerts.
+- [ ] **Step 7: Commit** remaining test-only work as `test: verify job terminal truth end to end`.
