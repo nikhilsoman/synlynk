@@ -19,6 +19,7 @@ from synlynk.local_pilot import (
     find_sensitive_worktree_paths,
     valid_scope_path,
 )
+from synlynk.local_auth_proxy import LocalAuthBroker, ensure_inert_aider_key
 
 
 class _SecretRedactor:
@@ -175,15 +176,22 @@ def run_isolated_dispatch(
     exit_file: str,
     job_id: str,
     pilot_class: str,
+    task_sha256: str,
+    effective_model: str,
     scope_paths: list[str],
     aider_args: list[str],
     env: dict | None = None,
 ) -> int:
     env = dict(os.environ if env is None else env)
-    api_key = env.get("OPENAI_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is required for isolated oMLX dispatch")
-    if pilot_class not in PILOT_CLASSES or not scope_paths:
+    env.pop("OPENAI_API_KEY", None)
+    env.pop("OMLX_API_KEY", None)
+    from synlynk.local_credentials import LocalCredentialStore
+    api_key = LocalCredentialStore().get()
+    aider_args = ensure_inert_aider_key(list(aider_args))
+    if (pilot_class not in PILOT_CLASSES or not scope_paths
+            or len(task_sha256) != 64
+            or any(char not in "0123456789abcdef" for char in task_sha256)
+            or not effective_model):
         raise RuntimeError("Local Pilot task class and bounded scope are required")
     compose_file = str(Path(repo_root) / "docker" / "local-pilot.compose.yaml")
     prefix = ["docker", "compose", "-f", compose_file, "--project-name", job_id]
@@ -194,6 +202,14 @@ def run_isolated_dispatch(
         "schema_version": 1,
         "job_id": job_id,
         "pilot_class": pilot_class,
+        "task_sha256": task_sha256,
+        "effective_model": effective_model,
+        "execution": "isolated",
+        "read_only": pilot_class in {
+            "test_summary", "test_diagnosis", "codepath_summary", "change_summary"
+        },
+        "preflight_passed": False,
+        "rollback_verified": False,
         "scope_paths": scope_paths,
         "changed_paths": [],
         "applied_paths": [],
@@ -204,12 +220,14 @@ def run_isolated_dispatch(
     output_code = 1
     child: subprocess.Popen | None = None
     compose_started = False
+    compose_cleanup_ok = True
     scratch_context = tempfile.TemporaryDirectory(
         prefix=".synlynk-local-pilot-", dir=os.path.dirname(source_worktree)
     )
     scratch = scratch_context.name
     log_handle = open(log_file, "wb")
     redactor = _SecretRedactor(api_key.encode("utf-8"), log_handle)
+    auth_relay = LocalAuthBroker(api_key)
 
     def stop_child(signum, _frame):
         if child is not None and child.poll() is None:
@@ -224,12 +242,16 @@ def run_isolated_dispatch(
         if find_sensitive_worktree_paths(source_worktree):
             raise RuntimeError("source worktree contains credential-like paths")
         _scoped_file_copy(source_worktree, scratch, scope_paths)
+        relay_port = auth_relay.start()
+        env["PILOT_RELAY_PORT"] = str(relay_port)
         expanded_scope = _expanded_scope(scratch, scope_paths, require_existing=True)
         if not expanded_scope:
             raise RuntimeError("Local Pilot scope resolved to no files")
         env["PILOT_WORKTREE"] = scratch
         compose_started = True  # also clean up partial `up` failures
-        relay = _run_captured(prefix + ["up", "--detach", "omlx-relay"], env)
+        relay = _run_captured(
+            prefix + ["up", "--detach", "--wait", "--wait-timeout", "15", "omlx-relay"], env
+        )
         if relay.returncode != 0:
             redactor.write(relay.stdout + relay.stderr)
             output_code = relay.returncode
@@ -239,6 +261,7 @@ def run_isolated_dispatch(
             redactor.write(build.stdout + build.stderr)
             output_code = build.returncode
             return output_code
+        receipt["preflight_passed"] = True
 
         scope_flags = []
         flag = "--read" if pilot_class in {
@@ -314,16 +337,31 @@ def run_isolated_dispatch(
         if compose_started:
             down = _run_captured(prefix + ["down", "--remove-orphans"], env)
             if down.returncode != 0:
+                compose_cleanup_ok = False
                 redactor.write(down.stdout + down.stderr)
+        auth_relay.close()
         redactor.flush()
+        api_key = ""
+        redactor.secret = b""
+        redactor.pending = b""
         log_handle.close()
         receipt["exit_code"] = output_code
         receipt["ended_at"] = time.time()
+        try:
+            scratch_context.cleanup()
+        except OSError:
+            compose_cleanup_ok = False
+        receipt["rollback_verified"] = (
+            compose_cleanup_ok
+            and not os.path.exists(scratch)
+            and receipt["read_only"]
+            and receipt["changed_paths"] == []
+            and receipt["applied_paths"] == []
+        )
         Path(pilot_receipt_file).write_text(
             json.dumps(receipt, sort_keys=True, indent=2) + "\n", encoding="utf-8"
         )
         Path(exit_file).write_text(f"{output_code}\n", encoding="utf-8")
-        scratch_context.cleanup()
         for signum, handler in previous_handlers.items():
             signal.signal(signum, handler)
     return output_code
@@ -338,6 +376,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--exit-file", required=True)
     parser.add_argument("--job-id", required=True)
     parser.add_argument("--pilot-class", required=True)
+    parser.add_argument("--task-sha256", required=True)
+    parser.add_argument("--effective-model", required=True)
     parser.add_argument("--scope-path", action="append", default=[])
     parser.add_argument("aider_args", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
@@ -352,6 +392,8 @@ def main(argv: list[str] | None = None) -> int:
         exit_file=args.exit_file,
         job_id=args.job_id,
         pilot_class=args.pilot_class,
+        task_sha256=args.task_sha256,
+        effective_model=args.effective_model,
         scope_paths=args.scope_path,
         aider_args=aider_args,
     )

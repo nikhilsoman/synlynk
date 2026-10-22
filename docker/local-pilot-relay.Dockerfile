@@ -1,0 +1,3 @@
+FROM alpine/socat:1.8.0.1@sha256:87d88ff79bf42ca723fb360e9585c40e2923a2f4df9b9d148b127568ef6b99e7
+
+ENTRYPOINT ["socat"]

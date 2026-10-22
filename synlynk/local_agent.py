@@ -50,33 +50,35 @@ def _check_prism_ml_available() -> bool:
 
 _TIER_THRESHOLDS = [
     (12 * 1024**3, "8gb-light"),
-    (20 * 1024**3, "16gb-default"),
+    (28 * 1024**3, "16gb-default"),
     (48 * 1024**3, "32gb-pro"),
     (float("inf"), "64gb-fleet"),
 ]
 
 
+def _detect_physical_memory_bytes() -> Optional[int]:
+    """Return measured physical memory without rounding it to a tier label."""
+    try:
+        if sys.platform == "darwin":
+            raw = _subprocess.check_output(["sysctl", "-n", "hw.memsize"], timeout=5)
+            return int(raw.strip())
+        with open("/proc/meminfo") as meminfo:
+            for line in meminfo:
+                if line.startswith("MemTotal:"):
+                    return int(line.split()[1]) * 1024
+    except Exception:
+        return None
+    return None
+
+
 def _detect_hardware_tier() -> str:
-    """Detect RAM and return the corresponding local hardware tier.
+    """Detect RAM and return the corresponding conservative local tier.
 
     Uses ``sysctl`` on macOS and ``/proc/meminfo`` on Linux. Detection
     failures conservatively fall back to the default tier.
     """
-    try:
-        if sys.platform == "darwin":
-            raw = _subprocess.check_output(
-                ["sysctl", "-n", "hw.memsize"], timeout=5
-            )
-            ram_bytes = int(raw.strip())
-        else:
-            with open("/proc/meminfo") as meminfo:
-                for line in meminfo:
-                    if line.startswith("MemTotal:"):
-                        ram_bytes = int(line.split()[1]) * 1024
-                        break
-                else:
-                    return "16gb-default"
-    except Exception:
+    ram_bytes = _detect_physical_memory_bytes()
+    if ram_bytes is None:
         return "16gb-default"
 
     for threshold, tier in _TIER_THRESHOLDS:
@@ -205,12 +207,18 @@ def resolve_effective_local_model(
         endpoint = config.get("endpoint")
         if not endpoint:
             raise ValueError("local policy has no oMLX endpoint; cannot verify live model inventory")
-        health_result = _health_check(endpoint, api_key=api_key or os.environ.get("OPENAI_API_KEY"))
+        if api_key is None:
+            try:
+                from synlynk.local_credentials import LocalCredentialStore
+                api_key = LocalCredentialStore().get()
+            except Exception:
+                api_key = None
+        health_result = _health_check(endpoint, api_key=api_key)
         inventory_status = health_result.get("status", "unavailable")
         if not health_result.get("reachable"):
             detail = health_result.get("error", "inventory health check failed")
             if inventory_status == "unauthenticated":
-                detail = "oMLX rejected authentication (HTTP 401); configure OPENAI_API_KEY"
+                detail = "oMLX rejected authentication (HTTP 401); check the oMLX persistent settings API key"
             elif inventory_status == "timeout":
                 detail = "oMLX inventory request timed out"
             elif inventory_status == "malformed_inventory":
@@ -778,7 +786,7 @@ def record_local_pilot_review(job_id: str, reviewer: str, verdict: str, rational
         conn.close()
 
 
-def cmd_local_doctor(config_path: str = None, init: bool = False) -> int:
+def cmd_local_doctor(config_path: str = None, init: bool = False, api_key: str = None) -> int:
     """Print oMLX reachability, roster status, and hardware recommendation.
 
     With ``init=True``, write the detected ``hardware_tier`` and recommended
@@ -795,16 +803,28 @@ def cmd_local_doctor(config_path: str = None, init: bool = False) -> int:
             print(f"  ✗ {exc}")
             return 1
     endpoint = config["endpoint"]
-    api_key = os.environ.get("OPENAI_API_KEY")
+    if api_key is None:
+        try:
+            from synlynk.local_credentials import LocalCredentialStore
+            api_key = LocalCredentialStore().get()
+        except Exception:
+            api_key = None
+    print("  ✓ oMLX persistent settings API key configured" if api_key
+          else "  ✗ oMLX persistent settings API key missing or unreadable")
     result = _health_check(endpoint, api_key=api_key)
     if not result["reachable"]:
         print(f"  ✗ oMLX unreachable at {endpoint}: {result['error']}")
         if "401" in result["error"]:
-            print("    oMLX rejected the request (401 Unauthorized) — export OPENAI_API_KEY and retry")
+            print("    oMLX rejected the request (401 Unauthorized) — check the oMLX persistent settings API key")
         else:
             print("    Start it with: omlx serve")
         return 1
     print(f"  ✓ oMLX reachable at {endpoint}")
+    physical_memory = _detect_physical_memory_bytes()
+    if physical_memory is not None:
+        print(f"  ✓ physical memory: {physical_memory / 1024**3:.1f} GiB (measured)")
+    else:
+        print("  ⚠ physical memory: unavailable (tier is conservative)")
     tier = _detect_hardware_tier()
     best_model = _select_model_for_tier(tier, config)
     print(f"  ✓ hardware tier: {tier}")
@@ -857,3 +877,64 @@ def cmd_local_doctor(config_path: str = None, init: bool = False) -> int:
     if missing or aider_missing:
         return 1
     return 0
+
+
+def cmd_local_credentials(action: str, *, replace: bool = False, environ=None,
+                          interactive: bool = None, store=None) -> int:
+    """Manage legacy Keychain credentials or inspect active oMLX settings."""
+    import sys
+    from synlynk.local_credentials import LocalCredentialStore
+
+    store = store or LocalCredentialStore()
+    environ = os.environ if environ is None else environ
+    interactive = (sys.stdin.isatty() and sys.stdout.isatty()) if interactive is None else interactive
+    try:
+        if action == "import":
+            if not interactive:
+                print("  ✗ credential import requires an interactive terminal")
+                return 1
+            store.import_from_environment(environ, replace=replace)
+            print("  ✓ oMLX credential stored in macOS Keychain")
+        elif action == "status":
+            print("  ✓ oMLX persistent settings API key configured" if store.is_configured()
+                  else "  ✗ oMLX persistent settings API key missing or unreadable")
+        elif action == "delete":
+            store.delete()
+            print("  ✓ legacy Keychain credential deleted; oMLX settings were not changed")
+        else:
+            raise ValueError("unknown local credentials action")
+        return 0
+    except Exception as exc:
+        message = str(exc)
+        if "OPENAI_API_KEY" in message:
+            print("  ✗ OPENAI_API_KEY is missing")
+        else:
+            print(f"  ✗ {message}")
+        return 1
+
+
+def cmd_local_lifecycle(action: str, *, manager=None) -> int:
+    """Inspect lifecycle state or stop only a provably managed service."""
+    import json
+    from synlynk.local_lifecycle import LocalLifecycleManager
+
+    manager = manager or LocalLifecycleManager()
+    try:
+        if action == "status":
+            payload = manager.status()
+            try:
+                from synlynk.local_failure_reporter import outbox_status
+                payload["failure_reporting"] = outbox_status()
+            except Exception:
+                payload["failure_reporting"] = {"pending": None, "tracked": None}
+            print(json.dumps(payload, indent=2, sort_keys=True))
+        elif action == "stop":
+            stopped = manager.stop_managed_service()
+            print("  ✓ Synlynk-managed oMLX stopped" if stopped
+                  else "  ✦ no provably Synlynk-managed oMLX service to stop")
+        else:
+            raise ValueError("unknown local lifecycle action")
+        return 0
+    except Exception as exc:
+        print(f"  ✗ {exc}")
+        return 1

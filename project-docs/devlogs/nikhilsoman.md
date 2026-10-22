@@ -2235,3 +2235,38 @@ implementation dispatched, external messages sent, or policy changed.
   11 passed.
 [@codex]
 
+## 2026-10-21 — Unattended Local oMLX Lifecycle (Task 1)
+
+- Began the approved Local unattended lifecycle plan on the isolated branch `chore/local-unattended-lifecycle`; the plan worktree is cleanly separated from a pre-existing unrelated cost-log edit in the primary checkout.
+- Added a Keychain-backed credential-store abstraction and `synlynk local credentials import|status|delete`; Local doctor now reads its credential from Keychain rather than inheriting `OPENAI_API_KEY` from the environment.
+- Verification: `pytest -q tests/test_local_credentials.py tests/test_local_agent.py tests/test_cli_parser.py` — 71 passed. The no-write Keychain status check reported the credential is not configured; no secret was imported or displayed.
+- The installed executing-plans helper bundle lacks its documented `task-start` / `task-done` scripts; the plan-local SDD ledger records the manual task-boundary workflow used instead.
+
+## 2026-10-21 — Unattended Local oMLX Lifecycle (Task 2)
+
+- Added an authenticated oMLX client pinned to the observed 0.5.3 API contract, Ornith-only model actions, redacted HTTP error classes, credential-free version subprocesses, macOS memory/swap parsers, and a fail-closed 8 GiB / normal-pressure / <=256 MiB swap-growth gate.
+- Corrected the 24 GiB label mismatch: measured RAM is now displayed independently and the nearest conservative named tier is `16gb-default`; 32 GiB still maps to `32gb-pro`.
+- Verification: `pytest -q tests/test_local_lifecycle.py tests/test_local_agent.py` — 55 passed. Host sysctl memory/swap reads are blocked by this sandbox, so no live lifecycle admission/load was attempted.
+
+## 2026-10-21 — Unattended Local oMLX Lifecycle (Task 3)
+
+- Added a host-global lifecycle manager with a shared file lock, mode-restricted ownership state, process PID/start-identity validation, managed start/load, untouched operator-owned service behavior, persisted job and pre-dispatch reservation leases, and 900-second idle unload/stop.
+- Integrated the supervisor into each Synlynk daemon poll and added `synlynk local lifecycle status|stop`; status reports endpoint/model/credential/ownership separately without printing the key.
+- Verification: lifecycle, Local agent, CLI parser, new daemon lifecycle seam, and existing daemon start/lock tests — 99 passed.
+- Repository deviation: `tests/test_daemon.py` named by the plan is absent; the added `tests/test_daemon_local_lifecycle.py` and two extant daemon regression suites cover the seam.
+
+## 2026-10-21 — Unattended Local oMLX Lifecycle (Task 4)
+
+- Replaced the raw host TCP relay with a per-job host Unix-socket broker and minimal pinned socat relay. The broker injects Keychain auth only to fixed `127.0.0.1:8000`, permits only model metadata/chat completion, filters inventory to Ornith, rewrites the Aider provider prefix, bounds requests, streams responses, and removes the socket/secret reference on teardown.
+- Removed `OPENAI_API_KEY` from runner/Compose/Aider environment. Aider requires a non-empty OpenAI client value, so it gets the fixed inert `synlynk-local-relay-only` sentinel; the broker unconditionally replaces inbound Authorization.
+- Verification: broker socket tests 9 passed (outside sandbox because UDS binding is denied inside it); Local pilot suite 30 passed; Compose config validation passed.
+- Docker/OrbStack was not running and was left untouched; actual container socket bind-mount smoke remains a required integration check before Local is enabled.
+
+## 2026-10-22 — Local Pilot Host TCP Relay (#2525)
+
+- Replaced the unsupported host Unix-socket transport with a loopback-only ephemeral TCP broker. The non-privileged socat relay has a fixed `host.docker.internal:<job-port>` destination and alone joins a dedicated bridge; Aider remains internal-only with an inert key.
+- Added bounded Compose readiness and a gated fake-upstream Docker integration test. OrbStack verified allowlisted inventory/chat forwarding and rejected-model handling; internal-only clients could not bypass directly to the host broker or the tested Internet endpoint. Teardown left no test containers or networks.
+- Verification: focused Local Pilot/dispatch suite 245 passed (one workspace-state assertion excluded because a pre-existing user edit enables Local); full suite 4,967 passed, 14 skipped, 3 xfailed, 7 failed in unrelated tests/current workspace state. Full failure names and details are recorded in the committed implementation plan.
+- Fresh review identified and closed two gaps: readiness now uses an authenticated model-inventory request and fails on upstream 401; chat streams are capped at 32 MiB / 300 seconds. Post-review checks: broker suite 12 passed, focused Local Pilot/dispatch suite 247 passed with the same one workspace assertion excluded, and OrbStack integration passed including the unhealthy-auth case. The full suite was not rerun after this scoped hardening.
+- Commits: `e00ede3d`, `2d36cb4c`, `250f62dd`, `b3cd3aff`, `db0cb1b3`. No pilot canary was launched. The implementation/status rollup is on GitHub issue #2525; no PR has been opened.
+

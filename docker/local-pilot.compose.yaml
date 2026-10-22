@@ -2,21 +2,38 @@ name: synlynk-local-pilot
 
 services:
   omlx-relay:
-    image: alpine/socat:1.8.0.1@sha256:87d88ff79bf42ca723fb360e9585c40e2923a2f4df9b9d148b127568ef6b99e7
+    build:
+      context: ..
+      dockerfile: docker/local-pilot-relay.Dockerfile
+    image: synlynk-local-pilot-relay:1
     command:
       - TCP-LISTEN:8000,fork,reuseaddr
-      - TCP:host.docker.internal:8000
+      - TCP:host.docker.internal:${PILOT_RELAY_PORT:?PILOT_RELAY_PORT is required}
     restart: "no"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          for attempt in 1 2 3 4 5; do
+          wget -q -T 2 -O /dev/null http://127.0.0.1:8000/v1/models && exit 0;
+          sleep 1;
+          done;
+          exit 1
+      interval: 30s
+      timeout: 12s
+      retries: 10
+      start_period: 2s
     read_only: true
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=8m
+    user: "${PILOT_UID:?}:${PILOT_GID:?}"
     networks:
       local-pilot:
         aliases: [omlx]
-      upstream: {}
+      host-access: {}
 
   aider:
     build:
@@ -37,7 +54,6 @@ services:
       - /workspace/.synlynk:rw,noexec,nosuid,size=64m
     environment:
       HOME: /home/aider
-      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY is required for oMLX}
     networks:
       - local-pilot
     volumes:
@@ -48,4 +64,5 @@ services:
 networks:
   local-pilot:
     internal: true
-  upstream: {}
+  host-access:
+    driver: bridge

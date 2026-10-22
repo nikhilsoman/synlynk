@@ -1175,6 +1175,8 @@ class SynlynkDaemon(WatchDaemon):
         self._last_autonomous_run = 0.0
         self._last_autonomy_pass_at = 0.0
         self._last_dispatch_count = 0
+        from synlynk.local_lifecycle import LocalLifecycleManager
+        self.local_lifecycle_manager = LocalLifecycleManager()
         # Bind request handlers to the workspace that created this daemon;
         # relative CWD resolution is unsafe for linked worktrees.
         self.sentinel_path = os.path.join(self.workspace_root, ".synlynk", "sentinel.md")
@@ -1198,6 +1200,23 @@ class SynlynkDaemon(WatchDaemon):
             log_telemetry_event({"event": "sre_heartbeat", "status": "ok", "component": "autonomous_loop"})
         except Exception as exc:
             log_telemetry_event({"event": "sre_heartbeat", "status": "degraded", "component": "autonomous_loop", "error": str(exc)})
+
+    def _local_lifecycle_tick(self) -> None:
+        """Supervise host-global Synlynk-owned oMLX idle state."""
+        try:
+            self.local_lifecycle_manager.tick()
+            from synlynk.local_failure_reporter import retry_pending_local_failures
+            retry_pending_local_failures()
+        except Exception as exc:
+            # Only classified fields are emitted; exception text may contain
+            # endpoint or provider details and must never reach telemetry.
+            log_telemetry_event({
+                "event": "local_lifecycle_tick",
+                "status": "degraded",
+                "component": "local_runtime",
+                "reason_code": getattr(exc, "reason_code", "lifecycle_tick_failed"),
+                "phase": getattr(exc, "phase", "idle_shutdown"),
+            })
 
     def _run_capability_watch_tick(self, config: dict) -> None:
         """Run due capability checks from the daemon cadence.
@@ -1480,6 +1499,7 @@ class SynlynkDaemon(WatchDaemon):
         last_quota_poll = 0.0
         while True:
             time.sleep(interval)
+            self._local_lifecycle_tick()
             current_mtimes = self._get_mtimes("project-docs")
             changed = [f for f in current_mtimes
                        if current_mtimes[f] != last_mtimes.get(f)]

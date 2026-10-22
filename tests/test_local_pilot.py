@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -474,7 +475,7 @@ def test_legacy_promotion_gate_is_retired_and_fails_closed():
     assert decision.reason == "promotion_gate_retired_use_evaluate_rebaseline"
 
 
-def test_isolated_compose_builder_passes_only_local_model_credential(tmp_path, monkeypatch):
+def test_isolated_compose_builder_never_passes_host_credential(tmp_path, monkeypatch):
     from synlynk import local_pilot
 
     repo = tmp_path / "repo"
@@ -492,6 +493,7 @@ def test_isolated_compose_builder_passes_only_local_model_credential(tmp_path, m
         repo_root=str(repo), worktree=str(worktree),
         prompt_file=str(prompt), log_file=str(log), exit_file=str(exit_file),
         job_id="job-abc123", aider_args=["--model", "openai/Ornith"],
+        task_sha256="a" * 64, effective_model="ornith",
         pilot_class="test_summary", scope_paths=["test.log"],
         env={
             "PATH": "/usr/bin", "OPENAI_API_KEY": "local-test-secret",
@@ -502,23 +504,54 @@ def test_isolated_compose_builder_passes_only_local_model_credential(tmp_path, m
     assert command[1:3] == ["-m", "synlynk.local_pilot_runner"]
     assert "--openai-api-base" in command
     assert command[command.index("--openai-api-base") + 1] == "http://omlx:8000/v1"
-    assert env["OPENAI_API_KEY"] == "local-test-secret"
+    assert "OPENAI_API_KEY" not in env
+    assert "local-test-secret" not in repr(env)
+    assert command[command.index("--openai-api-key") + 1] == "synlynk-local-relay-only"
     assert "GH_TOKEN" not in env
     assert "ANTHROPIC_API_KEY" not in env
     assert "local-test-secret" not in " ".join(command)
+    assert command[command.index("--task-sha256") + 1] == "a" * 64
+    assert command[command.index("--effective-model") + 1] == "ornith"
 
 
-def test_isolated_compose_builder_fails_closed_without_key_or_runner(tmp_path):
+def test_isolated_compose_builder_does_not_require_environment_key(tmp_path, monkeypatch):
     from synlynk.local_pilot import LocalPilotSetupError, build_isolated_compose_shell
+    repo = tmp_path / "repo"
+    (repo / "docker").mkdir(parents=True)
+    (repo / "docker" / "local-pilot.compose.yaml").write_text("services: {}\n")
+    source = tmp_path / "source"
+    source.mkdir()
+    prompt = tmp_path / "prompt"
+    prompt.write_text("summary")
+    monkeypatch.setattr("synlynk.local_pilot.shutil.which", lambda name: "/usr/bin/docker")
+    command, env = build_isolated_compose_shell(
+        repo_root=str(repo), worktree=str(source), prompt_file=str(prompt),
+        log_file=str(tmp_path / "log"), exit_file=str(tmp_path / "exit"),
+        job_id="job-no-env-key", aider_args=[], pilot_class="test_summary",
+        task_sha256="b" * 64, effective_model="ornith",
+        scope_paths=["test.log"], env={"PATH": "/usr/bin"},
+    )
+    assert "OPENAI_API_KEY" not in env
+    assert "--openai-api-key" in command
 
-    with pytest.raises(LocalPilotSetupError, match="OPENAI_API_KEY"):
-        build_isolated_compose_shell(
-            repo_root=str(tmp_path), worktree=str(tmp_path),
-            prompt_file=str(tmp_path / "missing"),
-            log_file=str(tmp_path / "log"), exit_file=str(tmp_path / "exit"),
-            job_id="job", aider_args=[], pilot_class="test_summary",
-            scope_paths=["test.log"], env={},
-        )
+
+def test_real_compose_uses_fixed_host_tcp_relay_and_no_host_key_environment():
+    from pathlib import Path
+
+    compose = Path(__file__).resolve().parents[1] / "docker" / "local-pilot.compose.yaml"
+    content = compose.read_text()
+    assert "TCP:host.docker.internal:${PILOT_RELAY_PORT" in content
+    assert "PILOT_RELAY_PORT" in content
+    assert "OPENAI_API_KEY" not in content
+    relay, remainder = content.split("  aider:", 1)
+    aider = remainder.split("\nnetworks:", 1)[0]
+    assert "host-access" in relay
+    assert "host-access" not in aider
+    assert "local-pilot:" in relay
+    assert "internal: true" in content
+    assert "cap_drop: [ALL]" in relay
+    assert "no-new-privileges:true" in relay
+    assert "wget -q -T 2 -O /dev/null http://127.0.0.1:8000/v1/models" in relay
 
 
 def test_sensitive_files_are_rejected_before_the_worktree_is_mounted(tmp_path, monkeypatch):
@@ -539,6 +572,7 @@ def test_sensitive_files_are_rejected_before_the_worktree_is_mounted(tmp_path, m
             repo_root=str(repo), worktree=str(worktree),
             prompt_file=str(prompt), log_file=str(tmp_path / "log"),
             exit_file=str(tmp_path / "exit"), job_id="job-test", aider_args=[],
+            task_sha256="c" * 64, effective_model="ornith",
             pilot_class="test_summary", scope_paths=["test.log"],
             env={"OPENAI_API_KEY": "local-key"},
         )
@@ -579,12 +613,31 @@ def test_isolated_runner_cleans_up_compose_and_redacts_persisted_logs(tmp_path, 
     compose_envs = []
     scratch_entries = []
     scratch_files = []
+    relay_calls = []
+
+    class FakeAuthRelay:
+        def __init__(self, credential):
+            relay_calls.append(("init", credential))
+
+        def start(self):
+            relay_calls.append(("start",))
+            return 45678
+
+        def close(self):
+            relay_calls.append(("close",))
+
+    monkeypatch.setattr(local_pilot_runner, "LocalAuthBroker", FakeAuthRelay)
+    monkeypatch.setattr(
+        "synlynk.local_credentials.LocalCredentialStore.get", lambda self: "test-secret"
+    )
     aider_calls = []
     aider_stdin = []
 
     def fake_run(argv, env):
         compose_calls.append(argv)
         compose_envs.append(dict(env))
+        assert "OPENAI_API_KEY" not in env
+        assert "OMLX_API_KEY" not in env
         if env.get("PILOT_WORKTREE"):
             scratch_entries.append(sorted(os.listdir(env["PILOT_WORKTREE"])))
             scratch_files.append(sorted(
@@ -619,26 +672,58 @@ def test_isolated_runner_cleans_up_compose_and_redacts_persisted_logs(tmp_path, 
     result = local_pilot_runner.run_isolated_dispatch(
         repo_root=str(tmp_path), source_worktree=str(source), prompt_file=str(prompt), log_file=str(log),
         exit_file=str(exit_file), job_id="job-test", pilot_class="test_summary",
+        task_sha256=hashlib.sha256(
+            b"Summarize the focused test result."
+        ).hexdigest(), effective_model="ornith",
         scope_paths=["test.log"], aider_args=["--model", "openai/ornith"],
-        env={"PATH": "/usr/bin", "OPENAI_API_KEY": "test-secret"},
+        env={
+            "PATH": "/usr/bin",
+            "OPENAI_API_KEY": "test-secret",
+            "OMLX_API_KEY": "omlx-secret",
+        },
     )
     assert result == 0
     assert log.read_text() == "completion [REDACTED] ok\n"
     assert exit_file.read_text() == "0\n"
     receipt = json.loads((tmp_path / "runner.log.pilot.json").read_text())
     assert receipt["outcome"] == "completed_read_only"
+    assert receipt["task_sha256"] == hashlib.sha256(
+        b"Summarize the focused test result."
+    ).hexdigest()
+    assert receipt["effective_model"] == "ornith"
+    assert receipt["execution"] == "isolated"
+    assert receipt["read_only"] is True
+    assert receipt["preflight_passed"] is True
+    assert receipt["rollback_verified"] is True
     assert receipt["changed_paths"] == []
+    from synlynk.jobs import _local_pilot_receipt_failure
+    task = "Summarize the focused test result."
+    admission = {
+        "admission_id": "job-test",
+        "task_sha256": hashlib.sha256(task.encode("utf-8")).hexdigest(),
+        "pilot_class": "test_summary",
+        "scope_paths": ["test.log"],
+        "effective_model": "ornith",
+        "qualified_models": ["ornith"],
+    }
+    assert _local_pilot_receipt_failure(
+        {"id": "job-test", "task": task, "local_pilot_receipt": admission}, receipt
+    ) is None
     assert compose_envs[0]["PILOT_WORKTREE"] != str(source)
+    assert compose_envs[0]["PILOT_RELAY_PORT"] == "45678"
+    assert relay_calls[1][0] == "start"
+    assert relay_calls[-1][0] == "close"
     assert scratch_entries[0] == [".git", "test.log"]
     assert scratch_files[0] == ["test.log"]
     assert aider_stdin == [b"prompt"]
     assert aider_calls[0][aider_calls[0].index("aider") + 1:] == [
         "--model", "openai/ornith",
+        "--openai-api-key", "synlynk-local-relay-only",
         "--no-show-model-warnings",
         "--no-pretty",
         "--no-suggest-shell-commands",
         "--message-file", "/dev/stdin",
         "--read", "test.log",
     ]
-    assert compose_calls[0][5:8] == ["job-test", "up", "--detach"]
+    assert compose_calls[0][5:12] == ["job-test", "up", "--detach", "--wait", "--wait-timeout", "15", "omlx-relay"]
     assert compose_calls[-1][-2:] == ["down", "--remove-orphans"]
