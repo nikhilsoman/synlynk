@@ -1944,15 +1944,31 @@ def test_mark_daemon_job_terminal_routes_through_canonical_settlement(project_di
 
     conn = _get_db()
     _seed_daemon_job(conn, "job-canonical", agent="codex")
+    domain = {"version": 1, "kind": "host_process_group", "pgid": 123}
+    conn.execute(
+        "UPDATE daemon_jobs SET termination_domain_json=? WHERE job_id='job-canonical'",
+        (json.dumps(domain),),
+    )
+    conn.commit()
     calls = []
     monkeypatch.setattr(
         jobs_mod,
+        "_resolve_persisted_termination_domain",
+        lambda conn, job_id, raw, config: (
+            calls.append(("resolve", job_id, json.loads(raw))) or "stopped_verified"
+        ),
+    )
+    monkeypatch.setattr(
+        jobs_mod,
         "_settle_daemon_job_terminal",
-        lambda *args, **kwargs: calls.append((args, kwargs)) or True,
+        lambda *args, **kwargs: calls.append(("settle", args, kwargs)) or True,
     )
 
     assert jobs_mod.mark_daemon_job_terminal(conn, "job-canonical") is True
-    assert calls and calls[0][0][1:3] == ("job-canonical", "timed_out")
+    assert calls[0] == ("resolve", "job-canonical", domain)
+    assert calls[1][1][1:3] == ("job-canonical", "timed_out")
+    assert calls[1][2]["process_state"] == "stopped_verified"
+    assert calls[1][2]["effect_state"] == "not_required"
     conn.close()
 
 
@@ -2004,10 +2020,56 @@ def test_mark_daemon_job_terminal_leaves_queued_job_unchanged(project_dir):
         "WHERE job_id='job-queued'"
     ).fetchone()
     assert row == ("queued", None, None)
+    assert conn.execute(
+        "SELECT COUNT(*) FROM job_evidence WHERE job_id='job-queued'"
+    ).fetchone()[0] == 0
+    assert conn.execute(
+        "SELECT COUNT(*) FROM job_terminal_decision WHERE job_id='job-queued'"
+    ).fetchone()[0] == 0
     conn.close()
 
 
-def test_reconcile_releases_reservation_on_settlement(project_dir, monkeypatch):
+def test_daemon_circuit_breaker_receives_persisted_termination_domain(
+    project_dir, monkeypatch
+):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+    from synlynk.circuit_breaker import CircuitBreakerResult
+
+    conn = sl._get_db()
+    _seed_daemon_job(conn, "job-cb-domain", agent="codex", pid=424242)
+    domain = {
+        "version": 1,
+        "kind": "host_process_group",
+        "leader_pid": 424242,
+        "pgid": 424242,
+        "dispatcher_pgid": 99,
+    }
+    conn.execute(
+        "UPDATE daemon_jobs SET termination_domain_json=? WHERE job_id='job-cb-domain'",
+        (json.dumps(domain),),
+    )
+    conn.commit()
+    seen = []
+    original_pkg = jobs_mod._pkg
+
+    def pkg(name, *args):
+        if name == "evaluate_job_circuit_breaker":
+            return lambda job, config, sentinel: (
+                seen.append(job) or CircuitBreakerResult(tripped=False)
+            )
+        return original_pkg(name, *args)
+
+    monkeypatch.setattr(jobs_mod, "_pkg", pkg)
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: True)
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    assert seen[0]["termination_domain"] == domain
+    conn.close()
+
+
+def test_reconcile_holds_reservation_without_persisted_process_domain(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.jobs as jobs_mod
 
@@ -2033,7 +2095,406 @@ def test_reconcile_releases_reservation_on_settlement(project_dir, monkeypatch):
     status = conn.execute(
         "SELECT status FROM harness_reservations WHERE id=?", (rid,)
     ).fetchone()[0]
-    assert status == "released"
+    assert status == "open"
+
+
+def test_terminal_settlement_holds_reservation_until_cleanup_is_verified(project_dir):
+    import synlynk as sl
+    from synlynk.jobs import _settle_daemon_job_terminal
+
+    conn = sl._get_db()
+    rid = sl._open_reservation(
+        conn, "codex", 4_000, scope="adhoc", job_id="job-cleanup-unknown"
+    )
+    _seed_daemon_job(conn, "job-cleanup-unknown", agent="codex", pid=999999)
+
+    assert _settle_daemon_job_terminal(
+        conn,
+        "job-cleanup-unknown",
+        "failed",
+        1,
+        "2026-10-22T10:00:00+00:00",
+        release_reservation=True,
+        process_state="cleanup_unverified",
+        effect_state="not_verified",
+    )
+
+    assert conn.execute(
+        "SELECT process_state FROM daemon_jobs WHERE job_id='job-cleanup-unknown'"
+    ).fetchone()[0] == "cleanup_unverified"
+    assert conn.execute(
+        "SELECT status FROM harness_reservations WHERE id=?", (rid,)
+    ).fetchone()[0] == "open"
+    projection = __import__(
+        "synlynk.job_status_projection", fromlist=["project_job_status"]
+    ).project_job_status(conn, "job-cleanup-unknown")
+    assert projection["process_state"] == "cleanup_unverified"
+    assert projection["effect_state"] == "not_verified"
+    deadline = conn.execute(
+        "SELECT cleanup_deadline_at FROM daemon_jobs WHERE job_id='job-cleanup-unknown'"
+    ).fetchone()[0]
+    assert deadline is not None
+    conn.close()
+
+
+def test_losing_terminal_settlement_does_not_append_truth_ledger(project_dir):
+    import synlynk as sl
+    from synlynk.jobs import _settle_daemon_job_terminal
+
+    conn = sl._get_db()
+    _seed_daemon_job(conn, "job-cas-ledger", agent="codex", pid=999999)
+    conn.execute(
+        "UPDATE daemon_jobs SET terminal_claim_token='winner' WHERE job_id='job-cas-ledger'"
+    )
+    conn.commit()
+
+    assert not _settle_daemon_job_terminal(
+        conn,
+        "job-cas-ledger",
+        "killed_zombie",
+        -9,
+        "2026-10-22T10:00:00+00:00",
+        terminal_claim_token="loser",
+        process_state="stopped_verified",
+        effect_state="unknown",
+    )
+    assert conn.execute(
+        "SELECT COUNT(*) FROM job_evidence WHERE job_id='job-cas-ledger'"
+    ).fetchone()[0] == 0
+    assert conn.execute(
+        "SELECT COUNT(*) FROM job_terminal_decision WHERE job_id='job-cas-ledger'"
+    ).fetchone()[0] == 0
+    assert conn.execute(
+        "SELECT COUNT(*) FROM job_terminal_outbox WHERE job_id='job-cas-ledger'"
+    ).fetchone()[0] == 0
+    conn.close()
+
+
+@pytest.mark.parametrize("process_state", ["stopped_verified", "cleanup_overridden"])
+def test_terminal_settlement_releases_reservation_for_resolved_cleanup(
+    project_dir, process_state
+):
+    import synlynk as sl
+    from synlynk.jobs import _settle_daemon_job_terminal
+
+    job_id = f"job-{process_state}"
+    conn = sl._get_db()
+    rid = sl._open_reservation(conn, "codex", 4_000, scope="adhoc", job_id=job_id)
+    _seed_daemon_job(conn, job_id, agent="codex", pid=999999)
+
+    assert _settle_daemon_job_terminal(
+        conn,
+        job_id,
+        "done",
+        0,
+        "2026-10-22T10:01:00+00:00",
+        release_reservation=True,
+        process_state=process_state,
+        effect_state="verified",
+    )
+
+    assert conn.execute(
+        "SELECT status FROM harness_reservations WHERE id=?", (rid,)
+    ).fetchone()[0] == "released"
+    conn.close()
+
+
+def test_terminal_settlement_does_not_commit_callers_transaction(project_dir):
+    import synlynk as sl
+    from synlynk.jobs import _settle_daemon_job_terminal
+
+    conn = sl._get_db()
+    _seed_daemon_job(conn, "job-outer-transaction", agent="codex", pid=999999)
+    conn.execute("BEGIN")
+
+    assert _settle_daemon_job_terminal(
+        conn,
+        "job-outer-transaction",
+        "failed",
+        1,
+        "2026-10-22T10:02:00+00:00",
+        process_state="stopped_verified",
+        effect_state="not_verified",
+    )
+    assert conn.in_transaction is True
+
+    conn.rollback()
+    assert conn.execute(
+        "SELECT status, process_state FROM daemon_jobs WHERE job_id='job-outer-transaction'"
+    ).fetchone() == ("running", "unknown")
+    assert conn.execute(
+        "SELECT COUNT(*) FROM job_evidence WHERE job_id='job-outer-transaction'"
+    ).fetchone()[0] == 0
+    conn.close()
+
+
+def test_cleanup_resolve_cli_requires_acknowledgement_and_reason():
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    parsed = parser.parse_args([
+        "jobs", "cleanup-resolve", "job-uncertain",
+        "--accept-risk", "--reason", "operator inspected host",
+    ])
+
+    assert parsed.jobs_cmd == "cleanup-resolve"
+    assert parsed.job_id == "job-uncertain"
+    assert parsed.accept_risk is True
+    assert parsed.reason == "operator inspected host"
+
+
+@pytest.mark.parametrize(
+    ("accept_risk", "reason", "expected"),
+    [
+        (False, "operator inspected host", "--accept-risk"),
+        (True, "", "--reason"),
+        (True, "   ", "--reason"),
+    ],
+)
+def test_cleanup_resolve_rejects_missing_operator_confirmation(
+    project_dir, capsys, accept_risk, reason, expected
+):
+    from synlynk.jobs import cmd_jobs_cleanup_resolve
+
+    assert cmd_jobs_cleanup_resolve(
+        "job-uncertain", accept_risk=accept_risk, reason=reason
+    ) == 2
+    assert expected in capsys.readouterr().err
+
+
+def test_cleanup_resolve_rejects_unknown_job_and_early_override(project_dir, capsys):
+    import synlynk as sl
+    from synlynk.jobs import cmd_jobs_cleanup_resolve
+
+    assert cmd_jobs_cleanup_resolve(
+        "job-missing", accept_risk=True, reason="checked"
+    ) == 1
+    assert "not found" in capsys.readouterr().err
+
+    conn = sl._get_db()
+    _seed_daemon_job(conn, "job-too-early", agent="codex", pid=999999)
+    conn.execute(
+        "UPDATE daemon_jobs SET process_state='cleanup_unverified', cleanup_deadline_at=? "
+        "WHERE job_id='job-too-early'",
+        ("2026-10-22T10:05:00+00:00",),
+    )
+    conn.commit()
+    conn.close()
+
+    assert cmd_jobs_cleanup_resolve(
+        "job-too-early",
+        accept_risk=True,
+        reason="checked",
+        now="2026-10-22T10:04:59+00:00",
+    ) == 1
+    assert "not available until" in capsys.readouterr().err
+
+
+def test_cleanup_resolve_audits_override_releases_capacity_and_is_idempotent(
+    project_dir, capsys
+):
+    import synlynk as sl
+    from synlynk.jobs import _settle_daemon_job_terminal, cmd_jobs_cleanup_resolve
+
+    conn = sl._get_db()
+    rid = sl._open_reservation(
+        conn, "codex", 4_000, scope="adhoc", job_id="job-aged-cleanup"
+    )
+    _seed_daemon_job(conn, "job-aged-cleanup", agent="codex", pid=999999)
+    conn.execute(
+        "UPDATE daemon_jobs SET cleanup_deadline_at=? WHERE job_id='job-aged-cleanup'",
+        ("2026-10-22T10:05:00+00:00",),
+    )
+    conn.commit()
+    assert _settle_daemon_job_terminal(
+        conn,
+        "job-aged-cleanup",
+        "failed",
+        1,
+        "2026-10-22T10:00:00+00:00",
+        release_reservation=True,
+        process_state="cleanup_unverified",
+        effect_state="unknown",
+    )
+    conn.close()
+
+    assert cmd_jobs_cleanup_resolve(
+        "job-aged-cleanup",
+        accept_risk=True,
+        reason="host reboot independently confirmed",
+        now="2026-10-22T10:05:01+00:00",
+        actor="test-operator",
+    ) == 0
+
+    conn = sl._get_db()
+    assert conn.execute(
+        "SELECT process_state FROM daemon_jobs WHERE job_id='job-aged-cleanup'"
+    ).fetchone()[0] == "cleanup_overridden"
+    assert conn.execute(
+        "SELECT status FROM harness_reservations WHERE id=?", (rid,)
+    ).fetchone()[0] == "released"
+    event = conn.execute(
+        "SELECT process_result_json, occurred_at FROM job_lifecycle_event "
+        "WHERE job_id='job-aged-cleanup' AND event_type='correction'"
+    ).fetchone()
+    payload = json.loads(event[0])
+    assert payload == {
+        "accept_risk": True,
+        "actor": "test-operator",
+        "previous_process_state": "cleanup_unverified",
+        "process_state": "cleanup_overridden",
+        "reason": "host reboot independently confirmed",
+    }
+    assert event[1] == "2026-10-22T10:05:01+00:00"
+    effect_before = conn.execute(
+        "SELECT effect_state FROM job_terminal_decision "
+        "WHERE job_id='job-aged-cleanup' ORDER BY revision DESC LIMIT 1"
+    ).fetchone()[0]
+    conn.close()
+    assert effect_before == "unknown"
+
+    assert cmd_jobs_cleanup_resolve(
+        "job-aged-cleanup",
+        accept_risk=True,
+        reason="repeat",
+        now="2026-10-22T10:06:00+00:00",
+        actor="test-operator",
+    ) == 0
+    conn = sl._get_db()
+    assert conn.execute(
+        "SELECT COUNT(*) FROM job_lifecycle_event WHERE job_id='job-aged-cleanup' "
+        "AND event_type='correction'"
+    ).fetchone()[0] == 1
+    assert conn.execute(
+        "SELECT effect_state FROM job_terminal_decision "
+        "WHERE job_id='job-aged-cleanup' ORDER BY revision DESC LIMIT 1"
+    ).fetchone()[0] == "unknown"
+    conn.close()
+    assert "cleanup_overridden" in capsys.readouterr().out
+
+
+def test_cleanup_resolve_publishes_deferred_terminal_outbox(project_dir):
+    import synlynk as sl
+    from synlynk.job_truth import ensure_effect_contract
+    from synlynk.jobs import _settle_daemon_job_terminal, cmd_jobs_cleanup_resolve
+
+    conn = sl._get_db()
+    _seed_daemon_job(conn, "job-deferred-outbox", agent="codex", pid=999999)
+    ensure_effect_contract(conn, {
+        "id": "job-deferred-outbox",
+        "requires_gh_write": True,
+        "gh_write_expect": "comment",
+        "gh_write_target": "issue:2530",
+        "started_at": "2026-10-22T10:00:00+00:00",
+    })
+    conn.execute(
+        "UPDATE daemon_jobs SET cleanup_deadline_at=? WHERE job_id='job-deferred-outbox'",
+        ("2026-10-22T10:05:00+00:00",),
+    )
+    conn.commit()
+    assert _settle_daemon_job_terminal(
+        conn,
+        "job-deferred-outbox",
+        "done",
+        0,
+        "2026-10-22T10:00:00+00:00",
+        process_state="cleanup_unverified",
+        effect_state="verified",
+    )
+    assert conn.execute(
+        "SELECT COUNT(*) FROM job_terminal_outbox WHERE job_id='job-deferred-outbox'"
+    ).fetchone()[0] == 0
+    conn.close()
+
+    assert cmd_jobs_cleanup_resolve(
+        "job-deferred-outbox",
+        accept_risk=True,
+        reason="host inspected",
+        now="2026-10-22T10:05:01+00:00",
+        actor="operator",
+    ) == 0
+    conn = sl._get_db()
+    assert conn.execute(
+        "SELECT COUNT(*) FROM job_terminal_outbox WHERE job_id='job-deferred-outbox'"
+    ).fetchone()[0] == 1
+    conn.close()
+
+
+def test_wrapper_exit_with_live_child_and_verified_effect_keeps_capacity_reserved(
+    project_dir, monkeypatch
+):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+    from synlynk.job_status_projection import project_job_status
+    from synlynk.job_truth import ensure_effect_contract
+
+    conn = sl._get_db()
+    reservation_id = sl._open_reservation(
+        conn, "codex", 4_000, scope="adhoc", job_id="job-wrapper"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs "
+        "(job_id, agent, task, status, pid, enqueued_at, started_at, "
+        "requires_gh_write, gh_write_target, gh_write_expect, process_state) "
+        "VALUES ('job-wrapper', 'codex', 'comment on issue', 'running', 111, ?, ?, "
+        "1, 'issue:2530', 'comment', 'running')",
+        ("2026-10-22T10:00:00+00:00", "2026-10-22T10:00:00+00:00"),
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs "
+        "(job_id, agent, task, status, pid, parent_job_id, enqueued_at, started_at, process_state) "
+        "VALUES ('job-child', 'codex', 'surviving child', 'running', 222, 'job-wrapper', ?, ?, 'running')",
+        ("2026-10-22T10:00:00+00:00", "2026-10-22T10:00:00+00:00"),
+    )
+    ensure_effect_contract(conn, {
+        "id": "job-wrapper",
+        "requires_gh_write": True,
+        "gh_write_expect": "comment",
+        "gh_write_target": "issue:2530",
+        "started_at": "2026-10-22T10:00:00+00:00",
+    })
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: pid == 222)
+    monkeypatch.setattr(
+        jobs_mod, "_existing_terminal_summary_truth",
+        lambda job_id: ("done", 0) if job_id == "job-wrapper" else None,
+    )
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", lambda *args, **kwargs: True)
+    monkeypatch.setattr(jobs_mod, "_daemon_job_worktree_path", lambda *args: None)
+    monkeypatch.setattr(jobs_mod, "_ensure_daemon_job_cost_entry", lambda *args, **kwargs: True)
+    monkeypatch.setattr(jobs_mod, "emit_event", lambda *args, **kwargs: None)
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    parent = conn.execute(
+        "SELECT status, process_state FROM daemon_jobs WHERE job_id='job-wrapper'"
+    ).fetchone()
+    child = conn.execute(
+        "SELECT status, process_state FROM daemon_jobs WHERE job_id='job-child'"
+    ).fetchone()
+    reservation = conn.execute(
+        "SELECT status FROM harness_reservations WHERE id=?", (reservation_id,)
+    ).fetchone()[0]
+    projection = project_job_status(conn, "job-wrapper")
+    evidence = conn.execute(
+        "SELECT kind, result FROM job_evidence WHERE job_id='job-wrapper' ORDER BY kind"
+    ).fetchall()
+    outbox_count = conn.execute(
+        "SELECT COUNT(*) FROM job_terminal_outbox WHERE job_id='job-wrapper'"
+    ).fetchone()[0]
+    conn.close()
+
+    assert parent == ("done", "cleanup_unverified")
+    assert child == ("running", "running")
+    assert reservation == "open"
+    assert projection["effect_state"] == "verified"
+    assert projection["process_stop_verified"] is False
+    assert outbox_count == 0
+    assert ("remote_effect", "true") in evidence
+    assert ("legacy_terminal_status", "true") in evidence
 
 
 def test_reconcile_scope_review_uses_persisted_task_type_before_prompt_fallback(
@@ -2332,8 +2793,13 @@ def test_auto_reap_job_from_sentinel(project_dir):
     row = conn.execute(
         "SELECT status, exit_code FROM daemon_jobs WHERE job_id='job-ad59d3ea'"
     ).fetchone()
+    effect_state = conn.execute(
+        "SELECT effect_state FROM job_terminal_decision "
+        "WHERE job_id='job-ad59d3ea' ORDER BY revision DESC LIMIT 1"
+    ).fetchone()[0]
     conn.close()
     assert row == ("timed_out", -9)
+    assert effect_state == "not_required"
 
 
 def test_write_sentinel_stall_auto_reaps(project_dir, monkeypatch):
@@ -4385,10 +4851,14 @@ def test_null_pid_zombie_is_reaped_with_leaked_worktree(tmp_path, project_dir):
     row = conn.execute(
         "SELECT status, exit_code FROM daemon_jobs WHERE job_id='job-null-pid'"
     ).fetchone()
+    process_state = conn.execute(
+        "SELECT process_state FROM daemon_jobs WHERE job_id='job-null-pid'"
+    ).fetchone()[0]
     conn.close()
 
     assert row == ("killed_zombie", -9)
-    assert not wt.exists()
+    assert wt.exists()
+    assert process_state == "cleanup_unverified"
 
 
 def test_verified_gh_write_zombie_is_completed_without_reaping_worktree(

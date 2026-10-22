@@ -155,10 +155,15 @@ def _project_job_status(conn, job_id: str) -> dict[str, Any]:
     for name, required in contract.get("required_predicates", {}).items():
         matching = [item for item in evidence if item.get("kind") in {"github_effect", "remote_effect"} and item.get(name) is True]
         predicates[name] = {"required": bool(required), "result": True if matching else "unknown"}
+    process_state = daemon.get("process_state", "unknown") if daemon else "unknown"
     return {
         "schema": PROJECTION_SCHEMA,
         "job_id": job_id,
         "status": canonical,
+        "process_state": process_state,
+        "process_stop_verified": process_state == "stopped_verified",
+        "cleanup_risk_accepted": process_state == "cleanup_overridden",
+        "effect_state": latest.get("effect_state", latest.get("verification_state", "unknown")) if latest else "unknown",
         "legacy_status": legacy,
         "legacy_alias": STATUS_ALIASES.get(str(legacy).lower()) if legacy else None,
         "lifecycle_state": "terminal" if latest and canonical not in {"verifying", "unknown"} else ("verifying" if latest else "unobserved"),
@@ -175,7 +180,9 @@ def _project_job_status(conn, job_id: str) -> dict[str, Any]:
     }
 
 
-def record_shadow_comparison(conn, job_id: str) -> dict[str, Any]:
+def record_shadow_comparison(
+    conn, job_id: str, *, manage_transaction: bool = True
+) -> dict[str, Any]:
     projection = project_job_status(conn, job_id)
     shadow = projection["shadow_comparison"]
     conn.execute(
@@ -184,7 +191,8 @@ def record_shadow_comparison(conn, job_id: str) -> dict[str, Any]:
         "SELECT ?, ?, ?, ?, ?, harness, ?, CURRENT_TIMESTAMP FROM daemon_jobs WHERE job_id=?",
         (job_id, shadow["legacy_status"], shadow["oracle_status"], shadow["reason_code"], int(shadow["disagreement"]), projection["contract"].get("kind"), job_id),
     )
-    conn.commit()
+    if manage_transaction:
+        conn.commit()
     return shadow
 
 
