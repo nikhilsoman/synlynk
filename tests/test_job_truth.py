@@ -213,6 +213,37 @@ def test_job_2158_verified_remote_effect_overrides_unknown_contract():
     )
 
 
+@pytest.mark.parametrize(
+    ("kind", "status", "reason"),
+    [
+        ("timeout", "timed_out", "timeout_with_verified_effect"),
+        ("cancelled", "cancelled", "cancellation_with_verified_effect"),
+        ("zombie", "killed_zombie", "zombie_with_verified_effect"),
+    ],
+)
+def test_verified_remote_effect_preserves_forced_process_outcome(kind, status, reason):
+    result = decide_job_outcome(
+        review_contract("job-forced-effect"),
+        [
+            {"evidence_id": "process", "kind": kind, "result": "true"},
+            {
+                "evidence_id": "remote",
+                "kind": "remote_effect",
+                "result": "true",
+                "causal_match": True,
+                "target_match": True,
+                "actor_match": True,
+                "sha_match": True,
+            },
+        ],
+    )
+
+    assert result.status == status
+    assert result.reason_code == reason
+    assert result.effect_state == "verified"
+    assert result.verification_state == "verified"
+
+
 def test_duplicate_evidence_is_idempotent_and_correction_is_revision():
     conn = db()
     contract = review_contract()

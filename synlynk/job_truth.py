@@ -252,6 +252,36 @@ def decide_job_outcome(
         all(e.get(name) is True for name in required_predicates)
         for e in causal_remote
     )
+    forced_outcome = None
+    if any(
+        e.get("kind") == "circuit_breaker"
+        and e.get("result") == "true"
+        and e.get("process_live_at_observation", True)
+        for e in rows
+    ):
+        forced_outcome = (
+            "circuit_breaker_tripped", "circuit_breaker_with_verified_effect",
+            "circuit_breaker_killed_live_process",
+        )
+    else:
+        for kind, status, verified_reason, unverified_reason in (
+            ("cancelled", "cancelled", "cancellation_with_verified_effect", "explicit_cancellation"),
+            ("timeout", "timed_out", "timeout_with_verified_effect", "timeout_observed"),
+            ("zombie", "killed_zombie", "zombie_with_verified_effect", "zombie_reaped"),
+        ):
+            if matches(kind):
+                forced_outcome = (status, verified_reason, unverified_reason)
+                break
+    if forced_outcome is not None:
+        status, verified_reason, unverified_reason = forced_outcome
+        return CompletionDecision(
+            status,
+            "verified" if verified_remote else "failed",
+            verified_reason if verified_remote else unverified_reason,
+            effect_state="verified" if verified_remote else "unknown",
+            required_follow_up="none" if verified_remote else "retry_verification",
+            evidence_ids=ids,
+        )
     if verified_remote:
         warnings = ("receipt_absent",) if any(e.get("kind") == "task_receipt" and e.get("result") == "false" for e in rows) else ()
         return CompletionDecision(
@@ -288,11 +318,6 @@ def decide_job_outcome(
             "verifying", "unknown", "contract_predicate_unresolved",
             effect_state="verifying", required_follow_up="retry_verification", evidence_ids=ids,
         )
-    if any(e.get("kind") == "circuit_breaker" and e.get("result") == "true" and e.get("process_live_at_observation", True) for e in rows):
-        return CompletionDecision("circuit_breaker_tripped", "failed", "circuit_breaker_killed_live_process", effect_state="verifying", evidence_ids=ids)
-    for kind, status, reason in (("cancelled", "cancelled", "explicit_cancellation"), ("timeout", "timed_out", "timeout_observed"), ("zombie", "killed_zombie", "zombie_reaped")):
-        if matches(kind):
-            return CompletionDecision(status, "failed", reason, effect_state="verifying", evidence_ids=ids)
     if matches("permission_denied") and not remote:
         return CompletionDecision("permission_denied", "failed", "verified_permission_denial", effect_state="not_verified", evidence_ids=ids)
     if any(e.get("result") == "unknown" for e in rows) or (remote and not matches("github_effect")):

@@ -2274,6 +2274,79 @@ def test_cleanup_resolve_audits_override_releases_capacity_and_is_idempotent(
     assert "cleanup_overridden" in capsys.readouterr().out
 
 
+def test_wrapper_exit_with_live_child_and_verified_effect_keeps_capacity_reserved(
+    project_dir, monkeypatch
+):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+    from synlynk.job_status_projection import project_job_status
+    from synlynk.job_truth import ensure_effect_contract
+
+    conn = sl._get_db()
+    reservation_id = sl._open_reservation(
+        conn, "codex", 4_000, scope="adhoc", job_id="job-wrapper"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs "
+        "(job_id, agent, task, status, pid, enqueued_at, started_at, "
+        "requires_gh_write, gh_write_target, gh_write_expect, process_state) "
+        "VALUES ('job-wrapper', 'codex', 'comment on issue', 'running', 111, ?, ?, "
+        "1, 'issue:2530', 'comment', 'running')",
+        ("2026-10-22T10:00:00+00:00", "2026-10-22T10:00:00+00:00"),
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs "
+        "(job_id, agent, task, status, pid, parent_job_id, enqueued_at, started_at, process_state) "
+        "VALUES ('job-child', 'codex', 'surviving child', 'running', 222, 'job-wrapper', ?, ?, 'running')",
+        ("2026-10-22T10:00:00+00:00", "2026-10-22T10:00:00+00:00"),
+    )
+    ensure_effect_contract(conn, {
+        "id": "job-wrapper",
+        "requires_gh_write": True,
+        "gh_write_expect": "comment",
+        "gh_write_target": "issue:2530",
+        "started_at": "2026-10-22T10:00:00+00:00",
+    })
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: pid == 222)
+    monkeypatch.setattr(
+        jobs_mod, "_existing_terminal_summary_truth",
+        lambda job_id: ("done", 0) if job_id == "job-wrapper" else None,
+    )
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", lambda *args, **kwargs: True)
+    monkeypatch.setattr(jobs_mod, "_daemon_job_worktree_path", lambda *args: None)
+    monkeypatch.setattr(jobs_mod, "_ensure_daemon_job_cost_entry", lambda *args, **kwargs: True)
+    monkeypatch.setattr(jobs_mod, "emit_event", lambda *args, **kwargs: None)
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    parent = conn.execute(
+        "SELECT status, process_state FROM daemon_jobs WHERE job_id='job-wrapper'"
+    ).fetchone()
+    child = conn.execute(
+        "SELECT status, process_state FROM daemon_jobs WHERE job_id='job-child'"
+    ).fetchone()
+    reservation = conn.execute(
+        "SELECT status FROM harness_reservations WHERE id=?", (reservation_id,)
+    ).fetchone()[0]
+    projection = project_job_status(conn, "job-wrapper")
+    evidence = conn.execute(
+        "SELECT kind, result FROM job_evidence WHERE job_id='job-wrapper' ORDER BY kind"
+    ).fetchall()
+    conn.close()
+
+    assert parent == ("done", "cleanup_unverified")
+    assert child == ("running", "running")
+    assert reservation == "open"
+    assert projection["effect_state"] == "verified"
+    assert projection["process_stop_verified"] is False
+    assert ("remote_effect", "true") in evidence
+    assert ("legacy_terminal_status", "true") in evidence
+
+
 def test_reconcile_scope_review_uses_persisted_task_type_before_prompt_fallback(
     project_dir, monkeypatch
 ):

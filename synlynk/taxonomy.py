@@ -289,6 +289,12 @@ COMMAND_TAXONOMY = [
          "manually reconcile a job",
          "repair job completion evidence",
      ], "hook_event": None},
+    {"command": "jobs cleanup-resolve", "governs_stage": "execute", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": [
+         "accept aged cleanup uncertainty",
+         "release capacity after unverified cleanup",
+     ], "hook_event": None},
     {"command": "gc", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["garbage collect merged worktrees", "clean up orphaned state shards"],

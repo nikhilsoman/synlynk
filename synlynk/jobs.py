@@ -2539,6 +2539,17 @@ def _gh_write_verified_is_false(value) -> bool:
     return value is False or (isinstance(value, str) and value.lower() == "false")
 
 
+def _circuit_breaker_requires_terminal(result) -> bool:
+    """Separate a real/uncertain cleanup attempt from a post-exit observation."""
+    return bool(
+        result.tripped
+        and (
+            result.process_killed
+            or str(result.kill_method or "").startswith("cleanup_unverified:")
+        )
+    )
+
+
 def _defer_local_gh_write_failure(job: dict, github_effect_consulted: bool) -> bool:
     """Hold a local failure-looking gh-write classification as non-terminal.
 
@@ -2607,7 +2618,7 @@ def _reconcile_jobs_unlocked() -> None:
                 evaluate_cb = None
         if evaluate_cb:
             cb_res = evaluate_cb(job, config, sentinel_path)
-            if cb_res.tripped:
+            if _circuit_breaker_requires_terminal(cb_res):
                 # Only a confirmed process termination belongs to the circuit
                 # breaker terminal state.  A limit breach observed after a
                 # natural exit must continue through normal reaping below.
@@ -3283,6 +3294,36 @@ def _pid_is_alive(pid) -> bool:
 
 
 _UNSET_TERMINAL_CLAIM = object()
+_UNRESOLVED_PROCESS_STATES = {
+    "unknown", "running", "stop_requested", "cleanup_unverified",
+}
+
+
+def _terminal_process_state(
+    conn, job_id: str, observed_state: str = "stopped_verified"
+) -> str:
+    """Refuse verified-stop projection while this job or a child is unresolved."""
+    if observed_state != "stopped_verified":
+        return observed_state
+    try:
+        own = conn.execute(
+            "SELECT process_state FROM daemon_jobs WHERE job_id=?", (job_id,)
+        ).fetchone()
+        if own and own[0] == "cleanup_unverified":
+            return "cleanup_unverified"
+        child = conn.execute(
+            "SELECT 1 FROM daemon_jobs WHERE parent_job_id=? AND "
+            "(status IN ('running', 'queued') OR process_state IN "
+            "('unknown', 'running', 'stop_requested', 'cleanup_unverified')) LIMIT 1",
+            (job_id,),
+        ).fetchone()
+        if child:
+            return "cleanup_unverified"
+    except sqlite3.OperationalError:
+        # Old fixture schemas cannot express descendant ownership. Preserve the
+        # caller's observed state until their migration adds lifecycle columns.
+        pass
+    return "stopped_verified"
 
 
 def _persist_daemon_job_terminal(
@@ -3381,6 +3422,53 @@ def _settle_daemon_job_terminal(
                 canonical_legacy_status = canonical_status(status)
             except ValueError:
                 canonical_legacy_status = status
+            forced_kind = {
+                "timed_out": "timeout",
+                "cancelled": "cancelled",
+                "killed_zombie": "zombie",
+                "circuit_breaker_tripped": "circuit_breaker",
+            }.get(canonical_legacy_status)
+            if forced_kind:
+                record_evidence_and_reconcile(
+                    conn,
+                    job_id,
+                    {
+                        "kind": forced_kind,
+                        "result": "true",
+                        "source": "daemon_reconciliation",
+                        "event_id": f"process:{job_id}:{completed_at}:{forced_kind}",
+                        "observed_at": completed_at,
+                        "exit_code": exit_code,
+                        "process_live_at_observation": forced_kind == "circuit_breaker",
+                    },
+                    update_compatibility=False,
+                    manage_transaction=False,
+                )
+            if effect_state in {"verified", "not_verified", "unknown"}:
+                effect_result = {
+                    "verified": "true", "not_verified": "false", "unknown": "unknown",
+                }[effect_state]
+                effect_evidence = {
+                    "kind": "remote_effect",
+                    "result": effect_result,
+                    "source": "daemon_reconciliation",
+                    "event_id": f"effect:{job_id}:{completed_at}:{effect_state}",
+                    "observed_at": completed_at,
+                    "causal_match": effect_state == "verified",
+                }
+                if effect_state == "verified":
+                    effect_evidence.update({
+                        "target_match": True,
+                        "actor_match": True,
+                        "sha_match": True,
+                    })
+                record_evidence_and_reconcile(
+                    conn,
+                    job_id,
+                    effect_evidence,
+                    update_compatibility=False,
+                    manage_transaction=False,
+                )
             record_evidence_and_reconcile(
                 conn,
                 job_id,
@@ -3417,10 +3505,14 @@ def _settle_daemon_job_terminal(
             evidence_strength=evidence_strength,
         )
         if settled and process_state is not None:
-            conn.execute(
-                "UPDATE daemon_jobs SET process_state=? WHERE job_id=?",
-                (process_state, job_id),
-            )
+            try:
+                conn.execute(
+                    "UPDATE daemon_jobs SET process_state=? WHERE job_id=?",
+                    (process_state, job_id),
+                )
+            except sqlite3.OperationalError:
+                # Compatibility fixture/legacy DB; migration adds this axis.
+                pass
         if settled and release_reservation:
             _release_daemon_job_reservation(conn, job_id, process_state=process_state)
         if had_transaction:
@@ -3940,7 +4032,7 @@ def reclaim_stranded_stories(
                                 137,
                                 terminal_at,
                                 only_running=True,
-                                process_state="stopped_verified",
+                                process_state=_terminal_process_state(conn, job_id),
                                 effect_state="unknown",
                             )
                     conn.execute(
@@ -4440,6 +4532,7 @@ def _reconcile_terminal_jobs_json(conn) -> int:
             effect_state=_effect_state_after_verification(
                 verified, bool(requires_gh_write)
             ),
+            process_state=_terminal_process_state(conn, job_id),
         ):
             repaired += 1
             emit_event(
@@ -5090,7 +5183,7 @@ def _reconcile_daemon_jobs() -> None:
                 except (TypeError, ValueError):
                     cb_job["pid_identity"] = None
                 cb_res = evaluate_cb(cb_job, config, ".synlynk/sentinel.md")
-                if cb_res.tripped:
+                if _circuit_breaker_requires_terminal(cb_res):
                     # Only a confirmed process termination belongs to the
                     # circuit breaker terminal state.  If the worker exited
                     # naturally, let the waitpid/exit-marker path below
@@ -5105,7 +5198,11 @@ def _reconcile_daemon_jobs() -> None:
                         cb_job.get("exit_code", -9),
                         ended_at,
                         release_reservation=True,
-                        process_state=cb_job.get("process_state", "cleanup_unverified"),
+                        process_state=_terminal_process_state(
+                            conn,
+                            job_id,
+                            cb_job.get("process_state", "cleanup_unverified"),
+                        ),
                         effect_state="unknown",
                     )
                     if settled:
@@ -5225,7 +5322,7 @@ def _reconcile_daemon_jobs() -> None:
                     settled = _settle_daemon_job_terminal(
                         conn, job_id, status, exit_code, now, release_reservation=True,
                         evidence_strength=("github" if gh_write_verified_str in ("true", "false") else "unknown"),
-                        process_state="stopped_verified",
+                        process_state=_terminal_process_state(conn, job_id),
                         effect_state=_effect_state_after_verification(
                             gh_write_verified_str, bool(requires_gh_write)
                         ),
@@ -5365,12 +5462,16 @@ def _reconcile_daemon_jobs() -> None:
                             conn, job_id, zombie_status, zombie_exit_code, now,
                             only_running=True, terminal_claim_token=terminal_claim_token,
                             evidence_strength=("github" if gh_write_verified_str in ("true", "false") else "unknown"),
-                            process_state="stopped_verified",
+                            process_state=_terminal_process_state(conn, job_id),
                             effect_state=_effect_state_after_verification(
                                 gh_write_verified_str, bool(requires_gh_write)
                             ),
                         )
-                        if settled and zombie_status == "killed_zombie":
+                        if (
+                            settled
+                            and zombie_status == "killed_zombie"
+                            and _terminal_process_state(conn, job_id) == "stopped_verified"
+                        ):
                             _reap_zombie_worktree(job_id, log_path, conn=conn)
                         if settled:
                             _ensure_daemon_job_cost_entry(
@@ -5526,7 +5627,7 @@ def _reconcile_daemon_jobs() -> None:
                 settled = _settle_daemon_job_terminal(
                     conn, job_id, status, exit_code, now, release_reservation=True,
                     evidence_strength=("github" if gh_write_verified_str in ("true", "false") else "local"),
-                    process_state="stopped_verified",
+                    process_state=_terminal_process_state(conn, job_id),
                     effect_state=_effect_state_after_verification(
                         gh_write_verified_str, bool(requires_gh_write)
                     ),
@@ -5673,7 +5774,8 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                 if any(dep_statuses.get(d) == "failed" for d in deps):
                     _settle_daemon_job_terminal(
                         conn, job_id, "failed", 1, now, only_running=False,
-                        process_state="stopped_verified", effect_state="not_required",
+                        process_state=_terminal_process_state(conn, job_id),
+                        effect_state="not_required",
                     )
                     continue
                 done_ids = {jid for jid, st in dep_statuses.items() if st == "done"}
@@ -5723,7 +5825,8 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                 # the daemon does not spin forever on an unlaunchable job.
                 _settle_daemon_job_terminal(
                     conn, job_id, "failed", 1, now, only_running=False,
-                    process_state="stopped_verified", effect_state="not_required",
+                    process_state=_terminal_process_state(conn, job_id),
+                    effect_state="not_required",
                 )
                 continue
 
