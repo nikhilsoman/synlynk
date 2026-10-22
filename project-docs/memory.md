@@ -227,3 +227,15 @@
 - **2026-10-19 [LIVE-27] Canonical cleanse:** Migration 23 deprecates every malformed or non-current `execution_log` model in `harness_models` using the shared `is_plausible_model_id()` and `_curated_model_ids()` predicates. It preserves authoritative and valid execution-log rows, is idempotent, and has been applied to the canonical state database. [@codex]
 - **2026-10-21 [LIVE-27] Complete retirement:** Migration 28 deprecates every remaining non-deprecated `execution_log` row, including stale-but-plausible observations, so the full 75-row incident set cannot participate in resolution. Rows remain in place as audit history. [@codex]
 
+- **2026-10-22 Roadmap daily-release rebaseline:** Nikhil approved a single
+  public stable release stream beginning 2026-10-23, targeting a gated
+  Developer Preview on 2026-11-06. There are no parallel RC/DEV/PROD
+  channels. Each day's work begins with a dependency sweep across goals,
+  stories, parent epics, issue comments, linked PRs, specs/plans, adjacent
+  past work, and relevant bugs/tech debt. Evidence-green work may move earlier
+  without waiting for its scheduled date, but no quality or human release gate
+  is bypassed. Local, OpenRouter, swarms, Universal Gateway, crawler/GTM, and
+  public announcement work are deferred; Muse is an early required core
+  harness. The 2026-10-20 schedule and its 94-story placement are superseded
+  by the rebaseline once its schedule PR merges. [@nikhilsoman]
+
