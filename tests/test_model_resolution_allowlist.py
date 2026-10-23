@@ -37,6 +37,20 @@ def _insert(conn, harness, model_id, source, discovered_at, tier="pro"):
     )
 
 
+def test_self_report_outranks_newer_execution_log():
+    """gh:#2449: self_report ranks above execution_log, even when the log row is newer."""
+    import synlynk.db as db
+
+    conn = _catalog_db()
+    _insert(conn, "codex", "gpt-5.6-luna", "self_report", "2026-10-01T00:00:00+00:00")
+    _insert(conn, "codex", "gpt-5.6-terra", "execution_log", "2026-10-19T00:00:00+00:00")
+
+    rows = db.get_active_harness_models(conn, harness="codex", tier="pro")
+
+    assert [row["discovery_source"] for row in rows] == ["self_report", "execution_log"]
+    assert rows[0]["model_id"] == "gpt-5.6-luna"
+
+
 def test_authoritative_sources_outrank_newer_execution_log_rows(monkeypatch):
     import synlynk as sl
     import synlynk.models as models
