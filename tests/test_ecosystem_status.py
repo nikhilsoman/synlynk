@@ -198,6 +198,18 @@ def test_format_status_terminal_structure(db):
     assert "SENTINELS" in output
 
 
+def test_format_status_terminal_reports_unknown_muse_capacity():
+    from synlynk.status import _format_status_terminal
+
+    rows = [{"harness_name": "muse", "fleet_tier": "experimental", "installed_version": "1.4.12"}]
+    output = _format_status_terminal(rows, {}, 1.0, "daily-grind", 0)
+
+    assert "muse         experimental" in output
+    capacity_line = next(line for line in output.splitlines() if line.startswith("  muse") and "experimental" not in line)
+    assert capacity_line.count("unknown") == 4
+    assert "0K" not in capacity_line
+
+
 def test_format_status_terminal_shows_rates_updated_date():
     from synlynk.status import _format_status_terminal
 
