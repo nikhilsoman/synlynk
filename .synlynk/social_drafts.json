@@ -3278,5 +3278,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2550 \u2014 record the shipped v0.25.2 release in roadmap bookkeeping (PR #2550, v0.25.2)\n\n\u2022 Merged improvements and fixes for PR #2550.\n\n#posts",
     "changelog": "### v0.25.2 (2026-10-23) - PR #2550\n- Merged improvements and fixes for PR #2550."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/452-pr2555-record-nikhil-s-v0-25-3-sign-off-on-two-.md",
+    "title": "PR #2555 \u2014 record Nikhil's v0.25.3 sign-off on two design specs",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-23",
+    "pr": "#2555",
+    "version": "0.25.2",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2555."
+    ],
+    "tweet": "\ud83d\ude80 PR #2555 \u2014 record Nikhil's v0.25.3 sign-off on two design specs (PR #2555, v0.25.2)\n\n\u2022 Merged improvements and fixes for PR #2555.\n\n#posts",
+    "changelog": "### v0.25.2 (2026-10-23) - PR #2555\n- Merged improvements and fixes for PR #2555."
   }
 ]
