@@ -20,6 +20,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   entitlement checks, and reconnect/status hardening remain follow-up work.
 - Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
+- Guard watch stale-PID cleanup with the daemon lifetime lock so concurrent starts cannot lose a newly published PID file (#2537).
 
 ## [v0.25.1] - 2026-10-14
 ### Added
