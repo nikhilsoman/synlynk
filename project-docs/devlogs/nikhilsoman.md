@@ -2294,3 +2294,25 @@ implementation dispatched, external messages sent, or policy changed.
   cost was not independently available, so no amount was invented.
 [@codex]
 
+## 2026-10-23 — v0.25.2 stability blockers merged
+
+- PR #2538 closed #2532 and merged to `main` as `524a28c9`. Generated docs and
+  archives now resolve to the calling worktree, unsafe relative paths are
+  rejected, and dispatches no longer create incidental generated-file writes.
+  QA reviewed head `5e68e55c`; 629 focused tests passed, all six CI checks were
+  green, and `synlynk pr check` passed.
+- PR #2544 closed #2537 and merged as `6d047311`. Watch status/stop now handle
+  missing PID files and serialize stale cleanup against concurrent starts.
+  QA reviewed head `119e0b78`; all six CI checks and the merge policy passed,
+  16 focused daemon tests passed with the known shared-port case excluded, and
+  full collection reported 5,034 tests. The complete CI matrix passed.
+- Marked canonical stories `story-issue-2532` and `story-issue-2537` done via
+  the CLI and refreshed the generated roadmap note. The v0.25.2 arc remains
+  `planned`: other gate work remains and neither merge cuts a release tag.
+- Posted the combined rollup to roadmap parent #2458. Five completed dispatches
+  were missing `cost_entries` rows; their usage and resolved models were
+  verified from job records, then backfilled via the CLI. Regenerated
+  `costs.md` and its archive from canonical state. Interactive-session cost was
+  not independently available and was not invented.
+[@codex]
+
