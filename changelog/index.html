@@ -46,11 +46,6 @@ Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versio
 <hr>
 <h2><a href="https://github.com/nikhilsoman/synlynk/compare/v0.3.0...HEAD">Unreleased</a></h2>
 <ul>
-<li>Fix generated project docs and archives to stay in the invoking interactive
-checkout, reject unsafe relative paths, and suppress incidental generated-file
-writes from dispatch jobs while preserving canonical DB mutations (#2532, #2237).</li>
-<li>Fix dispatched cost attribution so <code>cost_entries.agent_role</code> preserves the
-job's explicit role across repeated dispatches on the same story (gh:#2509).</li>
 <li>Add an opt-in personal NATS relay with scoped device credentials, durable
 JetStream replay, retention-gap events, subscription filters, and safe document
 previews. See <a href="docs/personal-hosted-relay.md">self-hosted setup</a>. The <code>hub</code> extra
@@ -58,8 +53,18 @@ is optional; the core CLI remains stdlib-only. Managed service provisioning,
 entitlement checks, and reconnect/status hardening remain follow-up work.</li>
 <li>Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.</li>
 <li>Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.</li>
-<li>Guard watch stale-PID cleanup with the daemon lifetime lock so concurrent starts cannot lose a newly published PID file (#2537).</li>
 </ul>
+<div class="changelog-version-header"><span class="changelog-version">vv0.25.2</span><span class="changelog-date">2026-10-23</span></div>
+<h3 class="tag-fixed">Fixed</h3>
+- Rank `self_report` above `execution_log` so a scraped log row cannot outrank a probe or self-report (#2449, #2548).
+- Keep execution-log ingestion on the catalog allowlist, preserve discovery provenance and timestamps, and cover Codex, Grok, Agy, Claude, and Muse resolution (#2448, #2450, #2441).
+- Reject an invalid explicit `--model` before the harness starts (#2291).
+- Make job terminal state follow process truth (#2530, #2539).
+- Keep generated project docs and archives in the invoking worktree (#2532, #2538).
+- Guard watch stale-PID cleanup so concurrent starts cannot drop a newly published PID file (#2537, #2544).
+- Preserve the dispatched role on repeated cost entries for the same story (#2509, #2510).
+<h3 class="tag-changed">Changed</h3>
+- Muse onboarding stays on v0.25.3. Local stays deferred (#2534).
 <div class="changelog-version-header"><span class="changelog-version">vv0.25.1</span><span class="changelog-date">2026-10-14</span></div>
 <h3 class="tag-added">Added</h3>
 - feat(db): provider-aware `harness_models` catalog — 3-column primary key `(harness_name, model_id, provider)`, rate-card columns (input/output/cache-read/cache-write/tool-use per Mtok), `complexity_tier`, `max_effort_level`, `context_window_tokens`, `discovered_at` (#2293)
