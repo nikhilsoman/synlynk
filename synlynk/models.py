@@ -194,11 +194,14 @@ _GROK_TIER_DISCOVERY_PREFERENCE = {
     "reasoning": ("grok-4.7", "grok-4.6"),
 }
 
-# Preference order when a catalog id is absent from live Codex config/probe (gh:#2291).
+# Preference order when a catalog id is absent from live Codex config/probe.
+# Each tuple stays inside one tier. Codex discovery is a single config.toml
+# model, not a roster, so a pro id must not be a reasoning or fast fallback
+# (gh:#2291, gh:#2552).
 _CODEX_TIER_DISCOVERY_PREFERENCE = {
     "fast": ("gpt-5.6-luna", "gpt-5.5", "gpt-5.4-mini", "gpt-6-luna"),
-    "pro": ("gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-luna", "gpt-5.5"),
-    "reasoning": ("gpt-5.6-sol", "gpt-6.1-sol", "gpt-5.6-terra"),
+    "pro": ("gpt-5.6-terra",),
+    "reasoning": ("gpt-5.6-sol", "gpt-6.1-sol"),
 }
 
 _DISCOVERY_CACHE: dict[str, tuple[float, tuple[str, ...]]] = {}
@@ -292,7 +295,11 @@ def _heuristic_grok_tier_model(tier: str, discovered: list[str]) -> str | None:
 
 
 def _heuristic_codex_tier_model(tier: str, discovered: list[str]) -> str | None:
-    """Pick a live Codex model id when none of the preferred ids are present (gh:#2291)."""
+    """Pick a live Codex model id when none of the preferred ids are present.
+
+    Markers are tier-specific. A generic ``gpt`` match, or another tier's
+    name, would assign one config.toml model to every tier (gh:#2552).
+    """
     def first(predicate) -> str | None:
         for name in discovered:
             if predicate(name.lower()):
@@ -305,22 +312,17 @@ def _heuristic_codex_tier_model(tier: str, discovered: list[str]) -> str | None:
             or first(lambda name: "mini" in name)
             or first(lambda name: "fast" in name)
             or first(lambda name: "flash" in name)
-            or first(lambda name: "gpt" in name)
         )
     if tier == "pro":
         return (
             first(lambda name: "terra" in name)
             or first(lambda name: "pro" in name)
-            or first(lambda name: "luna" in name)
-            or first(lambda name: "gpt" in name)
         )
     if tier == "reasoning":
         return (
             first(lambda name: "sol" in name)
             or first(lambda name: "reasoning" in name or "think" in name)
             or first(lambda name: "o3" in name or "o1" in name)
-            or first(lambda name: "terra" in name)
-            or first(lambda name: "gpt" in name)
         )
     return None
 
@@ -346,7 +348,9 @@ def _pick_discovered_tier_model(harness: str, tier: str, configured: str, discov
             if candidate in discovered:
                 return candidate
         heuristic = _heuristic_codex_tier_model(tier, discovered)
-        return heuristic or discovered[0]
+        # Codex has no model-list CLI. One unrelated id is not a roster,
+        # so keep the allowlisted configured model instead of discovered[0].
+        return heuristic or configured
     return configured
 
 
