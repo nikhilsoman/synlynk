@@ -1535,11 +1535,31 @@ class SynlynkDaemon(WatchDaemon):
         print("    Tip: run 'synlynk daemon --install-service' to supervise and auto-start across reboots.")
 
     def status(self) -> None:
-        if not self._is_running():
+        # _health() treats a missing pidfile as running only for a live lock
+        # owner. A live HTTP-port listener is still daemon evidence (same
+        # fallback stop() already uses). Consult it before the not-running
+        # branch so gh:#2553's port-only case reports degraded running
+        # instead of "not running".
+        if not self._is_running() and self._resolve_live_pid() is None:
             self._print_not_running()
             return
-        with open(self.pidfile) as f:
-            pid = int(f.read().strip())
+        pidfile_pid = None
+        if os.path.exists(self.pidfile):
+            try:
+                with open(self.pidfile) as f:
+                    pidfile_pid = int(f.read().strip())
+            except (OSError, ValueError):
+                pidfile_pid = None
+
+        degraded = pidfile_pid is None
+        pid = pidfile_pid if pidfile_pid is not None else self._resolve_live_pid()
+
+        if pid is None:
+            # _is_running() and _resolve_live_pid() disagree (e.g. the lock
+            # owner died between the two checks): no safe PID to report.
+            self._print_not_running()
+            return
+
         start_file = self.pidfile.replace(".pid", ".start")
         try:
             with open(start_file) as f:
@@ -1561,6 +1581,8 @@ class SynlynkDaemon(WatchDaemon):
         print(f"    jobs: {counts['queued']} queued · {counts['running']} running "
               f"· {counts['done']} done · {counts['failed']} failed · {counts['permission_denied']} permission_denied")
         print(f"    http: http://localhost:{self.HTTP_PORT}")
+        if degraded:
+            print("    (pidfile missing — reporting degraded evidence)")
 
     def _run_loop(self) -> None:
         import threading as _threading

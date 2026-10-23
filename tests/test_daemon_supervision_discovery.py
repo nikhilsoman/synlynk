@@ -36,8 +36,12 @@ def test_hc_daemon_service_ok_when_installed(tmp_path, monkeypatch):
 def test_daemon_status_hints_install_service_when_stopped(capsys):
     """synlynk daemon status prints install-service hint when not running."""
     daemon = SynlynkDaemon()
+    # status() now consults _resolve_live_pid() before the not-running branch
+    # so a live HTTP listener still counts (gh:#2553). This test forces "no
+    # live PID" without probing the host's real daemon port (LIVE-25, gh:#2329).
     with patch.object(daemon, "_is_running", return_value=False), \
-         patch("os.path.exists", return_value=False):
+         patch("os.path.exists", return_value=False), \
+         patch("synlynk.daemon._pid_is_alive", return_value=False):
         daemon.status()
     captured = capsys.readouterr()
     assert "daemon not running" in captured.out
