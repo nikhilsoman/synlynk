@@ -32,7 +32,8 @@ def _make_conn():
         """
         CREATE TABLE capability_ratings (
             story_id TEXT, agent TEXT, discipline TEXT,
-            pr_review_cycles INTEGER, quality REAL
+            pr_review_cycles INTEGER, dispatch_rework INTEGER,
+            micro_rework INTEGER, quality REAL
         )
         """
     )
@@ -55,24 +56,24 @@ def test_column_exists_true_and_false():
 def test_fetch_rows_without_quality_verified_column():
     conn = _make_conn()
     conn.execute(
-        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'backend', 2, 4.5)"
+        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'backend', 2, 1, 0, 4.5)"
     )
     conn.execute("INSERT INTO cost_entries VALUES ('s1', 1.23, 100, 'job-1')")
     rows, has_qv = _fetch_rows(conn)
     assert has_qv is False
-    assert rows == [("s1", "codex", "backend", 2, None, 1.23, 100, "job-1")]
+    assert rows == [("s1", "codex", "backend", 2, 1, 0, None, 1.23, 100, "job-1")]
 
 
 def test_fetch_rows_with_quality_verified_column():
     conn = _make_conn()
     conn.execute("ALTER TABLE capability_ratings ADD COLUMN quality_verified INTEGER")
     conn.execute(
-        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'backend', 2, 4.5, 1)"
+        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'backend', 2, 1, 0, 4.5, 1)"
     )
     conn.execute("INSERT INTO cost_entries VALUES ('s1', 1.23, 100, 'job-1')")
     rows, has_qv = _fetch_rows(conn)
     assert has_qv is True
-    assert rows == [("s1", "codex", "backend", 2, 1, 1.23, 100, "job-1")]
+    assert rows == [("s1", "codex", "backend", 2, 1, 0, 1, 1.23, 100, "job-1")]
 
 
 def test_dedupe_cost_rows_same_pr_number_counted_once():
@@ -96,7 +97,7 @@ def test_dedupe_cost_rows_null_pr_number_falls_back_to_job_id():
 def test_build_buckets_excludes_unmapped_discipline():
     conn = _make_conn()
     conn.execute(
-        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'ml', 2, 4.5)"
+        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'ml', 2, 0, 0, 4.5)"
     )
     conn.execute("INSERT INTO cost_entries VALUES ('s1', 1.23, 100, 'job-1')")
     buckets, skipped = build_buckets(conn)
@@ -107,11 +108,11 @@ def test_build_buckets_excludes_unmapped_discipline():
 def test_build_buckets_groups_by_harness_and_task_type():
     conn = _make_conn()
     conn.execute(
-        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'backend', 2, 4.5)"
+        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'backend', 2, 0, 0, 4.5)"
     )
     conn.execute("INSERT INTO cost_entries VALUES ('s1', 1.50, 100, 'job-1')")
     conn.execute(
-        "INSERT INTO capability_ratings VALUES ('s2', 'codex', 'backend', 4, 4.5)"
+        "INSERT INTO capability_ratings VALUES ('s2', 'codex', 'backend', 4, 0, 0, 4.5)"
     )
     conn.execute("INSERT INTO cost_entries VALUES ('s2', 3.00, 101, 'job-2')")
     buckets, skipped = build_buckets(conn)
@@ -353,13 +354,13 @@ def test_capability_report_against_real_db_copy_does_not_mutate_source(tmp_path,
 
 def test_build_buckets_maps_expanded_disciplines():
     conn = _make_conn()
-    conn.execute("INSERT INTO capability_ratings VALUES ('s1', 'agy', 'docs', 1, 4.5)")
+    conn.execute("INSERT INTO capability_ratings VALUES ('s1', 'agy', 'docs', 1, 0, 0, 4.5)")
     conn.execute("INSERT INTO cost_entries VALUES ('s1', 1.0, 100, 'job-1')")
-    conn.execute("INSERT INTO capability_ratings VALUES ('s2', 'codex', 'security', 2, 4.5)")
+    conn.execute("INSERT INTO capability_ratings VALUES ('s2', 'codex', 'security', 2, 0, 0, 4.5)")
     conn.execute("INSERT INTO cost_entries VALUES ('s2', 2.0, 101, 'job-2')")
-    conn.execute("INSERT INTO capability_ratings VALUES ('s3', 'codex', 'PROG', 1, 4.5)")
+    conn.execute("INSERT INTO capability_ratings VALUES ('s3', 'codex', 'PROG', 1, 0, 0, 4.5)")
     conn.execute("INSERT INTO cost_entries VALUES ('s3', 3.0, 102, 'job-3')")
-    conn.execute("INSERT INTO capability_ratings VALUES ('s4', 'grok', 'devops', 1, 4.5)")
+    conn.execute("INSERT INTO capability_ratings VALUES ('s4', 'grok', 'devops', 1, 0, 0, 4.5)")
     conn.execute("INSERT INTO cost_entries VALUES ('s4', 4.0, 103, 'job-4')")
     buckets, skipped = build_buckets(conn)
     assert skipped == 0
@@ -371,18 +372,18 @@ def test_build_buckets_maps_expanded_disciplines():
 
 def test_fetch_rows_excludes_seed_and_local_records():
     conn = _make_conn()
-    conn.execute("INSERT INTO capability_ratings VALUES ('real-1', 'codex', 'backend', 2, 4.5)")
+    conn.execute("INSERT INTO capability_ratings VALUES ('real-1', 'codex', 'backend', 2, 0, 0, 4.5)")
     conn.execute("INSERT INTO cost_entries VALUES ('real-1', 1.0, 100, 'job-1')")
     # Synthetic seed by quality
-    conn.execute("INSERT INTO capability_ratings VALUES ('seed-qual', 'codex', 'backend', 2, 0.6)")
+    conn.execute("INSERT INTO capability_ratings VALUES ('seed-qual', 'codex', 'backend', 2, 0, 0, 0.6)")
     conn.execute("INSERT INTO cost_entries VALUES ('seed-qual', 1.0, 101, 'job-2')")
     # Local agent
-    conn.execute("INSERT INTO capability_ratings VALUES ('local-1', 'local', 'backend', 2, 4.5)")
+    conn.execute("INSERT INTO capability_ratings VALUES ('local-1', 'local', 'backend', 2, 0, 0, 4.5)")
     conn.execute("INSERT INTO cost_entries VALUES ('local-1', 1.0, 102, 'job-3')")
     # Seed story ID
-    conn.execute("INSERT INTO capability_ratings VALUES ('seed-story-1', 'codex', 'backend', 2, 4.5)")
+    conn.execute("INSERT INTO capability_ratings VALUES ('seed-story-1', 'codex', 'backend', 2, 0, 0, 4.5)")
     conn.execute("INSERT INTO cost_entries VALUES ('seed-story-1', 1.0, 103, 'job-4')")
-    conn.execute("INSERT INTO capability_ratings VALUES ('local-seed-01', 'codex', 'backend', 2, 4.5)")
+    conn.execute("INSERT INTO capability_ratings VALUES ('local-seed-01', 'codex', 'backend', 2, 0, 0, 4.5)")
     conn.execute("INSERT INTO cost_entries VALUES ('local-seed-01', 1.0, 104, 'job-5')")
 
     rows, _ = _fetch_rows(conn)

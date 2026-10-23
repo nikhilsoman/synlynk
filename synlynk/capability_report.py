@@ -47,6 +47,7 @@ def _fetch_rows(conn):
     quality_filter = " AND (cr.quality IS NULL OR cr.quality != 0.6)" if has_quality else ""
     query = (
         "SELECT cr.story_id, cr.agent, cr.discipline, cr.pr_review_cycles, "
+        "cr.dispatch_rework, cr.micro_rework, "
         f"{qv_select}, ce.total_cost_usd, ce.pr_number, ce.job_id "
         "FROM capability_ratings cr JOIN cost_entries ce ON cr.story_id = ce.story_id "
         f"WHERE cr.agent != 'local' AND cr.story_id NOT LIKE 'seed-%' AND cr.story_id NOT LIKE 'local-seed-%'{quality_filter}"
