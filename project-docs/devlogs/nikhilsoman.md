@@ -2309,8 +2309,10 @@ implementation dispatched, external messages sent, or policy changed.
 - Marked canonical stories `story-issue-2532` and `story-issue-2537` done via
   the CLI and refreshed the generated roadmap note. The v0.25.2 arc remains
   `planned`: other gate work remains and neither merge cuts a release tag.
-- Posted the combined rollup to roadmap parent #2458. Synlynk telemetry costs
-  were regenerated from canonical state into `costs.md`; interactive-session
-  cost was not independently available and was not invented.
+- Posted the combined rollup to roadmap parent #2458. Five completed dispatches
+  were missing `cost_entries` rows; their usage and resolved models were
+  verified from job records, then backfilled via the CLI. Regenerated
+  `costs.md` and its archive from canonical state. Interactive-session cost was
+  not independently available and was not invented.
 [@codex]
 

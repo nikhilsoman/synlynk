@@ -1655,13 +1655,18 @@
 | 2026-10-23 12:10 | codex | o4-mini | 866474 | 7484 | $0.0023 [sub] (API: $0.2324) | estimated_token_rate | story-issue-2537 | exec: codex job job-cfcac6... |
 | 2026-10-23 12:18 | codex | o4-mini | 1531810 | 9141 | $0.0042 [sub] (API: $0.3730) | estimated_token_rate | story-issue-2538 | exec: codex job job-342b89... |
 | 2026-10-23 12:48 | codex | o4-mini | 314349 | 4785 | $0.0026 [sub] (API: $0.2208) | estimated_token_rate | story-issue-2458 | exec: codex job job-7d1fcf... |
+| 2026-10-23 13:09 | codex | gpt-5.6-luna | 369928 | 5786 | $0.0180 [sub] (API: $1.1966) | estimated_manual | story-issue-2532 | Backfill: missing cost_entries row; token counts and resolved model verified from completed Synlynk job. |
+| 2026-10-23 13:09 | codex | gpt-5.6-luna | 1133385 | 6695 | $0.0545 [sub] (API: $3.5006) | estimated_manual | story-issue-2544 | Backfill: missing cost_entries row; token counts and resolved model verified from completed Synlynk job. |
+| 2026-10-23 13:09 | codex | gpt-5.6-luna | 1307228 | 8293 | $0.0629 [sub] (API: $4.0461) | estimated_manual | story-issue-2538 | Backfill: missing cost_entries row; token counts and resolved model verified from completed Synlynk job. |
+| 2026-10-23 13:09 | codex | gpt-5.6-sol | 749058 | 9020 | $0.0362 [sub] (API: $2.3825) | estimated_manual | story-issue-2544 | Backfill: missing cost_entries row; token counts and resolved model verified from completed Synlynk job. |
+| 2026-10-23 13:09 | codex | gpt-5.6-luna | 338854 | 5741 | $0.0165 [sub] (API: $1.1027) | estimated_manual | story-issue-2544 | Backfill: missing cost_entries row; token counts and resolved model verified from completed Synlynk job. |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
 | claude | $20.00 | $61.3899 | $107.0917 | $45.7018 |
-| codex | $20.00 | $28.2101 | $1839.5329 | $1811.3228 |
+| codex | $20.00 | $28.3981 | $1851.7613 | $1823.3632 |
 | agy | $20.00 | $23.6278 | $117.5740 | $93.9462 |
 | grok | $30.00 | $183.6451 | $134.7717 | $-48.8734 |
-| **Total** | **$90.00** | **$296.8728** | **$2198.9702** | **$1902.0974** |
+| **Total** | **$90.00** | **$297.0608** | **$2211.1986** | **$1914.1378** |
