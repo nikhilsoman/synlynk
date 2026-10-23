@@ -149,13 +149,17 @@ def test_dr_sync_copies_file(tmp_path, monkeypatch):
     (tmp_path / ".synlynk").mkdir()
     backup = tmp_path / ".synlynk" / "project-docs"
     backup.mkdir(parents=True)
-    (backup / "todo.md").write_text("# Tasks\n")
+    (backup / "todo.md").write_text("# Hidden cache copy\n")
+    tracked_docs = tmp_path / "project-docs"
+    tracked_docs.mkdir()
+    (tracked_docs / "todo.md").write_text("# Current checkout tasks\n")
     dr_path = tmp_path / "dr-mirror"
     dr_path.mkdir()
     cfg = tmp_path / ".synlynk" / "config.json"
     cfg.write_text(json.dumps({"dr_sync_path": str(dr_path)}))
     synlynk._dr_sync("todo.md")
-    assert (dr_path / "project-docs" / "todo.md").exists()
+    mirrored = dr_path / "project-docs" / "todo.md"
+    assert mirrored.read_text() == "# Current checkout tasks\n"
 
 
 def test_dr_sync_silent_skip_if_path_missing(tmp_path, monkeypatch):
