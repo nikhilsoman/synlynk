@@ -1513,27 +1513,30 @@ class SynlynkDaemon(WatchDaemon):
         except OSError as e:
             print(f"  Error stopping daemon: {e}")
 
+    def _print_not_running(self) -> None:
+        stale_pidfile = os.path.exists(self.pidfile)
+        if stale_pidfile:
+            os.remove(self.pidfile)
+        print("  ✦ synlynk daemon not running")
+        if stale_pidfile:
+            print("    stale pidfile cleaned")
+        if _daemon_service_installed():
+            registration = _daemon_service_registration()
+            registration_text = (
+                "registered" if registration is True
+                else "not registered" if registration is False
+                else "registration unknown"
+            )
+            print(
+                f"    service: installed ({registration_text}) but process is not healthy"
+            )
+        else:
+            print("    service: not installed")
+        print("    Tip: run 'synlynk daemon --install-service' to supervise and auto-start across reboots.")
+
     def status(self) -> None:
         if not self._is_running():
-            stale_pidfile = os.path.exists(self.pidfile)
-            if os.path.exists(self.pidfile):
-                os.remove(self.pidfile)
-            print("  ✦ synlynk daemon not running")
-            if stale_pidfile:
-                print("    stale pidfile cleaned")
-            if _daemon_service_installed():
-                registration = _daemon_service_registration()
-                registration_text = (
-                    "registered" if registration is True
-                    else "not registered" if registration is False
-                    else "registration unknown"
-                )
-                print(
-                    f"    service: installed ({registration_text}) but process is not healthy"
-                )
-            else:
-                print("    service: not installed")
-            print("    Tip: run 'synlynk daemon --install-service' to supervise and auto-start across reboots.")
+            self._print_not_running()
             return
         with open(self.pidfile) as f:
             pid = int(f.read().strip())

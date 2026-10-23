@@ -74,3 +74,18 @@ def test_resolve_live_pid_returns_none_when_no_evidence(tmp_path, monkeypatch):
     monkeypatch.setattr(daemon_module, "_find_pid_listening_on_port", lambda port: None)
 
     assert daemon._resolve_live_pid() is None
+
+
+def test_print_not_running_cleans_stale_pidfile(tmp_path, capsys):
+    pidfile = str(tmp_path / "daemon.pid")
+    daemon = SynlynkDaemon()
+    daemon.pidfile = pidfile
+    with open(pidfile, "w") as f:
+        f.write("99999999\n")  # certainly-dead PID
+
+    daemon._print_not_running()
+
+    output = capsys.readouterr().out
+    assert "daemon not running" in output
+    assert "stale pidfile cleaned" in output
+    assert not os.path.exists(pidfile)
