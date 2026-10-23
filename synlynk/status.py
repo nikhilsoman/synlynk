@@ -16,6 +16,7 @@ TIER1_CAPACITY = {
     "agy": {"ctx_window_tokens": 1_000_000, "read_budget_tokens": 900_000, "write_budget_tokens": 65_000, "tool_budget_count": 500},
     "codex": {"ctx_window_tokens": 128_000, "read_budget_tokens": 110_000, "write_budget_tokens": 16_000, "tool_budget_count": 128},
     "grok": {"ctx_window_tokens": 131_000, "read_budget_tokens": 115_000, "write_budget_tokens": 16_000, "tool_budget_count": 100},
+    "muse": {"ctx_window_tokens": None, "read_budget_tokens": None, "write_budget_tokens": None, "tool_budget_count": None},
 }
 
 TOOL_DEF_OVERHEAD = {"claude": 2200, "agy": 1800, "codex": 1600, "grok": 1400}
@@ -414,10 +415,10 @@ def _format_status_terminal(
     lines += ["", f"{'CAPACITY':<14} {'R(read)':>8}  {'W(write)':>9}  {'T(tools)':>8}  {'CTX':>8}"]
     for agent in agents:
         cap = TIER1_CAPACITY.get(agent, {})
-        r_tok = f"{cap.get('read_budget_tokens', 0) // 1000}K"
-        w_tok = f"{cap.get('write_budget_tokens', 0) // 1000}K"
-        t_bud = f"~{cap.get('tool_budget_count', 0)}"
-        ctx = f"{cap.get('ctx_window_tokens', 0) // 1000}K"
+        r_tok = f"{cap['read_budget_tokens'] // 1000}K" if cap.get("read_budget_tokens") is not None else "unknown"
+        w_tok = f"{cap['write_budget_tokens'] // 1000}K" if cap.get("write_budget_tokens") is not None else "unknown"
+        t_bud = f"~{cap['tool_budget_count']}" if cap.get("tool_budget_count") is not None else "unknown"
+        ctx = f"{cap['ctx_window_tokens'] // 1000}K" if cap.get("ctx_window_tokens") is not None else "unknown"
         lines.append(
             f"  {agent:<12} {r_tok:>8}  {w_tok:>9}  {t_bud:>8}  {ctx:>8}"
         )

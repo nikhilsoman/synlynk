@@ -246,6 +246,7 @@ def test_tier_for_agent_experimental_and_supported(project_dir):
     from synlynk.fleet import MatrixCellResult, new_run_id, record_matrix_run, tier_for_agent
 
     assert tier_for_agent(None, "local") == "experimental"
+    assert tier_for_agent(None, "muse") == "experimental"
     assert tier_for_agent(None, "unknown-agent") == "unsupported"
 
     conn = _get_db()
