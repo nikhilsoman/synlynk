@@ -1416,7 +1416,17 @@ class SynlynkDaemon(WatchDaemon):
             import traceback as _traceback
             _traceback.print_exc()
 
-    def stop(self) -> None:
+    def _resolve_live_pid(self) -> Optional[int]:
+        """Resolve a live PID for this daemon: pidfile, then lock owner, then
+        whatever process is listening on the daemon's HTTP port.
+
+        Pidfile is the primary source of truth; the lock-owner and port-listener
+        fallbacks exist because SynlynkDaemon._health() can already consider the
+        daemon "running" via those signals alone when the pidfile is absent or
+        stale. Shared between stop() (unchanged behavior) and status() (gh:#2553,
+        which previously opened the pidfile unconditionally once _is_running()
+        passed, raising FileNotFoundError on exactly this fallback path).
+        """
         lock_path = _daemon_lock_path(self.pidfile)
         owner_pid = _daemon_lock_owner_pid(lock_path)
         pid = None
@@ -1434,6 +1444,11 @@ class SynlynkDaemon(WatchDaemon):
             port_pid = _find_pid_listening_on_port(self.HTTP_PORT)
             if port_pid and _pid_is_alive(port_pid) and port_pid != os.getpid():
                 target_pid = port_pid
+        return target_pid
+
+    def stop(self) -> None:
+        target_pid = self._resolve_live_pid()
+        lock_path = _daemon_lock_path(self.pidfile)
         start_file = self.pidfile.replace(".pid", ".start")
 
         if not target_pid:
