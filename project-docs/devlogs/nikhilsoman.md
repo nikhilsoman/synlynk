@@ -2316,3 +2316,11 @@ implementation dispatched, external messages sent, or policy changed.
   not independently available and was not invented.
 [@codex]
 
+## 2026-10-23 — v0.25.2 post-release bookkeeping
+
+- Verified tag `v0.25.2` is lightweight commit `4df4390da18d22070605d0cec6c4ddce11569863`, equal to `origin/main`. The GitHub Release is published, not a draft, and not a prerelease (2026-10-23T09:32:22Z, synlynk-synlynk-pm[bot]). No tag or release was created, moved, or republished.
+- Issue #2465 is closed. Parent #2458 stays open and already records the tag. Milestone #1 (`v0.25.2`) had zero open issues and was still open; it is now closed.
+- Canonical arc `v0.25.2` and stories `story-issue-2291`, `story-f5d725cc`, `story-60eea2c4`, `story-a846f2a5`, `story-54758ff8`, and `story-issue-2465` were still open or planned after those issues closed. Marked them done through `synlynk story done` and set the arc to `shipped` through `synlynk roadmap add --role pm`. `v0.25.3` stayed planned.
+- Goals `goal-3ef62232`, `goal-005ea87d`, and `goal-51c4be3f` stay active. `story-issue-2465` is still linked to `goal-51c4be3f`.
+[@grok]
+
