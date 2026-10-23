@@ -291,6 +291,27 @@ def _project_root() -> str:
     return os.getcwd()
 
 
+def _working_tree_root() -> str:
+    """Return the root of the current checkout, not its shared Git directory."""
+    import subprocess
+
+    try:
+        root = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+        if root:
+            return os.path.abspath(root)
+        raise ValueError("git returned an empty worktree root")
+    except Exception as exc:
+        if os.environ.get("SYNLYNK_ALLOW_CWD_FALLBACK") == "1":
+            return os.getcwd()
+        raise RuntimeError(
+            "could not resolve git worktree root; refusing to write generated "
+            "project docs relative to an unknown checkout"
+        ) from exc
+
+
 def _get_project_root() -> str:
     """Backwards-compatible alias for callers that expect a root helper."""
     return _project_root()
@@ -695,9 +716,18 @@ def _synlynk_project_docs_dir() -> str:
 
 
 def _dr_sync(relative_path: str) -> None:
+    if not _generated_doc_side_effects_allowed():
+        return
+
+    from synlynk.db import _resolved_docs_dir
+
+    # Root resolution is mandatory even when the DR destination is absolute:
+    # the source document must belong to the invoking checkout.
+    root = _working_tree_root()
+    src = os.path.join(_resolved_docs_dir(), relative_path)
     try:
-        workspace_path = os.path.join('.synlynk', 'workspace.json')
-        legacy_path = os.path.join('.synlynk', 'config.json')
+        workspace_path = os.path.join(root, '.synlynk', 'workspace.json')
+        legacy_path = os.path.join(root, '.synlynk', 'config.json')
         cfg_path = workspace_path if os.path.exists(workspace_path) else legacy_path
         if not os.path.exists(cfg_path):
             return
@@ -707,19 +737,33 @@ def _dr_sync(relative_path: str) -> None:
         if not dr_path:
             return
         dr_path = os.path.expanduser(str(dr_path))
-        if not os.path.isdir(dr_path):
-            return
-        src = os.path.join(_docs_dir(), relative_path)
-        if not os.path.exists(src):
-            src = os.path.join('.synlynk', 'project-docs', relative_path)
-        if not os.path.exists(src):
-            return
-        dst = os.path.join(dr_path, 'project-docs', relative_path)
+    except Exception:
+        pass
+        return
+    if not os.path.isabs(dr_path):
+        dr_path = os.path.abspath(os.path.join(root, dr_path))
+        try:
+            inside_root = os.path.commonpath(
+                [os.path.realpath(root), os.path.realpath(dr_path)]
+            ) == os.path.realpath(root)
+        except ValueError:
+            inside_root = False
+        if not inside_root:
+            raise RuntimeError("relative dr_sync_path escapes the current checkout")
+    if not os.path.isdir(dr_path) or not os.path.exists(src):
+        return
+    dst = os.path.join(dr_path, 'project-docs', relative_path)
+    try:
         os.makedirs(os.path.dirname(os.path.abspath(dst)), exist_ok=True)
         import shutil as _shutil
         _shutil.copy2(src, dst)
     except Exception:
         pass
+
+
+def _generated_doc_side_effects_allowed() -> bool:
+    """Return false for dispatcher jobs that must not emit project-wide docs."""
+    return "SYNLYNK_JOB_ID" not in os.environ
 
 
 def _seed_verb_map(db_conn):

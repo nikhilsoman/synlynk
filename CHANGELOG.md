@@ -8,6 +8,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ---
 
 ## [Unreleased]
+- Fix generated project docs and archives to stay in the invoking interactive
+  checkout, reject unsafe relative paths, and suppress incidental generated-file
+  writes from dispatch jobs while preserving canonical DB mutations (#2532, #2237).
 - Fix dispatched cost attribution so `cost_entries.agent_role` preserves the
   job's explicit role across repeated dispatches on the same story (gh:#2509).
 - Add an opt-in personal NATS relay with scoped device credentials, durable

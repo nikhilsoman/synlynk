@@ -250,3 +250,10 @@
   the missing governed phase-update path for legacy placement cleanup by the
   Oct 27 ticket lock. [@nikhilsoman]
 
+- **2026-10-22 #2532 Generated-doc worktree isolation:** Keep `_project_root()`
+  tied to the shared Git common directory for canonical project/state DB
+  identity, but resolve tracked generated documentation and its per-checkout
+  archives from `git rev-parse --show-toplevel`. A command running in a linked
+  worktree must not mutate the main checkout's tracked `project-docs/` files.
+  [@codex]
+
