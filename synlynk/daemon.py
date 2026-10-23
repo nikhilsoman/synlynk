@@ -1416,7 +1416,17 @@ class SynlynkDaemon(WatchDaemon):
             import traceback as _traceback
             _traceback.print_exc()
 
-    def stop(self) -> None:
+    def _resolve_live_pid(self) -> Optional[int]:
+        """Resolve a live PID for this daemon: pidfile, then lock owner, then
+        whatever process is listening on the daemon's HTTP port.
+
+        Pidfile is the primary source of truth; the lock-owner and port-listener
+        fallbacks exist because SynlynkDaemon._health() can already consider the
+        daemon "running" via those signals alone when the pidfile is absent or
+        stale. Shared between stop() (unchanged behavior) and status() (gh:#2553,
+        which previously opened the pidfile unconditionally once _is_running()
+        passed, raising FileNotFoundError on exactly this fallback path).
+        """
         lock_path = _daemon_lock_path(self.pidfile)
         owner_pid = _daemon_lock_owner_pid(lock_path)
         pid = None
@@ -1434,6 +1444,11 @@ class SynlynkDaemon(WatchDaemon):
             port_pid = _find_pid_listening_on_port(self.HTTP_PORT)
             if port_pid and _pid_is_alive(port_pid) and port_pid != os.getpid():
                 target_pid = port_pid
+        return target_pid
+
+    def stop(self) -> None:
+        target_pid = self._resolve_live_pid()
+        lock_path = _daemon_lock_path(self.pidfile)
         start_file = self.pidfile.replace(".pid", ".start")
 
         if not target_pid:
@@ -1498,30 +1513,53 @@ class SynlynkDaemon(WatchDaemon):
         except OSError as e:
             print(f"  Error stopping daemon: {e}")
 
+    def _print_not_running(self) -> None:
+        stale_pidfile = os.path.exists(self.pidfile)
+        if stale_pidfile:
+            os.remove(self.pidfile)
+        print("  ✦ synlynk daemon not running")
+        if stale_pidfile:
+            print("    stale pidfile cleaned")
+        if _daemon_service_installed():
+            registration = _daemon_service_registration()
+            registration_text = (
+                "registered" if registration is True
+                else "not registered" if registration is False
+                else "registration unknown"
+            )
+            print(
+                f"    service: installed ({registration_text}) but process is not healthy"
+            )
+        else:
+            print("    service: not installed")
+        print("    Tip: run 'synlynk daemon --install-service' to supervise and auto-start across reboots.")
+
     def status(self) -> None:
-        if not self._is_running():
-            stale_pidfile = os.path.exists(self.pidfile)
-            if os.path.exists(self.pidfile):
-                os.remove(self.pidfile)
-            print("  ✦ synlynk daemon not running")
-            if stale_pidfile:
-                print("    stale pidfile cleaned")
-            if _daemon_service_installed():
-                registration = _daemon_service_registration()
-                registration_text = (
-                    "registered" if registration is True
-                    else "not registered" if registration is False
-                    else "registration unknown"
-                )
-                print(
-                    f"    service: installed ({registration_text}) but process is not healthy"
-                )
-            else:
-                print("    service: not installed")
-            print("    Tip: run 'synlynk daemon --install-service' to supervise and auto-start across reboots.")
+        # _health() treats a missing pidfile as running only for a live lock
+        # owner. A live HTTP-port listener is still daemon evidence (same
+        # fallback stop() already uses). Consult it before the not-running
+        # branch so gh:#2553's port-only case reports degraded running
+        # instead of "not running".
+        if not self._is_running() and self._resolve_live_pid() is None:
+            self._print_not_running()
             return
-        with open(self.pidfile) as f:
-            pid = int(f.read().strip())
+        pidfile_pid = None
+        if os.path.exists(self.pidfile):
+            try:
+                with open(self.pidfile) as f:
+                    pidfile_pid = int(f.read().strip())
+            except (OSError, ValueError):
+                pidfile_pid = None
+
+        degraded = pidfile_pid is None
+        pid = pidfile_pid if pidfile_pid is not None else self._resolve_live_pid()
+
+        if pid is None:
+            # _is_running() and _resolve_live_pid() disagree (e.g. the lock
+            # owner died between the two checks): no safe PID to report.
+            self._print_not_running()
+            return
+
         start_file = self.pidfile.replace(".pid", ".start")
         try:
             with open(start_file) as f:
@@ -1543,6 +1581,8 @@ class SynlynkDaemon(WatchDaemon):
         print(f"    jobs: {counts['queued']} queued · {counts['running']} running "
               f"· {counts['done']} done · {counts['failed']} failed · {counts['permission_denied']} permission_denied")
         print(f"    http: http://localhost:{self.HTTP_PORT}")
+        if degraded:
+            print("    (pidfile missing — reporting degraded evidence)")
 
     def _run_loop(self) -> None:
         import threading as _threading
