@@ -61,7 +61,18 @@ def _dedupe_cost_rows(rows):
     seen = set()
     deduped = []
     for row in rows:
-        story_id, _harness, _discipline, _cycles, _qv, _cost, pr_number, job_id = row
+        (
+            story_id,
+            _harness,
+            _discipline,
+            _cycles,
+            _dispatch_rework,
+            _micro_rework,
+            _qv,
+            _cost,
+            pr_number,
+            job_id,
+        ) = row
         key = (
             (story_id, "pr", pr_number)
             if pr_number is not None
@@ -78,9 +89,28 @@ def build_buckets(conn):
     """Return ``(buckets, skipped_no_mapping)`` grouped by harness and task type."""
     rows, _has_quality_verified = _fetch_rows(conn)
     rows = _dedupe_cost_rows(rows)
-    buckets = defaultdict(lambda: {"cycles": [], "costs": [], "story_ids": set()})
+    buckets = defaultdict(
+        lambda: {
+            "cycles": [],
+            "costs": [],
+            "dispatch_rework": [],
+            "micro_rework": [],
+            "story_ids": set(),
+        }
+    )
     skipped_no_mapping = 0
-    for story_id, harness, discipline, cycles, _qv, cost, _pr_number, _job_id in rows:
+    for (
+        story_id,
+        harness,
+        discipline,
+        cycles,
+        dispatch_rework,
+        micro_rework,
+        _qv,
+        cost,
+        _pr_number,
+        _job_id,
+    ) in rows:
         task_type = DISCIPLINE_TO_TASK_TYPE.get(discipline)
         if task_type is None:
             skipped_no_mapping += 1
@@ -90,6 +120,10 @@ def build_buckets(conn):
             bucket["cycles"].append(cycles)
         if cost is not None:
             bucket["costs"].append(cost)
+        if dispatch_rework is not None:
+            bucket["dispatch_rework"].append(dispatch_rework)
+        if micro_rework is not None:
+            bucket["micro_rework"].append(micro_rework)
         bucket["story_ids"].add(story_id)
     return dict(buckets), skipped_no_mapping
 

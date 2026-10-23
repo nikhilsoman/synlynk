@@ -78,8 +78,8 @@ def test_fetch_rows_with_quality_verified_column():
 
 def test_dedupe_cost_rows_same_pr_number_counted_once():
     rows = [
-        ("s1", "codex", "backend", 2, None, 1.00, 100, "job-1"),
-        ("s1", "codex", "backend", 2, None, 2.00, 100, "job-2"),
+        ("s1", "codex", "backend", 2, 0, 0, None, 1.00, 100, "job-1"),
+        ("s1", "codex", "backend", 2, 0, 0, None, 2.00, 100, "job-2"),
     ]
     deduped = _dedupe_cost_rows(rows)
     assert len(deduped) == 1
@@ -87,8 +87,8 @@ def test_dedupe_cost_rows_same_pr_number_counted_once():
 
 def test_dedupe_cost_rows_null_pr_number_falls_back_to_job_id():
     rows = [
-        ("s1", "codex", "backend", 2, None, 1.00, None, "job-1"),
-        ("s1", "codex", "backend", 2, None, 2.00, None, "job-2"),
+        ("s1", "codex", "backend", 2, 0, 0, None, 1.00, None, "job-1"),
+        ("s1", "codex", "backend", 2, 0, 0, None, 2.00, None, "job-2"),
     ]
     deduped = _dedupe_cost_rows(rows)
     assert len(deduped) == 2
@@ -108,11 +108,11 @@ def test_build_buckets_excludes_unmapped_discipline():
 def test_build_buckets_groups_by_harness_and_task_type():
     conn = _make_conn()
     conn.execute(
-        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'backend', 2, 0, 0, 4.5)"
+        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'backend', 2, 1, 0, 4.5)"
     )
     conn.execute("INSERT INTO cost_entries VALUES ('s1', 1.50, 100, 'job-1')")
     conn.execute(
-        "INSERT INTO capability_ratings VALUES ('s2', 'codex', 'backend', 4, 0, 0, 4.5)"
+        "INSERT INTO capability_ratings VALUES ('s2', 'codex', 'backend', 4, 0, 1, 4.5)"
     )
     conn.execute("INSERT INTO cost_entries VALUES ('s2', 3.00, 101, 'job-2')")
     buckets, skipped = build_buckets(conn)
@@ -120,6 +120,8 @@ def test_build_buckets_groups_by_harness_and_task_type():
     key = ("codex", "implement")
     assert buckets[key]["cycles"] == [2, 4]
     assert buckets[key]["costs"] == [1.50, 3.00]
+    assert buckets[key]["dispatch_rework"] == [1, 0]
+    assert buckets[key]["micro_rework"] == [0, 1]
     assert buckets[key]["story_ids"] == {"s1", "s2"}
 
 
