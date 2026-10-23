@@ -353,7 +353,7 @@ Daily stable gate: developer-surface listing/publication, install, update and di
 
 ## v0.25.2 — Stability baseline and accumulated PR reconciliation [planned] (target: 2026-10-23)
 
-Daily stable gate: reconcile accumulated PRs and establish the functional baseline. Resolve or explicitly gate dispatch/process lifecycle #2530 and worktree generated-doc write safety #2532 before relying on autonomous work. Parent #2458; release epic #2465; goals goal-3ef62232 and goal-005ea87d.
+Daily stable gate: reconcile accumulated PRs and establish the functional baseline. #2530 is resolved by PR #2539 (main f4d3ba0); #2532 by PR #2538 (main 524a28c); and #2537 by PR #2544 (main 6d047311). These three stability blockers are closed. v0.25.2 remains planned; no release tag is cut, and remaining gate work plus release authority are still required. Parent #2458; release epic #2465; goals goal-3ef62232 and goal-005ea87d.
 
 - [x] Daemon health fixes (gh:#2261, gh:#2288) (P0) <!-- story:story-e73fac9e -->
   Dormant re-exec bug + crash on stale worktree cwd blocking --requires-gh-write dispatch.
