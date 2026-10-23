@@ -129,7 +129,7 @@ def build_buckets(conn):
 
 
 def summarize_buckets(buckets: dict, min_sample_size: int) -> dict:
-    """Return sample counts, gate status, and metric medians per bucket."""
+    """Return sample counts, gate status, and metric medians/rates per bucket."""
     summary = {}
     for key, data in buckets.items():
         n = len(data["story_ids"])
@@ -141,6 +141,20 @@ def summarize_buckets(buckets: dict, min_sample_size: int) -> dict:
             ),
             "median_total_cost_usd": (
                 statistics.median(data["costs"]) if data["costs"] else None
+            ),
+            "dispatch_rework_rate": (
+                sum(1 for value in data["dispatch_rework"] if value > 0)
+                / len(data["dispatch_rework"])
+                * 100.0
+                if data["dispatch_rework"]
+                else None
+            ),
+            "micro_rework_rate": (
+                sum(1 for value in data["micro_rework"] if value > 0)
+                / len(data["micro_rework"])
+                * 100.0
+                if data["micro_rework"]
+                else None
             ),
         }
     return summary
