@@ -1,6 +1,6 @@
 # Model Catalog Discovery, Cost & Capability Persistence — Design Spec
 
-Status: proposed, pending sign-off
+Status: approved (Nikhil, 2026-10-23) — unblocks planning/implementation for gh:#2552
 Date: 2026-10-14
 Related: gh:#2268 / PR #2278 (Agy-only precedent), gh:#2291 (gap writeup this spec supersedes the scope of), gh:#2287/#2288 (same session, downstream symptoms)
 
