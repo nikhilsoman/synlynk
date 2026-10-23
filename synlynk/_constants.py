@@ -302,7 +302,7 @@ HARNESS_CAPABILITY_BASELINES = {
     },
     "muse": {
         "cli": "muse",
-        "can_gh_write": True,
+        "can_gh_write": False,
         "non_interactive_flags": ["exec"],
         "prompt_via_arg": True,
         "dispatch_flags": {
@@ -337,7 +337,7 @@ HARNESS_CAPABILITY_BASELINES = {
                 "missing api key",
             ],
         },
-        "roles": ["builder", "verifier", "architect"],
+        "roles": ["builder"],
         "env_passthrough": ["MUSE_API_KEY", "META_API_KEY"],
         "strengths": ["surgical refactoring", "algorithmic synthesis", "automated unit testing", "high throughput"],
     },
@@ -346,7 +346,7 @@ HARNESS_CAPABILITY_BASELINES = {
 # Core fleet = product-supported interactive + dispatch agents.
 # local and muse remain dispatchable via experimental/next-gen paths.
 CORE_FLEET = frozenset({"claude", "agy", "codex", "grok"})
-EXPERIMENTAL_FLEET = frozenset({"local"})
+EXPERIMENTAL_FLEET = frozenset({"local", "muse"})
 NEXT_GEN_FLEET = frozenset({"muse"})
 EXTENDED_FLEET = frozenset({"local", "muse"})
 PROVEN_FRESHNESS_DAYS = 7
