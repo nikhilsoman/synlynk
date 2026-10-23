@@ -195,18 +195,18 @@ def test_summarize_buckets_all_zero_rework_yields_zero_rate_not_none():
     assert entry["micro_rework_rate"] == 0.0
 
 
-def test_propose_diff_promotes_strictly_better_harness():
+def test_propose_diff_promotes_harness_clearing_rework_rate_margin():
     summary = {
         ("claude", "implement"): {
             "n": 12,
             "measured": True,
-            "median_pr_review_cycles": 2.5,
+            "dispatch_rework_rate": 25.0,
             "median_total_cost_usd": 3.10,
         },
         ("codex", "implement"): {
             "n": 18,
             "measured": True,
-            "median_pr_review_cycles": 1.5,
+            "dispatch_rework_rate": 10.0,
             "median_total_cost_usd": 1.80,
         },
     }
@@ -221,13 +221,13 @@ def test_propose_diff_no_change_on_split_result():
         ("claude", "implement"): {
             "n": 12,
             "measured": True,
-            "median_pr_review_cycles": 1.0,
+            "dispatch_rework_rate": 5.0,
             "median_total_cost_usd": 5.00,
         },
         ("codex", "implement"): {
             "n": 18,
             "measured": True,
-            "median_pr_review_cycles": 2.0,
+            "dispatch_rework_rate": 20.0,
             "median_total_cost_usd": 1.00,
         },
     }
@@ -240,13 +240,13 @@ def test_propose_diff_skips_unmeasured_candidate():
         ("claude", "implement"): {
             "n": 12,
             "measured": True,
-            "median_pr_review_cycles": 2.5,
+            "dispatch_rework_rate": 25.0,
             "median_total_cost_usd": 3.10,
         },
         ("grok", "implement"): {
             "n": 2,
             "measured": False,
-            "median_pr_review_cycles": 0.5,
+            "dispatch_rework_rate": 5.0,
             "median_total_cost_usd": 0.50,
         },
     }
@@ -259,18 +259,86 @@ def test_propose_diff_skips_unmeasured_current():
         ("claude", "implement"): {
             "n": 2,
             "measured": False,
-            "median_pr_review_cycles": 2.5,
+            "dispatch_rework_rate": 25.0,
             "median_total_cost_usd": 3.10,
         },
         ("codex", "implement"): {
             "n": 18,
             "measured": True,
-            "median_pr_review_cycles": 1.5,
+            "dispatch_rework_rate": 10.0,
             "median_total_cost_usd": 1.80,
         },
     }
     proposals = propose_diff(summary, CURRENT_TASK_ALLOCATION, min_sample_size=5)
     assert proposals == []
+
+
+def test_propose_diff_margin_boundary_exact_pass_and_near_miss():
+    summary_exact = {
+        ("claude", "implement"): {
+            "n": 12, "measured": True,
+            "dispatch_rework_rate": 20.0, "median_total_cost_usd": 3.10,
+        },
+        ("codex", "implement"): {
+            "n": 18, "measured": True,
+            "dispatch_rework_rate": 10.0, "median_total_cost_usd": 1.80,
+        },
+    }
+    assert len(propose_diff(summary_exact, CURRENT_TASK_ALLOCATION, min_sample_size=5)) == 1
+
+    summary_near_miss = {
+        ("claude", "implement"): {
+            "n": 12, "measured": True,
+            "dispatch_rework_rate": 20.0, "median_total_cost_usd": 3.10,
+        },
+        ("codex", "implement"): {
+            "n": 18, "measured": True,
+            "dispatch_rework_rate": 10.1, "median_total_cost_usd": 1.80,
+        },
+    }
+    assert propose_diff(summary_near_miss, CURRENT_TASK_ALLOCATION, min_sample_size=5) == []
+
+
+def test_propose_diff_both_zero_rework_rate_produces_no_proposal():
+    summary = {
+        ("claude", "implement"): {
+            "n": 12,
+            "measured": True,
+            "dispatch_rework_rate": 0.0,
+            "median_total_cost_usd": 3.10,
+        },
+        ("codex", "implement"): {
+            "n": 18,
+            "measured": True,
+            "dispatch_rework_rate": 0.0,
+            "median_total_cost_usd": 1.80,
+        },
+    }
+    assert propose_diff(summary, CURRENT_TASK_ALLOCATION, min_sample_size=5) == []
+
+
+def test_propose_diff_fires_on_rework_rate_gap_despite_tied_pr_review_cycles():
+    summary = {
+        ("claude", "implement"): {
+            "n": 476,
+            "measured": True,
+            "median_pr_review_cycles": 0,
+            "dispatch_rework_rate": 2.3,
+            "median_total_cost_usd": 1.80,
+        },
+        ("codex", "implement"): {
+            "n": 656,
+            "measured": True,
+            "median_pr_review_cycles": 0,
+            "dispatch_rework_rate": 21.7,
+            "median_total_cost_usd": 3.10,
+        },
+    }
+    proposals = propose_diff(
+        summary, {"implement": {"harness": "codex", "fallback": []}}, min_sample_size=5
+    )
+    assert len(proposals) == 1
+    assert proposals[0]["proposed_harness"] == "claude"
 
 
 def test_format_text_report_no_proposals():

@@ -28,6 +28,8 @@ DISCIPLINE_TO_TASK_TYPE = {
     "VISU": "css",
 }
 
+MIN_REWORK_RATE_MARGIN_PP = 10.0
+
 
 def _column_exists(conn, table: str, column: str) -> bool:
     cols = [row[1] for row in conn.execute(f"PRAGMA table_info({table})")]
@@ -161,7 +163,12 @@ def summarize_buckets(buckets: dict, min_sample_size: int) -> dict:
 
 
 def propose_diff(summary: dict, current_task_allocation: dict, min_sample_size: int) -> list:
-    """Return harness swaps where a measured candidate beats both metrics."""
+    """Return harness swaps where a measured candidate beats both metrics.
+
+    Quality requires the candidate's dispatch rework rate to be at least
+    ``MIN_REWORK_RATE_MARGIN_PP`` percentage points below the incumbent's.
+    Review-cycle medians remain in summaries as historical report context.
+    """
     by_task_type = defaultdict(dict)
     for (harness, task_type), entry in summary.items():
         by_task_type[task_type][harness] = entry
@@ -176,18 +183,21 @@ def propose_diff(summary: dict, current_task_allocation: dict, min_sample_size: 
         for harness, entry in candidates.items():
             if harness == current_harness or not entry["measured"]:
                 continue
-            cycles_ok = (
-                entry["median_pr_review_cycles"] is not None
-                and current_entry["median_pr_review_cycles"] is not None
-                and entry["median_pr_review_cycles"]
-                < current_entry["median_pr_review_cycles"]
+            rework_rate_ok = (
+                entry["dispatch_rework_rate"] is not None
+                and current_entry["dispatch_rework_rate"] is not None
+                and (
+                    current_entry["dispatch_rework_rate"]
+                    - entry["dispatch_rework_rate"]
+                )
+                >= MIN_REWORK_RATE_MARGIN_PP
             )
             cost_ok = (
                 entry["median_total_cost_usd"] is not None
                 and current_entry["median_total_cost_usd"] is not None
                 and entry["median_total_cost_usd"] < current_entry["median_total_cost_usd"]
             )
-            if cycles_ok and cost_ok:
+            if rework_rate_ok and cost_ok:
                 proposals.append(
                     {
                         "task_type": task_type,
