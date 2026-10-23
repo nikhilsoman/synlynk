@@ -257,3 +257,16 @@
   worktree must not mutate the main checkout's tracked `project-docs/` files.
   [@codex]
 
+- **2026-10-23 #2537 Watch PID cleanup race:** After a health snapshot, stale
+  PID cleanup in `status()`/`stop()` must acquire the daemon lifetime lock and
+  re-read the PID path before unlinking. If a concurrent start owns the lock
+  or has published a fresh PID, leave both PID and state untouched. PR #2544
+  merged this behavior with deterministic status/stop race regressions.
+  [@codex]
+
+- **2026-10-23 v0.25.2 remains planned after blocker merges:** PRs #2538 and
+  #2544 resolve the #2532 generated-doc isolation and #2537 watch-health
+  blockers; PR #2539 already resolved #2530. These merges do not constitute a
+  stable release. Keep the roadmap arc planned until its remaining gate work
+  passes and authorized release/tag action occurs. [@nikhilsoman]
+
