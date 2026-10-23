@@ -522,6 +522,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [442](./442-pr2534-rebaseline-daily-stable-release-schedule.md) | PR #2534 — rebaseline daily stable release schedule | [#2534](https://github.com/nikhilsoman/synlynk/pull/2534) | 2026-10-22 |
 | [443](./443-pr2536-activate-synchronized-daily-release-sche.md) | PR #2536 — activate synchronized daily release schedule | [#2536](https://github.com/nikhilsoman/synlynk/pull/2536) | 2026-10-22 |
 | [444](./444-pr2539-make-job-terminal-state-reflect-process-.md) | PR #2539 — make job terminal state reflect process truth | [#2539](https://github.com/nikhilsoman/synlynk/pull/2539) | 2026-10-22 |
+| [445](./445-pr2538-keep-generated-project-docs-in-current-w.md) | PR #2538 — keep generated project docs in current worktree | [#2538](https://github.com/nikhilsoman/synlynk/pull/2538) | 2026-10-23 |
 
 ## Per-PR Post Template
 

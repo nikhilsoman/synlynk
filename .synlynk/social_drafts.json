@@ -3166,5 +3166,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2539 \u2014 make job terminal state reflect process truth (PR #2539, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2539.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-22) - PR #2539\n- Merged improvements and fixes for PR #2539."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/445-pr2538-keep-generated-project-docs-in-current-w.md",
+    "title": "PR #2538 \u2014 keep generated project docs in current worktree",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-23",
+    "pr": "#2538",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2538."
+    ],
+    "tweet": "\ud83d\ude80 PR #2538 \u2014 keep generated project docs in current worktree (PR #2538, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2538.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-23) - PR #2538\n- Merged improvements and fixes for PR #2538."
   }
 ]
