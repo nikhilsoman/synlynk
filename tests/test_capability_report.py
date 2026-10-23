@@ -390,7 +390,9 @@ def test_cli_capability_report_runs_without_error(tmp_path, monkeypatch):
     db_path = tmp_path / "state.db"
     conn = sqlite3.connect(str(db_path))
     conn.execute(
-        "CREATE TABLE capability_ratings (story_id TEXT, agent TEXT, discipline TEXT, pr_review_cycles INTEGER, quality REAL)"
+        "CREATE TABLE capability_ratings (story_id TEXT, agent TEXT, discipline TEXT, "
+        "pr_review_cycles INTEGER, dispatch_rework INTEGER, "
+        "micro_rework INTEGER, quality REAL)"
     )
     conn.execute(
         "CREATE TABLE cost_entries (story_id TEXT, total_cost_usd REAL, pr_number INTEGER, job_id TEXT)"
