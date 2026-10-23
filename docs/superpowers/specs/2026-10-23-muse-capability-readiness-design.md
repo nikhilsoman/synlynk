@@ -1,6 +1,6 @@
 # Muse Capability Readiness — Design Spec
 
-Status: approved (Nikhil, 2026-10-23) — unblocks implementation plan for gh:#2554
+Status: approved (Nikhil, 2026-10-23), revised post-review to correct a factual error in the Problem section (see PR #2556 review history) — unblocks implementation plan for gh:#2554
 Date: 2026-10-23
 Related: gh:#2554 (bug this spec fixes), Empirical Capability Assessment Policy (CLAUDE.md), v0.25.3 decision agenda (parent gh:#2458)
 
@@ -8,7 +8,7 @@ Related: gh:#2554 (bug this spec fixes), Empirical Capability Assessment Policy 
 
 Three Muse-related surfaces disagree, and one over-grants authority ahead of any empirical evidence:
 
-1. **Capability mismatch.** `synlynk/_constants.py`'s `HARNESS_CAPABILITY_BASELINES["muse"]` sets `can_gh_write: True` and `roles: ["builder", "verifier", "architect"]` — advertising GitHub-write and review/architect authority. But `synlynk/capability_probe.py`'s `HARNESS_CAPABILITY_PROFILES` has **no entry for `muse` at all**, so `evaluate_harness_capabilities()` falls through to the generic default (`CAP_SHELL/CAP_WORKSPACE_WRITE/CAP_NET=True, CAP_GH_WRITE=False`, `CAP_REVIEW` absent). The two sources of truth for "what can Muse do" disagree with each other, and neither one reflects the policy direction below.
+1. **Capability over-grant.** `synlynk/_constants.py`'s `HARNESS_CAPABILITY_BASELINES["muse"]` sets `can_gh_write: True` and `roles: ["builder", "verifier", "architect"]`. `synlynk/capability_probe.py`'s `HARNESS_CAPABILITY_PROFILES` **already has an explicit `muse` entry** (not a fallback — confirmed present on `origin/main`), with every capability including `CAP_GH_WRITE` and `CAP_REVIEW` set to `True`, under the comment "Provisionally enable calibration dispatches. Live TC-9 probes and capability_ratings measurements determine whether these stay enabled." Both sources of truth agree with each other — and both grant Muse full review/GitHub-write authority ahead of any empirical evidence, which is the actual problem this spec fixes: narrowing an existing over-grant, not reconciling two conflicting defaults.
 2. **Routing gap.** `.synlynk/policy.json`'s `overrides.dev_authority.task_allocation` has no `muse` entry in any task type's `harness` or `fallback` list (confirmed by direct read 2026-10-23) — Muse cannot receive dispatch for `implement`/`test` even though `capability_policy.not_yet_calibrated` already lists it as a harness awaiting its first empirical samples, i.e. the policy already expects Muse to start accumulating `capability_ratings` rows, but routing never sends it anything to be rated on.
 3. **Status/probe disagreement.** gh:#2554 reports `synlynk status` showing Muse as `TIER unsupported` / 0 capacity while `synlynk probe` reports `ok`, with a version skew between the two surfaces (1.4.11 vs 1.4.12). Not yet root-caused in this spec — see Plan-stage question below.
 
@@ -22,17 +22,19 @@ Rationale: the non-authoring-reviewer backstop in the Hardened PR Review Policy 
 
 ### 1. Capability profile (`synlynk/capability_probe.py`)
 
-Add an explicit `muse` entry to `HARNESS_CAPABILITY_PROFILES` (currently absent, relying on the generic fallback — making it explicit removes ambiguity and lets this entry diverge from the fallback deliberately):
+Narrow the existing `muse` entry in `HARNESS_CAPABILITY_PROFILES` (lines ~66-72 on `origin/main`) from its current provisional all-`True` grant down to implement/test only:
 
 ```python
 "muse": {
     CAP_SHELL: True,
     CAP_WORKSPACE_WRITE: True,
-    CAP_GH_WRITE: False,   # no review/merge authority yet; implement/test dispatch doesn't require it
+    CAP_GH_WRITE: False,   # narrowed from True; no review/merge authority yet; implement/test dispatch doesn't require it
     CAP_NET: True,
-    CAP_REVIEW: False,     # deferred until Muse clears min_sample_size (5) per Empirical Capability Assessment Policy
+    CAP_REVIEW: False,     # narrowed from True; deferred until Muse clears min_sample_size (5) per Empirical Capability Assessment Policy
 },
 ```
+
+Replace the existing "Provisionally enable calibration dispatches..." comment with one noting the narrowing and linking this spec/gh:#2554, so the rationale for the lower grant is traceable the same way the Grok `CAP_GH_WRITE` flip (gh:#2034) documents its own history inline.
 
 `CAP_GH_WRITE: False` here means Muse cannot be routed to `review`/`gh_write` task types via `evaluate_harness_capabilities()`; it does not block Muse's own implement/test dispatch from making ordinary (non-GH-write) commits inside its worktree.
 
@@ -65,7 +67,7 @@ Plan-stage investigation required (not yet root-caused): confirm why `synlynk st
 
 ## Testing
 
-- Unit test: `evaluate_harness_capabilities("muse", {CAP_GH_WRITE})` returns `satisfied=False` (currently would also return False via the generic fallback, but this locks in the explicit entry so a future fallback-default change can't silently re-grant it).
+- Unit test: `evaluate_harness_capabilities("muse", {CAP_GH_WRITE})` returns `satisfied=False` (currently returns `True` via the existing provisional entry — this test is the regression guard for the narrowing in §1).
 - Unit test: `evaluate_harness_capabilities("muse", {CAP_SHELL, CAP_WORKSPACE_WRITE})` returns `satisfied=True`.
 - Config test: `.synlynk/policy.json`'s `implement`/`test` fallback lists include `"muse"`; `review`/`gh_write`/`pm`/`deploy` do not.
 - Manual verification: `synlynk status` and `synlynk probe` report consistent capacity/tier for Muse after the routing fix (or, if still inconsistent, the plan's investigation step documents the remaining root cause as a follow-up issue rather than silently leaving it).
