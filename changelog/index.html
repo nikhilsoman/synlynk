@@ -58,6 +58,7 @@ is optional; the core CLI remains stdlib-only. Managed service provisioning,
 entitlement checks, and reconnect/status hardening remain follow-up work.</li>
 <li>Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.</li>
 <li>Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.</li>
+<li>Guard watch stale-PID cleanup with the daemon lifetime lock so concurrent starts cannot lose a newly published PID file (#2537).</li>
 </ul>
 <div class="changelog-version-header"><span class="changelog-version">vv0.25.1</span><span class="changelog-date">2026-10-14</span></div>
 <h3 class="tag-added">Added</h3>
