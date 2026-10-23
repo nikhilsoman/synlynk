@@ -527,6 +527,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [447](./447-pr2545-record-2096-codex-egress-decide-panel.md) | PR #2545 — record #2096 Codex egress decide panel | [#2545](https://github.com/nikhilsoman/synlynk/pull/2545) | 2026-10-23 |
 | [448](./448-pr2546-sync-roadmap-and-cost-ledger-after-stabi.md) | PR #2546 — sync roadmap and cost ledger after stability merges | [#2546](https://github.com/nikhilsoman/synlynk/pull/2546) | 2026-10-23 |
 | [449](./449-pr2548-rank-self-report-above-execution-log-244.md) | PR #2548 — rank self_report above execution_log (#2449) | [#2548](https://github.com/nikhilsoman/synlynk/pull/2548) | 2026-10-23 |
+| [450](./450-pr2549-prepare-v0-25-2-metadata-2465.md) | PR #2549 — prepare v0.25.2 metadata (#2465) | [#2549](https://github.com/nikhilsoman/synlynk/pull/2549) | 2026-10-23 |
 
 ## Per-PR Post Template
 

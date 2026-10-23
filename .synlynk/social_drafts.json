@@ -3246,5 +3246,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2548 \u2014 rank self_report above execution_log (#2449) (PR #2548, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2548.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-23) - PR #2548\n- Merged improvements and fixes for PR #2548."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/450-pr2549-prepare-v0-25-2-metadata-2465.md",
+    "title": "PR #2549 \u2014 prepare v0.25.2 metadata (#2465)",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-23",
+    "pr": "#2549",
+    "version": "0.25.2",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2549."
+    ],
+    "tweet": "\ud83d\ude80 PR #2549 \u2014 prepare v0.25.2 metadata (#2465) (PR #2549, v0.25.2)\n\n\u2022 Merged improvements and fixes for PR #2549.\n\n#posts",
+    "changelog": "### v0.25.2 (2026-10-23) - PR #2549\n- Merged improvements and fixes for PR #2549."
   }
 ]
