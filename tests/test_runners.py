@@ -3,8 +3,10 @@ import sqlite3
 import sys
 
 from synlynk.db import _migrate_db
+from synlynk.cli import build_parser
 from synlynk.runners.local import LocalRunnerDriver
 from synlynk.runners.manager import RunnerManager
+from synlynk.runners.kubernetes import KubernetesRunnerDriver
 
 
 def test_swarm_runner_schema_and_local_lifecycle(tmp_path):
@@ -31,3 +33,98 @@ def test_local_driver_accepts_shell_command():
     output = []
     driver.stream_telemetry(runner_id, output.append)
     assert output[0]["message"] == "hello"
+
+
+def test_manager_persists_telemetry_and_result_receipt(tmp_path):
+    conn = sqlite3.connect(str(tmp_path / "state.db"))
+    _migrate_db(conn)
+    manager = RunnerManager({"swarm_runners": {"enabled": ["local"]}}, conn)
+    runner_id = manager.provision(
+        {"command": [sys.executable, "-c", "print('receipt')"], "commit_sha": "abc123"},
+        "local",
+    )
+    events = []
+    manager.stream_telemetry(runner_id, events.append)
+    result = manager.collect_results(runner_id)
+    record = manager.list()[0]
+
+    assert events[0]["message"] == "receipt"
+    assert record["last_telemetry_at"] is not None
+    assert record["status"] == "completed"
+    assert record["exit_code"] == 0
+    assert record["commit_sha"] == "abc123"
+    assert json.loads(record["results_json"]) == result
+
+
+def test_local_driver_merges_environment(monkeypatch):
+    monkeypatch.setenv("SYNLYNK_INHERITED_ENV", "inherited")
+    driver = LocalRunnerDriver()
+    runner_id = driver.provision({
+        "command": [sys.executable, "-c", "import os; print(os.environ['SYNLYNK_TEST_ENV'] + ':' + os.environ['SYNLYNK_INHERITED_ENV'])"],
+        "env": {"SYNLYNK_TEST_ENV": "present"},
+    })
+    output = []
+    driver.stream_telemetry(runner_id, output.append)
+    assert output[0]["message"] == "present:inherited"
+
+
+def test_kubernetes_driver_provisions_collects_and_deletes_job():
+    class Response:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(self.payload).encode()
+
+    requests = []
+
+    def opener(request, timeout):
+        requests.append((request, timeout))
+        if request.method == "GET" and "/jobs/runner-1" in request.full_url:
+            return Response({"status": {"succeeded": 1}})
+        if request.method == "GET" and "/pods?" in request.full_url:
+            return Response({"items": [{"metadata": {"name": "runner-1-pod"}}]})
+        if request.method == "GET" and request.full_url.endswith("/log"):
+            return Response("first line\nsecond line")
+        return Response({})
+
+    driver = KubernetesRunnerDriver(
+        {"base_url": "https://k8s.example", "namespace": "team-a"}, opener=opener
+    )
+    runner_id = driver.provision({"runner_id": "runner-1", "command": "echo ready"})
+    events = []
+    driver.stream_telemetry(runner_id, events.append)
+    result = driver.collect_results(runner_id)
+    assert driver.destroy(runner_id)
+
+    assert runner_id == "runner-1"
+    assert requests[0][0].method == "POST"
+    assert requests[0][0].full_url.endswith("/namespaces/team-a/jobs")
+    payload = json.loads(requests[0][0].data)
+    assert payload["kind"] == "Job"
+    assert payload["spec"]["template"]["spec"]["containers"][0]["command"] == ["sh", "-c", "echo ready"]
+    assert [event["message"] for event in events] == ["first line", "second line"]
+    assert result["status"] == "completed"
+    assert result["exit_code"] == 0
+    assert requests[-1][0].method == "DELETE"
+
+
+def test_fly_driver_is_only_loaded_when_enabled():
+    manager = RunnerManager({"swarm_runners": {"enabled": ["local"], "fly": {"app": "demo"}}})
+    assert set(manager.drivers) == {"local"}
+
+
+def test_kubernetes_driver_is_registered_when_enabled():
+    manager = RunnerManager({"swarm_runners": {"enabled": ["k8s"], "k8s": {"base_url": "https://k8s.example"}}})
+    assert set(manager.drivers) == {"k8s"}
+
+
+def test_swarm_dispatch_accepts_kubernetes_driver():
+    args = build_parser().parse_args(["swarm", "dispatch", "--driver", "k8s"])
+    assert args.driver == "k8s"
