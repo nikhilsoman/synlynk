@@ -11,7 +11,7 @@ import subprocess
 import sys
 import threading
 import time
-from typing import Optional
+from typing import NamedTuple, Optional
 
 from synlynk._lazy import pkg as _pkg
 from synlynk.context import generate_context
@@ -158,6 +158,25 @@ def _daemon_lock_owner_pid(lock_path: str) -> Optional[int]:
         return None
 
 
+def _daemon_lock_is_held(lock_path: str) -> bool:
+    """Check whether an existing daemon lock is held without changing it."""
+    try:
+        with open(lock_path, "rb") as fh:
+            try:
+                fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return True
+            except OSError:
+                return False
+            try:
+                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+            except OSError:
+                pass
+            return False
+    except OSError:
+        return False
+
+
 def _pid_is_alive(pid: Optional[int]) -> bool:
     if not pid or pid <= 0:
         return False
@@ -180,6 +199,12 @@ def _release_daemon_lock(lock_fh) -> None:
         lock_fh.close()
     except OSError:
         pass
+
+
+class _WatchHealth(NamedTuple):
+    state: str
+    pid: Optional[int]
+    pidfile_state: str
 
 
 def _find_pid_listening_on_port(port: int) -> Optional[int]:
@@ -361,60 +386,134 @@ class WatchDaemon:
             time.sleep(min(delay, remaining))
             delay = min(delay * 1.5, 0.5)
 
+    def _cleanup_stale_pidfile(self) -> bool:
+        """Remove stale PID metadata only while excluding a concurrent start.
+
+        Health is a snapshot; a new daemon can acquire the lifetime lock and
+        publish its PID file after that snapshot. Acquiring the same lifetime
+        lock before re-reading and cleaning the file closes that check/unlink
+        race. False means another owner won the race, so callers leave state
+        untouched.
+        """
+        lock_fh = _try_acquire_daemon_lock(
+            _daemon_lock_path(self.pidfile), blocking=False
+        )
+        if lock_fh is None:
+            return False
+        try:
+            try:
+                with open(self.pidfile) as f:
+                    contents = f.read().strip()
+            except FileNotFoundError:
+                return True
+            except OSError:
+                return False
+
+            try:
+                pid = int(contents)
+                if pid > 0 and _pid_is_alive(pid):
+                    return False
+            except (TypeError, ValueError):
+                pass
+
+            try:
+                os.remove(self.pidfile)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                return False
+            return True
+        finally:
+            _release_daemon_lock(lock_fh)
+
     def stop(self) -> None:
-        if not os.path.exists(self.pidfile):
-            print("  synlynk watch is not running.")
+        health = self._health_snapshot()
+        if health.state not in ("running", "degraded") or health.pid is None:
+            if not self._cleanup_stale_pidfile():
+                print("  synlynk watch changed state; left pidfile untouched.")
+                return
             _pkg("set_state")("stopped")
+            if health.pidfile_state == "absent":
+                print("  synlynk watch is not running.")
+            else:
+                print("  synlynk watch was not running (cleaned stale pidfile).")
             return
         try:
-            with open(self.pidfile) as f:
-                pid = int(f.read().strip())
-            os.kill(pid, 15)  # SIGTERM
-            os.remove(self.pidfile)
+            os.kill(health.pid, 15)  # SIGTERM
+            try:
+                os.remove(self.pidfile)
+            except FileNotFoundError:
+                pass
             _pkg("set_state")("stopped")
             print("  ✓ synlynk watch stopped.")
-        except (ProcessLookupError, ValueError):
-            if os.path.exists(self.pidfile):
+        except ProcessLookupError:
+            try:
                 os.remove(self.pidfile)
+            except FileNotFoundError:
+                pass
             _pkg("set_state")("stopped")
             print("  synlynk watch was not running (cleaned stale pidfile).")
         except OSError as e:
             print(f"  Error stopping watch daemon: {e}")
 
     def status(self) -> None:
-        if self._is_running():
-            with open(self.pidfile) as f:
-                pid = f.read().strip()
-            print(f"  ● synlynk watch running (PID {pid})")
+        health = self._health_snapshot()
+        if health.state in ("running", "degraded"):
+            print(f"  ● synlynk watch {health.state} (PID {health.pid})")
             if os.path.exists(self.logfile):
-                with open(self.logfile) as f:
-                    lines = f.readlines()
-                if lines:
-                    print(f"    Last log: {lines[-1].strip()}")
+                try:
+                    with open(self.logfile) as f:
+                        lines = f.readlines()
+                    if lines:
+                        print(f"    Last log: {lines[-1].strip()}")
+                except OSError:
+                    pass
         else:
-            if os.path.exists(self.pidfile):
-                os.remove(self.pidfile)
-            print("  ○ synlynk watch stopped")
+            if self._cleanup_stale_pidfile():
+                print("  ○ synlynk watch stopped")
+            else:
+                print("  ○ synlynk watch changed state; left pidfile untouched")
 
     def _health(self) -> str:
         """Returns 'running', 'stopped', or 'zombie' (pidfile exists but process dead)."""
-        lock_path = _daemon_lock_path(self.pidfile)
-        owner_pid = _daemon_lock_owner_pid(lock_path)
-        if owner_pid == os.getpid():
-            owner_pid = None
-        if not os.path.exists(self.pidfile):
-            if _pid_is_alive(owner_pid):
-                return "running"
-            return "stopped"
+        health = self._health_snapshot()
+        return "running" if health.state == "degraded" else health.state
+
+    def _health_snapshot(self) -> _WatchHealth:
+        """Return process health and PID-file condition without trusting lock text alone."""
+        pid = None
+        pidfile_state = "absent"
         try:
             with open(self.pidfile) as f:
-                pid = int(f.read().strip())
-            os.kill(pid, 0)
-            return "running"
-        except (ProcessLookupError, ValueError, OSError):
-            if _pid_is_alive(owner_pid):
-                return "running"
-            return "zombie"
+                contents = f.read().strip()
+        except FileNotFoundError:
+            contents = None
+        except OSError:
+            contents = None
+            pidfile_state = "unreadable"
+
+        if contents is not None:
+            try:
+                pid = int(contents)
+                if pid <= 0:
+                    raise ValueError("PID must be positive")
+            except (TypeError, ValueError):
+                pid = None
+                pidfile_state = "malformed"
+            else:
+                if _pid_is_alive(pid):
+                    return _WatchHealth("running", pid, "valid")
+                pidfile_state = "stale"
+
+        lock_path = _daemon_lock_path(self.pidfile)
+        lock_held = _daemon_lock_is_held(lock_path)
+        owner_pid = _daemon_lock_owner_pid(lock_path) if lock_held else None
+        if owner_pid == os.getpid():
+            owner_pid = None
+        if lock_held and _pid_is_alive(owner_pid):
+            return _WatchHealth("degraded", owner_pid, pidfile_state)
+        state = "zombie" if pidfile_state in ("stale", "malformed", "unreadable") else "stopped"
+        return _WatchHealth(state, None, pidfile_state)
 
     def _is_running(self) -> bool:
         return self._health() == "running"
@@ -1187,6 +1286,22 @@ class SynlynkDaemon(WatchDaemon):
                     f.write(self.start_revision + "\n")
             except OSError:
                 pass
+
+    def _health(self) -> str:
+        """Retain daemon health semantics; issue #2537 hardens the watch CLI."""
+        lock_path = _daemon_lock_path(self.pidfile)
+        owner_pid = _daemon_lock_owner_pid(lock_path)
+        if owner_pid == os.getpid():
+            owner_pid = None
+        if not os.path.exists(self.pidfile):
+            return "running" if _pid_is_alive(owner_pid) else "stopped"
+        try:
+            with open(self.pidfile) as f:
+                pid = int(f.read().strip())
+            os.kill(pid, 0)
+            return "running"
+        except (ProcessLookupError, ValueError, OSError):
+            return "running" if _pid_is_alive(owner_pid) else "zombie"
 
     def _autonomous_tick(self) -> None:
         """Run one bounded heal/TPM pass and leave an SRE heartbeat."""
