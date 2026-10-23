@@ -528,6 +528,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [448](./448-pr2546-sync-roadmap-and-cost-ledger-after-stabi.md) | PR #2546 — sync roadmap and cost ledger after stability merges | [#2546](https://github.com/nikhilsoman/synlynk/pull/2546) | 2026-10-23 |
 | [449](./449-pr2548-rank-self-report-above-execution-log-244.md) | PR #2548 — rank self_report above execution_log (#2449) | [#2548](https://github.com/nikhilsoman/synlynk/pull/2548) | 2026-10-23 |
 | [450](./450-pr2549-prepare-v0-25-2-metadata-2465.md) | PR #2549 — prepare v0.25.2 metadata (#2465) | [#2549](https://github.com/nikhilsoman/synlynk/pull/2549) | 2026-10-23 |
+| [451](./451-pr2550-record-the-shipped-v0-25-2-release-in-ro.md) | PR #2550 — record the shipped v0.25.2 release in roadmap bookkeeping | [#2550](https://github.com/nikhilsoman/synlynk/pull/2550) | 2026-10-23 |
 
 ## Per-PR Post Template
 
