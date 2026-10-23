@@ -1,6 +1,6 @@
 # Muse Capability Readiness — Design Spec
 
-Status: proposed, pending sign-off
+Status: approved (Nikhil, 2026-10-23) — unblocks implementation plan for gh:#2554
 Date: 2026-10-23
 Related: gh:#2554 (bug this spec fixes), Empirical Capability Assessment Policy (CLAUDE.md), v0.25.3 decision agenda (parent gh:#2458)
 
