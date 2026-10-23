@@ -2270,3 +2270,27 @@ implementation dispatched, external messages sent, or policy changed.
   independently available; no amount was invented.
 [@codex]
 
+## 2026-10-22 — v0.25.2 dependency sweep and #2532 worktree write isolation
+
+- Refreshed to `origin/main` at `30f696bf` before starting. Confirmed #2530
+  (dispatch status/process cleanup) and #2532 (generated docs escaping into
+  the main checkout) are the v0.25.2 direct safety gates. Filed #2537 as a
+  complementary v0.25.2 child issue after reproducing `synlynk watch status`
+  crashing when the live watch process is found through its lock but
+  `.synlynk/watch.pid` is missing.
+- For #2532, kept `_project_root()` as the shared state-DB identity root and
+  added a separate current-checkout root for tracked generated docs and
+  archives. Updated linked-worktree regressions to require writes to remain
+  in the calling checkout.
+- Red/green evidence: both regression tests failed before the fix and pass
+  afterward. Focused generated-doc/root suites: 546 passed. Full suite:
+  4,924 passed, 12 failed, 17 skipped, 3 xfailed, 5 errors; loopback/process
+  permissions and PyPI network access explain several failures, while the
+  remaining unrelated failures need separate triage. Ruff reports 154
+  pre-existing findings across the checked files; `git diff --check` is clean.
+- `synlynk status` still reports Codex unavailable, Muse unsupported with no
+  measured capacity, an overdue capability sweep/smoke test, and 99 worktrees
+  with 20 flagged stale. No cleanup or live self-test was run. Interactive
+  cost was not independently available, so no amount was invented.
+[@codex]
+
