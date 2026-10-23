@@ -3214,5 +3214,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2545 \u2014 record #2096 Codex egress decide panel (PR #2545, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2545.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-23) - PR #2545\n- Merged improvements and fixes for PR #2545."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/448-pr2546-sync-roadmap-and-cost-ledger-after-stabi.md",
+    "title": "PR #2546 \u2014 sync roadmap and cost ledger after stability merges",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-23",
+    "pr": "#2546",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2546."
+    ],
+    "tweet": "\ud83d\ude80 PR #2546 \u2014 sync roadmap and cost ledger after stability merges (PR #2546, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2546.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-23) - PR #2546\n- Merged improvements and fixes for PR #2546."
   }
 ]
