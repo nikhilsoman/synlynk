@@ -28,6 +28,8 @@ DISCIPLINE_TO_TASK_TYPE = {
     "VISU": "css",
 }
 
+MIN_REWORK_RATE_MARGIN_PP = 10.0
+
 
 def _column_exists(conn, table: str, column: str) -> bool:
     cols = [row[1] for row in conn.execute(f"PRAGMA table_info({table})")]
@@ -47,6 +49,7 @@ def _fetch_rows(conn):
     quality_filter = " AND (cr.quality IS NULL OR cr.quality != 0.6)" if has_quality else ""
     query = (
         "SELECT cr.story_id, cr.agent, cr.discipline, cr.pr_review_cycles, "
+        "cr.dispatch_rework, cr.micro_rework, "
         f"{qv_select}, ce.total_cost_usd, ce.pr_number, ce.job_id "
         "FROM capability_ratings cr JOIN cost_entries ce ON cr.story_id = ce.story_id "
         f"WHERE cr.agent != 'local' AND cr.story_id NOT LIKE 'seed-%' AND cr.story_id NOT LIKE 'local-seed-%'{quality_filter}"
@@ -60,7 +63,18 @@ def _dedupe_cost_rows(rows):
     seen = set()
     deduped = []
     for row in rows:
-        story_id, _harness, _discipline, _cycles, _qv, _cost, pr_number, job_id = row
+        (
+            story_id,
+            _harness,
+            _discipline,
+            _cycles,
+            _dispatch_rework,
+            _micro_rework,
+            _qv,
+            _cost,
+            pr_number,
+            job_id,
+        ) = row
         key = (
             (story_id, "pr", pr_number)
             if pr_number is not None
@@ -77,9 +91,28 @@ def build_buckets(conn):
     """Return ``(buckets, skipped_no_mapping)`` grouped by harness and task type."""
     rows, _has_quality_verified = _fetch_rows(conn)
     rows = _dedupe_cost_rows(rows)
-    buckets = defaultdict(lambda: {"cycles": [], "costs": [], "story_ids": set()})
+    buckets = defaultdict(
+        lambda: {
+            "cycles": [],
+            "costs": [],
+            "dispatch_rework": [],
+            "micro_rework": [],
+            "story_ids": set(),
+        }
+    )
     skipped_no_mapping = 0
-    for story_id, harness, discipline, cycles, _qv, cost, _pr_number, _job_id in rows:
+    for (
+        story_id,
+        harness,
+        discipline,
+        cycles,
+        dispatch_rework,
+        micro_rework,
+        _qv,
+        cost,
+        _pr_number,
+        _job_id,
+    ) in rows:
         task_type = DISCIPLINE_TO_TASK_TYPE.get(discipline)
         if task_type is None:
             skipped_no_mapping += 1
@@ -89,12 +122,16 @@ def build_buckets(conn):
             bucket["cycles"].append(cycles)
         if cost is not None:
             bucket["costs"].append(cost)
+        if dispatch_rework is not None:
+            bucket["dispatch_rework"].append(dispatch_rework)
+        if micro_rework is not None:
+            bucket["micro_rework"].append(micro_rework)
         bucket["story_ids"].add(story_id)
     return dict(buckets), skipped_no_mapping
 
 
 def summarize_buckets(buckets: dict, min_sample_size: int) -> dict:
-    """Return sample counts, gate status, and metric medians per bucket."""
+    """Return sample counts, gate status, and metric medians/rates per bucket."""
     summary = {}
     for key, data in buckets.items():
         n = len(data["story_ids"])
@@ -107,12 +144,31 @@ def summarize_buckets(buckets: dict, min_sample_size: int) -> dict:
             "median_total_cost_usd": (
                 statistics.median(data["costs"]) if data["costs"] else None
             ),
+            "dispatch_rework_rate": (
+                sum(1 for value in data["dispatch_rework"] if value > 0)
+                / n
+                * 100.0
+                if data["dispatch_rework"] and n
+                else None
+            ),
+            "micro_rework_rate": (
+                sum(1 for value in data["micro_rework"] if value > 0)
+                / n
+                * 100.0
+                if data["micro_rework"] and n
+                else None
+            ),
         }
     return summary
 
 
 def propose_diff(summary: dict, current_task_allocation: dict, min_sample_size: int) -> list:
-    """Return harness swaps where a measured candidate beats both metrics."""
+    """Return harness swaps where a measured candidate beats both metrics.
+
+    Quality requires the candidate's dispatch rework rate to be at least
+    ``MIN_REWORK_RATE_MARGIN_PP`` percentage points below the incumbent's.
+    Review-cycle medians remain in summaries as historical report context.
+    """
     by_task_type = defaultdict(dict)
     for (harness, task_type), entry in summary.items():
         by_task_type[task_type][harness] = entry
@@ -127,18 +183,21 @@ def propose_diff(summary: dict, current_task_allocation: dict, min_sample_size: 
         for harness, entry in candidates.items():
             if harness == current_harness or not entry["measured"]:
                 continue
-            cycles_ok = (
-                entry["median_pr_review_cycles"] is not None
-                and current_entry["median_pr_review_cycles"] is not None
-                and entry["median_pr_review_cycles"]
-                < current_entry["median_pr_review_cycles"]
+            rework_rate_ok = (
+                entry["dispatch_rework_rate"] is not None
+                and current_entry["dispatch_rework_rate"] is not None
+                and (
+                    current_entry["dispatch_rework_rate"]
+                    - entry["dispatch_rework_rate"]
+                )
+                >= MIN_REWORK_RATE_MARGIN_PP
             )
             cost_ok = (
                 entry["median_total_cost_usd"] is not None
                 and current_entry["median_total_cost_usd"] is not None
                 and entry["median_total_cost_usd"] < current_entry["median_total_cost_usd"]
             )
-            if cycles_ok and cost_ok:
+            if rework_rate_ok and cost_ok:
                 proposals.append(
                     {
                         "task_type": task_type,
@@ -156,21 +215,42 @@ def format_text_report(proposals: list, summary: dict, skipped_no_mapping: int) 
     if not proposals:
         lines.append(
             "No routing changes proposed (no harness clears min_sample_size "
-            "with a strictly better median on both metrics)."
+            "with a dispatch_rework_rate at least "
+            f"{MIN_REWORK_RATE_MARGIN_PP:.0f}pp lower and a cheaper median cost)."
         )
     for proposal in proposals:
         current, proposed = proposal["current"], proposal["proposed"]
         lines.append(
             f"{proposal['task_type']}: {proposal['current_harness']} "
             f"(current, n={current['n']}, "
-            f"cycles={current['median_pr_review_cycles']}, "
+            f"rework_rate={current['dispatch_rework_rate']:.1f}%, "
+            f"micro_rework_rate={current.get('micro_rework_rate')}% (non-gating), "
             f"cost=${current['median_total_cost_usd']:.2f}) -> "
             f"{proposal['proposed_harness']} (n={proposed['n']}, "
-            f"cycles={proposed['median_pr_review_cycles']}, "
+            f"rework_rate={proposed['dispatch_rework_rate']:.1f}%, "
+            f"micro_rework_rate={proposed.get('micro_rework_rate')}% (non-gating), "
             f"cost=${proposed['median_total_cost_usd']:.2f})"
+        )
+    for (harness, task_type), entry in sorted(summary.items()):
+        rework_rate = entry.get("dispatch_rework_rate")
+        micro_rate = entry.get("micro_rework_rate")
+        rework_text = "n/a" if rework_rate is None else f"{rework_rate:.1f}%"
+        micro_text = "n/a" if micro_rate is None else f"{micro_rate:.1f}%"
+        lines.append(
+            f"{harness}/{task_type}: n={entry['n']}, "
+            f"rework_rate={rework_text}, "
+            f"micro_rework_rate={micro_text} (non-gating)"
         )
     lines.append(f"\n{skipped_no_mapping} rows skipped (discipline has no task_type mapping).")
     return "\n".join(lines)
+
+
+def format_summary_for_json(summary: dict) -> list:
+    """Return bucket summaries with JSON-safe harness and task-type fields."""
+    return [
+        {"harness": harness, "task_type": task_type, **entry}
+        for (harness, task_type), entry in sorted(summary.items())
+    ]
 
 
 def _load_policy(path: str = ".synlynk/policy.json") -> dict:
@@ -243,7 +323,11 @@ def cmd_capability_report(
     if as_json:
         print(
             json.dumps(
-                {"proposals": proposals, "skipped_no_mapping": skipped_no_mapping},
+                {
+                    "proposals": proposals,
+                    "summary": format_summary_for_json(summary),
+                    "skipped_no_mapping": skipped_no_mapping,
+                },
                 indent=2,
                 default=str,
             )
