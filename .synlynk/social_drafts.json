@@ -3342,5 +3342,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2562 \u2014 align Muse capability readiness (gh:#2554) (PR #2562, v0.25.2)\n\n\u2022 Merged improvements and fixes for PR #2562.\n\n#posts",
     "changelog": "### v0.25.2 (2026-10-23) - PR #2562\n- Merged improvements and fixes for PR #2562."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/456-pr2560-keep-codex-tiers-when-discovery-is-a-sin.md",
+    "title": "PR #2560 \u2014 keep Codex tiers when discovery is a single model",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-23",
+    "pr": "#2560",
+    "version": "0.25.2",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2560."
+    ],
+    "tweet": "\ud83d\ude80 PR #2560 \u2014 keep Codex tiers when discovery is a single model (PR #2560, v0.25.2)\n\n\u2022 Merged improvements and fixes for PR #2560.\n\n#posts",
+    "changelog": "### v0.25.2 (2026-10-23) - PR #2560\n- Merged improvements and fixes for PR #2560."
   }
 ]

@@ -533,6 +533,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [453](./453-pr2556-muse-capability-readiness-design-spec-gh.md) | PR #2556 — Muse capability readiness design spec (gh:#2554) | [#2556](https://github.com/nikhilsoman/synlynk/pull/2556) | 2026-10-23 |
 | [454](./454-pr2559-muse-capability-readiness-implementation.md) | PR #2559 — Muse capability readiness implementation plan (gh:#2554) | [#2559](https://github.com/nikhilsoman/synlynk/pull/2559) | 2026-10-23 |
 | [455](./455-pr2562-align-muse-capability-readiness-gh-2554.md) | PR #2562 — align Muse capability readiness (gh:#2554) | [#2562](https://github.com/nikhilsoman/synlynk/pull/2562) | 2026-10-23 |
+| [456](./456-pr2560-keep-codex-tiers-when-discovery-is-a-sin.md) | PR #2560 — keep Codex tiers when discovery is a single model | [#2560](https://github.com/nikhilsoman/synlynk/pull/2560) | 2026-10-23 |
 
 ## Per-PR Post Template
 
