@@ -46,6 +46,9 @@ Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versio
 <hr>
 <h2><a href="https://github.com/nikhilsoman/synlynk/compare/v0.3.0...HEAD">Unreleased</a></h2>
 <ul>
+<li>Fix generated project docs and archives to stay in the invoking interactive
+checkout, reject unsafe relative paths, and suppress incidental generated-file
+writes from dispatch jobs while preserving canonical DB mutations (#2532, #2237).</li>
 <li>Fix dispatched cost attribution so <code>cost_entries.agent_role</code> preserves the
 job's explicit role across repeated dispatches on the same story (gh:#2509).</li>
 <li>Add an opt-in personal NATS relay with scoped device credentials, durable
