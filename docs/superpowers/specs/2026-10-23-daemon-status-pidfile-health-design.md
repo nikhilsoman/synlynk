@@ -1,6 +1,6 @@
 # Daemon Status Missing-PIDfile Health Design
 
-**Status:** Draft — pending Nikhil sign-off.
+**Status:** Approved.
 **Issue:** [#2553](https://github.com/nikhilsoman/synlynk/issues/2553)
 **Release:** v0.25.3 readiness sweep (#2466)
 
@@ -60,4 +60,4 @@ Note `SynlynkDaemon.stop()` (`synlynk/daemon.py:1419-1499`) does **not** have th
 
 ## Approval record
 
-Pending — awaiting Nikhil's review of this spec before the implementation plan is written, per Brainstorm-First Policy.
+Approved by Nikhil ("go ahead") in the conductor session, 2026-10-23, authorizing the implementation plan per Brainstorm-First Policy.
