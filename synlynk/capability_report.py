@@ -215,17 +215,20 @@ def format_text_report(proposals: list, summary: dict, skipped_no_mapping: int) 
     if not proposals:
         lines.append(
             "No routing changes proposed (no harness clears min_sample_size "
-            "with a strictly better median on both metrics)."
+            "with a dispatch_rework_rate at least "
+            f"{MIN_REWORK_RATE_MARGIN_PP:.0f}pp lower and a cheaper median cost)."
         )
     for proposal in proposals:
         current, proposed = proposal["current"], proposal["proposed"]
         lines.append(
             f"{proposal['task_type']}: {proposal['current_harness']} "
             f"(current, n={current['n']}, "
-            f"cycles={current['median_pr_review_cycles']}, "
+            f"rework_rate={current['dispatch_rework_rate']:.1f}%, "
+            f"micro_rework_rate={current.get('micro_rework_rate')}, "
             f"cost=${current['median_total_cost_usd']:.2f}) -> "
             f"{proposal['proposed_harness']} (n={proposed['n']}, "
-            f"cycles={proposed['median_pr_review_cycles']}, "
+            f"rework_rate={proposed['dispatch_rework_rate']:.1f}%, "
+            f"micro_rework_rate={proposed.get('micro_rework_rate')}, "
             f"cost=${proposed['median_total_cost_usd']:.2f})"
         )
     lines.append(f"\n{skipped_no_mapping} rows skipped (discipline has no task_type mapping).")

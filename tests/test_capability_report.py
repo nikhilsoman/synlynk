@@ -344,6 +344,7 @@ def test_propose_diff_fires_on_rework_rate_gap_despite_tied_pr_review_cycles():
 def test_format_text_report_no_proposals():
     text = format_text_report([], {}, skipped_no_mapping=0)
     assert "No routing changes proposed" in text
+    assert "dispatch_rework_rate" in text
 
 
 def test_format_text_report_with_proposal_matches_example_shape():
@@ -353,21 +354,24 @@ def test_format_text_report_with_proposal_matches_example_shape():
             "current_harness": "claude",
             "current": {
                 "n": 12,
-                "median_pr_review_cycles": 2.5,
+                "dispatch_rework_rate": 25.0,
+                "micro_rework_rate": 0.0,
                 "median_total_cost_usd": 3.10,
             },
             "proposed_harness": "codex",
             "proposed": {
                 "n": 18,
-                "median_pr_review_cycles": 1.5,
+                "dispatch_rework_rate": 10.0,
+                "micro_rework_rate": 0.5,
                 "median_total_cost_usd": 1.80,
             },
         }
     ]
     text = format_text_report(proposals, {}, skipped_no_mapping=3)
     assert (
-        "implement: claude (current, n=12, cycles=2.5, cost=$3.10) -> "
-        "codex (n=18, cycles=1.5, cost=$1.80)"
+        "implement: claude (current, n=12, rework_rate=25.0%, "
+        "micro_rework_rate=0.0, cost=$3.10) -> "
+        "codex (n=18, rework_rate=10.0%, micro_rework_rate=0.5, cost=$1.80)"
     ) in text
     assert "3 rows skipped" in text
 
