@@ -3358,5 +3358,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2560 \u2014 keep Codex tiers when discovery is a single model (PR #2560, v0.25.2)\n\n\u2022 Merged improvements and fixes for PR #2560.\n\n#posts",
     "changelog": "### v0.25.2 (2026-10-23) - PR #2560\n- Merged improvements and fixes for PR #2560."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/457-pr2563-replace-pr-review-cycles-with-dispatch-r.md",
+    "title": "PR #2563 \u2014 replace pr_review_cycles with dispatch_rework_rate for routing proposals",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-23",
+    "pr": "#2563",
+    "version": "0.25.2",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2563."
+    ],
+    "tweet": "\ud83d\ude80 PR #2563 \u2014 replace pr_review_cycles with dispatch_rework_rate for routing proposals (PR #2563, v0.25.2)\n\n\u2022 Merged improvements and fixes for PR #2563.\n\n#posts",
+    "changelog": "### v0.25.2 (2026-10-23) - PR #2563\n- Merged improvements and fixes for PR #2563."
   }
 ]
