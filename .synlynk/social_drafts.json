@@ -3198,5 +3198,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2544 \u2014 tolerate missing watch pidfiles (PR #2544, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2544.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-23) - PR #2544\n- Merged improvements and fixes for PR #2544."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/447-pr2545-record-2096-codex-egress-decide-panel.md",
+    "title": "PR #2545 \u2014 record #2096 Codex egress decide panel",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-23",
+    "pr": "#2545",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2545."
+    ],
+    "tweet": "\ud83d\ude80 PR #2545 \u2014 record #2096 Codex egress decide panel (PR #2545, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2545.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-23) - PR #2545\n- Merged improvements and fixes for PR #2545."
   }
 ]
