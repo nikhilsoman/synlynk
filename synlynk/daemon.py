@@ -386,15 +386,51 @@ class WatchDaemon:
             time.sleep(min(delay, remaining))
             delay = min(delay * 1.5, 0.5)
 
-    def stop(self) -> None:
-        health = self._health_snapshot()
-        if health.state not in ("running", "degraded") or health.pid is None:
+    def _cleanup_stale_pidfile(self) -> bool:
+        """Remove stale PID metadata only while excluding a concurrent start.
+
+        Health is a snapshot; a new daemon can acquire the lifetime lock and
+        publish its PID file after that snapshot. Acquiring the same lifetime
+        lock before re-reading and cleaning the file closes that check/unlink
+        race. False means another owner won the race, so callers leave state
+        untouched.
+        """
+        lock_fh = _try_acquire_daemon_lock(
+            _daemon_lock_path(self.pidfile), blocking=False
+        )
+        if lock_fh is None:
+            return False
+        try:
+            try:
+                with open(self.pidfile) as f:
+                    contents = f.read().strip()
+            except FileNotFoundError:
+                return True
+            except OSError:
+                return False
+
+            try:
+                pid = int(contents)
+                if pid > 0 and _pid_is_alive(pid):
+                    return False
+            except (TypeError, ValueError):
+                pass
+
             try:
                 os.remove(self.pidfile)
             except FileNotFoundError:
                 pass
-            except OSError as exc:
-                print(f"  Error cleaning stale watch pidfile: {exc}")
+            except OSError:
+                return False
+            return True
+        finally:
+            _release_daemon_lock(lock_fh)
+
+    def stop(self) -> None:
+        health = self._health_snapshot()
+        if health.state not in ("running", "degraded") or health.pid is None:
+            if not self._cleanup_stale_pidfile():
+                print("  synlynk watch changed state; left pidfile untouched.")
                 return
             _pkg("set_state")("stopped")
             if health.pidfile_state == "absent":
@@ -433,13 +469,10 @@ class WatchDaemon:
                 except OSError:
                     pass
         else:
-            try:
-                os.remove(self.pidfile)
-            except FileNotFoundError:
-                pass
-            except OSError:
-                pass
-            print("  ○ synlynk watch stopped")
+            if self._cleanup_stale_pidfile():
+                print("  ○ synlynk watch stopped")
+            else:
+                print("  ○ synlynk watch changed state; left pidfile untouched")
 
     def _health(self) -> str:
         """Returns 'running', 'stopped', or 'zombie' (pidfile exists but process dead)."""

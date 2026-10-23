@@ -174,6 +174,65 @@ def test_watch_stop_does_not_signal_unheld_lock_metadata(
     assert "watch is not running" in capsys.readouterr().out
 
 
+def test_watch_status_preserves_pidfile_published_after_health_snapshot(
+    tmp_path, monkeypatch, capsys
+):
+    pidfile = str(tmp_path / "watch.pid")
+    daemon = WatchDaemon()
+    daemon.pidfile = pidfile
+    daemon.logfile = str(tmp_path / "watch.log")
+    original_snapshot = daemon._health_snapshot
+    lifetime_lock = [None]
+
+    def snapshot_then_start_daemon():
+        health = original_snapshot()
+        lifetime_lock[0] = _try_acquire_daemon_lock(
+            _daemon_lock_path(pidfile), blocking=False
+        )
+        assert lifetime_lock[0] is not None
+        with open(pidfile, "w") as f:
+            f.write(f"{os.getpid()}\n")
+        return health
+
+    monkeypatch.setattr(daemon, "_health_snapshot", snapshot_then_start_daemon)
+    try:
+        daemon.status()
+        assert os.path.exists(pidfile)
+        assert "left pidfile untouched" in capsys.readouterr().out
+    finally:
+        _release_daemon_lock(lifetime_lock[0])
+
+
+def test_watch_stop_preserves_pidfile_published_after_health_snapshot(
+    tmp_path, monkeypatch, capsys
+):
+    pidfile = str(tmp_path / "watch.pid")
+    daemon = WatchDaemon()
+    daemon.pidfile = pidfile
+    daemon.logfile = str(tmp_path / "watch.log")
+    original_snapshot = daemon._health_snapshot
+    lifetime_lock = [None]
+
+    def snapshot_then_start_daemon():
+        health = original_snapshot()
+        lifetime_lock[0] = _try_acquire_daemon_lock(
+            _daemon_lock_path(pidfile), blocking=False
+        )
+        assert lifetime_lock[0] is not None
+        with open(pidfile, "w") as f:
+            f.write(f"{os.getpid()}\n")
+        return health
+
+    monkeypatch.setattr(daemon, "_health_snapshot", snapshot_then_start_daemon)
+    monkeypatch.setattr(daemon_module, "_pkg", lambda _name: lambda *_args: None)
+    try:
+        daemon.stop()
+        assert os.path.exists(pidfile)
+        assert "left pidfile untouched" in capsys.readouterr().out
+    finally:
+        _release_daemon_lock(lifetime_lock[0])
+
+
 def test_daemon_health_ignores_own_pid_in_lockfile(tmp_path):
     """When lockfile holds caller's os.getpid() during start, _health must NOT report running."""
     pidfile = str(tmp_path / "daemon.pid")

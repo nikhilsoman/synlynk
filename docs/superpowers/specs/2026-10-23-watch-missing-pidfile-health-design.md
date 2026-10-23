@@ -1,6 +1,6 @@
 # Watch Missing-PIDfile Health Design
 
-**Status:** Draft — requires Nikhil's sign-off before an implementation plan or code.
+**Status:** Approved by Nikhil on 2026-10-23 via explicit go-ahead to implement both reviewed work items.
 **Issue:** [#2537](https://github.com/nikhilsoman/synlynk/issues/2537)
 **Release:** v0.25.2 stability gate (#2465)
 
@@ -20,7 +20,7 @@ The lifetime lock file's recorded PID is diagnostic metadata; it is not proof th
 2. A valid live PID file remains the primary daemon identity. When it is absent or unusable, report a live lock-owner PID as degraded evidence only; status must not open the missing file, and must not claim an ordinary healthy PID-file-backed state.
 3. Before using lock-owner PID evidence to claim a daemon is alive or to signal it, confirm the lifetime lock is actually held by another process using a non-blocking lock probe. A PID merely written in a stale lock file is not sufficient. Existing self-PID protections remain in force.
 4. `start()` must refuse to spawn a second watch process only when a valid live PID or independently verified live lifetime-lock owner exists. Stale/malformed PID and lock metadata must not permanently block restart; preserve the existing starter/lifetime lock serialization.
-5. `status()` must never raise for filesystem races or malformed/unreadable PID files. It reports running for a valid live PID; degraded with PID when a verified live lock owner is the only evidence; otherwise stopped, cleaning stale PID metadata only when safe.
+5. `status()` must never raise for filesystem races or malformed/unreadable PID files. It reports running for a valid live PID; degraded with PID when a verified live lock owner is the only evidence; otherwise stopped, cleaning stale PID metadata only when safe. Cleanup must acquire the lifetime lock and re-read the PID file before unlinking; if a daemon acquired the lock or published a PID after the health snapshot, leave the PID file untouched.
 6. `stop()` uses the same resolution. It may signal a valid live PID, or a PID from a lock that was verified held by that process; it must not signal based only on stale lock text. Missing/stale/malformed files with no verified live owner produce the normal stopped/cleanup result. Preserve signal and state-update behavior for existing healthy cases.
 
 ## Compatibility and scope
@@ -35,6 +35,7 @@ The lifetime lock file's recorded PID is diagnostic metadata; it is not proof th
 - Missing PID file + stale/unheld lock metadata: status reports stopped, start can proceed, and stop does not signal the recorded PID.
 - Valid live PID file: status/start/stop retain their healthy behavior.
 - Stale and malformed PID files: each command behaves deterministically, does not raise, does not signal an unrelated process, and permits a later start when no verified daemon remains.
+- A PID file published by a concurrent start after a status/stop health snapshot is preserved; stale cleanup must not unlink a new owner's file.
 - Add regression tests for each matrix case, including a PID that is live but has no relationship to the stale lock metadata.
 - Run targeted daemon tests and the relevant integration checks; obtain an independent review before marking #2537 complete or tagging v0.25.2.
 
@@ -42,6 +43,6 @@ The lifetime lock file's recorded PID is diagnostic metadata; it is not proof th
 
 Use isolated `tmp_path` PID/lock paths and subprocesses or mocked lock probes so tests never inspect or signal the host's real daemon. Cover race-safe missing-file reads and verify both command output/state and whether a process was signaled. Run the existing daemon liveness, start-failure, token-refresh, and control-plane daemon health tests as appropriate.
 
-## Decision required
+## Approval record
 
-Nikhil must sign off this committed spec before a plan is written or implementation begins, per the repository's brainstorm-first and design→plan→build protocol.
+Nikhil approved both reviewed work items with the explicit instruction to proceed with both implementations autonomously on 2026-10-23. The implementation plan and code are authorized under that approval.

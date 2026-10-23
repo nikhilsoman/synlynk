@@ -25,6 +25,7 @@
 - A malformed or concurrently removed PID file must not raise or leave start/status/stop disagreeing; pin the malformed-file and read-race cases.
 - A valid PID file must retain healthy behavior; retain and run the current valid/stale PID tests.
 - A stale PID file with no live lock owner must be cleaned without signaling its recorded PID; pin with an `os.kill` non-call assertion.
+- PID cleanup must acquire the lifetime lock and re-read before unlinking; if a concurrent start has published a PID after the health snapshot, preserve that file.
 
 ---
 
@@ -89,6 +90,8 @@ Add the following command-level tests and assertions:
 - `test_watch_status_ignores_unheld_lock_metadata_for_live_pid`: with an unheld lock containing a live unrelated PID and no PID file, assert output contains `watch stopped` and not `watch running`.
 - `test_watch_start_proceeds_for_unheld_lock_metadata`: assert the fake spawn function is called once.
 - `test_watch_stop_does_not_signal_unheld_lock_metadata`: assert `os.kill` is not called with the recorded PID.
+- `test_watch_status_preserves_pidfile_published_after_health_snapshot`: inject a start after the status snapshot and assert the newly published PID file remains.
+- `test_watch_stop_preserves_pidfile_published_after_health_snapshot`: inject a start after the stop snapshot and assert the newly published PID file remains.
 - `test_watch_status_handles_pidfile_disappearing_before_read`: simulate `FileNotFoundError` between existence check and read; assert no exception.
 - `test_watch_start_cleans_malformed_pid_without_owner`: assert no exception, the stale file is removed, and one child spawn is attempted.
 - `test_watch_stop_cleans_malformed_pid_without_signaling`: assert no exception, the stale file is removed, and `os.kill` is not called.
@@ -103,7 +106,7 @@ Expected: FAIL because status opens an absent PID file and stop treats absence a
 
 - [ ] **Step 3: Update start/status/stop to consume the health snapshot**
 
-`start()` must refuse a second spawn for `running` or `degraded` backed by a verified lock owner, while preserving its starter-lock serialization. `status()` must print the PID from the snapshot when available and never unconditionally open the PID file. `stop()` may signal only a live PID selected from a valid PID file or verified live lock-owner evidence; when neither exists, remove stale PID metadata only when safe, set state to stopped, and report stopped. Catch filesystem races at the read/cleanup boundary.
+`start()` must refuse a second spawn for `running` or `degraded` backed by a verified lock owner, while preserving its starter-lock serialization. `status()` must print the PID from the snapshot when available and never unconditionally open the PID file. `stop()` may signal only a live PID selected from a valid PID file or verified live lock-owner evidence; when neither exists, remove stale PID metadata only after acquiring the lifetime lock and re-reading the path. If a concurrent start owns that lock, leave the PID file and state untouched. Catch filesystem races at the read/cleanup boundary.
 
 - [ ] **Step 4: Run focused daemon regressions**
 
