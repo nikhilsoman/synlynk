@@ -146,16 +146,16 @@ def summarize_buckets(buckets: dict, min_sample_size: int) -> dict:
             ),
             "dispatch_rework_rate": (
                 sum(1 for value in data["dispatch_rework"] if value > 0)
-                / len(data["dispatch_rework"])
+                / n
                 * 100.0
-                if data["dispatch_rework"]
+                if data["dispatch_rework"] and n
                 else None
             ),
             "micro_rework_rate": (
                 sum(1 for value in data["micro_rework"] if value > 0)
-                / len(data["micro_rework"])
+                / n
                 * 100.0
-                if data["micro_rework"]
+                if data["micro_rework"] and n
                 else None
             ),
         }
@@ -224,15 +224,33 @@ def format_text_report(proposals: list, summary: dict, skipped_no_mapping: int) 
             f"{proposal['task_type']}: {proposal['current_harness']} "
             f"(current, n={current['n']}, "
             f"rework_rate={current['dispatch_rework_rate']:.1f}%, "
-            f"micro_rework_rate={current.get('micro_rework_rate')}, "
+            f"micro_rework_rate={current.get('micro_rework_rate')}% (non-gating), "
             f"cost=${current['median_total_cost_usd']:.2f}) -> "
             f"{proposal['proposed_harness']} (n={proposed['n']}, "
             f"rework_rate={proposed['dispatch_rework_rate']:.1f}%, "
-            f"micro_rework_rate={proposed.get('micro_rework_rate')}, "
+            f"micro_rework_rate={proposed.get('micro_rework_rate')}% (non-gating), "
             f"cost=${proposed['median_total_cost_usd']:.2f})"
+        )
+    for (harness, task_type), entry in sorted(summary.items()):
+        rework_rate = entry.get("dispatch_rework_rate")
+        micro_rate = entry.get("micro_rework_rate")
+        rework_text = "n/a" if rework_rate is None else f"{rework_rate:.1f}%"
+        micro_text = "n/a" if micro_rate is None else f"{micro_rate:.1f}%"
+        lines.append(
+            f"{harness}/{task_type}: n={entry['n']}, "
+            f"rework_rate={rework_text}, "
+            f"micro_rework_rate={micro_text} (non-gating)"
         )
     lines.append(f"\n{skipped_no_mapping} rows skipped (discipline has no task_type mapping).")
     return "\n".join(lines)
+
+
+def format_summary_for_json(summary: dict) -> list:
+    """Return bucket summaries with JSON-safe harness and task-type fields."""
+    return [
+        {"harness": harness, "task_type": task_type, **entry}
+        for (harness, task_type), entry in sorted(summary.items())
+    ]
 
 
 def _load_policy(path: str = ".synlynk/policy.json") -> dict:
@@ -305,7 +323,11 @@ def cmd_capability_report(
     if as_json:
         print(
             json.dumps(
-                {"proposals": proposals, "skipped_no_mapping": skipped_no_mapping},
+                {
+                    "proposals": proposals,
+                    "summary": format_summary_for_json(summary),
+                    "skipped_no_mapping": skipped_no_mapping,
+                },
                 indent=2,
                 default=str,
             )

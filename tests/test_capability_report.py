@@ -15,6 +15,7 @@ from synlynk.capability_report import (
     _fetch_rows,
     build_buckets,
     format_text_report,
+    format_summary_for_json,
     propose_diff,
     summarize_buckets,
 )
@@ -195,6 +196,21 @@ def test_summarize_buckets_all_zero_rework_yields_zero_rate_not_none():
     assert entry["micro_rework_rate"] == 0.0
 
 
+def test_summarize_buckets_partial_null_rework_uses_bucket_sample_denominator():
+    buckets = {
+        ("claude", "implement"): {
+            "cycles": [0, 0, 0, 0, 0],
+            "costs": [1.0, 1.0, 1.0, 1.0, 1.0],
+            "dispatch_rework": [1],
+            "micro_rework": [1],
+            "story_ids": {"s1", "s2", "s3", "s4", "s5"},
+        },
+    }
+    entry = summarize_buckets(buckets, min_sample_size=5)[("claude", "implement")]
+    assert entry["dispatch_rework_rate"] == 20.0
+    assert entry["micro_rework_rate"] == 20.0
+
+
 def test_propose_diff_promotes_harness_clearing_rework_rate_margin():
     summary = {
         ("claude", "implement"): {
@@ -342,9 +358,41 @@ def test_propose_diff_fires_on_rework_rate_gap_despite_tied_pr_review_cycles():
 
 
 def test_format_text_report_no_proposals():
-    text = format_text_report([], {}, skipped_no_mapping=0)
+    summary = {
+        ("claude", "implement"): {
+            "n": 5,
+            "measured": True,
+            "median_pr_review_cycles": 0,
+            "median_total_cost_usd": 1.5,
+            "dispatch_rework_rate": 20.0,
+            "micro_rework_rate": 5.0,
+        }
+    }
+    text = format_text_report([], summary, skipped_no_mapping=0)
     assert "No routing changes proposed" in text
     assert "dispatch_rework_rate" in text
+    assert "claude/implement" in text
+    assert "rework_rate=20.0%" in text
+    assert "micro_rework_rate=5.0% (non-gating)" in text
+
+
+def test_format_summary_for_json_surfaces_bucket_rates():
+    summary = {
+        ("claude", "implement"): {
+            "n": 5,
+            "dispatch_rework_rate": 20.0,
+            "micro_rework_rate": 5.0,
+        }
+    }
+    assert format_summary_for_json(summary) == [
+        {
+            "harness": "claude",
+            "task_type": "implement",
+            "n": 5,
+            "dispatch_rework_rate": 20.0,
+            "micro_rework_rate": 5.0,
+        }
+    ]
 
 
 def test_format_text_report_with_proposal_matches_example_shape():
@@ -370,8 +418,9 @@ def test_format_text_report_with_proposal_matches_example_shape():
     text = format_text_report(proposals, {}, skipped_no_mapping=3)
     assert (
         "implement: claude (current, n=12, rework_rate=25.0%, "
-        "micro_rework_rate=0.0, cost=$3.10) -> "
-        "codex (n=18, rework_rate=10.0%, micro_rework_rate=0.5, cost=$1.80)"
+        "micro_rework_rate=0.0% (non-gating), cost=$3.10) -> "
+        "codex (n=18, rework_rate=10.0%, "
+        "micro_rework_rate=0.5% (non-gating), cost=$1.80)"
     ) in text
     assert "3 rows skipped" in text
 
