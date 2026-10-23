@@ -5183,6 +5183,151 @@ def test_rotate_project_doc_archives_in_current_worktree(git_worktree_repo, tmp_
     assert not (repo / "project-docs" / "archive").exists()
 
 
+def test_working_tree_root_resolves_nested_linked_checkout(
+    git_worktree_repo, tmp_path, monkeypatch
+):
+    import synlynk as sl
+
+    repo = git_worktree_repo
+    linked = tmp_path / "nested-job"
+    subprocess.run(
+        ["git", "worktree", "add", "--detach", str(linked), "HEAD"],
+        cwd=repo, capture_output=True, check=True,
+    )
+    nested = linked / "project-docs" / "devlogs"
+    nested.mkdir(parents=True, exist_ok=True)
+    monkeypatch.chdir(nested)
+
+    assert sl._working_tree_root() == str(linked)
+    assert sl._working_tree_root() != sl._project_root()
+
+
+def test_resolved_docs_dir_rejects_relative_path_traversal(
+    git_worktree_repo, monkeypatch
+):
+    import synlynk as sl
+    import synlynk.db as db
+
+    (git_worktree_repo / ".synlynk" / "config.json").write_text(
+        json.dumps({"project_docs_dir": "../outside"})
+    )
+
+    with pytest.raises(RuntimeError, match="escapes the current checkout"):
+        db._resolved_docs_dir()
+
+
+def test_resolved_docs_dir_fails_closed_when_git_root_unavailable(
+    git_worktree_repo, monkeypatch
+):
+    import synlynk as sl
+    import synlynk.db as db
+
+    (git_worktree_repo / ".synlynk" / "config.json").write_text(
+        json.dumps({"project_docs_dir": str(git_worktree_repo / "project-docs")})
+    )
+    monkeypatch.setattr(
+        sl, "_working_tree_root",
+        lambda: (_ for _ in ()).throw(RuntimeError("no root")),
+    )
+
+    with pytest.raises(RuntimeError, match="no root"):
+        db._resolved_docs_dir()
+
+
+def test_resolved_docs_dir_preserves_explicit_absolute_path(
+    git_worktree_repo, monkeypatch
+):
+    import synlynk.db as db
+
+    configured = str(git_worktree_repo.parent / "explicit-docs")
+    (git_worktree_repo / ".synlynk" / "config.json").write_text(
+        json.dumps({"project_docs_dir": configured})
+    )
+
+    assert db._resolved_docs_dir() == configured
+
+
+def test_dispatched_story_create_persists_without_generated_doc_side_effects(
+    git_worktree_repo, tmp_path, monkeypatch
+):
+    import synlynk as sl
+
+    repo = git_worktree_repo
+    (repo / ".synlynk" / ".synlynk_migrated").write_text("migrated\n")
+    cache_dir = repo / ".synlynk" / "project-docs"
+    cache_dir.mkdir()
+    cache_todo = cache_dir / "todo.md"
+    cache_todo.write_text("shared cache\n")
+    dr_sync = tmp_path / "dr-sync"
+    dr_sync.mkdir()
+    config_path = repo / ".synlynk" / "config.json"
+    config_path.write_text(json.dumps({
+        "project_docs_dir": "project-docs",
+        "dr_sync_path": str(dr_sync),
+    }))
+    live_todo = repo / "project-docs" / "todo.md"
+    before_live = live_todo.read_bytes()
+    before_cache = cache_todo.read_bytes()
+    before_index = (repo / ".git" / "index").read_bytes()
+    monkeypatch.setenv("SYNLYNK_TEST_PROJECT_DIR", "1")
+    monkeypatch.setenv("SYNLYNK_JOB_ID", "job-test-generated-doc-suppression")
+
+    story_id = sl.cmd_story_create("DB change survives dispatch suppression")
+
+    conn = sl._get_db()
+    assert conn.execute(
+        "SELECT title FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone() == ("DB change survives dispatch suppression",)
+    conn.close()
+    assert live_todo.read_bytes() == before_live
+    assert cache_todo.read_bytes() == before_cache
+    assert (repo / ".git" / "index").read_bytes() == before_index
+    assert not (dr_sync / "project-docs" / "todo.md").exists()
+
+
+def test_dispatched_rotation_writes_no_archive_or_index(
+    git_worktree_repo, monkeypatch
+):
+    import synlynk.db as db
+
+    repo = git_worktree_repo
+    monkeypatch.setenv("SYNLYNK_JOB_ID", "job-test-rotation-suppression")
+    rows = [{"n": 1}, {"n": 2}]
+
+    assert db._rotate_project_doc("costs", rows, keep_n=1) == rows
+    assert not (repo / "project-docs" / "archive").exists()
+    assert not (repo / ".synlynk" / "project-docs" / "archive").exists()
+
+
+def test_migrated_rotation_archives_in_calling_linked_worktree(
+    git_worktree_repo, tmp_path, monkeypatch
+):
+    import synlynk.db as db
+
+    repo = git_worktree_repo
+    (repo / ".synlynk" / ".synlynk_migrated").write_text("migrated\n")
+    subprocess.run(
+        ["git", "add", "-f", ".synlynk/.synlynk_migrated"],
+        cwd=repo, capture_output=True, check=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "mark fixture migrated"],
+        cwd=repo, capture_output=True, check=True,
+    )
+    job = tmp_path / "migrated-job"
+    subprocess.run(
+        ["git", "worktree", "add", "--detach", str(job), "HEAD"],
+        cwd=repo, capture_output=True, check=True,
+    )
+    monkeypatch.chdir(job)
+
+    db._rotate_project_doc("costs", [{"n": 1}, {"n": 2}], keep_n=1)
+
+    assert (job / "project-docs" / "archive" / "INDEX.md").is_file()
+    assert not (repo / "project-docs" / "archive").exists()
+    assert not (repo / ".synlynk" / "project-docs" / "archive").exists()
+
+
 def test_import_todo_to_stories_imports_unchecked_lines(project_dir):
     """_import_todo_to_stories creates story rows for all supported checkbox states."""
     import synlynk as sl
