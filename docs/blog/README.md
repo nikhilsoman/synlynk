@@ -530,6 +530,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [450](./450-pr2549-prepare-v0-25-2-metadata-2465.md) | PR #2549 — prepare v0.25.2 metadata (#2465) | [#2549](https://github.com/nikhilsoman/synlynk/pull/2549) | 2026-10-23 |
 | [451](./451-pr2550-record-the-shipped-v0-25-2-release-in-ro.md) | PR #2550 — record the shipped v0.25.2 release in roadmap bookkeeping | [#2550](https://github.com/nikhilsoman/synlynk/pull/2550) | 2026-10-23 |
 | [452](./452-pr2555-record-nikhil-s-v0-25-3-sign-off-on-two-.md) | PR #2555 — record Nikhil's v0.25.3 sign-off on two design specs | [#2555](https://github.com/nikhilsoman/synlynk/pull/2555) | 2026-10-23 |
+| [453](./453-pr2556-muse-capability-readiness-design-spec-gh.md) | PR #2556 — Muse capability readiness design spec (gh:#2554) | [#2556](https://github.com/nikhilsoman/synlynk/pull/2556) | 2026-10-23 |
 
 ## Per-PR Post Template
 

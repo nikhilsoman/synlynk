@@ -3294,5 +3294,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2555 \u2014 record Nikhil's v0.25.3 sign-off on two design specs (PR #2555, v0.25.2)\n\n\u2022 Merged improvements and fixes for PR #2555.\n\n#posts",
     "changelog": "### v0.25.2 (2026-10-23) - PR #2555\n- Merged improvements and fixes for PR #2555."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/453-pr2556-muse-capability-readiness-design-spec-gh.md",
+    "title": "PR #2556 \u2014 Muse capability readiness design spec (gh:#2554)",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-23",
+    "pr": "#2556",
+    "version": "0.25.2",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2556."
+    ],
+    "tweet": "\ud83d\ude80 PR #2556 \u2014 Muse capability readiness design spec (gh:#2554) (PR #2556, v0.25.2)\n\n\u2022 Merged improvements and fixes for PR #2556.\n\n#posts",
+    "changelog": "### v0.25.2 (2026-10-23) - PR #2556\n- Merged improvements and fixes for PR #2556."
   }
 ]
