@@ -194,9 +194,9 @@ Patch release (rescoped from planned v0.14.0 minor — Agent/Harness terminology
 Two-tier policy.json (workspace defaults + repo overrides), check_authority() gates on dispatch/release/roadmap/goal actions, synlynk policy check-merge/sync-branch-protection/show commands. Branch protection live-verified on synlynk's own repo (gh:#1122, plan docs/superpowers/plans/2026-08-23-workspace-policy-and-autonomous-loop.md, Tasks 1-9). Precedes v0.16.0 Autonomous Loop (Tasks 10-13).
 
 
-## 1.0.0 — Developer Preview Public Launch [planned] (target: 2026-10-31)
+## 1.0.0 — Superseded: Developer Preview Public Launch (legacy alias) [superseded]
 
-Public GitHub tag v1.0.0 is NOT cut yet. Ceremony: synlynk.com collateral, HN/Product Hunt (#1515), book excerpt (#1514). Wave 1 implementation is done; this arc is the launch event. Target realigned to 2026-10-31 per Dev Preview Revised Roadmap and Deep Review 2026-10-16.
+Superseded by the active v0.27.2-v0.27.5 daily stable stream under parent #2458. No separate v1.0.0 preview tag, RC/DEV/PROD channel, or public launch requirement is planned. The separate future GA arc v1.0.0 remains distinct.
 
 - [ ] P0 Foundation and reset (P0)
   Reconcile main/origin, stale worktrees, daemon/runtime, sentinel noise, and release blockers. Establish a clean baseline and freeze non-launch work.
@@ -254,9 +254,9 @@ Named release v0.20.0. BS-6 visualizer, unattended milestone loop, deep scan bri
 - [x] Harness Specialization & Diagnostic Circuit Breakers (P1)
   Role matrix routing + >3 turn diagnostic churn auto-handoff
 
-## v1.0.0-rc1 — 15-Minute First Win Field Trials & Zero-Risk Install [planned] (target: 2026-10-31)
+## v1.0.0-rc1 — Superseded: 15-Minute First Win Field Trials & Zero-Risk Install [superseded]
 
-pipx distribution, 15-min wow journey across 3 target repos, browser Vizor onboarding, autonomous goal brainstorm, test suite runtime remediation (#1492). Aligned with 1.0.0 Developer Preview date.
+The RC tag is retired. First-win/onboarding work is scheduled in v0.27.1-v0.27.3; there is no parallel RC/DEV/PROD channel. Parent #2458; gated Developer Preview is v0.27.5 on 2026-11-06.
 
 - [ ] Zero-Risk Packaging & Standalone Distribution (pipx) (P0)
   Single-command installable package without environment conflicts
@@ -316,9 +316,9 @@ Self-management core, Board governance, Jev AST decisioning, swarms, concierge, 
 - [x] Autonomous Maintainer Zero-Issue Burndown Driver (P1) <!-- story:story-v024-t10-maintainer-burndown -->
   Continuous sweeping of open GitHub issues, driving open bugs to zero
 
-## v0.25.0 — Sovereign Silicon: Local oMLX Fleet [planned] (target: 2026-10-22)
+## v0.25.0 — Sovereign Silicon: Local oMLX Fleet [deferred]
 
-Zero-cloud offline local model inference harness optimized for Apple Silicon MLX
+Deferred until after the first Developer Preview stable tag. Local harness (oMLX/Aider) is not a v0.25.x-v0.27.5 release gate; re-evaluate after Dev Preview. Parent #2458; related tickets #2525 and #2533.
 
 - [ ] Local oMLX / Aider Harness Integration (#1710) (P0)
   Real subprocess dispatch to local MLX models (Llama-3, Qwen-2.5, DeepSeek)
@@ -327,9 +327,9 @@ Zero-cloud offline local model inference harness optimized for Apple Silicon MLX
 - [ ] Offline Zero-Cloud AST Tier-0 Routing (P1)
   Automatic fallback and tier-0 cost routing for self-hosted models
 
-## v0.26.0 — Supervised execution and daemon reliability [planned] (target: 2026-12-18)
+## v0.26.0 — Daemon reliability [planned] (target: 2026-10-28)
 
-Canonical release epic #2468. Goals: goal-bd5eaa14, goal-06758149, goal-eacab0dc. Scheduled release gate: 2026-12-18; restart, recovery, cancellation, scan containment, and replay evidence required. No phase is ready until story and ticket linkage are complete.
+Daily stable gate: daemon restart, cancellation, recovery, scan containment, replay and stop idempotence are evidence-tested. Revalidate #2464 and #1884; #2477 stays closed without a new reproduction. Legacy provider/OpenRouter/Fal.ai/driver phase rows under this arc are not part of the daemon gate and remain non-authoritative pending freshness disposition via #2535 by the Oct 27 ticket lock. Parent #2458; release epic #2468; goals goal-bd5eaa14, goal-06758149, goal-eacab0dc.
 
 - [ ] Universal Provider Aggregator Integration (#1711) (P0)
   BYOK gateway with provider fallback chains and latency optimization
@@ -340,9 +340,9 @@ Canonical release epic #2468. Goals: goal-bd5eaa14, goal-06758149, goal-eacab0dc
 - [ ] Specialist 3rd-Party Driver Agents (@supabase, @vercel) (P1)
   Dedicated driver roles for cloud infrastructure automation
 
-## v0.27.0 — Developer surfaces [planned] (target: 2027-02-05)
+## v0.27.0 — VS Code and OpenVSX listing [planned] (target: 2026-11-01)
 
-Canonical release epic #2471. Goals: goal-e3840370, goal-85656c82. Scheduled release gate: 2027-02-05; VS Code and OpenVSX listing, install, update, and dispatch smoke evidence required. No phase is ready until story and ticket linkage are complete.
+Daily stable gate: developer-surface listing/publication, install, update and dispatch smoke tests pass (#2103). Legacy Muse-GA and cross-harness review/cost phases under this arc are candidates for freshness disposition through #2535; they do not delay the listing gate absent a demonstrated dependency. Parent #2458; release epic #2471; goals goal-e3840370 and goal-85656c82.
 
 - [ ] Meta Muse CLI Adapter GA Promotion (P0)
   Full promotion from experimental to first-class peer in fleet baseline
@@ -351,9 +351,9 @@ Canonical release epic #2471. Goals: goal-e3840370, goal-85656c82. Scheduled rel
 - [ ] Muse Structured Output & Cost Ledger Integration (P1)
   Verified token extraction and dual-ledger cost reporting for Muse
 
-## v0.25.2 — Fleet capacity recovery and model catalog [planned] (target: 2026-11-06)
+## v0.25.2 — Stability baseline and accumulated PR reconciliation [planned] (target: 2026-10-23)
 
-Canonical release epic #2465. Goals: goal-3ef62232, goal-005ea87d. Scheduled gate: 2026-11-06. Model resolution plus capacity enlistment: Local Ornith only, isolated, max-one concurrent, successful live preflight, 20% implementation cohort; Muse authenticated, model-allowlisted low-privilege execution. Neither receives review, deploy, or GitHub-write authority. Quota/cost reconciliation is v0.25.3. No phase is ready until story and ticket linkage are complete.
+Daily stable gate: reconcile accumulated PRs and establish the functional baseline. Resolve or explicitly gate dispatch/process lifecycle #2530 and worktree generated-doc write safety #2532 before relying on autonomous work. Parent #2458; release epic #2465; goals goal-3ef62232 and goal-005ea87d.
 
 - [x] Daemon health fixes (gh:#2261, gh:#2288) (P0) <!-- story:story-e73fac9e -->
   Dormant re-exec bug + crash on stale worktree cwd blocking --requires-gh-write dispatch.
@@ -370,9 +370,9 @@ Canonical release epic #2465. Goals: goal-3ef62232, goal-005ea87d. Scheduled gat
 - [ ] Fleet-wide model resolution invariants (#2450) (P0) <!-- story:story-54758ff8 -->
   Delivery story is goal-3ef62232 and ticket #2450. Exit: invariant tests cover model resolution across the supported fleet.
 
-## v1.0.0-preview — v1.0.0 Developer Preview [planned] (target: 2026-10-31)
+## v1.0.0-preview — Superseded: v1.0.0 Developer Preview [superseded]
 
-Developer Preview Launch: empirical capability routing, thin VS Code client, PyPI release, worktree leased concurrency, 5 Invariants
+Superseded by the gated v0.27.5 Developer Preview stable tag on 2026-11-06 under parent #2458. Do not cut a separate v1.0.0-preview tag or channel. Re-triage remaining stories using #2535 and the daily dependency sweep; no legacy phase row is implementation authority.
 
 - [x] Phase 1A: Substrate Hardening & Hygiene (P0)
   Worktree fleet pruning, state.db vacuum (<30MB), sentinel 7-day TTL cleanup, and GenericAPIAdapter all complete.
@@ -393,46 +393,78 @@ Developer Preview Launch: empirical capability routing, thin VS Code client, PyP
 - [ ] Phase 3: Release Gate & Launch (P0)
   v1.0.0-rc1 tagging, PyPI Trusted Publishing, 4,500+ test suite pass, 15-min time-to-wow screencast, and milestone synthesis blog.
 
-## v0.25.3 — Trust contracts and capacity accounting [planned] (target: 2026-11-20)
+## v0.25.3 — Muse and model-capacity readiness [planned] (target: 2026-10-24)
 
-Canonical release epic #2466. Goals: goal-adb60ccc, goal-079e2f37, goal-eacab0dc. Scheduled gate: 2026-11-20. Fail-closed approval, provenance, GitHub-write, cost, and live federated quota/capacity reconciliation evidence required. No phase is ready until story and ticket linkage are complete.
-
-
-## v0.25.4 — Canonical state and release integrity [planned] (target: 2026-12-04)
-
-Canonical release epic #2467. Goals: goal-079e2f37, goal-9ef9a965, goal-eacab0dc. Prerequisite #1914 closed by PR #2462. Scheduled release gate: 2026-12-04; one canonical state path, DR, and review evidence required. No phase is ready until story and ticket linkage are complete.
+Daily stable gate: onboard Muse with authenticated, allowlisted, low-privilege execution; validate model catalog, capability and cost evidence across core harnesses. Quota truth may follow later in the cycle. Parent #2458; release epic #2466; goals goal-adb60ccc, goal-079e2f37, goal-eacab0dc.
 
 
-## v0.26.1 — Workspace-agent operations [planned] (target: 2027-01-08)
+## v0.25.4 — Accurate job status and completion evidence [planned] (target: 2026-10-25)
 
-Canonical release epic #2469. Goals: goal-eacab0dc, goal-a222b393, goal-06758149. Scheduled release gate: 2027-01-08; signed charters, authority, SOP, and operational evidence required. No phase is ready until story and ticket linkage are complete.
-
-
-## v0.26.2 — Evidence-gated supervised autonomy [planned] (target: 2027-01-22)
-
-Canonical release epic #2470. Goals: goal-bd5eaa14, goal-eacab0dc. Containment must precede autonomy escalation. Scheduled release gate: 2027-01-22; evidence-gated autonomy controls required. No phase is ready until story and ticket linkage are complete.
+Daily stable gate: accurate, auditable job status and completion evidence, including GitHub-write outcomes. Revalidate #2138, #2139, #2309 and #2530 against current main. Parent #2458; release epic #2467; goals goal-079e2f37, goal-9ef9a965, goal-eacab0dc.
 
 
-## v0.27.1 — Onboarding first win [planned] (target: 2027-02-19)
+## v0.26.1 — Workspace-agent charter and role operations [planned] (target: 2026-10-29)
 
-Canonical release epic #2472. Goals: goal-e47ee312, goal-85656c82, goal-9ef9a965. Scheduled release gate: 2027-02-19; five independent under-15-minute first-win journeys required. No phase is ready until story and ticket linkage are complete.
-
-
-## v0.27.2 — Marketplace distribution [planned] (target: 2027-03-05)
-
-Canonical release epic #2473. Goals: goal-9ef9a965, goal-85656c82. Onboarding gate precedes marketplace distribution. Scheduled release gate: 2027-03-05; install, update, rollback, and support evidence required. No phase is ready until story and ticket linkage are complete.
+Daily stable gate: workspace-agent charters, authority, SOPs and GOVERNS adherence are signed off and exercised; address #2305 where needed for enforceable role procedures. Parent #2458; release epic #2469; goals goal-eacab0dc, goal-a222b393, goal-06758149.
 
 
-## v0.28.0 — Swarms and Universal Gateway [planned] (target: 2027-03-26)
+## v0.26.2 — Safe autonomous operations [planned] (target: 2026-10-30)
 
-Canonical release epic #2474. Goals: goal-256d17d6, goal-8d34c416, goal-005ea87d. Scheduled release gate: 2027-03-26; bounded swarm, gateway, lease, budget, containment, and evidence controls required. No phase is ready until story and ticket linkage are complete.
-
-
-## v0.28.1 — Capability crawler, index, and GTM [planned] (target: 2027-04-09)
-
-Canonical release epic #2475. Goals: goal-aa48c456, goal-20bb3987. Scheduled release gate: 2027-04-09; reproducible, privacy-safe, sample-floor-gated capability evidence and GTM surface required. No phase is ready until story and ticket linkage are complete.
+Daily stable gate: enforce claims/leases at work-start paths (#2511/#2528); approval, containment, audit and recovery controls pass before broader autonomy. Parent #2458; release epic #2470; goals goal-bd5eaa14 and goal-eacab0dc.
 
 
-## v0.29.0 — Backlog consolidation [planned] (target: 2027-04-23)
+## v0.27.1 — Quickstart and onboarding first win [planned] (target: 2026-11-02)
 
-Canonical release epic #2476. Goal: goal-51c4be3f. Scheduled decision gate: 2027-04-23; every residual candidate promoted, archived, or held and human Dev Preview decision recorded. No Dev Preview date is implied.
+Daily stable gate: fresh-project journeys reach a verified first dispatch in under 15 minutes; revise #1515/#2472 scope to exclude deferred public-announcement requirements. Parent #2458; release epic #2472; goals goal-e47ee312, goal-85656c82, goal-9ef9a965.
+
+
+## v0.27.2 — Onboarding clarity and recovery [planned] (target: 2026-11-03)
+
+Daily stable gate: install/update failure paths, prerequisites, harness choice and common errors are explained and verified end to end. Parent #2458; release epic #2473; goals goal-9ef9a965 and goal-85656c82.
+
+
+## v0.28.0 — Swarms and Universal Gateway [planned]
+
+Post-Preview scope; intentionally undated. Bounded swarm, gateway, lease, budget, containment and evidence controls. Do not block the first Developer Preview. Parent #2458; release epic #2474; goals goal-256d17d6, goal-8d34c416, goal-005ea87d.
+
+
+## v0.28.1 — Capability crawler, index and GTM [planned]
+
+Post-Preview scope; intentionally undated. Reproducible, privacy-safe, sample-floor-gated capability evidence and GTM surface. Parent #2458; release epic #2475; goals goal-aa48c456 and goal-20bb3987.
+
+
+## v0.29.0 — Residual backlog consolidation [planned]
+
+Post-Preview scope; intentionally undated. Triage residual candidates, promote/archive/hold with evidence, and record the human Dev Preview follow-up decision. Parent #2458; release epic #2476; goal goal-51c4be3f.
+
+
+## v0.25.5 — CI and release-integrity stabilization [planned] (target: 2026-10-26)
+
+Daily stable gate: resolve or evidence non-blocking dispositions for self-test/CI race #2527/#2526, release-doc count drift #2522, and generated command-doc/sparse-checkout blocker #2320. Parent #2458; release epic #2467.
+
+
+## v0.25.6 — Stability closeout and ticket lock [planned] (target: 2026-10-27)
+
+Daily stable gate: close GOVERNS/model/cost/job-truth stability review; every selected story has a goal, release epic and current ticket; all 94 ticketless candidates receive a linked or explicit deferred/archive disposition. Use governed phase-update ticket #2535; do not edit canonical DB rows directly. Parent epic #2458; milestone #14; goal goal-9ef9a965.
+
+
+## v0.26.3 — End-to-end autonomous operating day [planned] (target: 2026-10-31)
+
+Daily stable gate: workspace-agent roles plan, claim, dispatch, monitor, recover and produce truthful evidence for one bounded roadmap task; revalidate #2262 and adjacent job-orphan issues. Parent #2458; release epic #2470.
+
+
+## v0.27.3 — Cross-harness onboarding verification [planned] (target: 2026-11-04)
+
+Daily stable gate: five independent fresh-project journeys pass from install to useful, evidence-backed result, including Muse. Parent #2458; release epics #2471-#2473.
+
+
+## v0.27.4 — Developer Preview acceptance run [planned] (target: 2026-11-05)
+
+Daily stable gate: GOVERNS, model catalog/capability/cost, job-status truth, workspace-agent autonomy and quickstart/onboarding pass together. Parent #2458; release epics #2471-#2473.
+
+
+## v0.27.5 — Developer Preview stable release gate [planned] (target: 2026-11-06)
+
+Daily stable tag is the Developer Preview only when the v0.27.4 acceptance evidence is green and no unresolved release-blocking Sev1/Sev2 defect remains. Human release authority remains required. Parent #2458; release epics #2471-#2473.
+
+

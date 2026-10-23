@@ -150,6 +150,40 @@ def test_dead_client_records_failure_without_failover(tmp_path, monkeypatch, git
     assert "example-test/runner:stub" in recorded
 
 
+def test_stall_cleanup_uses_container_domain_after_client_loss(tmp_path, monkeypatch):
+    import time
+    from synlynk.process_lifecycle import TerminationResult
+
+    log_file = tmp_path / "container.log"
+    log_file.write_text("")
+    old_mtime = time.time() - 3600
+    os.utime(log_file, (old_mtime, old_mtime))
+    domain = {
+        "version": 1, "kind": "container", "container_id": "container-123",
+        "leader_pid": 777, "leader_identity": {"start_time": "launch"},
+    }
+    seen = []
+    monkeypatch.setattr(
+        dispatch_mod,
+        "terminate_job_domain",
+        lambda value, **kwargs: seen.append(value) or TerminationResult(
+            "stopped_verified", True, "container", "container_stopped"
+        ),
+    )
+    import synlynk as sl
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: None)
+    job = {
+        "id": "job-container", "agent": "codex", "status": "running",
+        "pid": 777, "log_file": str(log_file), "termination_domain": domain,
+    }
+
+    assert dispatch_mod._check_job_stall(
+        job, {"stall_timeout_minutes": 30}, str(tmp_path / "sentinel.md")
+    )
+    assert seen == [domain]
+    assert job["process_state"] == "stopped_verified"
+
+
 def test_dispatch_flag_overrides_baseline_and_defaults_to_host():
     from synlynk.container_exec import resolve_container_image
     from synlynk._constants import HARNESS_CAPABILITY_BASELINES
@@ -160,6 +194,47 @@ def test_dispatch_flag_overrides_baseline_and_defaults_to_host():
     )
     for name, baseline in HARNESS_CAPABILITY_BASELINES.items():
         assert "container_image" not in baseline, name
+
+
+def test_container_wrap_uses_unique_cidfile(tmp_path):
+    from synlynk.container_exec import wrap
+
+    repo = _repo(tmp_path / "repo")
+    cidfile = tmp_path / "job.cid"
+    argv, _client, _cwd = wrap(
+        ["sh", "-c", "true"],
+        {"HOME": "/Users/me"},
+        str(repo),
+        "example-test/runner:stub",
+        docker_bin="/usr/bin/docker",
+        cidfile=str(cidfile),
+    )
+
+    index = argv.index("--cidfile")
+    assert argv[index + 1] == str(cidfile)
+
+
+def test_lifecycle_config_defaults_are_valid_and_non_destructive():
+    from synlynk import _apply_workspace_defaults
+    from synlynk.config_schema import WORKSPACE_SCHEMA, validate
+
+    config = {"schema_version": 1, "workspace_id": "existing"}
+    result = _apply_workspace_defaults(config)
+
+    assert result["termination_grace_seconds"] == 5
+    assert result["cleanup_verification_timeout_seconds"] == 300
+    assert result["workspace_id"] == "existing"
+    lifecycle_config = {
+        "schema_version": 1,
+        "termination_grace_seconds": result["termination_grace_seconds"],
+        "cleanup_verification_timeout_seconds": result["cleanup_verification_timeout_seconds"],
+    }
+    assert validate(lifecycle_config, WORKSPACE_SCHEMA) == []
+    lifecycle_config["termination_grace_seconds"] = -1
+    assert any(
+        "termination_grace_seconds" in error
+        for error in validate(lifecycle_config, WORKSPACE_SCHEMA)
+    )
 
 
 def test_dispatch_parser_accepts_container_image_without_a_default():

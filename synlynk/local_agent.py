@@ -6,16 +6,24 @@ needs, and the `synlynk local doctor` health-check command. It does not talk to
 Aider or oMLX's chat-completions endpoint directly; Aider does that."""
 
 import json
+import hashlib
 import importlib.util
 import os
 import shutil
 import subprocess as _subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
-from typing import Any, Iterable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 from synlynk import _get_db
+from synlynk.local_pilot import load_pilot_runtime
+
+
+_RESUME_CONFIRMATION = "RESUME LOCAL PILOT"
+_RESUME_SHARE = 0.20
+_RESUME_CONCURRENCY = 1
 
 _DEFAULT_CONFIG_PATH = os.path.join(".agents", "local.json")
 _DEFAULT_LOCAL_CONFIG = {
@@ -370,6 +378,404 @@ def _local_dispatch_model_flags(
         "--model", f"openai/{resolution['effective_model']}",
         "--edit-format", resolution["edit_format"],
     ] + _STARTER_TIER_GUARDRAIL_FLAGS
+
+
+def local_pilot_status() -> dict:
+    """Return read-only operator state for the disabled-by-default pilot."""
+    from synlynk.dispatch import _local_max_concurrent
+    from synlynk.local_pilot import REBASELINE_SHARE, evaluate_rebaseline, load_pilot_runtime
+    from synlynk.local_pilot_ledger import ensure_local_pilot_ledger, load_pilot_status
+
+    conn = _get_db()
+    try:
+        ensure_local_pilot_ledger(conn)
+        reconciled = _reconcile_activating_authorizations(conn)
+        if reconciled:
+            _write_disabled_local_pilot_config(
+                os.getcwd(), "activation interrupted; fresh confirmation required"
+            )
+        cohorts = load_pilot_status(conn)
+        max_concurrent = _local_max_concurrent()
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM daemon_jobs WHERE status = 'running' AND agent = 'local'"
+            ).fetchone()
+            running = int(row[0]) if row else 0
+        except Exception:
+            running = None
+    finally:
+        conn.close()
+    runtime = load_pilot_runtime(os.getcwd())
+    decision = evaluate_rebaseline(cohorts)
+    pause_reason = _local_pilot_pause_reason(os.getcwd())
+    endpoint = _local_pilot_endpoint_status()
+    reservation_state = (
+        "unknown" if running is None else "at_capacity" if running >= max_concurrent else "available"
+    )
+    operational = {
+        "endpoint": endpoint,
+        "credentials": "configured" if os.environ.get("OPENAI_API_KEY") else "missing",
+        "model_qualification": "qualified" if runtime["qualified"] else "unqualified",
+        "runner": "available" if runtime["isolated"] else "unavailable",
+        "reservation": {
+            "state": reservation_state,
+            "running": running,
+            "max_concurrent": max_concurrent,
+        },
+    }
+    return {
+        "cohorts": cohorts,
+        "progress": {
+            "validation": {"accepted": cohorts["validation"]["accepted"], "required": 5},
+            "expansion": {
+                "consecutive_accepted": cohorts["expansion"]["consecutive_accepted"],
+                "required": 10,
+            },
+        },
+        "boundaries": {"share": REBASELINE_SHARE, "max_concurrent": max_concurrent},
+        "state": {
+            "enabled": runtime["enabled"],
+            "paused": not runtime["enabled"],
+            "reason": pause_reason,
+        },
+        "model": {
+            "selected": runtime["qualified_models"][0] if runtime["qualified_models"] else None,
+            "qualified": runtime["qualified"],
+        },
+        "operational": operational,
+        "reconciled_authorizations": reconciled,
+        "proposal_35_eligible": decision.proposal_35_eligible,
+    }
+
+
+def _local_pilot_pause_reason(repo_root: str) -> str:
+    """Return the configured pause reason without falling back to generated state."""
+    workspace_path = os.path.join(repo_root, ".synlynk", "workspace.json")
+    try:
+        with open(workspace_path, encoding="utf-8") as handle:
+            settings = (json.load(handle).get("local_pilot") or {})
+    except (OSError, json.JSONDecodeError, AttributeError):
+        settings = {}
+    if settings.get("enabled") is True:
+        return "enabled"
+    return str(settings.get("pause_reason") or "disabled by configuration")
+
+
+def _local_pilot_endpoint_status() -> str:
+    """Check the configured endpoint by status only; never return a credential or error body."""
+    try:
+        config = _load_local_config()
+        endpoint = config.get("endpoint")
+    except (FileNotFoundError, AttributeError):
+        endpoint = None
+    if not endpoint:
+        return "missing"
+    return str(
+        _health_check(endpoint, timeout=3, api_key=os.environ.get("OPENAI_API_KEY")).get(
+            "status", "endpoint_unavailable"
+        )
+    )
+
+
+def _usable_compose_runner() -> bool:
+    """Require a runnable Docker Compose implementation, not merely a compose file."""
+    docker = shutil.which("docker")
+    if not docker:
+        return False
+    try:
+        result = _subprocess.run(
+            [docker, "compose", "version"], capture_output=True, text=True, timeout=5, check=False
+        )
+    except (OSError, _subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
+def _load_workspace_local_pilot(repo_root: str) -> tuple[dict, dict]:
+    path = os.path.join(repo_root, ".synlynk", "workspace.json")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            workspace = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        workspace = {}
+    workspace = workspace if isinstance(workspace, dict) else {}
+    settings = workspace.get("local_pilot")
+    return workspace, dict(settings) if isinstance(settings, dict) else {}
+
+
+def _resume_config_fingerprint(settings: dict) -> str:
+    canonical = json.dumps(settings, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _reconcile_activating_authorizations(conn) -> list[str]:
+    """Fail staged records; a config file can never complete an approval ceremony."""
+    from synlynk.local_pilot_ledger import fail_resume_authorization
+
+    stranded = conn.execute(
+        "SELECT authorization_id FROM local_pilot_resume_authorizations WHERE state = 'activating'"
+    ).fetchall()
+    reconciled = []
+    for (authorization_id,) in stranded:
+        fail_resume_authorization(conn, authorization_id, "activation interrupted; fresh confirmation required")
+        reconciled.append(authorization_id)
+    return reconciled
+
+
+def preflight_local_pilot_resume(repo_root: str, conn) -> dict:
+    """Return a durable, fail-closed receipt for a possible Local pilot resume."""
+    from synlynk.local_pilot_ledger import ensure_local_pilot_ledger
+
+    failures = []
+    try:
+        ensure_local_pilot_ledger(conn)
+        reconciled = _reconcile_activating_authorizations(conn)
+    except Exception:
+        return {"result": "failed", "failures": ["ledger_unreadable"], "reconciled": []}
+    workspace, settings = _load_workspace_local_pilot(repo_root)
+    del workspace
+    if settings.get("enabled") is not False:
+        failures.append("config_not_disabled")
+    if settings.get("share") != _RESUME_SHARE:
+        failures.append("config_share")
+    if settings.get("max_concurrent") != _RESUME_CONCURRENCY:
+        failures.append("config_concurrency")
+    try:
+        local_config = _load_local_config(os.path.join(repo_root, ".agents", "local.json"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        local_config = {}
+    if local_config.get("max_concurrent") != _RESUME_CONCURRENCY:
+        failures.append("local_config_concurrency")
+    runtime = load_pilot_runtime(repo_root)
+    if not runtime.get("qualified"):
+        failures.append("qualified_model")
+    if not runtime.get("isolated") or not _usable_compose_runner():
+        failures.append("isolated_runner")
+    try:
+        resolution = resolve_effective_local_model(
+            config_path=os.path.join(repo_root, ".agents", "local.json"),
+            require_live_inventory=True,
+            api_key=os.environ.get("OPENAI_API_KEY"),
+        )
+    except Exception:
+        resolution = None
+        failures.append("endpoint_health")
+    resolved_model = resolution.get("resolved_model") if resolution else None
+    qualified_models = {str(model) for model in runtime.get("qualified_models", [])}
+    if (
+        not isinstance(resolved_model, str)
+        or resolved_model not in qualified_models
+        or not resolved_model.casefold().startswith("ornith")
+    ):
+        failures.append("resolved_model_unqualified")
+    try:
+        running = conn.execute(
+            "SELECT COUNT(*) FROM daemon_jobs WHERE status = 'running' AND agent = 'local'"
+        ).fetchone()[0]
+    except Exception:
+        running = None
+        failures.append("reservation_unreadable")
+    if running:
+        failures.append("active_reservation")
+    pending = conn.execute(
+        "SELECT COUNT(*) FROM local_pilot_evidence "
+        "WHERE safety_verdict = 'pending' OR quality_verdict = 'pending'"
+    ).fetchone()[0]
+    if pending:
+        failures.append("reconciliation_debt")
+    if conn.execute(
+        "SELECT 1 FROM local_pilot_resume_authorizations WHERE state = 'active'"
+    ).fetchone():
+        failures.append("authorization_conflict")
+    return {
+        "result": "passed" if not failures else "failed",
+        "failures": failures,
+        "reconciled": reconciled,
+        "runtime": runtime,
+        "resolved_model": resolved_model,
+        "config_fingerprint": _resume_config_fingerprint(settings),
+        "requested_share": _RESUME_SHARE,
+        "requested_max_concurrent": _RESUME_CONCURRENCY,
+    }
+
+
+def _identity_key_path() -> str:
+    return os.path.expanduser("~/.synlynk/identity.key")
+
+
+def _sign_resume_authorization(authorization: dict) -> str:
+    key_path = _identity_key_path()
+    if not os.path.isfile(key_path) or not os.path.isfile(key_path + ".pub"):
+        raise ValueError("Local pilot resume requires an available host signing key")
+    canonical = json.dumps(authorization, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    with tempfile.NamedTemporaryFile(mode="wb", delete=False) as message:
+        message.write(canonical)
+        message_path = message.name
+    signature_path = message_path + ".sig"
+    try:
+        result = _subprocess.run(
+            ["ssh-keygen", "-Y", "sign", "-f", key_path, "-n", "synlynk-local-pilot-resume", message_path],
+            capture_output=True, text=True, check=False,
+        )
+        if result.returncode != 0 or not os.path.isfile(signature_path):
+            raise ValueError("Local pilot resume signing failed")
+        with open(signature_path, encoding="utf-8") as signature_file:
+            return signature_file.read()
+    finally:
+        for path in (message_path, signature_path):
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
+
+def _write_resumed_local_pilot_config(repo_root: str) -> None:
+    from synlynk import _write_json_atomic
+
+    workspace, settings = _load_workspace_local_pilot(repo_root)
+    settings.update({"enabled": True, "share": _RESUME_SHARE, "max_concurrent": _RESUME_CONCURRENCY})
+    settings.pop("pause_reason", None)
+    workspace["local_pilot"] = settings
+    _write_json_atomic(os.path.join(repo_root, ".synlynk", "workspace.json"), workspace)
+
+
+def resume_local_pilot(
+    repo_root: str,
+    conn,
+    remediation_ref: str,
+    verification_ref: str,
+    confirm: Callable[[str], str],
+    render: Callable[[dict], None] | None = None,
+) -> dict:
+    """Run the explicit human ceremony and activate only the fixed validation lane."""
+    from synlynk.local_pilot_ledger import (
+        activate_resume_authorization, create_resume_authorization, fail_resume_authorization,
+        local_pilot_control_lock, resume_authorization_context,
+    )
+
+    remediation_ref = str(remediation_ref or "").strip()
+    verification_ref = str(verification_ref or "").strip()
+    if not remediation_ref or not verification_ref:
+        raise ValueError("remediation and independent verification references are required")
+    preflight = preflight_local_pilot_resume(repo_root, conn)
+    if render is not None:
+        render(preflight)
+    if preflight["result"] != "passed":
+        raise ValueError("Local pilot resume preflight failed: " + ", ".join(preflight["failures"]))
+    if confirm("Type RESUME LOCAL PILOT to authorize the 20% / one-concurrent lane: ") != _RESUME_CONFIRMATION:
+        raise ValueError("Local pilot resume confirmation was not accepted")
+    context = resume_authorization_context(conn)
+    receipt_json = json.dumps(preflight, sort_keys=True, separators=(",", ":"))
+    authorization = {
+        **context,
+        "config_fingerprint": preflight["config_fingerprint"],
+        "remediation_reference": remediation_ref,
+        "verification_reference": verification_ref,
+        "preflight_receipt": preflight,
+        "preflight_receipt_digest": hashlib.sha256(receipt_json.encode("utf-8")).hexdigest(),
+    }
+    staged = create_resume_authorization(conn, {"signed_payload": {
+        "authorization": authorization, "signature": _sign_resume_authorization(authorization),
+    }})
+    try:
+        with local_pilot_control_lock(repo_root):
+            _write_resumed_local_pilot_config(repo_root)
+            # Recheck the state that can race the config write without treating enabled config as approval.
+            try:
+                running = conn.execute(
+                    "SELECT COUNT(*) FROM daemon_jobs WHERE status = 'running' AND agent = 'local'"
+                ).fetchone()[0]
+            except Exception as error:
+                raise ValueError("Local reservation state is unreadable during activation") from error
+            pending = conn.execute(
+                "SELECT COUNT(*) FROM local_pilot_evidence "
+                "WHERE safety_verdict = 'pending' OR quality_verdict = 'pending'"
+            ).fetchone()[0]
+            post_watermark_failure = conn.execute(
+                "SELECT COUNT(*) FROM local_pilot_evidence WHERE safety_verdict = 'failed' AND rowid > ?",
+                (authorization["safety_watermark"],),
+            ).fetchone()[0]
+            if running or pending or post_watermark_failure:
+                raise ValueError("Local pilot state changed during activation")
+            active = activate_resume_authorization(conn, staged["authorization_id"])
+        return {"preflight": preflight, "authorization": active, "enabled": True}
+    except Exception as error:
+        try:
+            _write_disabled_local_pilot_config(repo_root, str(error))
+        finally:
+            fail_resume_authorization(conn, staged["authorization_id"], str(error))
+        raise
+
+
+def _write_disabled_local_pilot_config(repo_root: str, reason: str) -> None:
+    from synlynk import _write_json_atomic
+
+    workspace, settings = _load_workspace_local_pilot(repo_root)
+    settings.update({"enabled": False, "pause_reason": reason})
+    workspace["local_pilot"] = settings
+    _write_json_atomic(os.path.join(repo_root, ".synlynk", "workspace.json"), workspace)
+
+
+def render_local_pilot_resume_preflight(preflight: dict) -> str:
+    """Render the operator-safe preflight receipt before an approval prompt."""
+    return json.dumps(preflight, indent=2, sort_keys=True)
+
+
+def render_local_pilot_status(status: dict) -> str:
+    """Render the read-only pilot view without combining independent cohorts."""
+    historical = status["cohorts"]["historical"]
+    progress = status["progress"]
+    boundaries = status["boundaries"]
+    state = status["state"]
+    model = status["model"]
+    operational = status["operational"]
+    mismatches = []
+    for name in ("credentials", "endpoint", "model_qualification", "runner"):
+        value = operational[name]
+        if (name, value) not in {
+            ("credentials", "configured"),
+            ("endpoint", "healthy"),
+            ("model_qualification", "qualified"),
+            ("runner", "available"),
+        }:
+            mismatches.append(f"{name}={value}")
+    reservation = operational["reservation"]
+    if reservation["state"] != "available":
+        mismatches.append(f"reservation={reservation['state']}")
+    lines = [
+        f"Pilot: {'enabled' if state['enabled'] else 'paused'} ({state['reason']})",
+        f"Historical evidence: {historical['accepted']}/{historical['eligible']} (preserved separately)",
+        f"Validation: {progress['validation']['accepted']}/{progress['validation']['required']} accepted",
+        "Expansion: "
+        f"{progress['expansion']['consecutive_accepted']}/{progress['expansion']['required']} consecutive accepted",
+        f"Boundary: {boundaries['share']:.0%} cap; {boundaries['max_concurrent']} concurrent",
+        f"Qualified Ornith model: {model['selected'] or 'none'}",
+        f"35% proposal eligible: {'yes' if status['proposal_35_eligible'] else 'no'}",
+        "Operational mismatches: " + ("; ".join(mismatches) if mismatches else "none"),
+    ]
+    return "\n".join(lines)
+
+
+def start_local_pilot_review(job_id: str) -> dict:
+    """Create one independently selected, factual-only Local pilot review brief."""
+    from synlynk.local_pilot_ledger import start_local_pilot_review as _start
+
+    conn = _get_db()
+    try:
+        return _start(conn, job_id)
+    finally:
+        conn.close()
+
+
+def record_local_pilot_review(job_id: str, reviewer: str, verdict: str, rationale: str) -> dict:
+    """Record one selected reviewer verdict without changing operational controls."""
+    from synlynk.local_pilot_ledger import record_local_pilot_review as _record
+
+    conn = _get_db()
+    try:
+        return _record(conn, job_id, reviewer, verdict, rationale)
+    finally:
+        conn.close()
 
 
 def cmd_local_doctor(config_path: str = None, init: bool = False) -> int:

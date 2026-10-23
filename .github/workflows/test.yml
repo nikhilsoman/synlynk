@@ -22,8 +22,39 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Docs-only changes (specs, blog, roadmap, etc.) don't touch anything
+      # pytest/py_compile can break. Skip the heavy steps below for those
+      # diffs, but keep this job (and its "test (3.x)" name) always running —
+      # it's a branch-protection required check, and a trigger-level path
+      # filter would leave it stuck "Expected" forever on docs-only PRs.
+      # See gh:#2505.
+      - name: Detect docs-only change
+        id: diff
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE" 2>/dev/null; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "No usable base SHA — running full suite."
+            exit 0
+          fi
+          CHANGED=$(git diff --name-only "$BASE" HEAD)
+          echo "Changed files:"
+          echo "$CHANGED"
+          if echo "$CHANGED" | grep -qvE '^(docs/|project-docs/|.*\.md$)'; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Guard against __init__.py regrowth
+        if: steps.diff.outputs.docs_only != 'true'
         run: |
           LINES=$(wc -l < synlynk/__init__.py)
           echo "synlynk/__init__.py is ${LINES} lines"
@@ -33,26 +64,34 @@ jobs:
           fi
 
       - name: Set up Python ${{ matrix.python-version }}
+        if: steps.diff.outputs.docs_only != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install pytest & pytest-xdist
+        if: steps.diff.outputs.docs_only != 'true'
         run: pip install pytest pytest-xdist
 
       - name: Syntax check
+        if: steps.diff.outputs.docs_only != 'true'
         run: python -m py_compile bin/synlynk.py
 
       - name: Run tests
+        if: steps.diff.outputs.docs_only != 'true'
         run: pytest tests/ -v -m "not local_hardware and not performance and not soak" -n 4 --dist loadfile --durations=25
 
       # Dry fleet matrix (no model spend). Only on one Python version — gate is
       # about repo hygiene/baselines, not interpreter variance.
       - name: Fleet matrix (dry)
-        if: matrix.python-version == '3.12'
+        if: steps.diff.outputs.docs_only != 'true' && matrix.python-version == '3.12'
         run: |
           python -m pip install -e . 2>/dev/null || true
           PYTHONPATH=. python -m synlynk selftest --matrix
+
+      - name: Docs-only — skipped heavy steps
+        if: steps.diff.outputs.docs_only == 'true'
+        run: echo "Change is docs-only; skipped install/py_compile/pytest/fleet-matrix steps. See gh:#2505."
 
       # Timing-sensitive cold-start checks run in the dedicated performance
       # workflow so shared-runner CPU variance cannot block unrelated changes.

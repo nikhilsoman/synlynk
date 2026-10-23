@@ -188,6 +188,15 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     depends_on   TEXT NOT NULL DEFAULT '[]',
     pid          INTEGER,
     pid_identity TEXT,
+    termination_domain_json TEXT,
+    parent_job_id TEXT,
+    cleanup_deadline_at TEXT,
+    process_state TEXT NOT NULL DEFAULT 'unknown' CHECK (
+        process_state IN (
+            'unknown', 'running', 'stop_requested', 'stopped_verified',
+            'cleanup_unverified', 'cleanup_overridden'
+        )
+    ),
     enqueued_at  TEXT NOT NULL,
     started_at   TEXT,
     completed_at TEXT,
@@ -256,6 +265,7 @@ CREATE TABLE IF NOT EXISTS job_terminal_decision (
     status TEXT NOT NULL,
     exit_code INTEGER,
     verification_state TEXT NOT NULL,
+    effect_state TEXT NOT NULL DEFAULT 'unknown',
     primary_evidence_id TEXT,
     evidence_snapshot_json TEXT NOT NULL DEFAULT '[]',
     decision_reason TEXT NOT NULL,
@@ -555,6 +565,8 @@ CREATE TABLE IF NOT EXISTS task_leases (
     lease_id           TEXT PRIMARY KEY,
     story_id           TEXT NOT NULL,
     leased_by          TEXT NOT NULL,
+    pid                INTEGER,
+    harness            TEXT,
     acquired_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     heartbeat_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     expires_at         TIMESTAMP NOT NULL,

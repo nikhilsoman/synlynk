@@ -2165,6 +2165,19 @@ implementation dispatched, external messages sent, or policy changed.
   result is claimed yet; merge the reviewed fix, then retry one scoped task.
 [@codex]
 
+## 2026-10-21 — LIVE-27 complete execution-log retirement (#2447)
+
+- Found the canonical database still had two of the original 75 execution-log
+  rows marked `stale` after migration 23; this left the issue's all-75-row
+  acceptance criterion incomplete.
+- Added migration 28 to mark every remaining non-deprecated
+  `discovery_source='execution_log'` row as `deprecated`, preserving all rows
+  for auditability and leaving curated rows untouched.
+- Applied the migration to the canonical `/Users/nikhilsoman/.synlynk/workspaces/synlynk/state.db`:
+  2 rows changed, 75 total execution-log rows deprecated, integrity check `ok`.
+- Focused LIVE-27/model-catalog tests: 85 passed.
+[@codex]
+
 ## 2026-10-17 — LIVE-25 Local Pilot fallback isolation boundary
 
 - Investigated a denied pilot task (`task_text_excluded`) that reached
@@ -2220,5 +2233,64 @@ implementation dispatched, external messages sent, or policy changed.
   73 of 75 execution-log rows were deprecated; the two remaining active rows
   are allowlisted (`Ornith-1.0-9B-4bit` and `muse-spark-1.3`). Focused tests:
   11 passed.
+[@codex]
+
+## 2026-10-22 — Daily stable release rebaseline
+
+- Replaced the October 20 spaced-gate proposal with an active calendar-daily
+  stable tag stream from `v0.25.2` (October 23) through `v0.27.5` (November 6,
+  gated Developer Preview); there are no RC/DEV/PROD side channels.
+- Added a mandatory start-of-day dependency sweep over the scheduled tickets,
+  goal/epic links, issue comments, linked PRs, plans, adjacent past work, and
+  current bug/tech-debt inventory; each finding must be included, separately
+  ticketed, deferred with a reason, or proven fixed/superseded.
+- Added an acceleration rule: move evidence-ready work forward immediately,
+  preserve dependency/semver order, and update the schedule rather than wait
+  for a date. No tag may bypass review, evidence, or human release authority.
+- Reaffirmed deferrals for Local, OpenRouter, swarms/Gateway, crawler/GTM, and
+  public-announcement work; Muse remains a required early core harness.
+- Readiness snapshot: `synlynk status` reports 98 worktrees (19 flagged stale),
+  an overdue capability sweep and smoke test, Codex unavailable, and Muse
+  unsupported/uncalibrated; `synlynk watch status` reports stopped. These are
+  baseline findings for the first dependency sweep, not root-cause conclusions.
+- `synlynk release --check-docs` leaves the command-documentation gate red:
+  `docs/reference/commands.md` is stale. Linked this finding to existing
+  sparse-checkout/docs issue #2320 rather than creating a duplicate issue.
+- PR #2534 merged after independent review, the required PR check, QA approval,
+  policy authorization, and green CI. Synchronized all 18 GitHub milestones:
+  15 daily gates are dated October 23-November 6; post-Preview #10-#12 are
+  intentionally undated. Updated the canonical state roadmap and re-scoped
+  release epics #2465-#2473; marked legacy `1.0.0`, `v1.0.0-preview`, and
+  `v1.0.0-rc1` preview arcs superseded. Parent #2458 now records the active
+  schedule and milestone map. Tracked generated-roadmap/status mirror is in a
+  follow-up PR. Filed #2535 for the missing governed phase-update/reassignment
+  path, required to disposition legacy phase placements by the Oct 27 ticket
+  lock; no direct state-DB edits were made. Preserved the user's dirty
+  `project-docs/costs.md` in the main checkout. Session cost was not
+  independently available; no amount was invented.
+[@codex]
+
+## 2026-10-22 — v0.25.2 dependency sweep and #2532 worktree write isolation
+
+- Refreshed to `origin/main` at `30f696bf` before starting. Confirmed #2530
+  (dispatch status/process cleanup) and #2532 (generated docs escaping into
+  the main checkout) are the v0.25.2 direct safety gates. Filed #2537 as a
+  complementary v0.25.2 child issue after reproducing `synlynk watch status`
+  crashing when the live watch process is found through its lock but
+  `.synlynk/watch.pid` is missing.
+- For #2532, kept `_project_root()` as the shared state-DB identity root and
+  added a separate current-checkout root for tracked generated docs and
+  archives. Updated linked-worktree regressions to require writes to remain
+  in the calling checkout.
+- Red/green evidence: both regression tests failed before the fix and pass
+  afterward. Focused generated-doc/root suites: 546 passed. Full suite:
+  4,924 passed, 12 failed, 17 skipped, 3 xfailed, 5 errors; loopback/process
+  permissions and PyPI network access explain several failures, while the
+  remaining unrelated failures need separate triage. Ruff reports 154
+  pre-existing findings across the checked files; `git diff --check` is clean.
+- `synlynk status` still reports Codex unavailable, Muse unsupported with no
+  measured capacity, an overdue capability sweep/smoke test, and 99 worktrees
+  with 20 flagged stale. No cleanup or live self-test was run. Interactive
+  cost was not independently available, so no amount was invented.
 [@codex]
 

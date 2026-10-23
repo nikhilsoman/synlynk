@@ -19,10 +19,24 @@ import tempfile
 import time
 from typing import List, Optional, Sequence, Tuple
 
-from synlynk._constants import HARNESS_CAPABILITY_BASELINES, _CODEX_NETWORK_PERMISSION
+from synlynk._constants import (
+    GH_WRITE_HARNESS_PRIORITY as _GH_WRITE_HARNESS_PRIORITY,
+    HARNESS_CAPABILITY_BASELINES,
+    _CODEX_NETWORK_PERMISSION,
+)
 from synlynk._lazy import pkg as _pkg
 from synlynk.harness_adapters.base import PermissionEnforcementError
-from synlynk.container_exec import ContainerExecError, resolve_container_image, wrap as wrap_container
+from synlynk.container_exec import (
+    ContainerExecError,
+    read_container_id,
+    resolve_container_image,
+    wrap as wrap_container,
+)
+from synlynk.process_lifecycle import (
+    TerminationResult,
+    capture_termination_domain,
+    terminate_job_domain,
+)
 
 _ORG_ROLE_TO_BASELINE_ROLE = {
     "dev": "builder",
@@ -35,15 +49,6 @@ _ORG_ROLE_TO_BASELINE_ROLE = {
     "synlynk-bot": "builder",
 }
 
-# Measured 2026-10-14 from ~/.synlynk/workspaces/synlynk/state.db
-# capability_ratings (no task_type column; 14-day AVG(quality), n>=5).
-# Query datetime('now')=2026-10-14 06:27:32, max(ts)=2026-10-14 06:24:10:
-#   codex 9.04 n=410, grok 8.55 n=176, claude 8.19 n=170, agy 7.58 n=89.
-# local (n=2) and muse (n=1) stay out. Codex is first because that
-# measurement says so. The pre-2026-10-04 tuple ("claude", "agy", "grok")
-# omitted Codex and listed Grok last; that heuristic is retired. Grok's
-# sandbox-deny finding is superseded (gh:#2034). Docs keep "Codex by default".
-_GH_WRITE_HARNESS_PRIORITY = ("codex", "grok", "claude", "agy")
 _STARTUP_FAILOVER_ORDER = ("codex", "agy", "claude")
 _CODEX_REVIEW_WRITABLE_ROOTS = "sandbox_workspace_write.writable_roots=[]"
 _LOCAL_PILOT_RECEIPT_KEY = secrets.token_bytes(32)
@@ -342,21 +347,44 @@ def _resolve_dispatch_agent(
         _log_routing_fallback(message, requested="local", actual=fallback)
         return fallback
 
-    from synlynk.local_pilot import evaluate_local_pilot, load_pilot_runtime
-
-    runtime = load_pilot_runtime(os.getcwd())
-    decision = evaluate_local_pilot(
-        enabled=runtime["enabled"],
-        qualified=runtime["qualified"],
-        isolated=runtime["isolated"],
-        pilot_class=pilot_class,
-        role=role,
-        requires_gh_write=requires_gh_write,
-        share=runtime["share"],
-        dispatch_key=dispatch_key or hashlib.sha256(task.encode("utf-8")).hexdigest(),
-        task=task,
-        scope_paths=scope_paths,
+    from synlynk.local_pilot import (
+        REBASELINE_SHARE,
+        evaluate_local_pilot,
+        evaluate_rebaseline,
+        load_pilot_runtime,
     )
+    from synlynk.local_pilot_ledger import (
+        active_resume_authorization_matches_runtime,
+        load_pilot_status,
+    )
+
+    try:
+        runtime = load_pilot_runtime(os.getcwd())
+        rebaseline = evaluate_rebaseline(load_pilot_status(db))
+        if runtime.get("max_concurrent") != 1:
+            raise ValueError("runtime_concurrency_disagrees_with_rebaseline_cap")
+        if runtime["share"] != REBASELINE_SHARE or rebaseline.share != REBASELINE_SHARE:
+            raise ValueError("runtime_share_disagrees_with_rebaseline_cap")
+        decision = evaluate_local_pilot(
+            enabled=runtime["enabled"],
+            qualified=runtime["qualified"],
+            isolated=runtime["isolated"],
+            pilot_class=pilot_class,
+            role=role,
+            requires_gh_write=requires_gh_write,
+            share=rebaseline.share,
+            dispatch_key=dispatch_key or hashlib.sha256(task.encode("utf-8")).hexdigest(),
+            task=task,
+            scope_paths=scope_paths,
+            rebaseline=True,
+        )
+        if not rebaseline.allow_admission:
+            decision = type(decision)(False, rebaseline.reason, pilot_class=pilot_class)
+    except Exception as exc:
+        message = f"Routing to: {fallback} (local pilot: rebaseline ledger unavailable: {exc})"
+        print(message)
+        _log_routing_fallback(message, requested="local", actual=fallback)
+        return fallback
     if not decision.route_local:
         message = f"Routing to: {fallback} (local pilot: {decision.reason})"
         print(message)
@@ -383,10 +411,21 @@ def _resolve_dispatch_agent(
         print(message)
         _log_routing_fallback(message, requested="local", actual=fallback)
         return fallback
+    if not active_resume_authorization_matches_runtime(
+        db,
+        share=REBASELINE_SHARE,
+        max_concurrent=1,
+        effective_model=model_resolution["effective_model"],
+    ):
+        message = f"Routing to: {fallback} (local pilot: active resume authorization required)"
+        print(message)
+        _log_routing_fallback(message, requested="local", actual=fallback)
+        return fallback
     score = _get_local_capability_score(task_type, db)
     _pending_local_pilot_receipt = _seal_local_pilot_receipt({
         "route_local": True,
         "reason": decision.reason,
+        "cohort": rebaseline.cohort,
         "pilot_class": decision.pilot_class,
         "share": decision.share,
         "bucket": decision.bucket,
@@ -403,6 +442,7 @@ def _resolve_dispatch_agent(
         "edit_format": model_resolution["edit_format"],
         "model_health": model_resolution["health"],
         "historical_capability_score": score,
+        "frontier_fallback": fallback,
     })
     print(f"Routing to: local (pilot {decision.share:.0%}; capability score: {score:.2f})")
     return "local"
@@ -1255,6 +1295,8 @@ _ENV_ALLOWLIST_BASE = [
     "GIT_COMMITTER_EMAIL",
     "GIT_SSH_COMMAND",
     "SOURCE_DATE_EPOCH",
+    "SYNLYNK_JOB_ID",
+    "SYNLYNK_PARENT_JOB_ID",
 ]
 
 
@@ -1609,20 +1651,57 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
     if stale_minutes < timeout:
         return False
 
-    def kill_stalled_process() -> Tuple[bool, bool]:
-        """Kill only the process whose dispatch-time identity still matches."""
-        pid = job.get("pid")
-        if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
-            return False, False
-        try:
-            if process_identity_check(pid, job.get("pid_identity")) != "safe to kill":
-                return False, True
-            os.kill(pid, signal.SIGKILL)
-            return True, False
-        except ProcessLookupError:
-            return False, False
-        except (PermissionError, TypeError, ValueError, OSError):
-            return False, False
+    def terminate_stalled_process() -> TerminationResult:
+        """Terminate only the persisted dispatch-owned domain."""
+        domain = job.get("termination_domain")
+        if isinstance(domain, str):
+            try:
+                domain = json.loads(domain)
+            except (TypeError, json.JSONDecodeError):
+                domain = None
+        if not isinstance(domain, dict):
+            pid = job.get("pid")
+            identity_verified = (
+                isinstance(pid, int)
+                and not isinstance(pid, bool)
+                and process_identity_check(pid, job.get("pid_identity")) == "safe to kill"
+            )
+            domain = {
+                "version": 1,
+                "kind": "legacy_process",
+                "leader_pid": pid,
+                "leader_identity": job.get("pid_identity"),
+                "identity_verified": identity_verified,
+            }
+        job.setdefault("lifecycle_evidence", []).append({
+            "kind": "cleanup", "process_state": "stop_requested",
+            "observed_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        })
+        job["process_state"] = "stop_requested"
+        result = terminate_job_domain(
+            domain,
+            grace_seconds=float(config.get("termination_grace_seconds", 5) or 0),
+        )
+        if result.process_state == "stopped_verified" and _has_unresolved_child_job(job.get("id")):
+            result = TerminationResult(
+                "cleanup_unverified", result.attempted, result.method,
+                "active_child_job", result.evidence,
+            )
+        job["process_state"] = result.process_state
+        job["cleanup_result"] = {
+            "process_state": result.process_state,
+            "attempted": result.attempted,
+            "method": result.method,
+            "reason_code": result.reason_code,
+            "evidence": list(result.evidence),
+        }
+        job["lifecycle_evidence"].append({
+            "kind": "cleanup", "process_state": result.process_state,
+            "reason_code": result.reason_code,
+            "evidence": list(result.evidence),
+            "observed_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        })
+        return result
 
     if job.get("requires_gh_write"):
         target = job.get("gh_write_target")
@@ -1653,7 +1732,9 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
             )
             return False
         if verified is False:
-            killed, kill_skipped = kill_stalled_process()
+            cleanup = terminate_stalled_process()
+            killed = cleanup.process_state == "stopped_verified"
+            kill_skipped = not cleanup.attempted
             if kill_skipped:
                 job["pid_identity_kill_skipped"] = True
             job["status"] = "failed"
@@ -1703,7 +1784,9 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
         )
         return False
 
-    killed, kill_skipped = kill_stalled_process()
+    cleanup = terminate_stalled_process()
+    killed = cleanup.process_state == "stopped_verified"
+    kill_skipped = not cleanup.attempted
     if kill_skipped:
         job["pid_identity_kill_skipped"] = True
 
@@ -1723,6 +1806,51 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
         f"Job {job.get('id')} on agent '{agent}' is awaiting handoff to another agent.",
         sentinel_path,
     )
+    return True
+
+
+def _has_unresolved_child_job(parent_job_id: str | None) -> bool:
+    if not parent_job_id:
+        return False
+    load_jobs = _pkg("_load_jobs")
+    if not load_jobs:
+        return False
+    try:
+        children = [
+            item for item in load_jobs()
+            if item.get("parent_job_id") == parent_job_id
+        ]
+    except Exception:
+        return True
+    unresolved_states = {"unknown", "running", "stop_requested", "cleanup_unverified"}
+    return any(
+        child.get("process_state", "unknown") in unresolved_states
+        for child in children
+    )
+
+
+_HELD_LOCAL_PILOT_CONTROLS: list = []
+
+
+def _release_local_pilot_control_after_cleanup(process, control, domain, job: dict) -> bool:
+    """Release Local admission control only after its process group is verified stopped."""
+    try:
+        process.wait()
+    except (AttributeError, OSError):
+        pass
+    result = terminate_job_domain(domain)
+    job["process_state"] = result.process_state
+    job["cleanup_result"] = {
+        "process_state": result.process_state,
+        "attempted": result.attempted,
+        "method": result.method,
+        "reason_code": result.reason_code,
+        "evidence": list(result.evidence),
+    }
+    if result.process_state != "stopped_verified":
+        _HELD_LOCAL_PILOT_CONTROLS.append(control)
+        return False
+    control.__exit__(None, None, None)
     return True
 
 
@@ -1838,11 +1966,15 @@ def _run_dispatch_gate(job: dict, gate_suite_cmd: str) -> Optional[dict]:
         match = re.search(pattern, combined)
         return int(match.group(1)) if match else 0
 
-    return {
-        "passed": _count(r"(\d+)\s+passed"),
-        "failed": _count(r"(\d+)\s+failed"),
-        "skipped": _count(r"(\d+)\s+skipped"),
-    }
+    passed = _count(r"(\d+)\s+passed")
+    failed = _count(r"(\d+)\s+failed")
+    skipped = _count(r"(\d+)\s+skipped")
+    # A gate command can fail before pytest emits its normal summary (missing
+    # interpreter dependency, collection error, signal, etc.).  A non-zero
+    # command must still fail closed instead of looking like a zero-test pass.
+    if result.returncode != 0 and failed == 0:
+        failed = 1
+    return {"passed": passed, "failed": failed, "skipped": skipped}
 
 
 def _check_dispatch_base_still_fresh(job: dict, repo_path: Optional[str] = None) -> bool:
@@ -4099,6 +4231,30 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
         )
+
+    def frontier_fallback(reason: str, receipt: Optional[dict] = None) -> dict:
+        """Refuse Local and continue only on the frontier selected for this task."""
+        fallback = (receipt or {}).get("frontier_fallback") or _read_local_fallback()
+        if fallback == "local":
+            raise RuntimeError("Local Pilot fallback cannot resolve to local")
+        message = f"Routing to: {fallback} (local pilot: {reason})"
+        print(message)
+        _log_routing_fallback(message, requested="local", actual=fallback)
+        return dispatch_agent(
+            fallback, task, story_id=story_id, agent_id=agent_id,
+            force_agent=True, context_mode=context_mode, cycle=cycle,
+            skip_preflight=skip_preflight, requires_gh_write=requires_gh_write,
+            static_baseline=static_baseline, task_type=task_type,
+            task_type_explicit=task_type_explicit, requires=requires, grants=grants,
+            revokes=revokes, job_id=job_id, issue=issue, base=base,
+            scope_paths=scope_paths, session_id=session_id,
+            gh_write_target_kind=gh_write_target_kind, gh_write_expect=gh_write_expect,
+            model=None, effort=effort, model_tier=model_tier, role=role,
+            task_domain=task_domain, criticality=criticality, lambda_=lambda_,
+            db_conn=None, _startup_failover=_startup_failover, pr=pr,
+            skip_permissions=skip_permissions, container_image=None,
+            local_pilot_requested=False,
+        )
     if local_pilot_receipt:
         if (
             agent != "local"
@@ -4112,13 +4268,31 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             raise RuntimeError(
                 "Local Pilot uses its fixed isolated Compose runner; custom container images are refused"
             )
-        from synlynk.local_pilot import evaluate_local_pilot, load_pilot_runtime
+        from synlynk.local_pilot import (
+            REBASELINE_SHARE,
+            evaluate_local_pilot,
+            evaluate_rebaseline,
+            load_pilot_runtime,
+        )
+        from synlynk.local_pilot_ledger import (
+            active_resume_authorization_matches_runtime,
+            load_pilot_status,
+        )
 
         receipt_payload = {
             key: value for key, value in local_pilot_receipt.items() if key != "_signature"
         }
         current_dispatch_key = str(story_id or issue or task)
         runtime = load_pilot_runtime(os.getcwd())
+        try:
+            ledger_conn = db_conn or _pkg("_get_db")()
+            rebaseline = evaluate_rebaseline(load_pilot_status(ledger_conn))
+            authorization_matches = active_resume_authorization_matches_runtime(
+                ledger_conn, share=REBASELINE_SHARE, max_concurrent=1,
+                effective_model=receipt_payload.get("effective_model"),
+            )
+        except Exception:
+            return frontier_fallback("rebaseline ledger unavailable", local_pilot_receipt)
         decision = evaluate_local_pilot(
             enabled=runtime["enabled"],
             qualified=runtime["qualified"],
@@ -4126,13 +4300,19 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             pilot_class=receipt_payload.get("pilot_class"),
             role=role,
             requires_gh_write=requires_gh_write,
-            share=runtime["share"],
+            share=rebaseline.share,
             dispatch_key=current_dispatch_key,
             task=task,
             scope_paths=scope_paths or [],
+            rebaseline=True,
         )
         if (
             not decision.route_local
+            or not rebaseline.allow_admission
+            or not authorization_matches
+            or runtime["share"] != REBASELINE_SHARE
+            or runtime.get("max_concurrent") != 1
+            or rebaseline.share != REBASELINE_SHARE
             or decision.share != receipt_payload.get("share")
             or decision.bucket != receipt_payload.get("bucket")
             or decision.pilot_class != receipt_payload.get("pilot_class")
@@ -4145,7 +4325,14 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             or receipt_payload.get("dispatch_key_sha256")
             != hashlib.sha256(current_dispatch_key.encode("utf-8")).hexdigest()
         ):
+            if local_pilot_requested:
+                return frontier_fallback("admission receipt no longer matches", local_pilot_receipt)
             raise RuntimeError("Local Pilot admission no longer matches dispatch request")
+        if receipt_payload.get("cohort") not in (None, rebaseline.cohort):
+            if local_pilot_requested:
+                return frontier_fallback("admission cohort no longer matches", local_pilot_receipt)
+            raise RuntimeError("Local Pilot admission cohort no longer matches dispatch request")
+        receipt_payload["cohort"] = rebaseline.cohort
         # Drop the signing material and raw cohort key before persisting the
         # receipt; task identity remains auditable via its one-way digest.
         local_pilot_receipt = {
@@ -4414,22 +4601,26 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     # harness_models catalog is discovery metadata, and may be stale or
     # polluted by filesystem shard names when an unauthenticated oMLX probe
     # cannot read /v1/models. It must not override the local resolver.
-    if requested_model_input and dconn is not None and agent != "local":
-        from synlynk.db import get_active_harness_models
+    if requested_model_input and agent != "local":
+        from synlynk.models import valid_harness_model_ids
 
-        active_models = get_active_harness_models(dconn, harness=agent)
-        if active_models:
-            valid_model_ids = list(dict.fromkeys(row["model_id"] for row in active_models))
-            if requested_model_input not in valid_model_ids:
-                if owns_dconn:
-                    try:
-                        dconn.close()
-                    except Exception:
-                        pass
-                raise ValueError(
-                    f"Invalid model '{requested_model_input}' for harness '{agent}'. "
-                    f"Valid model ids: {', '.join(valid_model_ids)}"
-                )
+        valid_model_ids = valid_harness_model_ids(agent, conn=dconn)
+        if valid_model_ids and requested_model_input not in valid_model_ids:
+            if owns_dconn and dconn is not None:
+                try:
+                    dconn.close()
+                except Exception:
+                    pass
+            import difflib
+
+            matches = difflib.get_close_matches(
+                requested_model_input, valid_model_ids, n=1, cutoff=0.5
+            )
+            suggestion = f". Did you mean '{matches[0]}'?" if matches else ""
+            raise ValueError(
+                f"Invalid model '{requested_model_input}' for harness '{agent}'. "
+                f"Valid model ids: {', '.join(valid_model_ids)}{suggestion}"
+            )
 
     if agent == "local" and dconn is not None:
         # Direct dispatch is a valid first-use path; do not require the
@@ -5017,6 +5208,16 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         story_id,
         agent_role=resolved_agent_role,
     )
+    parent_job_id = (
+        os.environ.get("SYNLYNK_JOB_ID")
+        or os.environ.get("SYNLYNK_PARENT_JOB_ID")
+        or None
+    )
+    proc_env["SYNLYNK_JOB_ID"] = job_id
+    if parent_job_id:
+        proc_env["SYNLYNK_PARENT_JOB_ID"] = parent_job_id
+    else:
+        proc_env.pop("SYNLYNK_PARENT_JOB_ID", None)
     if worktree_path and "SOURCE_DATE_EPOCH" not in proc_env:
         epoch = get_worktree_epoch(worktree_path)
         if epoch:
@@ -5035,13 +5236,57 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     gh_write_expect_for_job = gh_write_expect or gh_write_expect_value or "closed"
 
     local_slot_claimed = False
+    local_pilot_control = None
     if agent == "local" and dconn is not None:
+        if local_pilot_receipt:
+            from synlynk.local_pilot_ledger import local_pilot_control_lock
+            local_pilot_control = local_pilot_control_lock(os.getcwd())
+            local_pilot_control.__enter__()
         # Serialize the final capacity check with the running-row claim. The
         # transaction stays open through Popen and the row update below, so a
         # direct dispatch and a scheduler dispatch cannot both take the slot.
         dconn.execute("BEGIN IMMEDIATE")
-        if _local_concurrency_exceeded(dconn, max_concurrent=_local_max_concurrent()):
+        if local_pilot_receipt:
+            from synlynk.local_pilot import REBASELINE_SHARE, evaluate_rebaseline, load_pilot_runtime
+            from synlynk.local_pilot_ledger import (
+                active_resume_authorization_matches_runtime,
+                load_pilot_status,
+            )
+            final_runtime = load_pilot_runtime(os.getcwd())
+            final_authorization_matches = active_resume_authorization_matches_runtime(
+                dconn,
+                share=REBASELINE_SHARE,
+                max_concurrent=1,
+                effective_model=local_pilot_receipt.get("effective_model"),
+            )
+            final_rebaseline = evaluate_rebaseline(load_pilot_status(dconn))
+            if (
+                not final_authorization_matches
+                or not final_rebaseline.allow_admission
+                or final_runtime.get("enabled") is not True
+                or final_runtime.get("share") != REBASELINE_SHARE
+                or final_runtime.get("max_concurrent") != 1
+                or _local_max_concurrent() != 1
+            ):
+                dconn.rollback()
+                local_pilot_control.__exit__(None, None, None)
+                local_pilot_control = None
+                if pytest_shim_dir is not None:
+                    pytest_shim_dir.cleanup()
+                if owns_dconn:
+                    dconn.close()
+                return frontier_fallback("Local authorization or runtime changed before slot claim", local_pilot_receipt)
+        if _local_concurrency_exceeded(dconn, max_concurrent=1):
             dconn.rollback()
+            if local_pilot_control is not None:
+                local_pilot_control.__exit__(None, None, None)
+                local_pilot_control = None
+            if local_pilot_receipt:
+                if pytest_shim_dir is not None:
+                    pytest_shim_dir.cleanup()
+                if owns_dconn:
+                    dconn.close()
+                return frontier_fallback("Local reservation unavailable", local_pilot_receipt)
             result = _defer_local_concurrency(
                 dconn, job_id=job_id, agent=agent, task=task, story_id=story_id,
                 reason="local_concurrency",
@@ -5081,6 +5326,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             "worktree_path": "TEXT",
             "worktree_branch": "TEXT",
             "pid_identity": "TEXT",
+            "termination_domain_json": "TEXT",
+            "parent_job_id": "TEXT",
+            "cleanup_deadline_at": "TEXT",
+            "process_state": "TEXT NOT NULL DEFAULT 'unknown'",
         })
         dconn.execute(
             "INSERT OR IGNORE INTO daemon_jobs "
@@ -5096,6 +5345,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     spawn_cwd = worktree_path
     stderr_target = subprocess.DEVNULL
     stderr_handle = None
+    container_cidfile = None
     isolated_local_pilot = bool(local_pilot_receipt)
     if isolated_local_pilot:
         from synlynk.local_pilot import build_isolated_compose_shell
@@ -5118,9 +5368,38 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 pytest_shim_dir.cleanup()
             if local_slot_claimed:
                 dconn.rollback()
+            if local_pilot_control is not None:
+                local_pilot_control.__exit__(None, None, None)
+                local_pilot_control = None
             if owns_dconn and dconn is not None:
                 dconn.close()
-            raise ValueError(f"Local Pilot isolated runner setup failed: {exc}") from exc
+            return frontier_fallback("isolated runner setup failed", local_pilot_receipt)
+        try:
+            from synlynk.local_pilot_ledger import record_admission
+
+            sample = record_admission(dconn, {
+                "job_id": job_id,
+                "cohort": local_pilot_receipt["cohort"],
+                "task_class": local_pilot_receipt["pilot_class"],
+                "task_digest": local_pilot_receipt["task_sha256"],
+                "receipt": local_pilot_receipt,
+            })
+            local_pilot_receipt = {
+                **local_pilot_receipt,
+                "admission_id": sample["job_id"],
+                "receipt_digest": sample["receipt_digest"],
+            }
+        except Exception as exc:
+            if pytest_shim_dir is not None:
+                pytest_shim_dir.cleanup()
+            if local_slot_claimed:
+                dconn.rollback()
+            if local_pilot_control is not None:
+                local_pilot_control.__exit__(None, None, None)
+                local_pilot_control = None
+            if owns_dconn and dconn is not None:
+                dconn.close()
+            return frontier_fallback("ledger admission failed", local_pilot_receipt)
     elif container_image is not None:
         docker_bin = shutil.which("docker")
         if not docker_bin:
@@ -5130,12 +5409,14 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 "docker is not on PATH; refusing to fall back to a host subprocess"
             )
         try:
+            container_cidfile = log_file + ".cid"
             spawn_cmd, spawn_env, spawn_cwd = wrap_container(
                 spawn_cmd,
                 proc_env,
                 worktree_path,
                 container_image,
                 docker_bin=docker_bin,
+                cidfile=container_cidfile,
             )
         except Exception:
             if pytest_shim_dir is not None:
@@ -5157,6 +5438,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             pytest_shim_dir.cleanup()
         if local_slot_claimed:
             dconn.rollback()
+        if local_pilot_control is not None:
+            local_pilot_control.__exit__(None, None, None)
+            local_pilot_control = None
         raise
     finally:
         if stderr_handle is not None:
@@ -5210,7 +5494,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 static_baseline=static_baseline, task_type=task_type, requires=requires,
                 grants=grants, revokes=revokes, job_id=job_id, issue=issue, base=base,
                 scope_paths=scope_paths, session_id=session_id,
-                gh_write_target_kind=gh_write_target_kind, model=model, role=role,
+                gh_write_target_kind=gh_write_target_kind, model=requested_model_input, role=role,
                 model_tier=model_tier,
                 db_conn=db_conn, _startup_failover=False,
                 container_image=container_image,
@@ -5224,6 +5508,31 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             "result_receipt_file": log_file + ".pilot.json",
         }
 
+    container_id = read_container_id(container_cidfile) if container_cidfile else None
+    termination_domain = capture_termination_domain(
+        proc,
+        container_id=container_id,
+        parent_job_id=parent_job_id,
+    )
+    if container_cidfile:
+        termination_domain["cidfile"] = container_cidfile
+    pid_identity = termination_domain.get("leader_identity") or capture_process_identity(
+        proc.pid, proc
+    )
+    process_state = (
+        "running"
+        if termination_domain.get("kind") in {"host_process_group", "container"}
+        else "cleanup_unverified"
+    )
+    cleanup_deadline_at = None
+    if process_state == "cleanup_unverified":
+        cleanup_timeout = float(
+            fence_config.get("cleanup_verification_timeout_seconds", 300) or 300
+        )
+        cleanup_deadline_at = time.strftime(
+            "%Y-%m-%dT%H:%M:%SZ",
+            time.gmtime(time.time() + max(0.0, cleanup_timeout)),
+        )
     job = {
         "id": job_id,
         "agent": agent,
@@ -5234,7 +5543,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "task": task,
         "cycle": cycle,
         "pid": proc.pid,
-        "pid_identity": capture_process_identity(proc.pid, proc),
+        "pid_identity": pid_identity,
+        "termination_domain": termination_domain,
+        "parent_job_id": parent_job_id,
+        "cleanup_deadline_at": cleanup_deadline_at,
+        "process_state": process_state,
         "log_file": log_file,
         "prompt_file": prompt_file,
         "context_file": context_file if context_mode != "none" else "",
@@ -5356,6 +5669,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 "worktree_path": "TEXT",
                 "worktree_branch": "TEXT",
                 "pid_identity": "TEXT",
+                "termination_domain_json": "TEXT",
+                "parent_job_id": "TEXT",
+                "cleanup_deadline_at": "TEXT",
+                "process_state": "TEXT NOT NULL DEFAULT 'unknown'",
             })
             existing = dconn.execute(
                 "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
@@ -5365,7 +5682,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dispatch_context = _dispatch_context()
                 dconn.execute(
                     "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, "
-                    "log_path=?, worktree_path=?, worktree_branch=?, pid_identity=?, agent=?, harness=?, role=?, task=?, story_id=?, "
+                    "log_path=?, worktree_path=?, worktree_branch=?, pid_identity=?, termination_domain_json=?, "
+                    "parent_job_id=?, cleanup_deadline_at=?, process_state=?, "
+                    "agent=?, harness=?, role=?, task=?, story_id=?, "
                     "model_tier=?, impact_score=?, requested_model=?, resolved_model=?, "
                     "dispatch_context=COALESCE(dispatch_context, ?), "
                     "context_mode=?, context_bytes=?, "
@@ -5384,6 +5703,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         worktree_path,
                         worktree_branch,
                         json.dumps(job.get("pid_identity")) if job.get("pid_identity") else None,
+                        json.dumps(job["termination_domain"], sort_keys=True),
+                        parent_job_id,
+                        job["cleanup_deadline_at"],
+                        job["process_state"],
                         agent,
                         agent,
                         resolved_agent_role or None,
@@ -5416,11 +5739,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn.execute(
                     "INSERT OR REPLACE INTO daemon_jobs "
                     "(job_id, agent, harness, role, task, story_id, status, priority, depends_on, pid, pid_identity, "
+                    "termination_domain_json, parent_job_id, cleanup_deadline_at, process_state, "
                     "enqueued_at, started_at, log_path, worktree_path, worktree_branch, dispatch_context, context_mode, context_bytes, session_id, "
                     "agent_id, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect, "
                     "model_tier, impact_score, requested_model, resolved_model, "
                     "requested_harness, actual_harness, fallback_reason, task_type, task_type_explicit, purpose) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -5433,6 +5757,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         "[]",
                         proc.pid,
                         json.dumps(job.get("pid_identity")) if job.get("pid_identity") else None,
+                        json.dumps(job["termination_domain"], sort_keys=True),
+                        parent_job_id,
+                        job["cleanup_deadline_at"],
+                        job["process_state"],
                         job["started_at"],
                         job["started_at"],
                         log_file,
@@ -5502,6 +5830,14 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             except Exception:
                 pass
 
+    if local_pilot_control is not None:
+        threading.Thread(
+            target=_release_local_pilot_control_after_cleanup,
+            args=(proc, local_pilot_control, termination_domain, job),
+            daemon=True,
+        ).start()
+        local_pilot_control = None
+
     log_telemetry = _pkg("log_telemetry_event")
     if log_telemetry:
         log_telemetry({
@@ -5540,6 +5876,13 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
 
     if generate_context:
         generate_context()
+    try:
+        from synlynk.jobs import heartbeat_claims_for_pid, heartbeat_claims_by_story_ids
+        from synlynk.session import _read_active_claim_leases
+        heartbeat_claims_for_pid(os.getpid())
+        heartbeat_claims_by_story_ids(_read_active_claim_leases())
+    except Exception:
+        pass
     cmd_args = _inject_grok_rules(cmd_args)
     if check_budgets:
         check_budgets()

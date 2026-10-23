@@ -36,6 +36,19 @@ def test_db(tmp_path):
             exit_code INTEGER
         )
     """)
+    conn.execute("""
+        CREATE TABLE task_leases (
+            lease_id           TEXT PRIMARY KEY,
+            story_id           TEXT NOT NULL,
+            leased_by          TEXT NOT NULL,
+            pid                INTEGER,
+            harness            TEXT,
+            acquired_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            heartbeat_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expires_at         TIMESTAMP NOT NULL,
+            status             TEXT NOT NULL DEFAULT 'active'
+        )
+    """)
     conn.commit()
     yield conn, str(db_path)
     conn.close()

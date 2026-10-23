@@ -87,7 +87,7 @@ BUILTIN_FAMILIES = (
     ModelFamily("claude-5", "anthropic", ContextGeometry(200_000, 16_384, True), ("tool_calling", "json_schema", "vision", "prompt_caching")),
     ModelFamily("gemini-3", "google", ContextGeometry(1_000_000, 32_768, True), ("tool_calling", "json_schema", "vision")),
     ModelFamily("gpt-5.6", "openai", ContextGeometry(400_000, 32_768, True), ("tool_calling", "json_schema")),
-    ModelFamily("grok-4", "xai", ContextGeometry(131_072, 16_384, True), ("tool_calling", "json_schema", "vision")),
+    ModelFamily("grok-4", "xai", ContextGeometry(500_000, 0, True), ("tool_calling", "json_schema", "vision")),
     ModelFamily("gemma-2", "meta", ContextGeometry(8_192, 4_096, False), ("tool_calling",)),
     ModelFamily("deepseek-r1", "local", ContextGeometry(128_000, 8_192, True), ("tool_calling",)),
     ModelFamily("qwen2-5", "alibaba", ContextGeometry(128_000, 8_192, False), ("tool_calling",)),
@@ -111,8 +111,11 @@ BUILTIN_MODEL_CATALOG = (
     _remote("claude-opus-4-6-thinking", "claude-5", "agy", EntitlementTier.SUBSCRIPTION_CAPPED),
     _remote("gpt-oss-120b-medium", "gpt-5.6", "agy", EntitlementTier.INCLUDED_IN_BASE),
     _remote("gpt-5.6-luna", "gpt-5.6", "codex", EntitlementTier.INCLUDED_IN_BASE),
+    # Live `grok models` roster as of 2026-10-21 (gh:#2457).
     _remote("grok-4.7", "grok-4", "grok", EntitlementTier.METERED_EXTRA_USAGE_ONLY),
-    _remote("grok-4.6", "grok-4", "grok", EntitlementTier.SUBSCRIPTION_CAPPED),
+    _remote("grok-4.7-build-fast", "grok-4", "grok", EntitlementTier.METERED_EXTRA_USAGE_ONLY),
+    _remote("grok-4.6", "grok-4", "grok", EntitlementTier.INCLUDED_IN_BASE),
+    _remote("grok-4.5", "grok-4", "grok", EntitlementTier.INCLUDED_IN_BASE),
     ModelSpec("Ornith-1.0-9B-4bit", "ornith-1", "local", locality="on_device_local", quantization="4bit", entitlement_tier=EntitlementTier.ZERO_COST_LOCAL),
     ModelSpec("gemma-2-9b-it-q4", "gemma-2", "local", locality="on_device_local", quantization="Q4_K_M", entitlement_tier=EntitlementTier.ZERO_COST_LOCAL),
     ModelSpec("deepseek-r1", "deepseek-r1", "local", locality="on_device_local", entitlement_tier=EntitlementTier.ZERO_COST_LOCAL),
@@ -184,6 +187,20 @@ _AGY_TIER_DISCOVERY_PREFERENCE = {
     "reasoning": ("claude-opus-4-6-thinking", "gemini-3.8-flash-high", "claude-sonnet-4-6"),
 }
 
+# Preference order when a catalog id is absent from the live Grok roster (gh:#2291).
+_GROK_TIER_DISCOVERY_PREFERENCE = {
+    "fast": ("grok-4.6", "grok-4.7-build-fast", "grok-4.5", "grok-4.7"),
+    "pro": ("grok-4.7", "grok-4.7-build-fast", "grok-4.6"),
+    "reasoning": ("grok-4.7", "grok-4.6"),
+}
+
+# Preference order when a catalog id is absent from live Codex config/probe (gh:#2291).
+_CODEX_TIER_DISCOVERY_PREFERENCE = {
+    "fast": ("gpt-5.6-luna", "gpt-5.5", "gpt-5.4-mini", "gpt-6-luna"),
+    "pro": ("gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-luna", "gpt-5.5"),
+    "reasoning": ("gpt-5.6-sol", "gpt-6.1-sol", "gpt-5.6-terra"),
+}
+
 _DISCOVERY_CACHE: dict[str, tuple[float, tuple[str, ...]]] = {}
 _DISCOVERY_TTL_SECONDS = 300.0
 
@@ -241,17 +258,96 @@ def _heuristic_agy_tier_model(tier: str, discovered: list[str]) -> str | None:
     return None
 
 
+def _heuristic_grok_tier_model(tier: str, discovered: list[str]) -> str | None:
+    """Pick a live Grok model id when none of the preferred ids are present (gh:#2291)."""
+    def first(predicate) -> str | None:
+        for name in discovered:
+            if predicate(name.lower()):
+                return name
+        return None
+
+    if tier == "fast":
+        return (
+            first(lambda name: "fast" in name)
+            or first(lambda name: "4.6" in name)
+            or first(lambda name: "4.5" in name)
+            or first(lambda name: "mini" in name)
+            or first(lambda name: "grok" in name)
+        )
+    if tier == "pro":
+        return (
+            first(lambda name: "4.7" in name and "fast" not in name)
+            or first(lambda name: "4.7" in name)
+            or first(lambda name: "pro" in name)
+            or first(lambda name: "grok" in name)
+        )
+    if tier == "reasoning":
+        return (
+            first(lambda name: "reasoning" in name or "think" in name)
+            or first(lambda name: "4.7" in name and "fast" not in name)
+            or first(lambda name: "4.7" in name)
+            or first(lambda name: "grok" in name)
+        )
+    return None
+
+
+def _heuristic_codex_tier_model(tier: str, discovered: list[str]) -> str | None:
+    """Pick a live Codex model id when none of the preferred ids are present (gh:#2291)."""
+    def first(predicate) -> str | None:
+        for name in discovered:
+            if predicate(name.lower()):
+                return name
+        return None
+
+    if tier == "fast":
+        return (
+            first(lambda name: "luna" in name)
+            or first(lambda name: "mini" in name)
+            or first(lambda name: "fast" in name)
+            or first(lambda name: "flash" in name)
+            or first(lambda name: "gpt" in name)
+        )
+    if tier == "pro":
+        return (
+            first(lambda name: "terra" in name)
+            or first(lambda name: "pro" in name)
+            or first(lambda name: "luna" in name)
+            or first(lambda name: "gpt" in name)
+        )
+    if tier == "reasoning":
+        return (
+            first(lambda name: "sol" in name)
+            or first(lambda name: "reasoning" in name or "think" in name)
+            or first(lambda name: "o3" in name or "o1" in name)
+            or first(lambda name: "terra" in name)
+            or first(lambda name: "gpt" in name)
+        )
+    return None
+
+
 def _pick_discovered_tier_model(harness: str, tier: str, configured: str, discovered: list[str]) -> str:
     """Keep a catalog id that the harness still advertises; otherwise fall back."""
     if not discovered or configured in discovered:
         return configured
-    if harness != "agy":
-        return configured
-    for candidate in _AGY_TIER_DISCOVERY_PREFERENCE.get(tier, ()):
-        if candidate in discovered:
-            return candidate
-    heuristic = _heuristic_agy_tier_model(tier, discovered)
-    return heuristic or discovered[0]
+    if harness == "agy":
+        for candidate in _AGY_TIER_DISCOVERY_PREFERENCE.get(tier, ()):
+            if candidate in discovered:
+                return candidate
+        heuristic = _heuristic_agy_tier_model(tier, discovered)
+        return heuristic or discovered[0]
+    if harness == "grok":
+        for candidate in _GROK_TIER_DISCOVERY_PREFERENCE.get(tier, ()):
+            if candidate in discovered:
+                return candidate
+        heuristic = _heuristic_grok_tier_model(tier, discovered)
+        return heuristic or discovered[0]
+    if harness == "codex":
+        for candidate in _CODEX_TIER_DISCOVERY_PREFERENCE.get(tier, ()):
+            if candidate in discovered:
+                return candidate
+        heuristic = _heuristic_codex_tier_model(tier, discovered)
+        return heuristic or discovered[0]
+    return configured
 
 
 # A scraped log fragment is not a model id (gh:#2441). Execution-log rows
@@ -300,12 +396,15 @@ def resolve_tier_model(tier: str, harness: str, repo_path: Optional[str] = None)
     from synlynk import _get_db
     from synlynk.db import get_active_harness_models
 
+    live_models = discovered_model_ids(harness) if harness in ("agy", "grok", "codex") else []
     conn = _get_db()
     active = get_active_harness_models(conn, harness=harness, tier=tier)
     allowlisted = _curated_model_ids(harness, repo_path)
     for row in active:
         model_id = row.get("model_id")
         if is_plausible_model_id(model_id) and model_id in allowlisted:
+            if live_models and harness in ("agy", "grok", "codex"):
+                return _pick_discovered_tier_model(harness, tier, model_id, live_models)
             return model_id
 
     # The static catalog is a bootstrap seed only. Once discovery has ever
@@ -326,16 +425,46 @@ def resolve_tier_model(tier: str, harness: str, repo_path: Optional[str] = None)
         for row in harness_rows:
             model_id = row.get("model_id")
             if is_plausible_model_id(model_id) and model_id in allowlisted:
+                if live_models and harness in ("agy", "grok", "codex"):
+                    return _pick_discovered_tier_model(harness, tier, model_id, live_models)
                 return model_id
         # No allowlisted discovery row: fall through to the curated static
         # fallback below instead of returning a scraped or retired model.
 
     configured = _static_tier_model(tier, harness, repo_path)
-    if harness == "agy":
+    if harness in ("agy", "grok", "codex"):
         configured = _pick_discovered_tier_model(
-            harness, tier, configured, discovered_model_ids("agy")
+            harness, tier, configured, live_models
         )
     return configured
+
+
+def valid_harness_model_ids(
+    harness: str,
+    conn: Optional[sqlite3.Connection] = None,
+    repo_path: Optional[str] = None,
+) -> list[str]:
+    """Return all currently valid model ids for a harness (gh:#2291).
+
+    Consults live CLI discovery, active database rows, and curated catalog definitions.
+    For harnesses with live model lists (agy, grok), live discovery is authoritative
+    when present; otherwise falls back to active database rows or curated catalog entries.
+    For codex, the configured model from config.toml and curated catalog models are accepted.
+    """
+    from synlynk.db import get_active_harness_models
+
+    live_ids = [m for m in discovered_model_ids(harness) if is_plausible_model_id(m)]
+    active_rows = get_active_harness_models(conn, harness=harness) if conn is not None else []
+    active_ids = [row["model_id"] for row in active_rows if is_plausible_model_id(row.get("model_id"))]
+    curated_ids = [m for m in _curated_model_ids(harness, repo_path=repo_path) if is_plausible_model_id(m)]
+
+    if live_ids and harness in ("agy", "grok"):
+        return list(dict.fromkeys(live_ids))
+    if harness == "codex":
+        return list(dict.fromkeys(active_ids + live_ids + curated_ids))
+    if active_ids:
+        return list(dict.fromkeys(active_ids))
+    return list(dict.fromkeys(live_ids + curated_ids))
 
 
 def get_models_from_catalog(repo_path: Optional[str] = None) -> list[ModelSpec]:
@@ -427,6 +556,24 @@ def _parse_agy_models_listing(text: str) -> list[str]:
     return list(dict.fromkeys(names))
 
 
+def _parse_grok_models_listing(text: str) -> list[str]:
+    """Parse `grok models` output, extracting model identifiers from bullet lines (gh:#2291)."""
+    names: list[str] = []
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if line.startswith(("* ", "- ")):
+            parts = line[2:].strip().split()
+            if parts:
+                candidate = parts[0]
+                if is_plausible_model_id(candidate) and not candidate.endswith((".com", ".org", ".io", ".net")):
+                    names.append(candidate)
+    if not names:
+        for name in _parse_model_names(text):
+            if is_plausible_model_id(name) and not name.endswith((".com", ".org", ".io", ".net")):
+                names.append(name)
+    return list(dict.fromkeys(names))
+
+
 # Harnesses whose CLI actually lists models. Codex has no such surface
 # (plan 2026-10-14): its configured model is read from config.toml instead.
 CLI_MODEL_LIST_COMMANDS = {
@@ -508,6 +655,8 @@ def _observations_from_text(text: str, harness: str) -> list[dict[str, Any]]:
     """Parse a model listing into ids plus whatever rates the text encoded."""
     if harness == "agy":
         return [{"model_id": name, "meta": None} for name in _parse_agy_models_listing(text)]
+    if harness == "grok":
+        return [{"model_id": name, "meta": None} for name in _parse_grok_models_listing(text)]
     observations: list[dict[str, Any]] = []
     seen: set[str] = set()
     payload = None
@@ -551,6 +700,15 @@ def probe_cli_harness(harness: str, executable: str | None = None, timeout: floa
     """Probe one installed CLI without failing the caller when it is absent."""
     executable = executable or harness
     if harness not in CLI_MODEL_LIST_COMMANDS or not shutil.which(executable):
+        if harness in _CONFIG_MODEL_READERS:
+            reader = _CONFIG_MODEL_READERS[harness]
+            configured = reader()
+            if configured:
+                return [ModelSpec(
+                    configured, "discovered", harness,
+                    discovered=True,
+                    discovery_source="config_file",
+                )]
         return []
     try:
         result = subprocess.run(

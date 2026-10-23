@@ -270,3 +270,18 @@ see verification output in the session transcript. [@codex]
   (431 passed); `git diff --check` clean. Independent review, merge, and a
   valid live receipt remain required before accepting pilot traffic.
 [@codex]
+
+## 2026-10-22 — #2530 job terminal process/outcome truth design
+
+- Traced dispatch stall handling, daemon reconciliation, job-truth contracts,
+  and circuit-breaker cleanup. The focused baseline passed (371 tests).
+- Nikhil approved the design separating process cleanup from effect
+  verification; the approved spec is committed at `94318710` on
+  `fix/codex/issue-2530-job-terminal-truth`.
+- Wrote the test-first implementation plan with bounded cleanup verification,
+  no automatic reservation release while a worker might run, and an audited
+  operator recovery path. Awaiting Nikhil's plan review before implementation.
+- Claude's two builder-check dispatches are captured in Synlynk costs under
+  `job-1cf0b5d6` and `job-f7f603af`; both returned useful analysis, although
+  Synlynk marked their task receipts absent.
+[@codex]

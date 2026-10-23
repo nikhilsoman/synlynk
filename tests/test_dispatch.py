@@ -1,4 +1,5 @@
 import hashlib
+import json
 import os
 import sqlite3
 import subprocess
@@ -1606,7 +1607,8 @@ def test_check_job_stall_uses_review_timeout_without_changing_default(
     assert result is expected_killed
     assert bool(killed) is expected_killed
     if expected_killed:
-        assert killed == [(12345, signal.SIGKILL)]
+        assert killed[0] == (12345, signal.SIGTERM)
+        assert job["process_state"] == "cleanup_unverified"
     else:
         assert job["status"] == "running"
 
@@ -1652,6 +1654,117 @@ def test_check_job_stall_kills_when_gh_write_verified_false(project_dir, monkeyp
     assert stalled is True
     assert job["status"] == "failed"
     assert job.get("gh_write_verified") == "false"
+
+
+def test_check_job_stall_records_verified_domain_cleanup(tmp_path, monkeypatch):
+    import time as _time
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.process_lifecycle import TerminationResult
+
+    log_file = tmp_path / "job.log"
+    log_file.write_text("")
+    old_mtime = _time.time() - 3600
+    os.utime(log_file, (old_mtime, old_mtime))
+    domain = {
+        "version": 1, "kind": "host_process_group", "leader_pid": 12345,
+        "pgid": 12345, "leader_identity": {"start_time": "launch"},
+        "dispatcher_pgid": 99,
+    }
+    calls = []
+    monkeypatch.setattr(
+        dispatch_mod,
+        "terminate_job_domain",
+        lambda value, **kwargs: calls.append(value) or TerminationResult(
+            "stopped_verified", True, "host_process_group", "forced_stop_verified",
+            ({"phase": "after_sigkill", "state": "stopped"},),
+        ),
+    )
+    import synlynk as sl
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: None)
+    job = {
+        "id": "job-domain", "agent": "codex", "status": "running",
+        "pid": 12345, "log_file": str(log_file), "termination_domain": domain,
+    }
+
+    assert dispatch_mod._check_job_stall(
+        job, {"stall_timeout_minutes": 30}, str(tmp_path / "sentinel.md")
+    )
+    assert calls == [domain]
+    assert job["process_state"] == "stopped_verified"
+    assert [item["process_state"] for item in job["lifecycle_evidence"][:2]] == [
+        "stop_requested", "stopped_verified",
+    ]
+
+
+def test_local_pilot_lock_released_only_after_verified_domain_stop(monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.process_lifecycle import TerminationResult
+
+    events = []
+
+    class Process:
+        def wait(self):
+            events.append("waited")
+
+    class Lock:
+        def __exit__(self, *args):
+            events.append("released")
+
+    monkeypatch.setattr(
+        dispatch_mod,
+        "terminate_job_domain",
+        lambda domain, **kwargs: events.append("verified") or TerminationResult(
+            "stopped_verified", False, "host_process_group", "already_stopped"
+        ),
+    )
+    job = {"process_state": "running"}
+
+    assert dispatch_mod._release_local_pilot_control_after_cleanup(
+        Process(), Lock(), {"kind": "host_process_group"}, job
+    ) is True
+    assert events == ["waited", "verified", "released"]
+    assert job["process_state"] == "stopped_verified"
+
+
+def test_parent_cleanup_remains_unverified_while_child_job_is_running(
+    tmp_path, monkeypatch,
+):
+    import time as _time
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.process_lifecycle import TerminationResult
+
+    monkeypatch.chdir(tmp_path)
+    log_file = tmp_path / "parent.log"
+    log_file.write_text("")
+    os.utime(log_file, (_time.time() - 3600, _time.time() - 3600))
+    sl._save_jobs([{
+        "id": "job-child", "parent_job_id": "job-parent",
+        "status": "running", "process_state": "running",
+    }])
+    monkeypatch.setattr(
+        dispatch_mod,
+        "terminate_job_domain",
+        lambda domain, **kwargs: TerminationResult(
+            "stopped_verified", True, "host_process_group", "forced_stop_verified"
+        ),
+    )
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: None)
+    job = {
+        "id": "job-parent", "agent": "codex", "status": "running",
+        "pid": 12345, "log_file": str(log_file),
+        "termination_domain": {
+            "version": 1, "kind": "host_process_group", "leader_pid": 12345,
+            "pgid": 12345, "leader_identity": {"start_time": "launch"},
+            "dispatcher_pgid": 99,
+        },
+    }
+
+    assert dispatch_mod._check_job_stall(
+        job, {"stall_timeout_minutes": 30}, str(tmp_path / "sentinel.md")
+    )
+    assert job["process_state"] == "cleanup_unverified"
+    assert job["cleanup_result"]["reason_code"] == "active_child_job"
 
 
 @pytest.mark.parametrize("requires_gh_write", [True, False])
@@ -2654,14 +2767,14 @@ def test_dispatch_emits_model_and_effort_flags(project_dir, monkeypatch):
     dispatch_mod.dispatch_agent(
         agent="agy",
         task="write docs",
-        model="gemini-3.1-pro-high",
+        model="gemini-3.8-flash-high",
         effort="high",
         skip_preflight=True,
         context_mode="none",
     )
 
     shell_cmd = recorded_cmd[0][2]
-    assert "--model gemini-3.1-pro-high" in shell_cmd
+    assert "--model gemini-3.8-flash-high" in shell_cmd
     assert "--effort high" in shell_cmd
 
 
@@ -2840,8 +2953,12 @@ def test_local_pilot_dispatch_uses_isolated_runner_and_records_cohort_receipt(pr
     monkeypatch.setattr("synlynk.harness_adapters.registry.get_adapter", lambda agent: adapter)
     monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda root: {
         "enabled": True, "qualified": True, "isolated": True,
-        "share": 0.2, "qualified_models": ["ornith"],
+        "share": 0.2, "max_concurrent": 1, "qualified_models": ["ornith"],
     })
+    monkeypatch.setattr(
+        "synlynk.local_pilot_ledger.active_resume_authorization_matches_runtime",
+        lambda _conn, **_kwargs: True,
+    )
     runner_calls = []
 
     def fake_build(**kwargs):
@@ -2887,10 +3004,276 @@ def test_local_pilot_dispatch_uses_isolated_runner_and_records_cohort_receipt(pr
     assert "GH_TOKEN" not in spawned[0][1]["env"]
     expected_receipt = {
         **{key: value for key, value in receipt_payload.items() if key != "dispatch_key"},
+        "cohort": "validation",
+        "admission_id": job["id"],
+        "receipt_digest": job["local_pilot_receipt"]["receipt_digest"],
         "result_receipt_file": job["log_file"] + ".pilot.json",
     }
     assert job["local_pilot_receipt"] == expected_receipt
     assert job["local_model_receipt"]["pilot"] == expected_receipt
+    from synlynk import _get_db
+
+    conn = _get_db()
+    try:
+        evidence = conn.execute(
+            "SELECT cohort, task_class, safety_verdict, quality_verdict "
+            "FROM local_pilot_evidence WHERE job_id = ?",
+            (job["id"],),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert evidence == ("validation", "test_summary", "pending", "pending")
+
+
+def test_disabled_local_pilot_uses_frontier_without_creating_ledger_evidence(project_dir, monkeypatch):
+    """A disabled runtime must not consume a re-baseline sample."""
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import _get_db
+
+    conn = _get_db()
+    try:
+        monkeypatch.setattr(dispatch_mod, "_read_local_fallback", lambda _path: "codex")
+        monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda _root: {
+            "enabled": False, "qualified": True, "isolated": True,
+            "share": 0.2, "qualified_models": ["ornith"],
+        })
+
+        routed = dispatch_mod._resolve_dispatch_agent(
+            "auto", "test", conn, task="summarize focused test output", role="dev",
+            pilot_class="test_summary", dispatch_key="disabled-pilot", scope_paths=["test.log"],
+        )
+        evidence_count = conn.execute("SELECT COUNT(*) FROM local_pilot_evidence").fetchone()[0]
+    finally:
+        conn.close()
+
+    assert routed == "codex"
+    assert evidence_count == 0
+
+
+def test_enabled_local_pilot_without_active_resume_authorization_falls_back(project_dir, monkeypatch):
+    """A config switch alone is never an operational-resume authority."""
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import _get_db
+
+    monkeypatch.setattr(dispatch_mod, "_read_local_fallback", lambda _path: "codex")
+    monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda _root: {
+        "enabled": True, "share": 0.2, "max_concurrent": 1,
+        "qualified": True, "isolated": True, "qualified_models": ["ornith"],
+    })
+    monkeypatch.setattr("synlynk.local_agent.resolve_effective_local_model", lambda **_kwargs: {
+        "effective_model": "ornith", "edit_format": "diff", "health": "available",
+    })
+
+    conn = _get_db()
+    try:
+        from synlynk.local_pilot_ledger import ensure_local_pilot_ledger
+        ensure_local_pilot_ledger(conn)
+        routed = dispatch_mod._resolve_dispatch_agent(
+            "auto", "test", conn, task="summarize focused output", role="dev",
+            pilot_class="test_summary", dispatch_key="local-5", scope_paths=["test.log"],
+        )
+    finally:
+        conn.close()
+
+    assert routed == "codex"
+
+
+def test_active_resume_authorization_with_concurrency_config_drift_falls_back(project_dir, monkeypatch):
+    """Changing the one-job cap after approval must invalidate Local admission."""
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import _get_db
+
+    monkeypatch.setattr(dispatch_mod, "_read_local_fallback", lambda _path: "codex")
+    monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda _root: {
+        "enabled": True, "share": 0.2, "max_concurrent": 2,
+        "qualified": True, "isolated": True, "qualified_models": ["ornith"],
+    })
+    monkeypatch.setattr("synlynk.local_pilot_ledger.active_resume_authorization", lambda _conn: {
+        "authorization_id": "resume-1",
+        "safety_watermark": 0,
+        "preflight_receipt_json": json.dumps({
+            "result": "passed", "requested_share": 0.2, "requested_max_concurrent": 1,
+        }),
+    })
+    monkeypatch.setattr("synlynk.local_agent.resolve_effective_local_model", lambda **_kwargs: {
+        "effective_model": "ornith", "edit_format": "diff", "health": "available",
+    })
+
+    conn = _get_db()
+    try:
+        from synlynk.local_pilot_ledger import ensure_local_pilot_ledger
+        ensure_local_pilot_ledger(conn)
+        routed = dispatch_mod._resolve_dispatch_agent(
+            "auto", "test", conn, task="summarize focused output", role="dev",
+            pilot_class="test_summary", dispatch_key="local-5", scope_paths=["test.log"],
+        )
+    finally:
+        conn.close()
+
+    assert routed == "codex"
+
+
+def test_resume_authorization_requires_the_preflight_selected_model(project_dir, monkeypatch):
+    """Another qualified Ornith model is not an approved replacement."""
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import _get_db
+
+    monkeypatch.setattr(dispatch_mod, "_read_local_fallback", lambda _path: "codex")
+    monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda _root: {
+        "enabled": True, "share": 0.2, "max_concurrent": 1,
+        "qualified": True, "isolated": True,
+        "qualified_models": ["ornith-approved", "ornith-other"],
+    })
+    monkeypatch.setattr("synlynk.local_pilot_ledger.active_resume_authorization", lambda _conn: {
+        "authorization_id": "resume-1", "safety_watermark": 0,
+        "preflight_receipt_json": json.dumps({
+            "result": "passed", "requested_share": 0.2, "requested_max_concurrent": 1,
+            "resolved_model": "ornith-approved",
+        }),
+    })
+    monkeypatch.setattr("synlynk.local_agent.resolve_effective_local_model", lambda **_kwargs: {
+        "effective_model": "ornith-other", "edit_format": "diff", "health": "available",
+    })
+
+    conn = _get_db()
+    try:
+        from synlynk.local_pilot_ledger import ensure_local_pilot_ledger
+        ensure_local_pilot_ledger(conn)
+        routed = dispatch_mod._resolve_dispatch_agent(
+            "auto", "test", conn, task="summarize focused output", role="dev",
+            pilot_class="test_summary", dispatch_key="local-5", scope_paths=["test.log"],
+        )
+    finally:
+        conn.close()
+
+    assert routed == "codex"
+
+
+def test_matching_signed_resume_authorization_auto_routes_local(project_dir, monkeypatch):
+    """A valid active authority and its exact preflight model admit the pilot lane."""
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import _get_db
+
+    monkeypatch.setattr(dispatch_mod, "_read_local_fallback", lambda _path: "codex")
+    monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda _root: {
+        "enabled": True, "share": 0.2, "max_concurrent": 1,
+        "qualified": True, "isolated": True, "qualified_models": ["ornith-approved"],
+    })
+    monkeypatch.setattr("synlynk.local_pilot_ledger.active_resume_authorization", lambda _conn: {
+        "authorization_id": "resume-1", "safety_watermark": 0,
+        "preflight_receipt_json": json.dumps({
+            "result": "passed", "requested_share": 0.2, "requested_max_concurrent": 1,
+            "resolved_model": "ornith-approved",
+        }),
+    })
+    monkeypatch.setattr("synlynk.local_agent.resolve_effective_local_model", lambda **_kwargs: {
+        "effective_model": "ornith-approved", "edit_format": "diff", "health": "available",
+    })
+
+    conn = _get_db()
+    try:
+        from synlynk.local_pilot_ledger import ensure_local_pilot_ledger
+        ensure_local_pilot_ledger(conn)
+        routed = dispatch_mod._resolve_dispatch_agent(
+            "auto", "test", conn, task="summarize focused output", role="dev",
+            pilot_class="test_summary", dispatch_key="local-5", scope_paths=["test.log"],
+        )
+        receipt = dispatch_mod.take_local_pilot_receipt()
+    finally:
+        conn.close()
+
+    assert routed == "local"
+    assert receipt["effective_model"] == "ornith-approved"
+
+
+def test_final_local_slot_claim_refuses_agent_concurrency_drift(project_dir, monkeypatch):
+    """The operative capacity source cannot widen the signed one-job lane."""
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.harness_adapters.local import LocalAdapter
+
+    policy_dir = project_dir / ".agents"
+    policy_dir.mkdir()
+    (policy_dir / "local.json").write_text(
+        '{"endpoint":"http://127.0.0.1:8000","pinned_model":"ornith",'
+        '"max_concurrent":2,"models":[{"id":"ornith","pinned":true,"edit_format":"diff"}]}'
+    )
+    monkeypatch.setattr("synlynk.local_agent._health_check", lambda *_args, **_kwargs: {
+        "reachable": True, "status": "healthy", "available_models": ["ornith"],
+    })
+    monkeypatch.setattr("synlynk.harness_adapters.registry.get_adapter", lambda _agent: LocalAdapter())
+    monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda _root: {
+        "enabled": True, "share": 0.2, "max_concurrent": 1,
+        "qualified": True, "isolated": True, "qualified_models": ["ornith"],
+    })
+    monkeypatch.setattr(
+        "synlynk.local_pilot_ledger.active_resume_authorization_matches_runtime",
+        lambda _conn, **_kwargs: True,
+    )
+    monkeypatch.setattr(dispatch_mod, "_read_local_fallback", lambda _path=None: "codex")
+    captured = {}
+    original_dispatch = dispatch_mod.dispatch_agent
+
+    def intercept_dispatch(agent, *args, **kwargs):
+        if agent == "codex":
+            captured.update(kwargs)
+            return {"agent": "codex"}
+        return original_dispatch(agent, *args, **kwargs)
+
+    monkeypatch.setattr(dispatch_mod, "dispatch_agent", intercept_dispatch)
+    receipt = dispatch_mod._seal_local_pilot_receipt({
+        "route_local": True, "reason": "eligible_local_cohort", "pilot_class": "test_summary",
+        "share": 0.2, "bucket": 137, "dispatch_key": "test-2",
+        "dispatch_key_sha256": hashlib.sha256(b"test-2").hexdigest(),
+        "task_sha256": hashlib.sha256(b"summarize focused test output").hexdigest(),
+        "role": "dev", "scope_paths": ["test.log"], "requested_model": None,
+        "effective_model": "ornith", "qualified_models": ["ornith"],
+    })
+
+    result = dispatch_mod.dispatch_agent(
+        "local", "summarize focused test output", story_id="test-2", role="dev",
+        skip_preflight=True, context_mode="none", scope_paths=["test.log"],
+        local_pilot_receipt=receipt, local_pilot_requested=True,
+    )
+
+    assert result == {"agent": "codex"}
+    assert captured["local_pilot_requested"] is False
+
+
+def test_local_frontier_fallback_preserves_pr_context(project_dir, monkeypatch):
+    """The fallback must retain PR-scoped policy and worktree context."""
+    import synlynk.dispatch as dispatch_mod
+
+    monkeypatch.setattr(dispatch_mod, "_read_local_fallback", lambda _path=None: "codex")
+    monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda _root: {
+        "enabled": True, "share": 0.2, "max_concurrent": 1,
+        "qualified": True, "isolated": True, "qualified_models": ["ornith"],
+    })
+    captured = {}
+    original_dispatch = dispatch_mod.dispatch_agent
+
+    def intercept_dispatch(agent, *args, **kwargs):
+        if agent == "codex":
+            captured.update(kwargs)
+            return {"agent": "codex"}
+        return original_dispatch(agent, *args, **kwargs)
+
+    monkeypatch.setattr(dispatch_mod, "dispatch_agent", intercept_dispatch)
+    receipt = dispatch_mod._seal_local_pilot_receipt({
+        "route_local": True, "reason": "eligible_local_cohort", "pilot_class": "test_summary",
+        "share": 0.2, "bucket": 1, "dispatch_key": "story-77",
+        "dispatch_key_sha256": hashlib.sha256(b"story-77").hexdigest(),
+        "task_sha256": "wrong-task-digest", "role": "dev", "scope_paths": ["test.log"],
+        "requested_model": None, "qualified_models": ["ornith"], "effective_model": "ornith",
+    })
+
+    result = dispatch_mod.dispatch_agent(
+        "local", "summarize focused output", story_id="story-77", pr=77, role="dev",
+        scope_paths=["test.log"], local_pilot_receipt=receipt, local_pilot_requested=True,
+    )
+
+    assert result == {"agent": "codex"}
+    assert captured["pr"] == 77
 
 
 def test_local_pilot_rejects_forged_and_cross_story_replayed_receipts(project_dir, monkeypatch):
@@ -3645,6 +4028,167 @@ def test_dispatch_agent_populates_harness_and_role_in_daemon_jobs(project_dir, m
     ).fetchone()
     conn.close()
     assert row == ("codex", "codex", "dev")
+
+
+def test_dispatch_persists_lifecycle_metadata_and_parent_linkage(project_dir, monkeypatch):
+    import json
+    import os
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+
+    class FakeProc:
+        pid = 12345
+
+    def fake_popen(*args, **kwargs):
+        captured["env"] = kwargs["env"]
+        return FakeProc()
+
+    monkeypatch.setattr(sl, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setenv("SYNLYNK_JOB_ID", "job-parent")
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(
+        dispatch_mod,
+        "capture_process_identity",
+        lambda pid, proc=None: {"pid": pid, "start_time": "launch"},
+    )
+    monkeypatch.setattr(
+        sl,
+        "_preflight_dispatch",
+        lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {
+            "passed": True, "sentinel": None, "reason": None,
+        },
+    )
+
+    job = sl.dispatch_agent(
+        "codex", "nested task", role="dev", force_agent=True, context_mode="none"
+    )
+
+    assert job["parent_job_id"] == "job-parent"
+    assert job["process_state"] == "cleanup_unverified"
+    assert job["termination_domain"]["version"] == 1
+    assert job["termination_domain"]["kind"] == "unknown"
+    assert captured["env"]["SYNLYNK_JOB_ID"] == job["id"]
+    assert captured["env"]["SYNLYNK_PARENT_JOB_ID"] == "job-parent"
+    saved = next(item for item in sl._load_jobs() if item["id"] == job["id"])
+    assert saved["termination_domain"] == job["termination_domain"]
+    assert saved["parent_job_id"] == "job-parent"
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT process_state, termination_domain_json, parent_job_id, cleanup_deadline_at "
+        "FROM daemon_jobs WHERE job_id=?",
+        (job["id"],),
+    ).fetchone()
+    conn.close()
+    assert row[0] == "cleanup_unverified"
+    assert json.loads(row[1]) == job["termination_domain"]
+    assert row[2] == "job-parent"
+    assert row[3] is not None
+
+
+def test_dispatch_cost_capture_preserves_explicit_role_across_same_story_dispatches(
+    project_dir, monkeypatch
+):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    import synlynk.jobs as jobs_mod
+
+    class FakeProc:
+        pid = 12345
+
+    real_popen = subprocess.Popen
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(
+        sl,
+        "_preflight_dispatch",
+        lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {
+            "passed": True,
+            "sentinel": None,
+            "reason": None,
+        },
+    )
+
+    story_id = "story-role-cost"
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO stories (story_id, title, status, role) VALUES (?, ?, ?, ?)",
+        (story_id, "Role-specific cost attribution", "in_progress", "dev"),
+    )
+    conn.commit()
+    conn.close()
+
+    jobs = [
+        sl.dispatch_agent(
+            "codex",
+            "analyze the implementation",
+            story_id=story_id,
+            role="architect",
+            job_id="job-role-cost-first",
+            force_agent=True,
+            context_mode="none",
+        ),
+        sl.dispatch_agent(
+            "codex",
+            "verify the follow-up",
+            story_id=story_id,
+            role="qa",
+            job_id="job-role-cost-second",
+            force_agent=True,
+            context_mode="none",
+        ),
+    ]
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", real_popen)
+
+    original_pkg = jobs_mod._pkg
+
+    def capture_cost(*args, **kwargs):
+        from synlynk.db import _insert_cost_row
+
+        _insert_cost_row(
+            session_date="2026-10-21",
+            agent=kwargs["agent"],
+            harness=kwargs["harness"],
+            agent_role=kwargs.get("agent_role"),
+            model="test-model",
+            input_tokens=1,
+            output_tokens=1,
+            cache_read_tokens=0,
+            cost_source="actual",
+            total_cost_usd=0.01,
+            story_id=kwargs["story_id"],
+            job_id=kwargs["job_id"],
+        )
+
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: {
+            "_get_db": sl._get_db,
+            "update_costs": capture_cost,
+            "extract_tokens": lambda *a, **k: (0, 0),
+            "extract_model_version": lambda *a, **k: "test-model",
+        }.get(name, original_pkg(name, default)),
+    )
+
+    conn = sl._get_db()
+    for job in jobs:
+        jobs_mod._ensure_daemon_job_cost_entry(
+            job["id"], job["agent"], story_id, "", conn=conn
+        )
+
+    rows = conn.execute(
+        "SELECT job_id, agent_role FROM cost_entries "
+        "WHERE job_id IN (?, ?) ORDER BY job_id",
+        (jobs[0]["id"], jobs[1]["id"]),
+    ).fetchall()
+    conn.close()
+
+    assert rows == [
+        ("job-role-cost-first", "architect"),
+        ("job-role-cost-second", "qa"),
+    ]
 
 
 def test_dispatch_logs_isolated_and_preserved_on_reap(tmp_path, monkeypatch):

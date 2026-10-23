@@ -1,8 +1,10 @@
 import json
 import os
+from pathlib import Path
 
 import pytest
 
+from synlynk import local_pilot
 from synlynk.local_pilot import (
     APPROVED_SHARES,
     PILOT_CLASSES,
@@ -38,6 +40,30 @@ def test_pilot_fails_closed_when_any_safety_prerequisite_is_missing():
     assert _decision(dispatch_key=None).reason == "dispatch_identity_missing"
 
 
+def test_tracked_rebaseline_config_keeps_local_disabled_after_merge():
+    """A merge must leave the tracked pilot unable to admit live work."""
+    repo_root = Path(__file__).resolve().parents[1]
+    workspace = json.loads((repo_root / ".synlynk" / "workspace.json").read_text())
+
+    assert workspace["local_pilot"]["enabled"] is False
+
+    decision = evaluate_local_pilot(
+        enabled=workspace["local_pilot"]["enabled"],
+        qualified=True,
+        isolated=True,
+        pilot_class="test_summary",
+        role="dev",
+        requires_gh_write=False,
+        share=workspace["local_pilot"]["share"],
+        dispatch_key="merged-rebaseline-task",
+        scope_paths=["test.log"],
+        rebaseline=True,
+    )
+
+    assert not decision.route_local
+    assert decision.reason == "pilot_disabled"
+
+
 def test_pilot_rejects_excluded_work_and_unscoped_edits():
     assert _decision(task="refactor the code", pilot_class="change_summary").reason == "task_text_excluded"
     assert _decision(pilot_class="documentation_edit", scope_paths=[]).reason == "bounded_scope_required"
@@ -60,6 +86,16 @@ def test_only_named_pilot_classes_are_allowlisted():
     assert _decision(pilot_class="implement").reason == "pilot_class_not_allowlisted"
 
 
+def test_rebaseline_admission_restricts_the_existing_pilot_classes_to_its_two_classes():
+    """Admitting documentation work in re-baseline mode would widen the approved lane."""
+    assert _decision(pilot_class="documentation_edit", rebaseline=True).reason == (
+        "rebaseline_pilot_class_not_allowlisted"
+    )
+    assert _decision(pilot_class="codepath_summary", rebaseline=True).reason != (
+        "rebaseline_pilot_class_not_allowlisted"
+    )
+
+
 def test_pilot_cohort_is_deterministic_and_cannot_exceed_approved_share():
     assert APPROVED_SHARES == {0.20, 0.35, 0.50}
     for share in APPROVED_SHARES:
@@ -77,49 +113,365 @@ def test_pilot_bucket_is_stable_across_share_gates():
     assert not low.route_local or high.route_local
 
 
-def test_promotion_requires_sample_and_90_percent_acceptance():
-    waiting = evaluate_promotion_gate(
-        current_share=0.20, eligible_jobs=29, accepted_jobs=29,
-        serious_incidents=0, latency_stable=True, memory_stable=True,
+def _status(*, validation=None, expansion=None):
+    return {
+        "historical": {"cohort": "historical", "accepted": 8, "eligible": 12},
+        "validation": {
+            "cohort": "validation", "accepted": 0, "eligible": 0,
+            "pending": 0, "rejected": 0, "safety_failed": 0,
+            **(validation or {}),
+        },
+        "expansion": {
+            "cohort": "expansion", "accepted": 0, "eligible": 0,
+            "pending": 0, "rejected": 0, "safety_failed": 0,
+            "consecutive_accepted": 0,
+            **(expansion or {}),
+        },
+    }
+
+
+def test_historical_safety_failure_requires_an_active_resume_authorization():
+    """A historical hard failure cannot be bypassed by ordinary rebaseline evidence."""
+    decision = local_pilot.evaluate_rebaseline(
+        {**_status(), "historical_safety_failures": 1, "active_authorization": None}
     )
-    assert waiting.next_share == 0.20
-    assert waiting.reason == "insufficient_30_job_sample"
 
-    passed = evaluate_promotion_gate(
-        current_share=0.20, eligible_jobs=30, accepted_jobs=27,
-        serious_incidents=0, latency_stable=True, memory_stable=True,
+    assert not decision.allow_admission
+    assert decision.pause_required
+    assert decision.reason == "operational_resume_required"
+
+
+def test_resume_preflight_fails_closed_for_config_runtime_or_reconciliation_debt(tmp_path, monkeypatch):
+    """A relaxed preflight branch could resume against unsafe state."""
+    import sqlite3
+    from synlynk import local_agent
+
+    repo = tmp_path / "repo"
+    (repo / ".synlynk").mkdir(parents=True)
+    (repo / ".agents").mkdir()
+    (repo / ".synlynk" / "workspace.json").write_text(
+        json.dumps({"local_pilot": {"enabled": False, "share": 0.20, "max_concurrent": 1}})
     )
-    assert passed.next_share == 0.35
+    (repo / ".agents" / "local.json").write_text(json.dumps({"max_concurrent": 1}))
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE daemon_jobs (status TEXT, agent TEXT)")
+    monkeypatch.setattr(local_agent, "load_pilot_runtime", lambda *_: {
+        "enabled": False, "share": 0.20, "qualified": True, "qualified_models": ["ornith-test"], "isolated": True,
+    })
+    monkeypatch.setattr(local_agent, "resolve_effective_local_model", lambda **_: {"resolved_model": "ornith-test"})
+    monkeypatch.setattr(local_agent, "_usable_compose_runner", lambda: True)
 
-    failed = evaluate_promotion_gate(
-        current_share=0.20, eligible_jobs=30, accepted_jobs=26,
-        serious_incidents=0, latency_stable=True, memory_stable=True,
+    passed = local_agent.preflight_local_pilot_resume(str(repo), conn)
+    assert passed["result"] == "passed"
+
+    (repo / ".synlynk" / "workspace.json").write_text(
+        json.dumps({"local_pilot": {"enabled": False, "share": 0.35, "max_concurrent": 1}})
     )
-    assert failed.next_share == 0.0
-    assert failed.rollback_required
+    failed = local_agent.preflight_local_pilot_resume(str(repo), conn)
+    assert failed["result"] == "failed"
+    assert "config_share" in failed["failures"]
 
 
-def test_50_percent_gate_requires_75_jobs_stability_and_rollback_drill():
-    args = dict(
-        current_share=0.35, accepted_jobs=68, serious_incidents=0,
-        latency_stable=True, memory_stable=True,
+def test_resume_preflight_requires_the_effectively_resolved_model_to_be_qualified_ornith(tmp_path, monkeypatch):
+    """A qualified fallback model must not authorize an unqualified pinned selection."""
+    import sqlite3
+    from synlynk import local_agent
+
+    repo = tmp_path / "repo"
+    (repo / ".synlynk").mkdir(parents=True)
+    (repo / ".agents").mkdir()
+    (repo / ".synlynk" / "workspace.json").write_text(
+        json.dumps({"local_pilot": {"enabled": False, "share": 0.20, "max_concurrent": 1}})
     )
-    assert evaluate_promotion_gate(eligible_jobs=74, **args).next_share == 0.35
-    assert evaluate_promotion_gate(eligible_jobs=75, **args).reason == "rollback_drill_required"
-    promoted = evaluate_promotion_gate(
-        eligible_jobs=75, rollback_drill_passed=True, **args
+    (repo / ".agents" / "local.json").write_text(json.dumps({"max_concurrent": 1}))
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE daemon_jobs (status TEXT, agent TEXT)")
+    monkeypatch.setattr(local_agent, "load_pilot_runtime", lambda *_: {
+        "enabled": False, "share": 0.20, "qualified": True,
+        "qualified_models": ["ornith-qualified"], "isolated": True,
+    })
+    monkeypatch.setattr(
+        local_agent, "resolve_effective_local_model", lambda **_: {"resolved_model": "unqualified-pinned-model"}
     )
-    assert promoted.next_share == 0.50
+    monkeypatch.setattr(local_agent, "_usable_compose_runner", lambda: True)
+
+    result = local_agent.preflight_local_pilot_resume(str(repo), conn)
+
+    assert result["result"] == "failed"
+    assert "resolved_model_unqualified" in result["failures"]
 
 
-def test_serious_incident_immediately_rolls_back_to_frontier():
+def test_resume_preflight_fails_when_local_reservation_source_is_unreadable(tmp_path, monkeypatch):
+    """A missing reservation table cannot safely mean no Local work is running."""
+    import sqlite3
+    from synlynk import local_agent
+
+    repo = tmp_path / "repo"
+    (repo / ".synlynk").mkdir(parents=True)
+    (repo / ".agents").mkdir()
+    (repo / ".synlynk" / "workspace.json").write_text(
+        json.dumps({"local_pilot": {"enabled": False, "share": 0.20, "max_concurrent": 1}})
+    )
+    (repo / ".agents" / "local.json").write_text(json.dumps({"max_concurrent": 1}))
+    conn = sqlite3.connect(":memory:")
+    monkeypatch.setattr(local_agent, "load_pilot_runtime", lambda *_: {
+        "enabled": False, "share": 0.20, "qualified": True, "qualified_models": ["ornith-test"], "isolated": True,
+    })
+    monkeypatch.setattr(local_agent, "resolve_effective_local_model", lambda **_: {"resolved_model": "ornith-test"})
+    monkeypatch.setattr(local_agent, "_usable_compose_runner", lambda: True)
+
+    result = local_agent.preflight_local_pilot_resume(str(repo), conn)
+
+    assert result["result"] == "failed"
+    assert "reservation_unreadable" in result["failures"]
+
+
+def test_resume_preflight_reconciles_stranded_activation_without_inferring_config_approval(tmp_path):
+    """An activating record must become failed even when a config later looks enabled."""
+    import sqlite3
+    from synlynk import local_agent
+    from synlynk.local_pilot_ledger import ensure_local_pilot_ledger
+
+    repo = tmp_path / "repo"
+    (repo / ".synlynk").mkdir(parents=True)
+    (repo / ".synlynk" / "workspace.json").write_text(json.dumps({"local_pilot": {"enabled": False, "share": .2}}))
+    conn = sqlite3.connect(":memory:")
+    ensure_local_pilot_ledger(conn)
+    conn.execute(
+        "INSERT INTO local_pilot_resume_authorizations "
+        "(authorization_id, created_at, signed_payload_json, signed_payload_digest, config_fingerprint, "
+        "remediation_reference, verification_reference, safety_watermark, preflight_receipt_json, "
+        "preflight_receipt_digest, state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'activating')",
+        ("stranded", "now", "{}", "digest", "fingerprint", "fix", "verify", 0, "{}", "digest"),
+    )
+    conn.commit()
+
+    result = local_agent.preflight_local_pilot_resume(str(repo), conn)
+
+    assert result["result"] == "failed"
+    assert conn.execute(
+        "SELECT state FROM local_pilot_resume_authorizations WHERE authorization_id = 'stranded'"
+    ).fetchone()[0] == "failed"
+
+
+def test_status_reconciles_stranded_activation_to_a_disabled_terminal_state(project_dir, monkeypatch):
+    """A read-only status request is also a required crash-boundary reconciliation point."""
+    import sqlite3
+    from synlynk import local_agent
+    from synlynk.local_pilot_ledger import ensure_local_pilot_ledger
+
+    conn = sqlite3.connect(":memory:")
+    ensure_local_pilot_ledger(conn)
+    conn.execute("CREATE TABLE daemon_jobs (status TEXT, agent TEXT)")
+    conn.execute(
+        "INSERT INTO local_pilot_resume_authorizations "
+        "(authorization_id, created_at, signed_payload_json, signed_payload_digest, config_fingerprint, "
+        "remediation_reference, verification_reference, safety_watermark, preflight_receipt_json, "
+        "preflight_receipt_digest, state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'activating')",
+        ("stranded-status", "now", "{}", "digest", "fingerprint", "fix", "verify", 0, "{}", "digest"),
+    )
+    conn.commit()
+    (project_dir / ".synlynk" / "workspace.json").write_text(
+        json.dumps({"local_pilot": {"enabled": True, "share": .2, "max_concurrent": 1}})
+    )
+    monkeypatch.setattr(local_agent, "_get_db", lambda: conn)
+    monkeypatch.setattr(local_agent, "load_pilot_runtime", lambda *_: {
+        "enabled": False, "share": .2, "qualified": True, "qualified_models": ["ornith-test"], "isolated": True,
+    })
+    monkeypatch.setattr(local_agent, "_local_pilot_endpoint_status", lambda: "healthy")
+
+    status = local_agent.local_pilot_status()
+
+    assert status["cohorts"]["latest_authorization"]["state"] == "failed"
+    workspace = json.loads((project_dir / ".synlynk" / "workspace.json").read_text())
+    assert workspace["local_pilot"]["enabled"] is False
+
+
+def test_pilot_resume_signs_and_activates_only_the_fixed_lane(tmp_path, monkeypatch):
+    """Changing the staged values or dispatching work would violate the recovery boundary."""
+    import sqlite3
+    from synlynk import local_agent, local_pilot_ledger
+
+    repo = tmp_path / "repo"
+    (repo / ".synlynk").mkdir(parents=True)
+    (repo / ".agents").mkdir()
+    (repo / ".synlynk" / "workspace.json").write_text(
+        json.dumps({"local_pilot": {"enabled": False, "share": 0.20, "max_concurrent": 1}})
+    )
+    (repo / ".agents" / "local.json").write_text(json.dumps({"max_concurrent": 1}))
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE daemon_jobs (status TEXT, agent TEXT)")
+    monkeypatch.setattr(local_agent, "load_pilot_runtime", lambda *_: {
+        "enabled": False, "share": 0.20, "qualified": True, "qualified_models": ["ornith-test"], "isolated": True,
+    })
+    monkeypatch.setattr(local_agent, "resolve_effective_local_model", lambda **_: {"resolved_model": "ornith-test"})
+    monkeypatch.setattr(local_agent, "_usable_compose_runner", lambda: True)
+    monkeypatch.setattr(local_agent, "_sign_resume_authorization", lambda _: "signed-by-test")
+    monkeypatch.setattr(local_pilot_ledger, "_verify_resume_signature", lambda *_: True)
+
+    result = local_agent.resume_local_pilot(
+        str(repo), conn, "issue-2342", "review-2349", lambda _: "RESUME LOCAL PILOT"
+    )
+
+    workspace = json.loads((repo / ".synlynk" / "workspace.json").read_text())
+    assert workspace["local_pilot"] == {"enabled": True, "share": 0.20, "max_concurrent": 1}
+    assert result["authorization"]["state"] == "active"
+    assert result["authorization"]["signed_payload_json"]
+    assert conn.execute("SELECT COUNT(*) FROM local_pilot_evidence").fetchone()[0] == 0
+
+
+def test_pilot_resume_refusal_or_missing_signing_key_leaves_config_disabled(tmp_path, monkeypatch):
+    """A declined or unsigned ceremony must not write an active authorization."""
+    import sqlite3
+    from synlynk import local_agent
+
+    repo = tmp_path / "repo"
+    (repo / ".synlynk").mkdir(parents=True)
+    (repo / ".agents").mkdir()
+    baseline = {"local_pilot": {"enabled": False, "share": 0.20, "max_concurrent": 1}}
+    (repo / ".synlynk" / "workspace.json").write_text(json.dumps(baseline))
+    (repo / ".agents" / "local.json").write_text(json.dumps({"max_concurrent": 1}))
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE daemon_jobs (status TEXT, agent TEXT)")
+    monkeypatch.setattr(local_agent, "load_pilot_runtime", lambda *_: {
+        "enabled": False, "share": 0.20, "qualified": True, "qualified_models": ["ornith-test"], "isolated": True,
+    })
+    monkeypatch.setattr(local_agent, "resolve_effective_local_model", lambda **_: {"resolved_model": "ornith-test"})
+    monkeypatch.setattr(local_agent, "_usable_compose_runner", lambda: True)
+    monkeypatch.setattr(local_agent, "_identity_key_path", lambda: str(repo / "missing-identity.key"))
+
+    with pytest.raises(ValueError, match="confirmation"):
+        local_agent.resume_local_pilot(str(repo), conn, "fix", "verify", lambda _: "no")
+    with pytest.raises(ValueError, match="signing key"):
+        local_agent.resume_local_pilot(str(repo), conn, "fix", "verify", lambda _: "RESUME LOCAL PILOT")
+
+    assert json.loads((repo / ".synlynk" / "workspace.json").read_text()) == baseline
+    assert conn.execute("SELECT COUNT(*) FROM local_pilot_resume_authorizations").fetchone()[0] == 0
+
+
+def test_active_resume_authorization_uses_only_its_new_epoch_for_rebaseline():
+    """The policy consumes the reset status arithmetic rather than old evidence."""
+    decision = local_pilot.evaluate_rebaseline(
+        {
+            **_status(validation={"accepted": 1, "eligible": 1}),
+            "historical_safety_failures": 1,
+            "active_epoch_safety_failures": 0,
+            "active_authorization": {"authorization_id": "resume-1", "state": "active"},
+        }
+    )
+
+    assert decision.allow_admission
+    assert decision.cohort == "validation"
+    assert decision.reason == "validation_incomplete"
+
+
+def test_activating_resume_authorization_cannot_admit_after_a_historical_failure():
+    """A crash before activation must remain fail-closed."""
+    decision = local_pilot.evaluate_rebaseline(
+        {
+            **_status(),
+            "historical_safety_failures": 1,
+            "active_epoch_safety_failures": 0,
+            "active_authorization": {"authorization_id": "resume-1", "state": "activating"},
+        }
+    )
+
+    assert not decision.allow_admission
+    assert decision.pause_required
+    assert decision.reason == "operational_resume_required"
+
+
+def test_rebaseline_uses_only_the_new_validation_cohort_not_historical_evidence():
+    """Counting the historical 8/12 toward validation must never open expansion."""
+    decision = local_pilot.evaluate_rebaseline(_status())
+
+    assert local_pilot.REBASELINE_PILOT_CLASSES == {"test_summary", "codepath_summary"}
+    assert decision.allow_admission
+    assert decision.cohort == "validation"
+    assert decision.share == 0.20
+    assert not decision.proposal_35_eligible
+    assert decision.reason == "validation_incomplete"
+
+
+def test_five_accepted_validation_samples_open_expansion_without_changing_share():
+    """Returning 0.35 after five validation acceptances would widen traffic automatically."""
+    decision = local_pilot.evaluate_rebaseline(_status(validation={"accepted": 5, "eligible": 5}))
+
+    assert decision.allow_admission
+    assert decision.cohort == "expansion"
+    assert decision.share == 0.20
+    assert not decision.pause_required
+    assert not decision.proposal_35_eligible
+    assert decision.reason == "expansion_evidence_required"
+
+
+def test_validation_rejection_requires_a_human_review_before_more_admission():
+    """Treating a rejected validation result as another attempt would bypass the 5/5 gate."""
+    decision = local_pilot.evaluate_rebaseline(_status(validation={"accepted": 4, "rejected": 1}))
+
+    assert not decision.allow_admission
+    assert decision.cohort is None
+    assert decision.share == 0.20
+    assert not decision.pause_required
+    assert decision.reason == "validation_quality_rejection_requires_human_review"
+
+
+def test_expansion_quality_rejection_resets_only_the_consecutive_acceptance_run():
+    """A quality rejection must not pause the pilot or preserve the prior run."""
+    decision = local_pilot.evaluate_rebaseline(
+        _status(
+            validation={"accepted": 5, "eligible": 5},
+            expansion={"accepted": 7, "rejected": 1, "consecutive_accepted": 0},
+        )
+    )
+
+    assert decision.allow_admission
+    assert decision.cohort == "expansion"
+    assert decision.share == 0.20
+    assert not decision.pause_required
+    assert not decision.proposal_35_eligible
+    assert decision.reason == "expansion_evidence_required"
+
+
+def test_ten_consecutive_expansion_acceptances_only_make_a_35_percent_proposal_eligible():
+    """Changing the share to 0.35 here would bypass the human expansion approval."""
+    decision = local_pilot.evaluate_rebaseline(
+        _status(
+            validation={"accepted": 5, "eligible": 5},
+            expansion={"accepted": 10, "eligible": 10, "consecutive_accepted": 10},
+        )
+    )
+
+    assert decision.allow_admission
+    assert decision.cohort == "expansion"
+    assert decision.share == 0.20
+    assert decision.proposal_35_eligible
+    assert decision.reason == "proposal_35_eligible"
+
+
+def test_hard_safety_failure_pauses_every_rebaseline_stage():
+    """Admitting another Local sample after a safety failure would violate the hard gate."""
+    decision = local_pilot.evaluate_rebaseline(_status(expansion={"safety_failed": 1}))
+
+    assert not decision.allow_admission
+    assert decision.cohort is None
+    assert decision.share == 0.20
+    assert decision.pause_required
+    assert not decision.proposal_35_eligible
+    assert decision.reason == "hard_safety_failure_requires_pause"
+
+
+def test_legacy_promotion_gate_is_retired_and_fails_closed():
+    """Returning 0.35 or 0.50 to an old caller would restore automatic promotion."""
     decision = evaluate_promotion_gate(
         current_share=0.35, eligible_jobs=75, accepted_jobs=75,
-        serious_incidents=1, latency_stable=True, memory_stable=True,
+        serious_incidents=0, latency_stable=True, memory_stable=True,
         rollback_drill_passed=True,
     )
+
     assert decision.next_share == 0.0
     assert decision.rollback_required
+    assert decision.reason == "promotion_gate_retired_use_evaluate_rebaseline"
 
 
 def test_isolated_compose_builder_passes_only_local_model_credential(tmp_path, monkeypatch):

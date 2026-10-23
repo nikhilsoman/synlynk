@@ -1,6 +1,7 @@
 """synlynk jobs: job store, reconciliation (CLI-dispatch and daemon paths), fleet routing."""
 
 import fnmatch
+import getpass
 import hashlib
 import inspect
 import json
@@ -11,7 +12,7 @@ import subprocess
 import sys
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
 
@@ -27,6 +28,7 @@ from synlynk.gh_verify import (
     github_branch_effect_verified,
 )
 from synlynk._lazy import pkg as _pkg
+from synlynk.process_lifecycle import terminate_job_domain
 
 
 _BOLD = "[1m"
@@ -563,6 +565,141 @@ def _record_local_adapter_evidence(job: dict, log_text: str) -> None:
     failure = adapter.classify_failure(job.get("exit_code") or 0, "", log_text)
     job["adapter_receipt"] = event.compatibility_evidence
     job["adapter_failure_kind"] = failure.value if failure else None
+
+
+def _local_pilot_receipt_failure(job: dict, receipt: object) -> Optional[str]:
+    """Return the first containment failure for an isolated pilot receipt."""
+    admission = job.get("local_pilot_receipt")
+    if not isinstance(admission, dict):
+        return "admission_missing"
+    if not isinstance(receipt, dict):
+        return "receipt_malformed"
+    if receipt.get("schema_version") != 1:
+        return "receipt_schema_invalid"
+    if receipt.get("job_id") != job.get("id") or admission.get("admission_id") != job.get("id"):
+        return "job_id_mismatch"
+    expected_digest = admission.get("task_sha256")
+    actual_task = job.get("task")
+    if not isinstance(expected_digest, str) or expected_digest != hashlib.sha256(
+        str(actual_task or "").encode("utf-8")
+    ).hexdigest():
+        return "admission_task_digest_mismatch"
+    if receipt.get("task_sha256") != expected_digest:
+        return "task_digest_mismatch"
+    if receipt.get("pilot_class") != admission.get("pilot_class"):
+        return "pilot_class_mismatch"
+    if receipt.get("scope_paths") != admission.get("scope_paths"):
+        return "scope_paths_mismatch"
+    if receipt.get("effective_model") not in admission.get("qualified_models", []):
+        return "model_not_qualified"
+    if receipt.get("effective_model") != admission.get("effective_model"):
+        return "model_mismatch"
+    if receipt.get("execution") == "host" or receipt.get("execution") != "isolated":
+        return "host_execution"
+    if receipt.get("read_only") is not True:
+        return "not_read_only"
+    if receipt.get("preflight_passed") is not True:
+        return "preflight_failed"
+    if receipt.get("rollback_verified") is not True:
+        return "rollback_unverified"
+    if receipt.get("outcome") != "completed_read_only":
+        return "outcome_not_completed_read_only"
+    if receipt.get("exit_code") != 0:
+        return "runner_exit_failed"
+    if receipt.get("changed_paths") != []:
+        return "changed_paths_not_empty"
+    if receipt.get("applied_paths") != []:
+        return "applied_paths_not_empty"
+    return None
+
+
+def reconcile_local_pilot_terminal(conn, job: dict) -> dict:
+    """Record terminal Local containment evidence and pause on any uncertainty.
+
+    Runner receipts are untrusted input.  They can prove safety only after every
+    admission identity and read-only isolation invariant is cross-checked; they
+    never create a quality verdict.
+    """
+    admission = job.get("local_pilot_receipt")
+    if not isinstance(admission, dict):
+        return {"safety_verdict": None, "reason": "not_local_pilot", "paused": False}
+    receipt_path = admission.get("result_receipt_file")
+    receipt = None
+    reason = None
+    if not isinstance(receipt_path, str) or not receipt_path:
+        reason = "receipt_missing"
+    else:
+        try:
+            with open(receipt_path, encoding="utf-8") as handle:
+                receipt = json.load(handle)
+        except FileNotFoundError:
+            reason = "receipt_missing"
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            reason = "receipt_malformed"
+    if reason is None:
+        reason = _local_pilot_receipt_failure(job, receipt)
+
+    from synlynk.local_pilot_ledger import pause_local_pilot, record_safety_outcome
+
+    verdict = "failed" if reason else "passed"
+    outcome_reason = reason or "completed_read_only"
+    evidence = {"runner_receipt": receipt, "reconciliation_reason": outcome_reason}
+    try:
+        record_safety_outcome(conn, job["id"], verdict, outcome_reason, evidence)
+    except ValueError as exc:
+        # Reconciliation is repeatable. An already-recorded immutable terminal
+        # outcome remains authoritative and must not be rewritten.
+        if "already recorded" not in str(exc):
+            raise
+        row = conn.execute(
+            "SELECT safety_verdict, safety_reason FROM local_pilot_evidence WHERE job_id = ?",
+            (job["id"],),
+        ).fetchone()
+        if row is None:
+            raise
+        return {"safety_verdict": row[0], "reason": row[1], "paused": row[0] == "failed"}
+    if verdict == "failed":
+        pause_local_pilot(outcome_reason, conn=conn)
+        return {"safety_verdict": verdict, "reason": outcome_reason, "paused": True}
+    return {"safety_verdict": verdict, "reason": outcome_reason, "paused": False}
+
+
+def _reconcile_local_pilot_terminals(jobs: list[dict]) -> bool:
+    """Reconcile each newly terminal Local pilot job once from its durable DB."""
+    candidates = [
+        job for job in jobs
+        if isinstance(job, dict)
+        and is_terminal_status(job.get("status"))
+        and isinstance(job.get("local_pilot_receipt"), dict)
+        and "local_pilot_safety" not in job
+    ]
+    if not candidates:
+        return False
+    get_db = _pkg("_get_db")
+    if not get_db:
+        from synlynk import _get_db as get_db
+    changed = False
+    for job in candidates:
+        conn = None
+        try:
+            conn = get_db()
+            job["local_pilot_safety"] = reconcile_local_pilot_terminal(conn, job)
+            changed = True
+        except Exception:
+            # If reconciliation itself cannot establish an immutable outcome,
+            # stop all future Local admission rather than leaving it active.
+            from synlynk.local_pilot_ledger import pause_local_pilot
+            pause_local_pilot("terminal_reconciliation_failed", conn=conn)
+            job["local_pilot_safety"] = {
+                "safety_verdict": "failed",
+                "reason": "terminal_reconciliation_failed",
+                "paused": True,
+            }
+            changed = True
+        finally:
+            if conn is not None:
+                conn.close()
+    return changed
 
 
 # Harness logs often wrap the receipt inside a JSON text field
@@ -2403,6 +2540,17 @@ def _gh_write_verified_is_false(value) -> bool:
     return value is False or (isinstance(value, str) and value.lower() == "false")
 
 
+def _circuit_breaker_requires_terminal(result) -> bool:
+    """Separate a real/uncertain cleanup attempt from a post-exit observation."""
+    return bool(
+        result.tripped
+        and (
+            result.process_killed
+            or str(result.kill_method or "").startswith("cleanup_unverified:")
+        )
+    )
+
+
 def _defer_local_gh_write_failure(job: dict, github_effect_consulted: bool) -> bool:
     """Hold a local failure-looking gh-write classification as non-terminal.
 
@@ -2471,7 +2619,7 @@ def _reconcile_jobs_unlocked() -> None:
                 evaluate_cb = None
         if evaluate_cb:
             cb_res = evaluate_cb(job, config, sentinel_path)
-            if cb_res.tripped and cb_res.process_killed:
+            if _circuit_breaker_requires_terminal(cb_res):
                 # Only a confirmed process termination belongs to the circuit
                 # breaker terminal state.  A limit breach observed after a
                 # natural exit must continue through normal reaping below.
@@ -3116,6 +3264,8 @@ def _reconcile_jobs_unlocked() -> None:
         except PermissionError:
             # Process exists but is owned by another user — keep status as running.
             pass
+    if _reconcile_local_pilot_terminals(jobs):
+        changed = True
     if changed:
         _save_jobs(jobs)
 
@@ -3145,6 +3295,55 @@ def _pid_is_alive(pid) -> bool:
 
 
 _UNSET_TERMINAL_CLAIM = object()
+_UNRESOLVED_PROCESS_STATES = {
+    "unknown", "running", "stop_requested", "cleanup_unverified",
+}
+
+
+def _terminal_process_state(
+    conn, job_id: str, observed_state: str = "cleanup_unverified"
+) -> str:
+    """Refuse verified-stop projection while this job or a child is unresolved."""
+    if observed_state != "stopped_verified":
+        return observed_state
+    try:
+        own = conn.execute(
+            "SELECT process_state FROM daemon_jobs WHERE job_id=?", (job_id,)
+        ).fetchone()
+        if own and own[0] == "cleanup_unverified":
+            return "cleanup_unverified"
+        child = conn.execute(
+            "SELECT 1 FROM daemon_jobs WHERE parent_job_id=? AND "
+            "(status IN ('running', 'queued') OR process_state IN "
+            "('unknown', 'running', 'stop_requested', 'cleanup_unverified')) LIMIT 1",
+            (job_id,),
+        ).fetchone()
+        if child:
+            return "cleanup_unverified"
+    except sqlite3.OperationalError:
+        # Old fixture schemas cannot express descendant ownership. Preserve the
+        # caller's observed state until their migration adds lifecycle columns.
+        pass
+    return "stopped_verified"
+
+
+def _resolve_persisted_termination_domain(
+    conn, job_id: str, termination_domain_json: Optional[str], config: Dict[str, Any]
+) -> str:
+    """Inspect/stop the immutable launch domain before publishing terminal truth."""
+    try:
+        domain = json.loads(termination_domain_json) if termination_domain_json else {}
+    except (TypeError, ValueError):
+        domain = {}
+    if not isinstance(domain, dict) or not domain:
+        observed = "cleanup_unverified"
+    else:
+        result = terminate_job_domain(
+            domain,
+            grace_seconds=float(config.get("termination_grace_seconds", 5) or 0),
+        )
+        observed = result.process_state
+    return _terminal_process_state(conn, job_id, observed)
 
 
 def _persist_daemon_job_terminal(
@@ -3223,52 +3422,176 @@ def _settle_daemon_job_terminal(
     terminal_claim_token=_UNSET_TERMINAL_CLAIM,
     release_reservation: bool = False,
     evidence_strength: str = "local",
+    process_state: Optional[str] = None,
+    effect_state: Optional[str] = None,
 ) -> bool:
-    """Persist and commit a daemon terminal transition atomically for callers."""
+    """Atomically persist already-observed process, effect, and capacity facts."""
+    had_transaction = conn.in_transaction
+    savepoint = f"settle_{uuid.uuid4().hex}"
+    if had_transaction:
+        conn.execute(f"SAVEPOINT {savepoint}")
+    else:
+        conn.execute("BEGIN IMMEDIATE")
     # PR1 shared decision entry point.  The compatibility status projection is
     # retained during the pilot, while the append-only ledger records the
     # evidence and the oracle's canonical shadow decision.
     try:
-        from synlynk.job_truth import record_evidence_and_reconcile
-        record_evidence_and_reconcile(
+        settled = _persist_daemon_job_terminal(
             conn,
             job_id,
-            {
-                "kind": "legacy_terminal_status",
-                "result": "true",
-                "source": "daemon_reconciliation",
-                "event_id": f"terminal:{job_id}:{completed_at}:{status}",
-                "observed_at": completed_at,
-                "exit_code": exit_code,
-                "legacy_status": status,
-            },
-            update_compatibility=False,
+            status,
+            exit_code,
+            completed_at,
+            only_running=only_running,
+            terminal_claim_token=terminal_claim_token,
+            evidence_strength=evidence_strength,
         )
-    except (sqlite3.OperationalError, ValueError):
-        # Unmigrated fixture databases are still supported by the compatibility
-        # path; the next migration creates/backfills the ledger.
-        conn.rollback()
-    settled = _persist_daemon_job_terminal(
-        conn,
-        job_id,
-        status,
-        exit_code,
-        completed_at,
-        only_running=only_running,
-        terminal_claim_token=terminal_claim_token,
-        evidence_strength=evidence_strength,
-    )
-    conn.commit()
+        if not settled:
+            if had_transaction:
+                conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+            else:
+                conn.rollback()
+            return False
+        try:
+            from synlynk.job_truth import canonical_status, record_evidence_and_reconcile
+            terminal_ready = (
+                None
+                if process_state is None
+                else process_state in {"stopped_verified", "cleanup_overridden"}
+            )
+            try:
+                canonical_legacy_status = canonical_status(status)
+            except ValueError:
+                canonical_legacy_status = status
+            retry_exhausted = (
+                canonical_legacy_status == STATUS_FAILED_VERIFICATION
+                and effect_state == "unknown"
+            )
+            forced_kind = {
+                "timed_out": "timeout",
+                "cancelled": "cancelled",
+                "killed_zombie": "zombie",
+                "circuit_breaker_tripped": "circuit_breaker",
+            }.get(canonical_legacy_status)
+            if forced_kind:
+                record_evidence_and_reconcile(
+                    conn,
+                    job_id,
+                    {
+                        "kind": forced_kind,
+                        "result": "true",
+                        "source": "daemon_reconciliation",
+                        "event_id": f"process:{job_id}:{completed_at}:{forced_kind}",
+                        "observed_at": completed_at,
+                        "exit_code": exit_code,
+                        "process_live_at_observation": forced_kind == "circuit_breaker",
+                    },
+                    update_compatibility=False,
+                    manage_transaction=False,
+                    terminal_ready=terminal_ready,
+                    retry_exhausted=retry_exhausted,
+                )
+            if effect_state in {"verified", "not_verified", "unknown"}:
+                effect_result = {
+                    "verified": "true", "not_verified": "false", "unknown": "unknown",
+                }[effect_state]
+                effect_evidence = {
+                    "kind": "remote_effect",
+                    "result": effect_result,
+                    "source": "daemon_reconciliation",
+                    "event_id": f"effect:{job_id}:{completed_at}:{effect_state}",
+                    "observed_at": completed_at,
+                    "causal_match": effect_state == "verified",
+                }
+                if effect_state == "verified":
+                    effect_evidence.update({
+                        "target_match": True,
+                        "actor_match": True,
+                        "sha_match": True,
+                    })
+                record_evidence_and_reconcile(
+                    conn,
+                    job_id,
+                    effect_evidence,
+                    update_compatibility=False,
+                    manage_transaction=False,
+                    terminal_ready=terminal_ready,
+                    retry_exhausted=retry_exhausted,
+                )
+            record_evidence_and_reconcile(
+                conn,
+                job_id,
+                {
+                    "kind": "legacy_terminal_status",
+                    "result": "true",
+                    "source": "daemon_reconciliation",
+                    "event_id": f"terminal:{job_id}:{completed_at}:{canonical_legacy_status}",
+                    "observed_at": completed_at,
+                    "exit_code": exit_code,
+                    "legacy_status": canonical_legacy_status,
+                },
+                update_compatibility=False,
+                manage_transaction=False,
+                terminal_ready=terminal_ready,
+                retry_exhausted=retry_exhausted,
+            )
+            if effect_state is not None:
+                conn.execute(
+                    "UPDATE job_terminal_decision SET effect_state=? "
+                    "WHERE job_id=? AND revision=(SELECT MAX(revision) FROM job_terminal_decision WHERE job_id=?)",
+                    (effect_state, job_id, job_id),
+                )
+        except (sqlite3.OperationalError, ValueError):
+            # Unmigrated fixture databases are still supported by the
+            # compatibility path; the next migration creates/backfills the ledger.
+            pass
+        if settled and process_state is not None:
+            try:
+                if process_state == "cleanup_unverified":
+                    load_config_fn = _pkg("load_config")
+                    config = load_config_fn() if load_config_fn else {}
+                    timeout = float(
+                        config.get("cleanup_verification_timeout_seconds", 300) or 300
+                    )
+                    deadline = (
+                        datetime.now(timezone.utc) + timedelta(seconds=max(0, timeout))
+                    ).isoformat()
+                    conn.execute(
+                        "UPDATE daemon_jobs SET process_state=?, "
+                        "cleanup_deadline_at=COALESCE(cleanup_deadline_at, ?) WHERE job_id=?",
+                        (process_state, deadline, job_id),
+                    )
+                else:
+                    conn.execute(
+                        "UPDATE daemon_jobs SET process_state=? WHERE job_id=?",
+                        (process_state, job_id),
+                    )
+            except sqlite3.OperationalError:
+                # Compatibility fixture/legacy DB; migration adds this axis.
+                pass
+        if settled and release_reservation:
+            _release_daemon_job_reservation(conn, job_id, process_state=process_state)
+        if had_transaction:
+            conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            conn.commit()
+    except Exception:
+        if had_transaction:
+            conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            conn.rollback()
+        raise
     if settled:
         try:
             from synlynk.job_status_projection import record_shadow_comparison
-            record_shadow_comparison(conn, job_id)
+            record_shadow_comparison(conn, job_id, manage_transaction=not had_transaction)
         except (sqlite3.OperationalError, ValueError):
             # Unmigrated fixture databases are still supported by the legacy
             # terminal path; the next migration creates the shadow table.
-            conn.rollback()
-    if settled and release_reservation:
-        _release_daemon_job_reservation(conn, job_id)
+            if not had_transaction:
+                conn.rollback()
     if settled:
         try:
             agent_row = conn.execute(
@@ -3345,17 +3668,22 @@ def _post_claim_zombie_evidence_is_valid(
     return bool(_has_leaked_worktree(job_id, log_path) or pid is None)
 
 
-def _release_daemon_job_reservation(conn, job_id: str) -> None:
-    """Release the open reservation associated with a terminal daemon job."""
-    release_fn = _pkg("_release_reservation")
-    if not release_fn:
+def _release_daemon_job_reservation(
+    conn, job_id: str, *, process_state: Optional[str]
+) -> None:
+    """Release capacity only after cleanup is verified or explicitly overridden."""
+    if process_state not in {"stopped_verified", "cleanup_overridden"}:
         return
     reservation = conn.execute(
         "SELECT id FROM harness_reservations WHERE job_id=? AND status='open'",
         (job_id,),
     ).fetchone()
     if reservation:
-        release_fn(conn, reservation[0])
+        conn.execute(
+            "UPDATE harness_reservations SET status='released', released_at=CURRENT_TIMESTAMP "
+            "WHERE id=? AND status='open'",
+            (reservation[0],),
+        )
 
 
 def mark_daemon_job_terminal(
@@ -3365,6 +3693,7 @@ def mark_daemon_job_terminal(
     status: str = "timed_out",
     exit_code: int = -9,
     completed_at: Optional[str] = None,
+    effect_state: Optional[str] = None,
 ) -> bool:
     """Mark a *running* daemon_jobs row terminal. Returns True if a row changed.
 
@@ -3376,24 +3705,34 @@ def mark_daemon_job_terminal(
         return False
     now = completed_at or time.strftime("%Y-%m-%dT%H:%M:%S")
     try:
-        from synlynk.job_truth import record_evidence_and_reconcile
-        record_evidence_and_reconcile(
-            conn,
-            job_id,
-            {
-                "kind": "timeout" if status == "timed_out" else "legacy_terminal_status",
-                "result": "true",
-                "source": "zombie_reaper",
-                "event_id": f"zombie:{job_id}:{now}:{status}",
-                "observed_at": now,
-                "exit_code": exit_code,
-            },
-            update_compatibility=False,
-        )
-    except (sqlite3.OperationalError, ValueError):
-        conn.rollback()
+        row = conn.execute(
+            "SELECT status, termination_domain_json, requires_gh_write "
+            "FROM daemon_jobs WHERE job_id=?",
+            (job_id,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        row = conn.execute(
+            "SELECT status, NULL, 0 FROM daemon_jobs WHERE job_id=?", (job_id,)
+        ).fetchone()
+    if not row or row[0] != STATUS_RUNNING:
+        return False
+    load_config_fn = _pkg("load_config")
+    config = load_config_fn() if load_config_fn else {}
+    process_state = _resolve_persisted_termination_domain(
+        conn, job_id, row[1], config
+    )
+    if effect_state is None:
+        effect_state = "unknown" if bool(row[2]) else "not_required"
     return _settle_daemon_job_terminal(
-        conn, job_id, status, exit_code, now, only_running=True
+        conn,
+        job_id,
+        status,
+        exit_code,
+        now,
+        only_running=True,
+        release_reservation=True,
+        process_state=process_state,
+        effect_state=effect_state,
     )
 
 
@@ -3460,8 +3799,18 @@ def auto_reap_job_from_sentinel(code: str, message: str) -> Optional[str]:
         ):
             status, terminal_exit_code = "done", 0
 
+        # Effect verification may update retry counters.  Finish that small
+        # transaction before process signaling/inspection begins.
+        if conn.in_transaction:
+            conn.commit()
         if mark_daemon_job_terminal(
-            conn, job_id, status=status, exit_code=terminal_exit_code
+            conn,
+            job_id,
+            status=status,
+            exit_code=terminal_exit_code,
+            effect_state=_effect_state_after_verification(
+                verified, bool(requires_gh_write)
+            ),
         ):
             conn.commit()
             return job_id
@@ -3736,6 +4085,15 @@ def reclaim_stranded_stories(
                         break
 
             if not has_active_worker:
+                lease_row = conn.execute(
+                    "SELECT pid FROM task_leases WHERE story_id=? AND status='active' "
+                    "ORDER BY rowid DESC LIMIT 1",
+                    (story_id,),
+                ).fetchone()
+                if lease_row and lease_row[0] is not None and _pid_is_alive(lease_row[0]):
+                    has_active_worker = True
+
+            if not has_active_worker:
                 reclaimed.append({
                     "story_id": story_id,
                     "title": title,
@@ -3752,6 +4110,8 @@ def reclaim_stranded_stories(
                                 137,
                                 terminal_at,
                                 only_running=True,
+                                process_state=_terminal_process_state(conn, job_id),
+                                effect_state="unknown",
                             )
                     conn.execute(
                         "UPDATE stories SET status='ready', readiness='ready' WHERE story_id=?",
@@ -3783,9 +4143,28 @@ def acquire_task_lease(
     story_id: str,
     leased_by: str,
     duration_seconds: int = 1800,
+    pid: int = None,
+    harness: str = None,
+    override: bool = False,
     conn=None,
 ) -> dict:
-    """Acquire or extend a rolling lease on a story in state.db."""
+    """Acquire or extend a rolling lease on a story in state.db.
+
+    A live conflicting claim (unexpired TTL) blocks acquisition unless
+    ``override=True``. A claim whose TTL expired is stale and does not block
+    (gh:#2511).
+
+    Staleness here is TTL-based only, not holder-PID-based: the one-shot
+    ``synlynk story claim`` CLI process exits immediately by design, and a
+    later, different-PID process in the same checkout keeps the claim alive
+    across that process boundary via ``heartbeat_claims_by_story_ids``, which
+    renews ``heartbeat_at``/``expires_at`` but never the stored ``pid``. A
+    dead-PID check here would treat every such claim as stale the instant the
+    claiming process exits, defeating conflict detection entirely (found by
+    cross-harness review on PR #2524). Holder-PID liveness is still used, but
+    only as a secondary signal in ``reclaim_stranded_stories``'s maintenance
+    sweep, which is free to be more aggressive than the live conflict gate.
+    """
     owns_conn = False
     if conn is None:
         from synlynk import _get_db
@@ -3796,17 +4175,22 @@ def acquire_task_lease(
     expires_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + duration_seconds))
     now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
     lease_id = f"lease-{hashlib.md5(f'{story_id}:{leased_by}:{now}'.encode()).hexdigest()[:8]}"
+    effective_pid = pid if pid is not None else os.getpid()
 
     try:
         row = conn.execute(
-            "SELECT lease_id, leased_by, expires_at FROM task_leases "
+            "SELECT lease_id, leased_by, pid, harness, expires_at FROM task_leases "
             "WHERE story_id=? AND status='active' ORDER BY rowid DESC LIMIT 1",
             (story_id,),
         ).fetchone()
 
         if row:
-            curr_id, curr_holder, curr_exp = row
-            if curr_exp < now_str or curr_holder == leased_by:
+            curr_id, curr_holder, curr_pid, curr_harness, curr_exp = row
+            is_expired = curr_exp < now_str
+            is_same_holder = curr_holder == leased_by
+            is_stale = is_expired or is_same_holder
+
+            if is_stale or override:
                 conn.execute(
                     "UPDATE task_leases SET status='expired' WHERE lease_id=?",
                     (curr_id,),
@@ -3816,13 +4200,15 @@ def acquire_task_lease(
                     "acquired": False,
                     "reason": "already_leased",
                     "leased_by": curr_holder,
+                    "harness": curr_harness,
                     "expires_at": curr_exp,
                 }
 
         conn.execute(
-            """INSERT INTO task_leases (lease_id, story_id, leased_by, acquired_at, heartbeat_at, expires_at, status)
-               VALUES (?, ?, ?, ?, ?, ?, 'active')""",
-            (lease_id, story_id, leased_by, now_str, now_str, expires_at),
+            """INSERT INTO task_leases
+               (lease_id, story_id, leased_by, pid, harness, acquired_at, heartbeat_at, expires_at, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')""",
+            (lease_id, story_id, leased_by, effective_pid, harness, now_str, now_str, expires_at),
         )
         conn.execute(
             "UPDATE stories SET status='in_progress', readiness='in_progress' WHERE story_id=?",
@@ -3834,6 +4220,7 @@ def acquire_task_lease(
             "lease_id": lease_id,
             "story_id": story_id,
             "leased_by": leased_by,
+            "harness": harness,
             "expires_at": expires_at,
         }
     finally:
@@ -3866,6 +4253,70 @@ def renew_task_lease(
         )
         conn.commit()
         return res.rowcount > 0
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def heartbeat_claims_for_pid(pid: int, extend_seconds: int = 2700, conn=None) -> int:
+    """Renew every active task_lease held by the given PID. Returns count renewed."""
+    owns_conn = False
+    if conn is None:
+        from synlynk import _get_db
+        conn = _get_db()
+        owns_conn = True
+
+    try:
+        now = time.time()
+        now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
+        expires_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + extend_seconds))
+        cur = conn.execute(
+            "UPDATE task_leases SET heartbeat_at=?, expires_at=? WHERE pid=? AND status='active'",
+            (now_str, expires_at, pid),
+        )
+        conn.commit()
+        return cur.rowcount
+    except sqlite3.OperationalError:
+        return 0
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def heartbeat_claims_by_story_ids(claim_leases: dict, extend_seconds: int = 2700, conn=None) -> int:
+    """Renew the active task_lease for each {story_id: lease_id} this checkout holds.
+
+    Renewal is scoped to the exact ``lease_id`` the marker was issued for, not
+    just the story_id. If another session force-took the story via
+    ``--override``, the active lease row now has a different lease_id; a
+    stale marker from the original checkout then renews zero rows instead of
+    silently extending the replacement claimant's lease (gh:#2511, found by
+    cross-harness review on PR #2524).
+    """
+    if not claim_leases:
+        return 0
+    owns_conn = False
+    if conn is None:
+        from synlynk import _get_db
+        conn = _get_db()
+        owns_conn = True
+
+    try:
+        now = time.time()
+        now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
+        expires_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + extend_seconds))
+        renewed = 0
+        for story_id, lease_id in claim_leases.items():
+            cur = conn.execute(
+                "UPDATE task_leases SET heartbeat_at=?, expires_at=? "
+                "WHERE story_id=? AND lease_id=? AND status='active'",
+                (now_str, expires_at, story_id, lease_id),
+            )
+            renewed += cur.rowcount
+        conn.commit()
+        return renewed
+    except sqlite3.OperationalError:
+        return 0
     finally:
         if owns_conn:
             conn.close()
@@ -3911,7 +4362,7 @@ def get_active_lease(story_id: str, conn=None) -> Optional[dict]:
 
     try:
         row = conn.execute(
-            "SELECT lease_id, story_id, leased_by, acquired_at, heartbeat_at, expires_at, status "
+            "SELECT lease_id, story_id, leased_by, pid, harness, acquired_at, heartbeat_at, expires_at, status "
             "FROM task_leases WHERE story_id=? AND status='active' ORDER BY rowid DESC LIMIT 1",
             (story_id,),
         ).fetchone()
@@ -3921,10 +4372,12 @@ def get_active_lease(story_id: str, conn=None) -> Optional[dict]:
             "lease_id": row[0],
             "story_id": row[1],
             "leased_by": row[2],
-            "acquired_at": row[3],
-            "heartbeat_at": row[4],
-            "expires_at": row[5],
-            "status": row[6],
+            "pid": row[3],
+            "harness": row[4],
+            "acquired_at": row[5],
+            "heartbeat_at": row[6],
+            "expires_at": row[7],
+            "status": row[8],
         }
     finally:
         if owns_conn:
@@ -3940,6 +4393,44 @@ def cmd_story_reclaim(max_age_minutes: int = 30, dry_run: bool = False) -> int:
         print(f"  ✓ {r['story_id']:16}  {r['title']}")
     print()
     return 0
+
+
+def cmd_story_claim(
+    story_id: str,
+    harness: str = None,
+    duration_seconds: int = 2700,
+    override: bool = False,
+) -> int:
+    """CLI handler for `synlynk story claim` (gh:#2511)."""
+    import socket
+    from synlynk.context import detect_active_home_harness
+
+    effective_harness = harness or detect_active_home_harness()
+    session_id = f"{effective_harness}:{socket.gethostname()}:{os.getpid()}"
+
+    result = acquire_task_lease(
+        story_id,
+        session_id,
+        duration_seconds=duration_seconds,
+        pid=os.getpid(),
+        harness=effective_harness,
+        override=override,
+    )
+
+    if result["acquired"]:
+        from synlynk.session import _add_active_claim
+        try:
+            _add_active_claim(story_id, result["lease_id"])
+        except OSError:
+            pass
+        print(f"\n  {_BOLD}synlynk story claim{_RESET}  story={story_id}  harness={effective_harness}  session={session_id}")
+        print(f"  Claim active until {result['expires_at']}\n")
+        return 0
+
+    print(f"\n  {_BOLD}synlynk story claim{_RESET}  REFUSED — story={story_id} already claimed")
+    print(f"  Held by harness={result.get('harness')}  leased_by={result.get('leased_by')}  expires_at={result.get('expires_at')}")
+    print("  Pass --override to force-take this claim.\n")
+    return 1
 
 
 def _existing_terminal_summary_truth(job_id: str) -> Optional[tuple]:
@@ -4116,6 +4607,10 @@ def _reconcile_terminal_jobs_json(conn) -> int:
         if _settle_daemon_job_terminal(
             conn, job_id, status, exit_code, completed_at, only_running=False,
             evidence_strength=evidence_strength,
+            effect_state=_effect_state_after_verification(
+                verified, bool(requires_gh_write)
+            ),
+            process_state=_terminal_process_state(conn, job_id),
         ):
             repaired += 1
             emit_event(
@@ -4392,6 +4887,19 @@ def _terminal_status_after_verification(
     if requires_gh_write and verified_str == "unknown":
         return STATUS_FAILED_VERIFICATION, exit_code if exit_code not in (None, 0) else 1
     return status, exit_code
+
+
+def _effect_state_after_verification(
+    verified_str: Optional[str], requires_gh_write: bool
+) -> str:
+    """Project the independent requested-effect axis from an external check."""
+    if not requires_gh_write:
+        return "not_required"
+    if verified_str == "true":
+        return "verified"
+    if verified_str == "false":
+        return "not_verified"
+    return "unknown"
 
 
 def _unpushed_branch_retry_pending(conn, job_id: str, pre_guard_status: str, post_guard_status: str) -> bool:
@@ -4718,7 +5226,7 @@ def _reconcile_daemon_jobs() -> None:
     rows = conn.execute(
         "SELECT job_id, agent, story_id, task, pid, started_at, completed_at, log_path, "
         "dispatch_context, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect, "
-        "worktree_path, worktree_branch, pid_identity "
+        "worktree_path, worktree_branch, pid_identity, termination_domain_json "
         "FROM daemon_jobs WHERE status='running'"
     ).fetchall()
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -4727,7 +5235,8 @@ def _reconcile_daemon_jobs() -> None:
     try:
         for (job_id, agent, story_id, task, pid, started_at, completed_at, log_path,
              dispatch_context, requires_gh_write, gh_write_target, gh_write_author,
-             gh_write_expect, persisted_worktree_path, persisted_worktree_branch, pid_identity_json) in rows:
+             gh_write_expect, persisted_worktree_path, persisted_worktree_branch, pid_identity_json,
+             termination_domain_json) in rows:
             try:
                 job_base_sha = _daemon_job_base_sha(conn, job_id)
                 # Invariant 2 must be enforced by the daemon's own polling
@@ -4752,8 +5261,15 @@ def _reconcile_daemon_jobs() -> None:
                     cb_job["pid_identity"] = json.loads(pid_identity_json) if pid_identity_json else None
                 except (TypeError, ValueError):
                     cb_job["pid_identity"] = None
+                try:
+                    cb_job["termination_domain"] = (
+                        json.loads(termination_domain_json)
+                        if termination_domain_json else None
+                    )
+                except (TypeError, ValueError):
+                    cb_job["termination_domain"] = None
                 cb_res = evaluate_cb(cb_job, config, ".synlynk/sentinel.md")
-                if cb_res.tripped and cb_res.process_killed:
+                if _circuit_breaker_requires_terminal(cb_res):
                     # Only a confirmed process termination belongs to the
                     # circuit breaker terminal state.  If the worker exited
                     # naturally, let the waitpid/exit-marker path below
@@ -4768,6 +5284,12 @@ def _reconcile_daemon_jobs() -> None:
                         cb_job.get("exit_code", -9),
                         ended_at,
                         release_reservation=True,
+                        process_state=_terminal_process_state(
+                            conn,
+                            job_id,
+                            cb_job.get("process_state", "cleanup_unverified"),
+                        ),
+                        effect_state="unknown",
                     )
                     if settled:
                         cost_recorded = _ensure_daemon_job_cost_entry(
@@ -4810,6 +5332,13 @@ def _reconcile_daemon_jobs() -> None:
 
                 if not exited:
                     continue
+
+                # This may signal, sleep, inspect a runtime, or call a container
+                # engine.  It intentionally runs before settlement opens its
+                # write transaction.
+                terminal_process_state = _resolve_persisted_termination_domain(
+                    conn, job_id, termination_domain_json, config
+                )
 
                 exit_code = None
                 exit_file = None
@@ -4886,6 +5415,10 @@ def _reconcile_daemon_jobs() -> None:
                     settled = _settle_daemon_job_terminal(
                         conn, job_id, status, exit_code, now, release_reservation=True,
                         evidence_strength=("github" if gh_write_verified_str in ("true", "false") else "unknown"),
+                        process_state=terminal_process_state,
+                        effect_state=_effect_state_after_verification(
+                            gh_write_verified_str, bool(requires_gh_write)
+                        ),
                     )
                     if not settled:
                         # Another actor already committed a terminal status.
@@ -5022,8 +5555,16 @@ def _reconcile_daemon_jobs() -> None:
                             conn, job_id, zombie_status, zombie_exit_code, now,
                             only_running=True, terminal_claim_token=terminal_claim_token,
                             evidence_strength=("github" if gh_write_verified_str in ("true", "false") else "unknown"),
+                            process_state=terminal_process_state,
+                            effect_state=_effect_state_after_verification(
+                                gh_write_verified_str, bool(requires_gh_write)
+                            ),
                         )
-                        if settled and zombie_status == "killed_zombie":
+                        if (
+                            settled
+                            and zombie_status == "killed_zombie"
+                            and terminal_process_state == "stopped_verified"
+                        ):
                             _reap_zombie_worktree(job_id, log_path, conn=conn)
                         if settled:
                             _ensure_daemon_job_cost_entry(
@@ -5179,6 +5720,10 @@ def _reconcile_daemon_jobs() -> None:
                 settled = _settle_daemon_job_terminal(
                     conn, job_id, status, exit_code, now, release_reservation=True,
                     evidence_strength=("github" if gh_write_verified_str in ("true", "false") else "local"),
+                    process_state=terminal_process_state,
+                    effect_state=_effect_state_after_verification(
+                        gh_write_verified_str, bool(requires_gh_write)
+                    ),
                 )
                 if not settled:
                     # Another reconciler/sentinel won the terminal-state
@@ -5321,7 +5866,9 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                 dep_statuses = {r[0]: r[1] for r in dep_rows}
                 if any(dep_statuses.get(d) == "failed" for d in deps):
                     _settle_daemon_job_terminal(
-                        conn, job_id, "failed", 1, now, only_running=False
+                        conn, job_id, "failed", 1, now, only_running=False,
+                        process_state=_terminal_process_state(conn, job_id),
+                        effect_state="not_required",
                     )
                     continue
                 done_ids = {jid for jid, st in dep_statuses.items() if st == "done"}
@@ -5370,7 +5917,9 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                 # Preflight/worktree/unknown-harness failures: fail the queue row so
                 # the daemon does not spin forever on an unlaunchable job.
                 _settle_daemon_job_terminal(
-                    conn, job_id, "failed", 1, now, only_running=False
+                    conn, job_id, "failed", 1, now, only_running=False,
+                    process_state=_terminal_process_state(conn, job_id),
+                    effect_state="not_required",
                 )
                 continue
 
@@ -5683,6 +6232,140 @@ def cmd_jobs_reconcile_truth(job_id: str, evidence_json: str | None = None) -> i
         return 0
     except (ValueError, TypeError, sqlite3.Error) as exc:
         print(f"manual reconciliation failed: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        conn.close()
+
+
+def cmd_jobs_cleanup_resolve(
+    job_id: str,
+    *,
+    accept_risk: bool = False,
+    reason: str | None = None,
+    now: str | None = None,
+    actor: str | None = None,
+) -> int:
+    """Audit an operator's acceptance of aged, unresolved process cleanup."""
+    if not accept_risk:
+        print("cleanup-resolve requires --accept-risk", file=sys.stderr)
+        return 2
+    reason = (reason or "").strip()
+    if not reason:
+        print("cleanup-resolve requires a non-empty --reason", file=sys.stderr)
+        return 2
+
+    occurred_at = now or datetime.now().astimezone().isoformat()
+    observed_now = _parse_iso8601(occurred_at)
+    if observed_now is None:
+        print("cleanup-resolve received an invalid timestamp", file=sys.stderr)
+        return 1
+    actor = actor or getpass.getuser()
+    conn = _pkg("_get_db")()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT process_state, cleanup_deadline_at, "
+            "COALESCE(harness, agent, 'unknown'), COALESCE(role, 'unknown') "
+            "FROM daemon_jobs WHERE job_id=?",
+            (job_id,),
+        ).fetchone()
+        if not row:
+            conn.rollback()
+            print(f"cleanup-resolve: job {job_id} not found", file=sys.stderr)
+            return 1
+        process_state, deadline_value, harness, role = row
+        if process_state == "cleanup_overridden":
+            conn.rollback()
+            from synlynk.job_status_projection import project_job_status
+            projection = project_job_status(conn, job_id)
+            print(json.dumps({
+                "job_id": job_id,
+                "process_state": projection["process_state"],
+                "process_stop_verified": projection["process_stop_verified"],
+                "cleanup_risk_accepted": projection["cleanup_risk_accepted"],
+                "effect_state": projection["effect_state"],
+                "idempotent": True,
+            }, sort_keys=True))
+            return 0
+        if process_state != "cleanup_unverified":
+            conn.rollback()
+            print(
+                f"cleanup-resolve: job {job_id} is {process_state!r}, not cleanup_unverified",
+                file=sys.stderr,
+            )
+            return 1
+        deadline = _parse_iso8601(deadline_value)
+        if deadline is None:
+            conn.rollback()
+            print(
+                f"cleanup-resolve: job {job_id} has no valid cleanup deadline",
+                file=sys.stderr,
+            )
+            return 1
+        if observed_now < deadline:
+            conn.rollback()
+            print(
+                f"cleanup-resolve is not available until {deadline.isoformat()}",
+                file=sys.stderr,
+            )
+            return 1
+
+        contract = conn.execute(
+            "SELECT contract_id, contract_version FROM job_effect_contract WHERE job_id=?",
+            (job_id,),
+        ).fetchone()
+        contract_id, contract_version = contract if contract else ("unknown_contract", 1)
+        sequence = conn.execute(
+            "SELECT COALESCE(MAX(sequence), -1) + 1 FROM job_lifecycle_event WHERE job_id=?",
+            (job_id,),
+        ).fetchone()[0]
+        process_result = {
+            "accept_risk": True,
+            "actor": actor,
+            "previous_process_state": process_state,
+            "process_state": "cleanup_overridden",
+            "reason": reason,
+        }
+        conn.execute(
+            "INSERT INTO job_lifecycle_event "
+            "(event_id, job_id, contract_id, contract_version, event_type, sequence, "
+            "harness, role, process_result_json, evidence_refs_json, occurred_at, "
+            "schema_version, compatibility, accepted, rejection_reason) "
+            "VALUES (?, ?, ?, ?, 'correction', ?, ?, ?, ?, '[]', ?, "
+            "'lifecycle.v1', 0, 1, NULL)",
+            (
+                f"cleanup-override:{job_id}", job_id, contract_id,
+                int(contract_version or 1), int(sequence), harness or "unknown",
+                role or "unknown", json.dumps(process_result, sort_keys=True), occurred_at,
+            ),
+        )
+        conn.execute(
+            "UPDATE daemon_jobs SET process_state='cleanup_overridden' "
+            "WHERE job_id=? AND process_state='cleanup_unverified'",
+            (job_id,),
+        )
+        _release_daemon_job_reservation(
+            conn, job_id, process_state="cleanup_overridden"
+        )
+        from synlynk.job_truth import ensure_latest_terminal_outbox
+        ensure_latest_terminal_outbox(conn, job_id)
+        conn.commit()
+
+        from synlynk.job_status_projection import project_job_status
+        projection = project_job_status(conn, job_id)
+        print(json.dumps({
+            "job_id": job_id,
+            "process_state": projection["process_state"],
+            "process_stop_verified": projection["process_stop_verified"],
+            "cleanup_risk_accepted": projection["cleanup_risk_accepted"],
+            "effect_state": projection["effect_state"],
+            "actor": actor,
+            "reason": reason,
+        }, sort_keys=True))
+        return 0
+    except sqlite3.Error as exc:
+        conn.rollback()
+        print(f"cleanup-resolve failed: {exc}", file=sys.stderr)
         return 1
     finally:
         conn.close()

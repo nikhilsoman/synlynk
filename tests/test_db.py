@@ -508,7 +508,7 @@ def test_rotate_moves_old_cost_entries_to_archive(tmp_path, monkeypatch):
     assert "row3" in live
     assert "row0" not in live
 
-    archive_dir = os.path.join(".synlynk", "project-docs", "archive")
+    archive_dir = os.path.join("project-docs", "archive")
     archive_files = os.listdir(archive_dir)
     assert any(f.startswith("costs-") for f in archive_files)
     archived_content = open(
@@ -632,7 +632,7 @@ def test_regeneration_does_not_duplicate_archive_rows(tmp_path, monkeypatch):
     from synlynk import _insert_cost_row
     from synlynk.db import _generate_costs_md
 
-    backup = _setup_migrated(tmp_path, monkeypatch)
+    _setup_migrated(tmp_path, monkeypatch)
     monkeypatch.setattr("synlynk.db._PROJECT_DOC_KEEP_N", 1)
     for i in range(3):
         _insert_cost_row(
@@ -653,24 +653,21 @@ def test_regeneration_does_not_duplicate_archive_rows(tmp_path, monkeypatch):
         )
 
     _generate_costs_md()
-    archive_path = next((backup / "archive").glob("costs-*.md"))
+    archive_path = next((tmp_path / "project-docs" / "archive").glob("costs-*.md"))
     first = archive_path.read_text()
     _generate_costs_md()
     assert archive_path.read_text() == first
 
 
 def test_rotate_auto_stages_archive_file_for_git_commit(tmp_path, monkeypatch):
-    """gh:#1995: a dispatched job's ephemeral worktree silently drops the
-    archive file _rotate_project_doc() writes, because nothing commits it.
-    The fix best-effort `git add`s the archive path the moment it's created,
-    so it's already staged if the calling job goes on to `git commit`."""
+    """Interactive rotation stages the archive beside the tracked docs."""
     import subprocess
 
     from tests.test_migrate import _setup_migrated
     from synlynk import _insert_cost_row
     from synlynk.db import _generate_costs_md
 
-    backup = _setup_migrated(tmp_path, monkeypatch)
+    _setup_migrated(tmp_path, monkeypatch)
     monkeypatch.setattr("synlynk.db._PROJECT_DOC_KEEP_N", 1)
 
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
@@ -702,7 +699,7 @@ def test_rotate_auto_stages_archive_file_for_git_commit(tmp_path, monkeypatch):
         cwd=tmp_path, check=True, capture_output=True, text=True,
     ).stdout
 
-    archive_dir = backup / "archive"
+    archive_dir = tmp_path / "project-docs" / "archive"
     archive_files = [f for f in os.listdir(archive_dir) if f.startswith("costs-")]
     assert archive_files, "rotation did not create an archive file"
     archive_rel = os.path.relpath(archive_dir / archive_files[0], tmp_path)

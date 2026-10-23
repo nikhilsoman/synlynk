@@ -635,6 +635,26 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         default=False,
         help="Detect hardware tier and write pinned_model to .agents/local.json",
     )
+    local_pilot_parser = local_sub.add_parser("pilot", help="Inspect and review Local pilot evidence")
+    local_pilot_sub = local_pilot_parser.add_subparsers(dest="local_pilot_action")
+    local_pilot_status_parser = local_pilot_sub.add_parser("status", help="Show Local pilot cohorts and controls")
+    local_pilot_status_parser.add_argument("--json", action="store_true", dest="json_output")
+    local_pilot_start_parser = local_pilot_sub.add_parser(
+        "review-start", help="Create the selected reviewer factual brief"
+    )
+    local_pilot_start_parser.add_argument("job_id")
+    local_pilot_record_parser = local_pilot_sub.add_parser(
+        "record-review", help="Record the selected reviewer factual verdict"
+    )
+    local_pilot_record_parser.add_argument("job_id")
+    local_pilot_record_parser.add_argument("--reviewer", required=True)
+    local_pilot_record_parser.add_argument("--verdict", choices=["accept", "reject"], required=True)
+    local_pilot_record_parser.add_argument("--rationale", required=True)
+    local_pilot_resume_parser = local_pilot_sub.add_parser(
+        "resume", help="Interactively preflight and resume the fixed Local validation lane"
+    )
+    local_pilot_resume_parser.add_argument("--remediation-ref", required=True)
+    local_pilot_resume_parser.add_argument("--verification-ref", required=True)
 
     gateway_parser = subparsers.add_parser("gateway", help="Manage external model gateways")
     gateway_sub = gateway_parser.add_subparsers(dest="gateway_cmd")
@@ -1339,6 +1359,19 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     reconcile_p.add_argument("job_id")
     reconcile_p.add_argument("--evidence-json", default=None,
         help="JSON object describing an evidence observation; omitted requests verification")
+    cleanup_resolve_p = jobs_sub.add_parser(
+        "cleanup-resolve",
+        help="Accept aged cleanup uncertainty and release reserved capacity",
+    )
+    cleanup_resolve_p.add_argument("job_id")
+    cleanup_resolve_p.add_argument(
+        "--accept-risk", action="store_true",
+        help="Acknowledge that process termination was not independently verified",
+    )
+    cleanup_resolve_p.add_argument(
+        "--reason", required=True,
+        help="Non-empty audit reason for accepting cleanup uncertainty",
+    )
     handoff_p = jobs_sub.add_parser("handoff", help="Transfer a stalled job to another harness")
     handoff_p.add_argument("job_id")
     handoff_p.add_argument("--to-harness", "--to-agent", "--to", dest="to_agent", default=None,
@@ -1523,6 +1556,11 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     story_reclaim_parser = story_sub.add_parser("reclaim", help="Reclaim orphaned in_progress stories")
     story_reclaim_parser.add_argument("--max-age", type=int, default=30, help="Maximum age in minutes (default: 30)")
     story_reclaim_parser.add_argument("--dry-run", action="store_true", help="Print stranded stories without modifying")
+    story_claim_parser = story_sub.add_parser("claim", help="Take an interactive home claim on a story (gh:#2511)")
+    story_claim_parser.add_argument("story_id")
+    story_claim_parser.add_argument("--harness", default=None, help="Harness identity; auto-detected if omitted")
+    story_claim_parser.add_argument("--duration", type=int, default=2700, help="Claim TTL in seconds (default: 45min)")
+    story_claim_parser.add_argument("--override", action="store_true", help="Force-take the claim even if another live session holds it")
 
     pm_parser = subparsers.add_parser("pm", help="PM agent commands")
     pm_subparsers = pm_parser.add_subparsers(dest="pm_command")
@@ -2858,6 +2896,13 @@ def main(argv=None) -> None:
         elif getattr(args, "jobs_cmd", None) == "reconcile":
             from synlynk.jobs import cmd_jobs_reconcile_truth
             raise SystemExit(cmd_jobs_reconcile_truth(args.job_id, getattr(args, "evidence_json", None)))
+        elif getattr(args, "jobs_cmd", None) == "cleanup-resolve":
+            from synlynk.jobs import cmd_jobs_cleanup_resolve
+            raise SystemExit(cmd_jobs_cleanup_resolve(
+                args.job_id,
+                accept_risk=getattr(args, "accept_risk", False),
+                reason=getattr(args, "reason", None),
+            ))
         else:
             cmd_jobs(all_jobs=getattr(args, "all_jobs", False),
                      watch=getattr(args, "watch", False),
@@ -2980,6 +3025,14 @@ def main(argv=None) -> None:
         elif args.story_action == "reclaim":
             from synlynk.jobs import cmd_story_reclaim
             cmd_story_reclaim(max_age_minutes=getattr(args, "max_age", 30), dry_run=getattr(args, "dry_run", False))
+        elif args.story_action == "claim":
+            from synlynk.jobs import cmd_story_claim
+            sys.exit(cmd_story_claim(
+                args.story_id,
+                harness=getattr(args, "harness", None),
+                duration_seconds=getattr(args, "duration", 2700),
+                override=getattr(args, "override", False),
+            ))
     elif args.command == "pm" and args.pm_command == "sweep":
         from synlynk.pm_agent import cmd_pm_sweep
 
@@ -3360,9 +3413,50 @@ def main(argv=None) -> None:
         else:
             cmd_governs(full=getattr(args, "full", False))
     elif args.command == "local":
-        from synlynk.local_agent import cmd_local_doctor
+        from synlynk.local_agent import (
+            cmd_local_doctor,
+            local_pilot_status,
+            record_local_pilot_review,
+            render_local_pilot_resume_preflight,
+            render_local_pilot_status,
+            resume_local_pilot,
+            start_local_pilot_review,
+        )
         if args.local_action == "doctor":
             sys.exit(cmd_local_doctor(init=args.init))
+        elif args.local_action == "pilot":
+            if args.local_pilot_action == "status":
+                payload = local_pilot_status()
+            elif args.local_pilot_action == "review-start":
+                payload = start_local_pilot_review(args.job_id)
+            elif args.local_pilot_action == "record-review":
+                payload = record_local_pilot_review(
+                    args.job_id, args.reviewer, args.verdict, args.rationale
+                )
+            elif args.local_pilot_action == "resume":
+                if not sys.stdin.isatty() or not sys.stdout.isatty():
+                    raise ValueError("Local pilot resume requires an interactive terminal")
+                from synlynk import _get_db
+
+                conn = _get_db()
+                try:
+                    print("Current Local pilot status:")
+                    print(json.dumps(local_pilot_status(), indent=2, sort_keys=True))
+                    payload = resume_local_pilot(
+                        os.getcwd(), conn, args.remediation_ref, args.verification_ref, input,
+                        lambda preflight: print(render_local_pilot_resume_preflight(preflight)),
+                    )
+                finally:
+                    conn.close()
+            else:
+                local_pilot_parser.print_help()
+                return
+            if getattr(args, "json_output", False):
+                print(json.dumps(payload, sort_keys=True))
+            elif args.local_pilot_action == "status":
+                print(render_local_pilot_status(payload))
+            else:
+                print(json.dumps(payload, indent=2, sort_keys=True))
         else:
             help_parsers.get("local", parser).print_help()
     elif args.command == "gateway":
