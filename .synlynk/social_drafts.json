@@ -3230,5 +3230,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2546 \u2014 sync roadmap and cost ledger after stability merges (PR #2546, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2546.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-23) - PR #2546\n- Merged improvements and fixes for PR #2546."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/449-pr2548-rank-self-report-above-execution-log-244.md",
+    "title": "PR #2548 \u2014 rank self_report above execution_log (#2449)",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-23",
+    "pr": "#2548",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2548."
+    ],
+    "tweet": "\ud83d\ude80 PR #2548 \u2014 rank self_report above execution_log (#2449) (PR #2548, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2548.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-23) - PR #2548\n- Merged improvements and fixes for PR #2548."
   }
 ]

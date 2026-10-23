@@ -526,6 +526,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [446](./446-pr2544-tolerate-missing-watch-pidfiles.md) | PR #2544 — tolerate missing watch pidfiles | [#2544](https://github.com/nikhilsoman/synlynk/pull/2544) | 2026-10-23 |
 | [447](./447-pr2545-record-2096-codex-egress-decide-panel.md) | PR #2545 — record #2096 Codex egress decide panel | [#2545](https://github.com/nikhilsoman/synlynk/pull/2545) | 2026-10-23 |
 | [448](./448-pr2546-sync-roadmap-and-cost-ledger-after-stabi.md) | PR #2546 — sync roadmap and cost ledger after stability merges | [#2546](https://github.com/nikhilsoman/synlynk/pull/2546) | 2026-10-23 |
+| [449](./449-pr2548-rank-self-report-above-execution-log-244.md) | PR #2548 — rank self_report above execution_log (#2449) | [#2548](https://github.com/nikhilsoman/synlynk/pull/2548) | 2026-10-23 |
 
 ## Per-PR Post Template
 
