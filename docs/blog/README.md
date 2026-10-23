@@ -536,6 +536,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [456](./456-pr2560-keep-codex-tiers-when-discovery-is-a-sin.md) | PR #2560 — keep Codex tiers when discovery is a single model | [#2560](https://github.com/nikhilsoman/synlynk/pull/2560) | 2026-10-23 |
 | [457](./457-pr2563-replace-pr-review-cycles-with-dispatch-r.md) | PR #2563 — replace pr_review_cycles with dispatch_rework_rate for routing proposals | [#2563](https://github.com/nikhilsoman/synlynk/pull/2563) | 2026-10-23 |
 | [458](./458-pr2564-tolerate-missing-daemon-pidfile-in-statu.md) | PR #2564 — tolerate missing daemon pidfile in status() (#2553) | [#2564](https://github.com/nikhilsoman/synlynk/pull/2564) | 2026-10-23 |
+| [459](./459-pr2568-use-recorded-base-sha-for-calibration-di.md) | PR #2568 — use recorded base_sha for calibration diff, not live merge-base (#2567) | [#2568](https://github.com/nikhilsoman/synlynk/pull/2568) | 2026-10-23 |
 
 ## Per-PR Post Template
 
