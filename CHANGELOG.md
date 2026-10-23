@@ -8,11 +8,6 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ---
 
 ## [Unreleased]
-- Fix generated project docs and archives to stay in the invoking interactive
-  checkout, reject unsafe relative paths, and suppress incidental generated-file
-  writes from dispatch jobs while preserving canonical DB mutations (#2532, #2237).
-- Fix dispatched cost attribution so `cost_entries.agent_role` preserves the
-  job's explicit role across repeated dispatches on the same story (gh:#2509).
 - Add an opt-in personal NATS relay with scoped device credentials, durable
   JetStream replay, retention-gap events, subscription filters, and safe document
   previews. See [self-hosted setup](docs/personal-hosted-relay.md). The `hub` extra
@@ -20,7 +15,18 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   entitlement checks, and reconnect/status hardening remain follow-up work.
 - Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
-- Guard watch stale-PID cleanup with the daemon lifetime lock so concurrent starts cannot lose a newly published PID file (#2537).
+
+## [v0.25.2] - 2026-10-23
+### Fixed
+- Rank `self_report` above `execution_log` so a scraped log row cannot outrank a probe or self-report (#2449, #2548).
+- Keep execution-log ingestion on the catalog allowlist, preserve discovery provenance and timestamps, and cover Codex, Grok, Agy, Claude, and Muse resolution (#2448, #2450, #2441).
+- Reject an invalid explicit `--model` before the harness starts (#2291).
+- Make job terminal state follow process truth (#2530, #2539).
+- Keep generated project docs and archives in the invoking worktree (#2532, #2538).
+- Guard watch stale-PID cleanup so concurrent starts cannot drop a newly published PID file (#2537, #2544).
+- Preserve the dispatched role on repeated cost entries for the same story (#2509, #2510).
+### Changed
+- Muse onboarding stays on v0.25.3. Local stays deferred (#2534).
 
 ## [v0.25.1] - 2026-10-14
 ### Added
