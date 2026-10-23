@@ -3374,5 +3374,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2563 \u2014 replace pr_review_cycles with dispatch_rework_rate for routing proposals (PR #2563, v0.25.2)\n\n\u2022 Merged improvements and fixes for PR #2563.\n\n#posts",
     "changelog": "### v0.25.2 (2026-10-23) - PR #2563\n- Merged improvements and fixes for PR #2563."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/458-pr2564-tolerate-missing-daemon-pidfile-in-statu.md",
+    "title": "PR #2564 \u2014 tolerate missing daemon pidfile in status() (#2553)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-23",
+    "pr": "#2564",
+    "version": "0.25.2",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2564."
+    ],
+    "tweet": "\ud83d\ude80 PR #2564 \u2014 tolerate missing daemon pidfile in status() (#2553) (PR #2564, v0.25.2)\n\n\u2022 Merged improvements and fixes for PR #2564.\n\n#posts",
+    "changelog": "### v0.25.2 (2026-10-23) - PR #2564\n- Merged improvements and fixes for PR #2564."
   }
 ]
