@@ -351,23 +351,23 @@ Daily stable gate: developer-surface listing/publication, install, update and di
 - [ ] Muse Structured Output & Cost Ledger Integration (P1)
   Verified token extraction and dual-ledger cost reporting for Muse
 
-## v0.25.2 — Stability baseline and accumulated PR reconciliation [planned] (target: 2026-10-23)
+## v0.25.2 — Stability baseline and accumulated PR reconciliation [shipped] (target: 2026-10-23)
 
-Daily stable gate: reconcile accumulated PRs and establish the functional baseline. #2530 is resolved by PR #2539 (main f4d3ba0); #2532 by PR #2538 (main 524a28c); and #2537 by PR #2544 (main 6d047311). These three stability blockers are closed. v0.25.2 remains planned; no release tag is cut, and remaining gate work plus release authority are still required. Parent #2458; release epic #2465; goals goal-3ef62232 and goal-005ea87d.
+Shipped 2026-10-23. Tag v0.25.2 is 4df4390da18d22070605d0cec6c4ddce11569863 and is origin/main. GitHub Release https://github.com/nikhilsoman/synlynk/releases/tag/v0.25.2 was published 2026-10-23T09:32:22Z by synlynk-synlynk-pm[bot]; it is not a draft and not a prerelease. Release metadata is #2549. Closed in this tag: #2448, #2449, #2450, #2291, and #2441, with catalog fix #2548. Already merged: #2530/#2539, #2532/#2538, #2537/#2544, and #2447/#2518. Muse onboarding stays on v0.25.3 (#2466). Local stays deferred (#2534). Parent #2458; release epic #2465; goals goal-3ef62232 and goal-005ea87d.
 
 - [x] Daemon health fixes (gh:#2261, gh:#2288) (P0) <!-- story:story-e73fac9e -->
   Dormant re-exec bug + crash on stale worktree cwd blocking --requires-gh-write dispatch.
 - [x] Wire daemon poll loop to autonomy pass (Task 4, gh:#2262) (P1) <!-- story:story-f67acd86 -->
   Daemon poll loop never calls _autonomy_pass(); backlog->schedule pipeline only runs via manual CLI today.
-- [ ] Cross-harness live discovery and explicit model validation (#2291) (P0) <!-- story:story-issue-2291 -->
+- [x] Cross-harness live discovery and explicit model validation (#2291) (P0) <!-- story:story-issue-2291 -->
   Delivery story is goal-3ef62232 and ticket #2291. Exit: supported harnesses reject stale explicit model IDs before a provider call.
-- [ ] Canonical harness-model data cleanup (#2447) (P0) <!-- story:story-f5d725cc -->
+- [x] Canonical harness-model data cleanup (#2447) (P0) <!-- story:story-f5d725cc -->
   Delivery story is goal-3ef62232 and ticket #2447. Exit: corrupted execution-log rows cannot contaminate harness model state.
-- [ ] Model candidate ingestion and freshness reliability (#2448) (P0) <!-- story:story-60eea2c4 -->
+- [x] Model candidate ingestion and freshness reliability (#2448) (P0) <!-- story:story-60eea2c4 -->
   Delivery story is goal-3ef62232 and ticket #2448. Exit: ingestion and timestamps preserve an auditable current catalog.
-- [ ] Authoritative resolution and catalog allowlist (#2449) (P0) <!-- story:story-a846f2a5 -->
+- [x] Authoritative resolution and catalog allowlist (#2449) (P0) <!-- story:story-a846f2a5 -->
   Delivery story is goal-3ef62232 and ticket #2449. Exit: resolution selects authoritative allowed sources only.
-- [ ] Fleet-wide model resolution invariants (#2450) (P0) <!-- story:story-54758ff8 -->
+- [x] Fleet-wide model resolution invariants (#2450) (P0) <!-- story:story-54758ff8 -->
   Delivery story is goal-3ef62232 and ticket #2450. Exit: invariant tests cover model resolution across the supported fleet.
 
 ## v1.0.0-preview — Superseded: v1.0.0 Developer Preview [superseded]

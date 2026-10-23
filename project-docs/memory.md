@@ -264,9 +264,13 @@
   merged this behavior with deterministic status/stop race regressions.
   [@codex]
 
-- **2026-10-23 v0.25.2 remains planned after blocker merges:** PRs #2538 and
-  #2544 resolve the #2532 generated-doc isolation and #2537 watch-health
-  blockers; PR #2539 already resolved #2530. These merges do not constitute a
-  stable release. Keep the roadmap arc planned until its remaining gate work
-  passes and authorized release/tag action occurs. [@nikhilsoman]
+- **2026-10-23 v0.25.2 shipped:** Tag `v0.25.2` is commit
+  `4df4390da18d22070605d0cec6c4ddce11569863` and matches `origin/main`. The
+  GitHub Release was published 2026-10-23T09:32:22Z by synlynk-synlynk-pm[bot];
+  it is not a draft and not a prerelease. Release metadata is #2549. Catalog
+  issues #2448, #2449, #2450, #2291, and #2441 are closed; stability PRs
+  #2539, #2538, and #2544 were already merged; #2447 was closed by #2518.
+  Muse onboarding stays on v0.25.3 (#2466). Local stays deferred (#2534).
+  The same-day pre-tag note that the arc stayed planned applied only until
+  this tag. [@grok]
 
