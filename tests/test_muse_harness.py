@@ -31,10 +31,8 @@ def test_muse_baseline_schema_tc0():
     baseline = HARNESS_CAPABILITY_BASELINES["muse"]
 
     assert baseline["cli"] == "muse"
-    assert baseline["can_gh_write"] is True
-    assert "builder" in baseline["roles"]
-    assert "verifier" in baseline["roles"]
-    assert "architect" in baseline["roles"]
+    assert baseline["can_gh_write"] is False
+    assert baseline["roles"] == ["builder"]
     assert baseline["non_interactive_flags"] == ["exec"]
     assert "prompt_flag" not in baseline
     assert baseline["prompt_via_arg"] is True

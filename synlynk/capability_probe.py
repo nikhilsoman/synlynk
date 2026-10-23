@@ -61,14 +61,14 @@ HARNESS_CAPABILITY_PROFILES: Dict[str, Dict[str, bool]] = {
         CAP_NET: True,
         CAP_REVIEW: True,
     },
-    # Provisionally enable calibration dispatches. Live TC-9 probes and
-    # capability_ratings measurements determine whether these stay enabled.
+    # CAP_GH_WRITE and CAP_REVIEW narrowed 2026-10-23 under the Muse
+    # capability-readiness plan (gh:#2554), pending empirical calibration.
     "muse": {
         CAP_SHELL: True,
         CAP_WORKSPACE_WRITE: True,
-        CAP_GH_WRITE: True,
+        CAP_GH_WRITE: False,
         CAP_NET: True,
-        CAP_REVIEW: True,
+        CAP_REVIEW: False,
     },
     "local": {
         CAP_SHELL: True,
