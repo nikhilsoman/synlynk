@@ -8,8 +8,6 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ---
 
 ## [Unreleased]
-- Fix dispatched cost attribution so `cost_entries.agent_role` preserves the
-  job's explicit role across repeated dispatches on the same story (gh:#2509).
 - Add an opt-in personal NATS relay with scoped device credentials, durable
   JetStream replay, retention-gap events, subscription filters, and safe document
   previews. See [self-hosted setup](docs/personal-hosted-relay.md). The `hub` extra
@@ -17,6 +15,37 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   entitlement checks, and reconnect/status hardening remain follow-up work.
 - Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
+
+## [v0.25.3] - 2026-10-24
+### Added
+- Muse authenticated, model-allowlisted, and usable at low privilege — implement/test access only, no review or GitHub-write authority until it clears the five-merged-job empirical capability bar (#2554, #2562).
+### Fixed
+- Keep Codex tiers when model-catalog discovery returns a single model, instead of collapsing the tier set (#2552, #2560).
+- Replace the inert `pr_review_cycles` metric with `dispatch_rework_rate` so capability/cost routing proposals are no longer computed from a signal that never varied (#2551, #2563).
+- Detect a silent `quality_verified` default-5.0 fallback in capability calibration results, so a missing verification signal can no longer masquerade as a real score (#2170, #2570), and use the recorded base SHA rather than a live merge-base for the calibration diff (#2567, #2568).
+- Tolerate a missing daemon pidfile in `status()` instead of crashing (#2553, #2564).
+### Changed
+- Quota/capacity truth for Muse remains explicitly unknown rather than estimated; completing it is deferred to a separately-scoped capability sweep.
+- Onboarding guide and team mode documentation (#2565).
+- docs: reconcile project-docs drift stranded in stale fix/claude/2567 worktree (#2571)
+- docs: implementation plan for Muse capability readiness (gh:#2554) (#2559)
+- docs: Muse capability readiness design spec (gh:#2554) (#2556)
+- docs: record Nikhil's v0.25.3 sign-off on two design specs (#2555)
+- docs: record the shipped v0.25.2 release in roadmap bookkeeping (#2550)
+
+---
+
+## [v0.25.2] - 2026-10-23
+### Fixed
+- Rank `self_report` above `execution_log` so a scraped log row cannot outrank a probe or self-report (#2449, #2548).
+- Keep execution-log ingestion on the catalog allowlist, preserve discovery provenance and timestamps, and cover Codex, Grok, Agy, Claude, and Muse resolution (#2448, #2450, #2441).
+- Reject an invalid explicit `--model` before the harness starts (#2291).
+- Make job terminal state follow process truth (#2530, #2539).
+- Keep generated project docs and archives in the invoking worktree (#2532, #2538).
+- Guard watch stale-PID cleanup so concurrent starts cannot drop a newly published PID file (#2537, #2544).
+- Preserve the dispatched role on repeated cost entries for the same story (#2509, #2510).
+### Changed
+- Muse onboarding stays on v0.25.3. Local stays deferred (#2534).
 
 ## [v0.25.1] - 2026-10-14
 ### Added

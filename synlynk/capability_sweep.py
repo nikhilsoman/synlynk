@@ -40,6 +40,7 @@ def _discover_models(conn=None) -> dict:
                         "codex": ("gpt-",),
                         "agy": ("gemini-",),
                         "grok": ("grok-",),
+                        "muse": ("muse-",),
                     }
                     prefixes = harness_model_prefixes.get(harness, ())
                     prefix_models = [
@@ -83,6 +84,7 @@ def _fallback_models_for_harness(harness: str) -> list:
         "codex": ("gpt-",),
         "agy": ("gemini-",),
         "grok": ("grok-",),
+        "muse": ("muse-",),
     }
     prefixes = harness_model_prefixes.get(harness, ())
     return [
@@ -330,24 +332,32 @@ def _await_calibration_job(job: dict, timeout_s: int = 120) -> dict:
         diff_text = ""
         if worktree_path and os.path.exists(worktree_path):
             try:
-                base_ref = "origin/main"
-                mb_res = subprocess.run(
-                    ["git", "-C", worktree_path, "merge-base", "HEAD", base_ref],
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                    timeout=5,
-                )
-                base_sha = (mb_res.stdout or "").strip()
+                base_sha = (job.get("base_sha") or "").strip()
                 if not base_sha:
+                    # Fallback only (gh:#2567): no recorded base_sha available, so
+                    # recompute against origin/main / main as before. Preferring
+                    # the job's own recorded base_sha avoids leaking the
+                    # dispatching process's own branch history into the
+                    # reconstructed diff when that process is running ahead of
+                    # origin/main.
+                    base_ref = "origin/main"
                     mb_res = subprocess.run(
-                        ["git", "-C", worktree_path, "merge-base", "HEAD", "main"],
+                        ["git", "-C", worktree_path, "merge-base", "HEAD", base_ref],
                         capture_output=True,
                         text=True,
                         check=False,
                         timeout=5,
                     )
                     base_sha = (mb_res.stdout or "").strip()
+                    if not base_sha:
+                        mb_res = subprocess.run(
+                            ["git", "-C", worktree_path, "merge-base", "HEAD", "main"],
+                            capture_output=True,
+                            text=True,
+                            check=False,
+                            timeout=5,
+                        )
+                        base_sha = (mb_res.stdout or "").strip()
 
                 if base_sha:
                     res = subprocess.run(

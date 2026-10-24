@@ -15,6 +15,7 @@ from synlynk.capability_report import (
     _fetch_rows,
     build_buckets,
     format_text_report,
+    format_summary_for_json,
     propose_diff,
     summarize_buckets,
 )
@@ -32,7 +33,8 @@ def _make_conn():
         """
         CREATE TABLE capability_ratings (
             story_id TEXT, agent TEXT, discipline TEXT,
-            pr_review_cycles INTEGER, quality REAL
+            pr_review_cycles INTEGER, dispatch_rework INTEGER,
+            micro_rework INTEGER, quality REAL
         )
         """
     )
@@ -55,30 +57,30 @@ def test_column_exists_true_and_false():
 def test_fetch_rows_without_quality_verified_column():
     conn = _make_conn()
     conn.execute(
-        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'backend', 2, 4.5)"
+        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'backend', 2, 1, 0, 4.5)"
     )
     conn.execute("INSERT INTO cost_entries VALUES ('s1', 1.23, 100, 'job-1')")
     rows, has_qv = _fetch_rows(conn)
     assert has_qv is False
-    assert rows == [("s1", "codex", "backend", 2, None, 1.23, 100, "job-1")]
+    assert rows == [("s1", "codex", "backend", 2, 1, 0, None, 1.23, 100, "job-1")]
 
 
 def test_fetch_rows_with_quality_verified_column():
     conn = _make_conn()
     conn.execute("ALTER TABLE capability_ratings ADD COLUMN quality_verified INTEGER")
     conn.execute(
-        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'backend', 2, 4.5, 1)"
+        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'backend', 2, 1, 0, 4.5, 1)"
     )
     conn.execute("INSERT INTO cost_entries VALUES ('s1', 1.23, 100, 'job-1')")
     rows, has_qv = _fetch_rows(conn)
     assert has_qv is True
-    assert rows == [("s1", "codex", "backend", 2, 1, 1.23, 100, "job-1")]
+    assert rows == [("s1", "codex", "backend", 2, 1, 0, 1, 1.23, 100, "job-1")]
 
 
 def test_dedupe_cost_rows_same_pr_number_counted_once():
     rows = [
-        ("s1", "codex", "backend", 2, None, 1.00, 100, "job-1"),
-        ("s1", "codex", "backend", 2, None, 2.00, 100, "job-2"),
+        ("s1", "codex", "backend", 2, 0, 0, None, 1.00, 100, "job-1"),
+        ("s1", "codex", "backend", 2, 0, 0, None, 2.00, 100, "job-2"),
     ]
     deduped = _dedupe_cost_rows(rows)
     assert len(deduped) == 1
@@ -86,8 +88,8 @@ def test_dedupe_cost_rows_same_pr_number_counted_once():
 
 def test_dedupe_cost_rows_null_pr_number_falls_back_to_job_id():
     rows = [
-        ("s1", "codex", "backend", 2, None, 1.00, None, "job-1"),
-        ("s1", "codex", "backend", 2, None, 2.00, None, "job-2"),
+        ("s1", "codex", "backend", 2, 0, 0, None, 1.00, None, "job-1"),
+        ("s1", "codex", "backend", 2, 0, 0, None, 2.00, None, "job-2"),
     ]
     deduped = _dedupe_cost_rows(rows)
     assert len(deduped) == 2
@@ -96,7 +98,7 @@ def test_dedupe_cost_rows_null_pr_number_falls_back_to_job_id():
 def test_build_buckets_excludes_unmapped_discipline():
     conn = _make_conn()
     conn.execute(
-        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'ml', 2, 4.5)"
+        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'ml', 2, 0, 0, 4.5)"
     )
     conn.execute("INSERT INTO cost_entries VALUES ('s1', 1.23, 100, 'job-1')")
     buckets, skipped = build_buckets(conn)
@@ -107,11 +109,11 @@ def test_build_buckets_excludes_unmapped_discipline():
 def test_build_buckets_groups_by_harness_and_task_type():
     conn = _make_conn()
     conn.execute(
-        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'backend', 2, 4.5)"
+        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'backend', 2, 1, 0, 4.5)"
     )
     conn.execute("INSERT INTO cost_entries VALUES ('s1', 1.50, 100, 'job-1')")
     conn.execute(
-        "INSERT INTO capability_ratings VALUES ('s2', 'codex', 'backend', 4, 4.5)"
+        "INSERT INTO capability_ratings VALUES ('s2', 'codex', 'backend', 4, 0, 1, 4.5)"
     )
     conn.execute("INSERT INTO cost_entries VALUES ('s2', 3.00, 101, 'job-2')")
     buckets, skipped = build_buckets(conn)
@@ -119,6 +121,8 @@ def test_build_buckets_groups_by_harness_and_task_type():
     key = ("codex", "implement")
     assert buckets[key]["cycles"] == [2, 4]
     assert buckets[key]["costs"] == [1.50, 3.00]
+    assert buckets[key]["dispatch_rework"] == [1, 0]
+    assert buckets[key]["micro_rework"] == [0, 1]
     assert buckets[key]["story_ids"] == {"s1", "s2"}
 
 
@@ -127,6 +131,8 @@ def test_summarize_buckets_below_min_sample_size_is_unmeasured():
         ("agy", "test"): {
             "cycles": [1, 2],
             "costs": [1.0, 2.0],
+            "dispatch_rework": [0, 1],
+            "micro_rework": [0, 0],
             "story_ids": {"s1", "s2"},
         },
     }
@@ -136,11 +142,13 @@ def test_summarize_buckets_below_min_sample_size_is_unmeasured():
     assert entry["measured"] is False
 
 
-def test_summarize_buckets_meets_min_sample_size_computes_medians():
+def test_summarize_buckets_meets_min_sample_size_computes_medians_and_rates():
     buckets = {
         ("codex", "implement"): {
             "cycles": [1, 2, 3, 4, 5],
             "costs": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "dispatch_rework": [1, 0, 0, 1, 0],
+            "micro_rework": [0, 0, 0, 0, 1],
             "story_ids": {"s1", "s2", "s3", "s4", "s5"},
         },
     }
@@ -150,13 +158,17 @@ def test_summarize_buckets_meets_min_sample_size_computes_medians():
     assert entry["measured"] is True
     assert entry["median_pr_review_cycles"] == 3
     assert entry["median_total_cost_usd"] == 3.0
+    assert entry["dispatch_rework_rate"] == 40.0
+    assert entry["micro_rework_rate"] == 20.0
 
 
-def test_summarize_buckets_empty_metric_lists_yield_none_median():
+def test_summarize_buckets_empty_metric_lists_yield_none_median_and_rate():
     buckets = {
         ("codex", "implement"): {
             "cycles": [],
             "costs": [],
+            "dispatch_rework": [],
+            "micro_rework": [],
             "story_ids": {"s1", "s2", "s3", "s4", "s5"},
         },
     }
@@ -164,20 +176,53 @@ def test_summarize_buckets_empty_metric_lists_yield_none_median():
     entry = summary[("codex", "implement")]
     assert entry["median_pr_review_cycles"] is None
     assert entry["median_total_cost_usd"] is None
+    assert entry["dispatch_rework_rate"] is None
+    assert entry["micro_rework_rate"] is None
 
 
-def test_propose_diff_promotes_strictly_better_harness():
+def test_summarize_buckets_all_zero_rework_yields_zero_rate_not_none():
+    buckets = {
+        ("claude", "implement"): {
+            "cycles": [0, 0, 0, 0, 0],
+            "costs": [1.0, 1.0, 1.0, 1.0, 1.0],
+            "dispatch_rework": [0, 0, 0, 0, 0],
+            "micro_rework": [0, 0, 0, 0, 0],
+            "story_ids": {"s1", "s2", "s3", "s4", "s5"},
+        },
+    }
+    summary = summarize_buckets(buckets, min_sample_size=5)
+    entry = summary[("claude", "implement")]
+    assert entry["dispatch_rework_rate"] == 0.0
+    assert entry["micro_rework_rate"] == 0.0
+
+
+def test_summarize_buckets_partial_null_rework_uses_bucket_sample_denominator():
+    buckets = {
+        ("claude", "implement"): {
+            "cycles": [0, 0, 0, 0, 0],
+            "costs": [1.0, 1.0, 1.0, 1.0, 1.0],
+            "dispatch_rework": [1],
+            "micro_rework": [1],
+            "story_ids": {"s1", "s2", "s3", "s4", "s5"},
+        },
+    }
+    entry = summarize_buckets(buckets, min_sample_size=5)[("claude", "implement")]
+    assert entry["dispatch_rework_rate"] == 20.0
+    assert entry["micro_rework_rate"] == 20.0
+
+
+def test_propose_diff_promotes_harness_clearing_rework_rate_margin():
     summary = {
         ("claude", "implement"): {
             "n": 12,
             "measured": True,
-            "median_pr_review_cycles": 2.5,
+            "dispatch_rework_rate": 25.0,
             "median_total_cost_usd": 3.10,
         },
         ("codex", "implement"): {
             "n": 18,
             "measured": True,
-            "median_pr_review_cycles": 1.5,
+            "dispatch_rework_rate": 10.0,
             "median_total_cost_usd": 1.80,
         },
     }
@@ -192,13 +237,13 @@ def test_propose_diff_no_change_on_split_result():
         ("claude", "implement"): {
             "n": 12,
             "measured": True,
-            "median_pr_review_cycles": 1.0,
+            "dispatch_rework_rate": 5.0,
             "median_total_cost_usd": 5.00,
         },
         ("codex", "implement"): {
             "n": 18,
             "measured": True,
-            "median_pr_review_cycles": 2.0,
+            "dispatch_rework_rate": 20.0,
             "median_total_cost_usd": 1.00,
         },
     }
@@ -211,13 +256,13 @@ def test_propose_diff_skips_unmeasured_candidate():
         ("claude", "implement"): {
             "n": 12,
             "measured": True,
-            "median_pr_review_cycles": 2.5,
+            "dispatch_rework_rate": 25.0,
             "median_total_cost_usd": 3.10,
         },
         ("grok", "implement"): {
             "n": 2,
             "measured": False,
-            "median_pr_review_cycles": 0.5,
+            "dispatch_rework_rate": 5.0,
             "median_total_cost_usd": 0.50,
         },
     }
@@ -230,13 +275,13 @@ def test_propose_diff_skips_unmeasured_current():
         ("claude", "implement"): {
             "n": 2,
             "measured": False,
-            "median_pr_review_cycles": 2.5,
+            "dispatch_rework_rate": 25.0,
             "median_total_cost_usd": 3.10,
         },
         ("codex", "implement"): {
             "n": 18,
             "measured": True,
-            "median_pr_review_cycles": 1.5,
+            "dispatch_rework_rate": 10.0,
             "median_total_cost_usd": 1.80,
         },
     }
@@ -244,9 +289,110 @@ def test_propose_diff_skips_unmeasured_current():
     assert proposals == []
 
 
+def test_propose_diff_margin_boundary_exact_pass_and_near_miss():
+    summary_exact = {
+        ("claude", "implement"): {
+            "n": 12, "measured": True,
+            "dispatch_rework_rate": 20.0, "median_total_cost_usd": 3.10,
+        },
+        ("codex", "implement"): {
+            "n": 18, "measured": True,
+            "dispatch_rework_rate": 10.0, "median_total_cost_usd": 1.80,
+        },
+    }
+    assert len(propose_diff(summary_exact, CURRENT_TASK_ALLOCATION, min_sample_size=5)) == 1
+
+    summary_near_miss = {
+        ("claude", "implement"): {
+            "n": 12, "measured": True,
+            "dispatch_rework_rate": 20.0, "median_total_cost_usd": 3.10,
+        },
+        ("codex", "implement"): {
+            "n": 18, "measured": True,
+            "dispatch_rework_rate": 10.1, "median_total_cost_usd": 1.80,
+        },
+    }
+    assert propose_diff(summary_near_miss, CURRENT_TASK_ALLOCATION, min_sample_size=5) == []
+
+
+def test_propose_diff_both_zero_rework_rate_produces_no_proposal():
+    summary = {
+        ("claude", "implement"): {
+            "n": 12,
+            "measured": True,
+            "dispatch_rework_rate": 0.0,
+            "median_total_cost_usd": 3.10,
+        },
+        ("codex", "implement"): {
+            "n": 18,
+            "measured": True,
+            "dispatch_rework_rate": 0.0,
+            "median_total_cost_usd": 1.80,
+        },
+    }
+    assert propose_diff(summary, CURRENT_TASK_ALLOCATION, min_sample_size=5) == []
+
+
+def test_propose_diff_fires_on_rework_rate_gap_despite_tied_pr_review_cycles():
+    summary = {
+        ("claude", "implement"): {
+            "n": 476,
+            "measured": True,
+            "median_pr_review_cycles": 0,
+            "dispatch_rework_rate": 2.3,
+            "median_total_cost_usd": 1.80,
+        },
+        ("codex", "implement"): {
+            "n": 656,
+            "measured": True,
+            "median_pr_review_cycles": 0,
+            "dispatch_rework_rate": 21.7,
+            "median_total_cost_usd": 3.10,
+        },
+    }
+    proposals = propose_diff(
+        summary, {"implement": {"harness": "codex", "fallback": []}}, min_sample_size=5
+    )
+    assert len(proposals) == 1
+    assert proposals[0]["proposed_harness"] == "claude"
+
+
 def test_format_text_report_no_proposals():
-    text = format_text_report([], {}, skipped_no_mapping=0)
+    summary = {
+        ("claude", "implement"): {
+            "n": 5,
+            "measured": True,
+            "median_pr_review_cycles": 0,
+            "median_total_cost_usd": 1.5,
+            "dispatch_rework_rate": 20.0,
+            "micro_rework_rate": 5.0,
+        }
+    }
+    text = format_text_report([], summary, skipped_no_mapping=0)
     assert "No routing changes proposed" in text
+    assert "dispatch_rework_rate" in text
+    assert "claude/implement" in text
+    assert "rework_rate=20.0%" in text
+    assert "micro_rework_rate=5.0% (non-gating)" in text
+
+
+def test_format_summary_for_json_surfaces_bucket_rates():
+    summary = {
+        ("claude", "implement"): {
+            "n": 5,
+            "dispatch_rework_rate": 20.0,
+            "micro_rework_rate": 5.0,
+        }
+    }
+    assert format_summary_for_json(summary) == [
+        {
+            "harness": "claude",
+            "task_type": "implement",
+            "n": 5,
+            "dispatch_rework_rate": 20.0,
+            "micro_rework_rate": 5.0,
+        }
+    ]
 
 
 def test_format_text_report_with_proposal_matches_example_shape():
@@ -256,21 +402,25 @@ def test_format_text_report_with_proposal_matches_example_shape():
             "current_harness": "claude",
             "current": {
                 "n": 12,
-                "median_pr_review_cycles": 2.5,
+                "dispatch_rework_rate": 25.0,
+                "micro_rework_rate": 0.0,
                 "median_total_cost_usd": 3.10,
             },
             "proposed_harness": "codex",
             "proposed": {
                 "n": 18,
-                "median_pr_review_cycles": 1.5,
+                "dispatch_rework_rate": 10.0,
+                "micro_rework_rate": 0.5,
                 "median_total_cost_usd": 1.80,
             },
         }
     ]
     text = format_text_report(proposals, {}, skipped_no_mapping=3)
     assert (
-        "implement: claude (current, n=12, cycles=2.5, cost=$3.10) -> "
-        "codex (n=18, cycles=1.5, cost=$1.80)"
+        "implement: claude (current, n=12, rework_rate=25.0%, "
+        "micro_rework_rate=0.0% (non-gating), cost=$3.10) -> "
+        "codex (n=18, rework_rate=10.0%, "
+        "micro_rework_rate=0.5% (non-gating), cost=$1.80)"
     ) in text
     assert "3 rows skipped" in text
 
@@ -289,7 +439,9 @@ def test_cli_capability_report_runs_without_error(tmp_path, monkeypatch):
     db_path = tmp_path / "state.db"
     conn = sqlite3.connect(str(db_path))
     conn.execute(
-        "CREATE TABLE capability_ratings (story_id TEXT, agent TEXT, discipline TEXT, pr_review_cycles INTEGER, quality REAL)"
+        "CREATE TABLE capability_ratings (story_id TEXT, agent TEXT, discipline TEXT, "
+        "pr_review_cycles INTEGER, dispatch_rework INTEGER, "
+        "micro_rework INTEGER, quality REAL)"
     )
     conn.execute(
         "CREATE TABLE cost_entries (story_id TEXT, total_cost_usd REAL, pr_number INTEGER, job_id TEXT)"
@@ -353,13 +505,13 @@ def test_capability_report_against_real_db_copy_does_not_mutate_source(tmp_path,
 
 def test_build_buckets_maps_expanded_disciplines():
     conn = _make_conn()
-    conn.execute("INSERT INTO capability_ratings VALUES ('s1', 'agy', 'docs', 1, 4.5)")
+    conn.execute("INSERT INTO capability_ratings VALUES ('s1', 'agy', 'docs', 1, 0, 0, 4.5)")
     conn.execute("INSERT INTO cost_entries VALUES ('s1', 1.0, 100, 'job-1')")
-    conn.execute("INSERT INTO capability_ratings VALUES ('s2', 'codex', 'security', 2, 4.5)")
+    conn.execute("INSERT INTO capability_ratings VALUES ('s2', 'codex', 'security', 2, 0, 0, 4.5)")
     conn.execute("INSERT INTO cost_entries VALUES ('s2', 2.0, 101, 'job-2')")
-    conn.execute("INSERT INTO capability_ratings VALUES ('s3', 'codex', 'PROG', 1, 4.5)")
+    conn.execute("INSERT INTO capability_ratings VALUES ('s3', 'codex', 'PROG', 1, 0, 0, 4.5)")
     conn.execute("INSERT INTO cost_entries VALUES ('s3', 3.0, 102, 'job-3')")
-    conn.execute("INSERT INTO capability_ratings VALUES ('s4', 'grok', 'devops', 1, 4.5)")
+    conn.execute("INSERT INTO capability_ratings VALUES ('s4', 'grok', 'devops', 1, 0, 0, 4.5)")
     conn.execute("INSERT INTO cost_entries VALUES ('s4', 4.0, 103, 'job-4')")
     buckets, skipped = build_buckets(conn)
     assert skipped == 0
@@ -371,18 +523,18 @@ def test_build_buckets_maps_expanded_disciplines():
 
 def test_fetch_rows_excludes_seed_and_local_records():
     conn = _make_conn()
-    conn.execute("INSERT INTO capability_ratings VALUES ('real-1', 'codex', 'backend', 2, 4.5)")
+    conn.execute("INSERT INTO capability_ratings VALUES ('real-1', 'codex', 'backend', 2, 0, 0, 4.5)")
     conn.execute("INSERT INTO cost_entries VALUES ('real-1', 1.0, 100, 'job-1')")
     # Synthetic seed by quality
-    conn.execute("INSERT INTO capability_ratings VALUES ('seed-qual', 'codex', 'backend', 2, 0.6)")
+    conn.execute("INSERT INTO capability_ratings VALUES ('seed-qual', 'codex', 'backend', 2, 0, 0, 0.6)")
     conn.execute("INSERT INTO cost_entries VALUES ('seed-qual', 1.0, 101, 'job-2')")
     # Local agent
-    conn.execute("INSERT INTO capability_ratings VALUES ('local-1', 'local', 'backend', 2, 4.5)")
+    conn.execute("INSERT INTO capability_ratings VALUES ('local-1', 'local', 'backend', 2, 0, 0, 4.5)")
     conn.execute("INSERT INTO cost_entries VALUES ('local-1', 1.0, 102, 'job-3')")
     # Seed story ID
-    conn.execute("INSERT INTO capability_ratings VALUES ('seed-story-1', 'codex', 'backend', 2, 4.5)")
+    conn.execute("INSERT INTO capability_ratings VALUES ('seed-story-1', 'codex', 'backend', 2, 0, 0, 4.5)")
     conn.execute("INSERT INTO cost_entries VALUES ('seed-story-1', 1.0, 103, 'job-4')")
-    conn.execute("INSERT INTO capability_ratings VALUES ('local-seed-01', 'codex', 'backend', 2, 4.5)")
+    conn.execute("INSERT INTO capability_ratings VALUES ('local-seed-01', 'codex', 'backend', 2, 0, 0, 4.5)")
     conn.execute("INSERT INTO cost_entries VALUES ('local-seed-01', 1.0, 104, 'job-5')")
 
     rows, _ = _fetch_rows(conn)

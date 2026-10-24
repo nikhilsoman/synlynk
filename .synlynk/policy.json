@@ -55,14 +55,17 @@
           "harness": "codex",
           "fallback": [
             "grok",
-            "agy"
-          ]
+            "agy",
+            "muse"
+          ],
+          "note": "Muse implement/test fallback enabled by the 2026-10-23 Muse capability-readiness plan (gh:#2554), pending empirical calibration."
         },
         "test": {
           "harness": "codex",
           "fallback": [
             "grok",
-            "agy"
+            "agy",
+            "muse"
           ]
         },
         "css": {

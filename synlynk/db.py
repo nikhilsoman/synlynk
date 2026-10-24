@@ -925,8 +925,9 @@ def get_active_harness_models(
             "WHEN discovery_source IN ('curated', 'curated_fallback') THEN 0 "
             "WHEN discovery_source = 'config_file' THEN 1 "
             "WHEN discovery_source LIKE 'cli:%' THEN 2 "
-            "WHEN discovery_source = 'execution_log' THEN 3 "
-            "ELSE 4 END ASC, discovered_at DESC",
+            "WHEN discovery_source = 'self_report' THEN 3 "
+            "WHEN discovery_source = 'execution_log' THEN 4 "
+            "ELSE 5 END ASC, discovered_at DESC",
             params,
         )
     except sqlite3.ProgrammingError:
@@ -2341,6 +2342,17 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
         definition="INTEGER",
     )
 
+    # Same gap as capability_ratings above, for the sibling column on
+    # capability_calibration_results (gh:#2569): it was only ever added
+    # inside the version-gated legacy block (see the dead ALTER near the
+    # CREATE TABLE above), so it never reaches an already-migrated database.
+    _add_column_if_missing(
+        conn,
+        table="capability_calibration_results",
+        column="quality_verified",
+        definition="INTEGER",
+    )
+
     _migrate_onboarding_sessions(conn)
     conn.commit()
 
@@ -3061,22 +3073,48 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
         raise SystemExit(1)
 
 def _resolved_docs_dir() -> str:
-    """Absolute project-docs directory for generated writes.
+    """Absolute project-docs directory for the current Git checkout.
 
     ``_docs_dir()`` returns the workspace.json value as configured, normally
-    the relative string ``project-docs``. Joining that with the process cwd
-    writes into whichever dispatch worktree happens to be current (#2237).
-    Generated docs belong to the shared project root.
+    the relative string ``project-docs``. Generated docs are tracked per
+    checkout, so resolve relative paths against the current worktree root;
+    shared state DB resolution remains on ``_project_root()``.
     """
-    from synlynk import _docs_dir, _project_root
+    from synlynk import _docs_dir, _working_tree_root
 
+    root = os.path.realpath(_working_tree_root())
     docs_dir = _docs_dir()
-    if docs_dir and not os.path.isabs(docs_dir):
+    if not docs_dir or os.path.isabs(docs_dir):
+        return docs_dir
+
+    # Nested invocations cannot discover the workspace configuration by
+    # looking in cwd. Load its relative setting from the checkout root instead.
+    for config_name in ("workspace.json", "config.json"):
+        config_path = os.path.join(root, ".synlynk", config_name)
+        if not os.path.exists(config_path):
+            continue
         try:
-            docs_dir = os.path.join(_project_root(), docs_dir)
-        except Exception:
-            return docs_dir
-    return docs_dir
+            with open(config_path) as fh:
+                configured = json.load(fh).get("project_docs_dir")
+            if configured:
+                docs_dir = str(configured)
+            break
+        except (OSError, json.JSONDecodeError):
+            break
+
+    if os.path.isabs(docs_dir):
+        return docs_dir
+    resolved = os.path.abspath(os.path.join(root, docs_dir))
+    real_resolved = os.path.realpath(resolved)
+    try:
+        inside_root = os.path.commonpath([root, real_resolved]) == root
+    except ValueError:
+        inside_root = False
+    if not inside_root:
+        raise RuntimeError(
+            f"relative project_docs_dir escapes the current checkout: {docs_dir!r}"
+        )
+    return resolved
 
 
 def _write_generated_project_doc(filename: str, content: str) -> None:
@@ -3084,17 +3122,26 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
     from synlynk import (
         DB_PATH,
         _dr_sync,
+        _generated_doc_side_effects_allowed,
         _is_migrated,
-        _project_root,
         _synlynk_project_docs_dir,
+        _working_tree_root,
     )
+
+    if not _generated_doc_side_effects_allowed():
+        return
+
+    # Resolve and validate the caller's checkout before writing even the
+    # migrated cache, so an unknown root never produces a partial side effect.
+    docs_dir = _resolved_docs_dir()
 
     def _is_tracked(path: str) -> bool:
         try:
-            relative = os.path.relpath(path, _project_root())
+            root = _working_tree_root()
+            relative = os.path.relpath(path, root)
             result = subprocess.run(
                 ["git", "ls-files", "--error-unmatch", "--", relative],
-                cwd=_project_root(),
+                cwd=root,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 check=False,
@@ -3208,7 +3255,6 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
         syn_dir = _synlynk_project_docs_dir()
         os.makedirs(syn_dir, exist_ok=True)
         paths.append(os.path.join(syn_dir, filename))
-    docs_dir = _resolved_docs_dir()
     if docs_dir:
         if _is_migrated() or os.path.exists(docs_dir):
             os.makedirs(docs_dir, exist_ok=True)
@@ -3323,18 +3369,15 @@ def _generate_todo_md() -> None:
 def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> list:
     """Rotate older generated project-doc rows into archive files.
 
-    gh:#1995/#1999: the archive file this writes lives in whatever working directory
-    the caller is running from. When that's a dispatched job's ephemeral git
-    worktree, the archive is lost the moment the worktree is removed unless
-    something commits it first. We can't guarantee the calling job will do
-    that, so we best-effort `git add` the archive path(s) ourselves the moment
-    they're written -- if the calling process does go on to `git commit`
-    (even with no pathspec, which commits the full index), the archive rides
-    along. This does not fully close the gap (a job that never commits
-    anything still loses it), but it closes the common case and is strictly
-    additive: failures here never block doc generation.
+    Interactive rotation stores the archive beside the current checkout's
+    configured docs and best-effort stages the resulting artifacts. Dispatcher
+    jobs skip rotation artifacts because they are incidental project-wide
+    snapshots, not part of the job's requested change.
     """
-    from synlynk import _is_migrated, _synlynk_project_docs_dir
+    from synlynk import _generated_doc_side_effects_allowed
+
+    if not _generated_doc_side_effects_allowed():
+        return all_rows
 
     n = keep_n if keep_n is not None else _PROJECT_DOC_KEEP_N
     if len(all_rows) <= n:
@@ -3343,7 +3386,7 @@ def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> l
     archived_rows = all_rows[:-n]
     live_rows = all_rows[-n:]
 
-    base_dir = _synlynk_project_docs_dir() if _is_migrated() else _resolved_docs_dir()
+    base_dir = _resolved_docs_dir()
     archive_dir = os.path.join(base_dir, "archive")
     os.makedirs(archive_dir, exist_ok=True)
 

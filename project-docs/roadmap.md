@@ -351,23 +351,23 @@ Daily stable gate: developer-surface listing/publication, install, update and di
 - [ ] Muse Structured Output & Cost Ledger Integration (P1)
   Verified token extraction and dual-ledger cost reporting for Muse
 
-## v0.25.2 — Stability baseline and accumulated PR reconciliation [planned] (target: 2026-10-23)
+## v0.25.2 — Stability baseline and accumulated PR reconciliation [shipped] (target: 2026-10-23)
 
-Daily stable gate: reconcile accumulated PRs and establish the functional baseline. Resolve or explicitly gate dispatch/process lifecycle #2530 and worktree generated-doc write safety #2532 before relying on autonomous work. Parent #2458; release epic #2465; goals goal-3ef62232 and goal-005ea87d.
+Shipped 2026-10-23. Tag v0.25.2 is 4df4390da18d22070605d0cec6c4ddce11569863 and is origin/main. GitHub Release https://github.com/nikhilsoman/synlynk/releases/tag/v0.25.2 was published 2026-10-23T09:32:22Z by synlynk-synlynk-pm[bot]; it is not a draft and not a prerelease. Release metadata is #2549. Closed in this tag: #2448, #2449, #2450, #2291, and #2441, with catalog fix #2548. Already merged: #2530/#2539, #2532/#2538, #2537/#2544, and #2447/#2518. Muse onboarding stays on v0.25.3 (#2466). Local stays deferred (#2534). Parent #2458; release epic #2465; goals goal-3ef62232 and goal-005ea87d.
 
 - [x] Daemon health fixes (gh:#2261, gh:#2288) (P0) <!-- story:story-e73fac9e -->
   Dormant re-exec bug + crash on stale worktree cwd blocking --requires-gh-write dispatch.
 - [x] Wire daemon poll loop to autonomy pass (Task 4, gh:#2262) (P1) <!-- story:story-f67acd86 -->
   Daemon poll loop never calls _autonomy_pass(); backlog->schedule pipeline only runs via manual CLI today.
-- [ ] Cross-harness live discovery and explicit model validation (#2291) (P0) <!-- story:story-issue-2291 -->
+- [x] Cross-harness live discovery and explicit model validation (#2291) (P0) <!-- story:story-issue-2291 -->
   Delivery story is goal-3ef62232 and ticket #2291. Exit: supported harnesses reject stale explicit model IDs before a provider call.
-- [ ] Canonical harness-model data cleanup (#2447) (P0) <!-- story:story-f5d725cc -->
+- [x] Canonical harness-model data cleanup (#2447) (P0) <!-- story:story-f5d725cc -->
   Delivery story is goal-3ef62232 and ticket #2447. Exit: corrupted execution-log rows cannot contaminate harness model state.
-- [ ] Model candidate ingestion and freshness reliability (#2448) (P0) <!-- story:story-60eea2c4 -->
+- [x] Model candidate ingestion and freshness reliability (#2448) (P0) <!-- story:story-60eea2c4 -->
   Delivery story is goal-3ef62232 and ticket #2448. Exit: ingestion and timestamps preserve an auditable current catalog.
-- [ ] Authoritative resolution and catalog allowlist (#2449) (P0) <!-- story:story-a846f2a5 -->
+- [x] Authoritative resolution and catalog allowlist (#2449) (P0) <!-- story:story-a846f2a5 -->
   Delivery story is goal-3ef62232 and ticket #2449. Exit: resolution selects authoritative allowed sources only.
-- [ ] Fleet-wide model resolution invariants (#2450) (P0) <!-- story:story-54758ff8 -->
+- [x] Fleet-wide model resolution invariants (#2450) (P0) <!-- story:story-54758ff8 -->
   Delivery story is goal-3ef62232 and ticket #2450. Exit: invariant tests cover model resolution across the supported fleet.
 
 ## v1.0.0-preview — Superseded: v1.0.0 Developer Preview [superseded]
@@ -393,14 +393,16 @@ Superseded by the gated v0.27.5 Developer Preview stable tag on 2026-11-06 under
 - [ ] Phase 3: Release Gate & Launch (P0)
   v1.0.0-rc1 tagging, PyPI Trusted Publishing, 4,500+ test suite pass, 15-min time-to-wow screencast, and milestone synthesis blog.
 
-## v0.25.3 — Muse and model-capacity readiness [planned] (target: 2026-10-24)
+## v0.25.3 — Muse and model-capacity readiness [shipped] (target: 2026-10-24)
 
 Daily stable gate: onboard Muse with authenticated, allowlisted, low-privilege execution; validate model catalog, capability and cost evidence across core harnesses. Quota truth may follow later in the cycle. Parent #2458; release epic #2466; goals goal-adb60ccc, goal-079e2f37, goal-eacab0dc.
+
+Shipped 2026-10-24. Tag v0.25.3 is ce28b3b4f1ef2eda3432b706441d8d6187ac14b5 and is origin/main. GitHub Release https://github.com/nikhilsoman/synlynk/releases/tag/v0.25.3 was published by Nikhil (`gh release create`, native PM-session). Closed in this tag: #2554/#2562 (Muse implement/test readiness), #2552/#2560 (Codex tier-collapse fix), #2551/#2563 (`dispatch_rework_rate` replacing inert `pr_review_cycles`), #2170/#2570 (silent `quality_verified` fallback detection), #2567/#2568 (calibration diff base-SHA fix), #2553/#2564 (daemon pidfile crash fix). Quota/capacity truth for Muse and Grok deferred to a separately-scoped capability sweep, gh:#2576 — not addressed in this tag. Merged via PR #2575, non-authoring cross-harness (Codex) review+merge per the Hardened PR Review Policy. Parent #2458; release epic #2466.
 
 
 ## v0.25.4 — Accurate job status and completion evidence [planned] (target: 2026-10-25)
 
-Daily stable gate: accurate, auditable job status and completion evidence, including GitHub-write outcomes. Revalidate #2138, #2139, #2309 and #2530 against current main. Parent #2458; release epic #2467; goals goal-079e2f37, goal-9ef9a965, goal-eacab0dc.
+Daily stable gate: accurate, auditable job status and completion evidence, including GitHub-write outcomes. Revalidate #2138, #2139, #2309 and #2530 against current main. Folded in 2026-10-24: #2547 ([Epic] Harness velocity: RSI loops) — its timing/telemetry investigation across Claude/Codex/Agy/Grok/Muse in home and headless modes is evidence toward this release's job-status/completion-evidence gate, not a separate code change. #2547 itself keeps running independently and is not to be redirected or merged into other in-flight work; this entry only gives it a landing release so it isn't an untracked loose thread. Parent #2458; release epic #2467; goals goal-079e2f37, goal-9ef9a965, goal-eacab0dc.
 
 
 ## v0.26.1 — Workspace-agent charter and role operations [planned] (target: 2026-10-29)

@@ -1,6 +1,6 @@
 # Capability Sweep Quality Signal — Design
 
-**Status:** Draft, pending user approval
+**Status:** approved (Nikhil, 2026-10-23) — unblocks implementation for gh:#2170
 **Related:** gh:#2170 (bug — this design fixes it), gh:#2169 (worktree self-cleanup — separate, unrelated fix), gh:#353 (self-attestation gap — already fixed, this issue is downstream of it), gh:#1993 (capability report generator — blocked on this)
 
 ## Problem

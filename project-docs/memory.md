@@ -250,3 +250,27 @@
   the missing governed phase-update path for legacy placement cleanup by the
   Oct 27 ticket lock. [@nikhilsoman]
 
+- **2026-10-22 #2532 Generated-doc worktree isolation:** Keep `_project_root()`
+  tied to the shared Git common directory for canonical project/state DB
+  identity, but resolve tracked generated documentation and its per-checkout
+  archives from `git rev-parse --show-toplevel`. A command running in a linked
+  worktree must not mutate the main checkout's tracked `project-docs/` files.
+  [@codex]
+
+- **2026-10-23 #2537 Watch PID cleanup race:** After a health snapshot, stale
+  PID cleanup in `status()`/`stop()` must acquire the daemon lifetime lock and
+  re-read the PID path before unlinking. If a concurrent start owns the lock
+  or has published a fresh PID, leave both PID and state untouched. PR #2544
+  merged this behavior with deterministic status/stop race regressions.
+  [@codex]
+
+- **2026-10-23 v0.25.2 shipped:** Tag `v0.25.2` is commit
+  `4df4390da18d22070605d0cec6c4ddce11569863` and matches `origin/main`. The
+  GitHub Release was published 2026-10-23T09:32:22Z by synlynk-synlynk-pm[bot];
+  it is not a draft and not a prerelease. Release metadata is #2549. Catalog
+  issues #2448, #2449, #2450, #2291, and #2441 are closed; stability PRs
+  #2539, #2538, and #2544 were already merged; #2447 was closed by #2518.
+  Muse onboarding stays on v0.25.3 (#2466). Local stays deferred (#2534).
+  The same-day pre-tag note that the arc stayed planned applied only until
+  this tag. [@grok]
+

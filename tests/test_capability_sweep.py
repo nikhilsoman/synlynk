@@ -30,6 +30,36 @@ def test_estimate_sweep_cost_scales_with_more_models():
     assert large > small
 
 
+def test_fallback_models_for_muse_uses_muse_hardcoded_rates():
+    from synlynk.capability_sweep import _fallback_models_for_harness
+
+    models = _fallback_models_for_harness("muse")
+
+    assert models
+    assert all(model.startswith("muse-") for model in models)
+
+
+def test_discover_models_selects_muse_catalog_models(monkeypatch):
+    from synlynk import capability_sweep
+    from synlynk import db
+
+    monkeypatch.setattr(
+        capability_sweep,
+        "HARNESS_CAPABILITY_BASELINES",
+        {"muse": {"cli": "muse"}},
+    )
+    monkeypatch.setattr(
+        db,
+        "get_active_harness_models",
+        lambda conn, harness: [
+            {"model_id": "other-model"},
+            {"model_id": "muse-spark-1.3"},
+        ],
+    )
+
+    assert capability_sweep._discover_models(conn=object()) == {"muse": ["muse-spark-1.3"]}
+
+
 def test_sweep_aborts_when_estimate_exceeds_cap(monkeypatch, tmp_path, capsys):
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk", exist_ok=True)
@@ -474,6 +504,68 @@ def test_await_calibration_job_handles_timeout(tmp_path, monkeypatch):
     assert result["status"] == "timeout"
     assert result["output"] == "partial output before hang"
     assert any(sig == signal.SIGTERM for _, sig in killed_signals)
+
+
+def test_await_calibration_job_uses_recorded_base_sha_not_live_merge_base(tmp_path):
+    """gh:#2567 — dispatching a calibration job from a feature branch ahead of
+    origin/main must not leak that branch's own prior commits into the job's
+    reconstructed output. The job's own recorded base_sha (its real fork point)
+    must be used as the diff base, not a live merge-base recompute against
+    origin/main/main, which resolves to the wrong (earlier) commit in this case.
+    """
+    import subprocess
+
+    from synlynk import capability_sweep
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-b", "main"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True, capture_output=True)
+    (repo / "base.txt").write_text("base\n")
+    subprocess.run(["git", "add", "base.txt"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "base commit"], cwd=repo, check=True, capture_output=True)
+
+    # Simulate the dispatching process's own feature branch, ahead of main with
+    # its own unrelated, already-committed work (e.g. the #2553 work in the real
+    # incident).
+    subprocess.run(["git", "checkout", "-b", "parent-feature"], cwd=repo, check=True, capture_output=True)
+    (repo / "parent_change.txt").write_text("parent feature work\n")
+    subprocess.run(["git", "add", "parent_change.txt"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "parent feature change"], cwd=repo, check=True, capture_output=True)
+    parent_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+    # The calibration job's own worktree, forked from the parent feature branch
+    # (not from main) — mirrors how a nested dispatch worktree is actually created.
+    job_dir = tmp_path / "job-worktree"
+    subprocess.run(
+        ["git", "worktree", "add", str(job_dir), "-b", "dispatch/job-xyz", "parent-feature"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    (job_dir / "job_change.txt").write_text("the job's own work\n")
+    subprocess.run(["git", "add", "job_change.txt"], cwd=job_dir, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "job's own change"], cwd=job_dir, check=True, capture_output=True)
+
+    job = {
+        "job_id": "job-xyz",
+        "status": "completed",
+        "pid": None,
+        "log_file": None,
+        "worktree_path": str(job_dir),
+        "base_sha": parent_sha,
+    }
+
+    result = capability_sweep._await_calibration_job(job, timeout_s=10)
+
+    assert "job_change.txt" in result["output"]
+    assert "parent_change.txt" not in result["output"], (
+        "reconstructed output must not leak the dispatching branch's own prior "
+        "commits (gh:#2567)"
+    )
 
 
 def test_run_sweep_passes_model_to_dispatch_calibration_task(tmp_path, monkeypatch):
