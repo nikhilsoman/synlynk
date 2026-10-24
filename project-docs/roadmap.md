@@ -429,6 +429,9 @@ Daily stable gate: install/update failure paths, prerequisites, harness choice a
 
 Post-Preview scope; intentionally undated. Bounded swarm, gateway, lease, budget, containment and evidence controls. Do not block the first Developer Preview. Parent #2458; release epic #2474; goals goal-256d17d6, goal-8d34c416, goal-005ea87d.
 
+- [ ] synlynk.com platform vision: accounts, entitlements, hosted infra (goal-56bfbfa1, design-only) <!-- story:story-6da127b4 -->
+  Design approved: docs/superpowers/specs/2026-10-23-synlynk-com-platform-vision-design.md. Account/Org/Workspace/Repo entity model, AWS/Pulumi stack with pay-as-you-go/ephemeral-infra cost philosophy, and 5-phase rollout (site migration, accounts/entitlements, hosted workstation, hosted relay, swarm gateway, community). Phase 4 (swarm gateway) directly extends this epic's bounded-swarm/gateway/budget/containment scope; Phase 3 (hosted relay) extends goal-f4ce526a's personal relay; Phase 5 (community) extends the v1.0.0 community-layer goals (goal-0b891b5f/goal-f424fc4c). Not yet planned per-phase or dispatched.
+
 
 ## v0.28.1 — Capability crawler, index and GTM [planned]
 
