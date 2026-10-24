@@ -30,6 +30,36 @@ def test_estimate_sweep_cost_scales_with_more_models():
     assert large > small
 
 
+def test_fallback_models_for_muse_uses_muse_hardcoded_rates():
+    from synlynk.capability_sweep import _fallback_models_for_harness
+
+    models = _fallback_models_for_harness("muse")
+
+    assert models
+    assert all(model.startswith("muse-") for model in models)
+
+
+def test_discover_models_selects_muse_catalog_models(monkeypatch):
+    from synlynk import capability_sweep
+    from synlynk import db
+
+    monkeypatch.setattr(
+        capability_sweep,
+        "HARNESS_CAPABILITY_BASELINES",
+        {"muse": {"cli": "muse"}},
+    )
+    monkeypatch.setattr(
+        db,
+        "get_active_harness_models",
+        lambda conn, harness: [
+            {"model_id": "other-model"},
+            {"model_id": "muse-spark-1.3"},
+        ],
+    )
+
+    assert capability_sweep._discover_models(conn=object()) == {"muse": ["muse-spark-1.3"]}
+
+
 def test_sweep_aborts_when_estimate_exceeds_cap(monkeypatch, tmp_path, capsys):
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk", exist_ok=True)
