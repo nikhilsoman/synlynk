@@ -1359,6 +1359,19 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     reconcile_p.add_argument("job_id")
     reconcile_p.add_argument("--evidence-json", default=None,
         help="JSON object describing an evidence observation; omitted requests verification")
+    cleanup_resolve_p = jobs_sub.add_parser(
+        "cleanup-resolve",
+        help="Accept aged cleanup uncertainty and release reserved capacity",
+    )
+    cleanup_resolve_p.add_argument("job_id")
+    cleanup_resolve_p.add_argument(
+        "--accept-risk", action="store_true",
+        help="Acknowledge that process termination was not independently verified",
+    )
+    cleanup_resolve_p.add_argument(
+        "--reason", required=True,
+        help="Non-empty audit reason for accepting cleanup uncertainty",
+    )
     handoff_p = jobs_sub.add_parser("handoff", help="Transfer a stalled job to another harness")
     handoff_p.add_argument("job_id")
     handoff_p.add_argument("--to-harness", "--to-agent", "--to", dest="to_agent", default=None,
@@ -2883,6 +2896,13 @@ def main(argv=None) -> None:
         elif getattr(args, "jobs_cmd", None) == "reconcile":
             from synlynk.jobs import cmd_jobs_reconcile_truth
             raise SystemExit(cmd_jobs_reconcile_truth(args.job_id, getattr(args, "evidence_json", None)))
+        elif getattr(args, "jobs_cmd", None) == "cleanup-resolve":
+            from synlynk.jobs import cmd_jobs_cleanup_resolve
+            raise SystemExit(cmd_jobs_cleanup_resolve(
+                args.job_id,
+                accept_risk=getattr(args, "accept_risk", False),
+                reason=getattr(args, "reason", None),
+            ))
         else:
             cmd_jobs(all_jobs=getattr(args, "all_jobs", False),
                      watch=getattr(args, "watch", False),

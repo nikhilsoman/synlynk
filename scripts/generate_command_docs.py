@@ -48,6 +48,25 @@ def render_reference_doc() -> str:
             prom = f" ({e['prominence']})" if e["prominence"] else ""
             lines.append(f"- `{e['command']}`{prom} — {e['governs_stage']}")
         lines.append("")
+        if tier == 2:
+            lines.extend([
+                "### Resolve aged cleanup uncertainty", "",
+                "Use `jobs cleanup-resolve` only when a job remains `cleanup_unverified` after",
+                "its persisted cleanup deadline and an operator has independently accepted the",
+                "risk that a descendant process may still be running:", "",
+                "```shell",
+                "synlynk jobs cleanup-resolve job-1234 \\",
+                '  --accept-risk \\',
+                '  --reason "host reboot independently confirmed"',
+                "```", "",
+                "The command rejects unknown jobs, missing acknowledgements, blank reasons, and",
+                "requests made before `cleanup_deadline_at` (normally 300 seconds after an",
+                "unverified cleanup). On success it appends the OS user, timestamp, and reason to",
+                "the lifecycle audit, sets `process_state` to `cleanup_overridden`, and releases",
+                "the job's capacity reservation atomically. This is an explicit risk override:",
+                "it does not claim `stopped_verified` and does not change the independent effect",
+                "state.", "",
+            ])
     return "\n".join(lines).rstrip() + "\n"
 
 

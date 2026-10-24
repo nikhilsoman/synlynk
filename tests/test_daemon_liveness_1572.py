@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import synlynk.daemon as daemon_module
 from synlynk.daemon import (
     SynlynkDaemon,
     WatchDaemon,
@@ -18,6 +19,218 @@ from synlynk.daemon import (
     _try_acquire_daemon_lock,
     _release_daemon_lock,
 )
+
+
+def test_health_snapshot_classifies_absent_pid_with_verified_lock(tmp_path, monkeypatch):
+    pidfile = str(tmp_path / "watch.pid")
+    daemon = WatchDaemon()
+    daemon.pidfile = pidfile
+    lock_fh = _try_acquire_daemon_lock(_daemon_lock_path(pidfile), blocking=False)
+    assert lock_fh is not None
+    monkeypatch.setattr(daemon_module, "_daemon_lock_owner_pid", lambda _path: 4242)
+    monkeypatch.setattr(daemon_module, "_pid_is_alive", lambda pid: pid == 4242)
+    try:
+        health = daemon._health_snapshot()
+        assert (health.state, health.pid, health.pidfile_state) == (
+            "degraded",
+            4242,
+            "absent",
+        )
+    finally:
+        _release_daemon_lock(lock_fh)
+
+
+def test_health_snapshot_ignores_unheld_lock_with_live_pid(tmp_path, monkeypatch):
+    pidfile = str(tmp_path / "watch.pid")
+    daemon = WatchDaemon()
+    daemon.pidfile = pidfile
+    with open(_daemon_lock_path(pidfile), "w") as fh:
+        fh.write("4242\n")
+    monkeypatch.setattr(daemon_module, "_daemon_lock_owner_pid", lambda _path: 4242)
+    monkeypatch.setattr(daemon_module, "_pid_is_alive", lambda pid: pid == 4242)
+
+    health = daemon._health_snapshot()
+
+    assert (health.state, health.pid, health.pidfile_state) == (
+        "stopped",
+        None,
+        "absent",
+    )
+
+
+def test_health_snapshot_classifies_malformed_pid_without_owner(tmp_path, monkeypatch):
+    pidfile = str(tmp_path / "watch.pid")
+    daemon = WatchDaemon()
+    daemon.pidfile = pidfile
+    with open(pidfile, "w") as fh:
+        fh.write("not-a-pid\n")
+    monkeypatch.setattr(daemon_module, "_daemon_lock_owner_pid", lambda _path: None)
+    monkeypatch.setattr(daemon_module, "_pid_is_alive", lambda _pid: False)
+
+    health = daemon._health_snapshot()
+
+    assert (health.state, health.pid, health.pidfile_state) == (
+        "zombie",
+        None,
+        "malformed",
+    )
+
+
+def test_health_snapshot_preserves_valid_live_pid(tmp_path):
+    pidfile = str(tmp_path / "watch.pid")
+    daemon = WatchDaemon()
+    daemon.pidfile = pidfile
+    with open(pidfile, "w") as fh:
+        fh.write(f"{os.getpid()}\n")
+
+    health = daemon._health_snapshot()
+
+    assert (health.state, health.pid, health.pidfile_state) == (
+        "running",
+        os.getpid(),
+        "valid",
+    )
+
+
+def test_daemon_lock_probe_detects_held_lock_without_mutating_pid(tmp_path):
+    lock_path = str(tmp_path / "watch.pid.lock")
+    lock_fh = _try_acquire_daemon_lock(lock_path, blocking=False)
+    assert lock_fh is not None
+    try:
+        with open(lock_path, "rb") as fh:
+            before = fh.read()
+        assert daemon_module._daemon_lock_is_held(lock_path) is True
+        with open(lock_path, "rb") as fh:
+            assert fh.read() == before
+    finally:
+        _release_daemon_lock(lock_fh)
+
+    assert daemon_module._daemon_lock_is_held(lock_path) is False
+
+
+def test_watch_status_reports_degraded_without_pidfile(
+    tmp_path, monkeypatch, capsys
+):
+    pidfile = str(tmp_path / "watch.pid")
+    daemon = WatchDaemon()
+    daemon.pidfile = pidfile
+    lock_fh = _try_acquire_daemon_lock(_daemon_lock_path(pidfile), blocking=False)
+    assert lock_fh is not None
+    monkeypatch.setattr(daemon_module, "_daemon_lock_owner_pid", lambda _path: 4242)
+    monkeypatch.setattr(daemon_module, "_pid_is_alive", lambda pid: pid == 4242)
+    try:
+        daemon.status()
+    finally:
+        _release_daemon_lock(lock_fh)
+
+    output = capsys.readouterr().out
+    assert "watch degraded" in output
+    assert "4242" in output
+
+
+def test_watch_stop_signals_verified_lock_owner_without_pidfile(
+    tmp_path, monkeypatch, capsys
+):
+    pidfile = str(tmp_path / "watch.pid")
+    daemon = WatchDaemon()
+    daemon.pidfile = pidfile
+    lock_fh = _try_acquire_daemon_lock(_daemon_lock_path(pidfile), blocking=False)
+    assert lock_fh is not None
+    monkeypatch.setattr(daemon_module, "_daemon_lock_owner_pid", lambda _path: 4242)
+    monkeypatch.setattr(daemon_module, "_pid_is_alive", lambda pid: pid == 4242)
+    sent = []
+    monkeypatch.setattr(
+        daemon_module.os, "kill", lambda pid, sig: sent.append((pid, sig))
+    )
+    monkeypatch.setattr(daemon_module, "_pkg", lambda _name: lambda *_args: None)
+    try:
+        daemon.stop()
+    finally:
+        _release_daemon_lock(lock_fh)
+
+    assert sent == [(4242, 15)]
+    assert "watch stopped" in capsys.readouterr().out
+
+
+def test_watch_stop_does_not_signal_unheld_lock_metadata(
+    tmp_path, monkeypatch, capsys
+):
+    pidfile = str(tmp_path / "watch.pid")
+    daemon = WatchDaemon()
+    daemon.pidfile = pidfile
+    with open(_daemon_lock_path(pidfile), "w") as fh:
+        fh.write("4242\n")
+    monkeypatch.setattr(daemon_module, "_daemon_lock_owner_pid", lambda _path: 4242)
+    monkeypatch.setattr(daemon_module, "_pid_is_alive", lambda pid: pid == 4242)
+    sent = []
+    monkeypatch.setattr(
+        daemon_module.os, "kill", lambda pid, sig: sent.append((pid, sig))
+    )
+    monkeypatch.setattr(daemon_module, "_pkg", lambda _name: lambda *_args: None)
+
+    daemon.stop()
+
+    assert sent == []
+    assert "watch is not running" in capsys.readouterr().out
+
+
+def test_watch_status_preserves_pidfile_published_after_health_snapshot(
+    tmp_path, monkeypatch, capsys
+):
+    pidfile = str(tmp_path / "watch.pid")
+    daemon = WatchDaemon()
+    daemon.pidfile = pidfile
+    daemon.logfile = str(tmp_path / "watch.log")
+    original_snapshot = daemon._health_snapshot
+    lifetime_lock = [None]
+
+    def snapshot_then_start_daemon():
+        health = original_snapshot()
+        lifetime_lock[0] = _try_acquire_daemon_lock(
+            _daemon_lock_path(pidfile), blocking=False
+        )
+        assert lifetime_lock[0] is not None
+        with open(pidfile, "w") as f:
+            f.write(f"{os.getpid()}\n")
+        return health
+
+    monkeypatch.setattr(daemon, "_health_snapshot", snapshot_then_start_daemon)
+    try:
+        daemon.status()
+        assert os.path.exists(pidfile)
+        assert "left pidfile untouched" in capsys.readouterr().out
+    finally:
+        _release_daemon_lock(lifetime_lock[0])
+
+
+def test_watch_stop_preserves_pidfile_published_after_health_snapshot(
+    tmp_path, monkeypatch, capsys
+):
+    pidfile = str(tmp_path / "watch.pid")
+    daemon = WatchDaemon()
+    daemon.pidfile = pidfile
+    daemon.logfile = str(tmp_path / "watch.log")
+    original_snapshot = daemon._health_snapshot
+    lifetime_lock = [None]
+
+    def snapshot_then_start_daemon():
+        health = original_snapshot()
+        lifetime_lock[0] = _try_acquire_daemon_lock(
+            _daemon_lock_path(pidfile), blocking=False
+        )
+        assert lifetime_lock[0] is not None
+        with open(pidfile, "w") as f:
+            f.write(f"{os.getpid()}\n")
+        return health
+
+    monkeypatch.setattr(daemon, "_health_snapshot", snapshot_then_start_daemon)
+    monkeypatch.setattr(daemon_module, "_pkg", lambda _name: lambda *_args: None)
+    try:
+        daemon.stop()
+        assert os.path.exists(pidfile)
+        assert "left pidfile untouched" in capsys.readouterr().out
+    finally:
+        _release_daemon_lock(lifetime_lock[0])
 
 
 def test_daemon_health_ignores_own_pid_in_lockfile(tmp_path):

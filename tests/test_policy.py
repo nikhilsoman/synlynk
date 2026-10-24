@@ -286,6 +286,17 @@ def test_repo_policy_compatible_pairs_include_repo_only_task_types():
             assert result.allowed is True, (role, task_type)
 
 
+def test_repo_policy_routes_muse_only_to_implement_and_test_fallbacks():
+    repo_root = Path(__file__).resolve().parent.parent
+    policy = load_policy(repo_path=str(repo_root))
+    table = policy["dev_authority"]["task_allocation"]
+
+    assert "muse" in table["implement"]["fallback"]
+    assert "muse" in table["test"]["fallback"]
+    assert "muse" not in table["review"]["fallback"]
+    assert "muse" not in table["gh_write"]["fallback"]
+
+
 def test_check_authority_gh_write_stays_allocation_only(tmp_path, monkeypatch):
     """gh_write is in task_allocation and not owned by the compatibility matrix."""
     monkeypatch.setenv("HOME", str(tmp_path))

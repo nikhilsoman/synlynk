@@ -101,6 +101,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `jobs handoff` (secondary) — execute
 - `jobs reap` (secondary) — execute
 - `jobs reconcile` (secondary) — execute
+- `jobs cleanup-resolve` (secondary) — execute
 - `gc` (secondary) — sustain
 - `schedule` (primary) — execute
 - `tpm sweep` (primary) — execute
@@ -174,6 +175,26 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `addon install` (primary) — sustain
 - `gateway probe` (primary) — sustain
 - `gateway dispatch` (primary) — execute
+
+### Resolve aged cleanup uncertainty
+
+Use `jobs cleanup-resolve` only when a job remains `cleanup_unverified` after
+its persisted cleanup deadline and an operator has independently accepted the
+risk that a descendant process may still be running:
+
+```shell
+synlynk jobs cleanup-resolve job-1234 \
+  --accept-risk \
+  --reason "host reboot independently confirmed"
+```
+
+The command rejects unknown jobs, missing acknowledgements, blank reasons, and
+requests made before `cleanup_deadline_at` (normally 300 seconds after an
+unverified cleanup). On success it appends the OS user, timestamp, and reason to
+the lifecycle audit, sets `process_state` to `cleanup_overridden`, and releases
+the job's capacity reservation atomically. This is an explicit risk override:
+it does not claim `stopped_verified` and does not change the independent effect
+state.
 
 ## Tier 3 — Team / Enterprise
 

@@ -149,13 +149,17 @@ def test_dr_sync_copies_file(tmp_path, monkeypatch):
     (tmp_path / ".synlynk").mkdir()
     backup = tmp_path / ".synlynk" / "project-docs"
     backup.mkdir(parents=True)
-    (backup / "todo.md").write_text("# Tasks\n")
+    (backup / "todo.md").write_text("# Hidden cache copy\n")
+    tracked_docs = tmp_path / "project-docs"
+    tracked_docs.mkdir()
+    (tracked_docs / "todo.md").write_text("# Current checkout tasks\n")
     dr_path = tmp_path / "dr-mirror"
     dr_path.mkdir()
     cfg = tmp_path / ".synlynk" / "config.json"
     cfg.write_text(json.dumps({"dr_sync_path": str(dr_path)}))
     synlynk._dr_sync("todo.md")
-    assert (dr_path / "project-docs" / "todo.md").exists()
+    mirrored = dr_path / "project-docs" / "todo.md"
+    assert mirrored.read_text() == "# Current checkout tasks\n"
 
 
 def test_dr_sync_silent_skip_if_path_missing(tmp_path, monkeypatch):
@@ -1078,4 +1082,46 @@ def test_migrate_repairs_quality_verified_on_bootstrapped_schema(tmp_path):
 
     rating_cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_ratings)")}
     assert "quality_verified" in rating_cols
+    conn.close()
+
+
+def test_migrate_repairs_calibration_results_quality_verified_on_bootstrapped_schema(tmp_path):
+    """A current-version DB missing the column on capability_calibration_results
+    is repaired on the next open, mirroring the capability_ratings repair above.
+    This is the gh:#2569 regression: the column was only ever added inside the
+    version-gated legacy block, so an already-migrated DB (user_version >=
+    _DB_MIGRATION_VERSION) never got it and crashed on INSERT."""
+    import sqlite3
+    from synlynk.db import _DB_MIGRATION_VERSION, _migrate_db
+
+    conn = sqlite3.connect(str(tmp_path / "state.db"))
+    _migrate_db(conn)
+
+    # Rebuild only capability_calibration_results from the bootstrapped schema,
+    # simulating an older snapshot that predates quality_verified while
+    # retaining every other table and the current user_version.
+    columns = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(capability_calibration_results)")
+        if row[1] != "quality_verified"
+    ]
+    quoted_columns = ", ".join('"' + column.replace('"', '""') + '"' for column in columns)
+    conn.execute(
+        "CREATE TABLE capability_calibration_results_legacy AS "
+        f"SELECT {quoted_columns} FROM capability_calibration_results"
+    )
+    conn.execute("DROP TABLE capability_calibration_results")
+    conn.execute(
+        "ALTER TABLE capability_calibration_results_legacy "
+        "RENAME TO capability_calibration_results"
+    )
+    conn.execute(f"PRAGMA user_version = {_DB_MIGRATION_VERSION}")
+    conn.commit()
+
+    _migrate_db(conn)
+
+    result_cols = {
+        row[1] for row in conn.execute("PRAGMA table_info(capability_calibration_results)")
+    }
+    assert "quality_verified" in result_cols
     conn.close()

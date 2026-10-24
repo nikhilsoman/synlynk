@@ -1,3 +1,51 @@
+## 2026-10-24 v0.25.4 brainstorm+spec+plan complete, GOVERNS scaffold created, Task A1 dispatching (goal-e262d406) [@claude]
+
+- **Standing practice note (applies going forward, not just this release):** fresh Claude session
+  per Named Release, with early self-compaction (~40-50% context used, not later) and devlog/memory
+  checkpoints every ~25K tokens below 75% context used / every ~5K above. Numbered lists of
+  fixes/options/recommendations go to devlog in the same turn they're presented, not deferred.
+  Decided explicitly this session (2026-10-24) per Nikhil's instruction; noting it here so future
+  release sessions inherit the pattern without being told again.
+- **Scope change mid-session:** gh:#2547 ("[Epic] Harness velocity: RSI loops") was originally
+  independent — not to be folded into this release. Nikhil reversed that explicitly
+  ("while I had kept it separate not much has been done on it... you will need to take over full
+  control of this"). Clarified via AskUserQuestion into a bounded cut: evidence-only reconstruction
+  of #2547's case PRs + fix the telemetry role/model mismatch bug + new post-job structured metric
+  extraction instrumentation (Option A: objective settlement-hook timestamps, primary; Option C:
+  agent self-report, cross-checked only, never trusted) + scaffold (not implement) a new RSI
+  epic/goal. A further scope question (does this extend to capability-sweep/dispatch-allocation
+  mechanics?) was explicitly bounded by Nikhil to a narrow boundary audit+guard only — sweep
+  scoring/allocation itself stays out of scope, upstream of this release.
+- **Revalidated #2138/#2139/#2309/#2530 against current main (`c2158427`) before writing any
+  code**, per Brainstorm-First Policy — avoided redundant work: #2530 already closed/fixed;
+  #2138 likely already fixed by prior work (`STATUS_FAILED_VERIFICATION` in `_reconcile_terminal_jobs_json`,
+  `synlynk/jobs.py:4594-4599`) pending a literal repro, not yet confirmed; #2139 confirmed still live
+  (`_settle_daemon_job_terminal`'s monotonic-evidence no-op has no logging/counting branch); #2309
+  confirmed still live via two fresh 2026-10-24 incidents (`job-cbe2a362`/PR#2577, `job-77e59e43`/
+  PR#2579 — both mislabeled `succeeded_gh_write_failed`/`FAILED_NOOP_DENIED` despite clean GitHub
+  effects already visible in their own transcripts).
+- **Design spec committed:** `docs/superpowers/specs/2026-10-24-v0.25.4-job-status-and-velocity-evidence-design.md`
+  (commit `8fedfddf`). Five workstreams: A (status/oracle correctness, #2138/#2139/#2309), B
+  (cost_entries/daemon_jobs harness-model attribution mismatch guard), C (new `job_timing_metrics`
+  table + settlement-hook extraction), D (RSI epic/goal scaffold, no code), E (capability-sweep
+  routing boundary audit — excludes `signal_source='baseline_seed'` rows from the n>=5 sample gate,
+  no scoring/allocation changes).
+- **Implementation plan committed:** `docs/superpowers/plans/2026-10-24-v0.25.4-job-status-and-velocity-evidence.md`
+  (commit `db2e1761`). Six tasks (0, A1, A2, A3, B, C, E), each independently dispatchable.
+- **GOVERNS scaffold created:** `goal-e262d406` + six linked stories: `story-c7688ea4` (A1),
+  `story-47248b4c` (A2), `story-c8ff5e3c` (A3), `story-fc0200e8` (B), `story-7adc5ff4` (C),
+  `story-0293277d` (E).
+- **Execution-model resolution (Mode A tension, resolved not escalated):** writing-plans' standard
+  handoff offers Subagent-Driven (Claude subagents) vs. Inline Execution (this session implements
+  directly) — neither fits CLAUDE.md's Default Agent Role split, which requires all implementation
+  routed to Agy/Grok/Codex via `synlynk dispatch`. Resolved as: this PM session drives execution by
+  running each task's own `synlynk dispatch` invocation and reviewing results — functionally
+  "Inline Execution" from the PM's seat, but the actual code in every task is written by the
+  dispatched harness, never by a Claude subagent or direct edit in this session.
+- **Worktree:** `/Users/nikhilsoman/dev/synlynk/.claude/worktrees/release+v0.25.4` on branch
+  `release/v0.25.4`, based on `origin/main` at `c2158427`.
+- Next: dispatch Task A1 (#2138 revalidation repro) to Codex per `--story story-c7688ea4`.
+
 ## 2026-10-20 Headless Chrome Test Isolation & Release Ceremony Guard (LIVE-28 #2463) [@agy, @nikhilsoman]
 
 - **Incident Investigation & Root Cause (LIVE-28):** Diagnosed `Google Chrome [9851]` crash during sandboxed Codex review job `job-d564fcc4` (`pytest tests/test_release_marketing.py`). Traced to `execute_release_ceremony()` and `cmd_marketing_ceremony()` calling `compile_docs_pdfs()` with `dry_run=False` while ignoring `skip_build=True`. On macOS, `/Applications/Google Chrome.app` aborts with SIGABRT in `HIServices!_RegisterApplication` (`TransformProcessType`) when executed inside a seatbelt sandbox lacking `com.apple.windowserver.active` Mach port lookup permissions.
@@ -2234,4 +2282,93 @@ implementation dispatched, external messages sent, or policy changed.
   are allowlisted (`Ornith-1.0-9B-4bit` and `muse-spark-1.3`). Focused tests:
   11 passed.
 [@codex]
+
+## 2026-10-22 — Daily stable release rebaseline
+
+- Replaced the October 20 spaced-gate proposal with an active calendar-daily
+  stable tag stream from `v0.25.2` (October 23) through `v0.27.5` (November 6,
+  gated Developer Preview); there are no RC/DEV/PROD side channels.
+- Added a mandatory start-of-day dependency sweep over the scheduled tickets,
+  goal/epic links, issue comments, linked PRs, plans, adjacent past work, and
+  current bug/tech-debt inventory; each finding must be included, separately
+  ticketed, deferred with a reason, or proven fixed/superseded.
+- Added an acceleration rule: move evidence-ready work forward immediately,
+  preserve dependency/semver order, and update the schedule rather than wait
+  for a date. No tag may bypass review, evidence, or human release authority.
+- Reaffirmed deferrals for Local, OpenRouter, swarms/Gateway, crawler/GTM, and
+  public-announcement work; Muse remains a required early core harness.
+- Readiness snapshot: `synlynk status` reports 98 worktrees (19 flagged stale),
+  an overdue capability sweep and smoke test, Codex unavailable, and Muse
+  unsupported/uncalibrated; `synlynk watch status` reports stopped. These are
+  baseline findings for the first dependency sweep, not root-cause conclusions.
+- `synlynk release --check-docs` leaves the command-documentation gate red:
+  `docs/reference/commands.md` is stale. Linked this finding to existing
+  sparse-checkout/docs issue #2320 rather than creating a duplicate issue.
+- PR #2534 merged after independent review, the required PR check, QA approval,
+  policy authorization, and green CI. Synchronized all 18 GitHub milestones:
+  15 daily gates are dated October 23-November 6; post-Preview #10-#12 are
+  intentionally undated. Updated the canonical state roadmap and re-scoped
+  release epics #2465-#2473; marked legacy `1.0.0`, `v1.0.0-preview`, and
+  `v1.0.0-rc1` preview arcs superseded. Parent #2458 now records the active
+  schedule and milestone map. Tracked generated-roadmap/status mirror is in a
+  follow-up PR. Filed #2535 for the missing governed phase-update/reassignment
+  path, required to disposition legacy phase placements by the Oct 27 ticket
+  lock; no direct state-DB edits were made. Preserved the user's dirty
+  `project-docs/costs.md` in the main checkout. Session cost was not
+  independently available; no amount was invented.
+[@codex]
+
+## 2026-10-22 — v0.25.2 dependency sweep and #2532 worktree write isolation
+
+- Refreshed to `origin/main` at `30f696bf` before starting. Confirmed #2530
+  (dispatch status/process cleanup) and #2532 (generated docs escaping into
+  the main checkout) are the v0.25.2 direct safety gates. Filed #2537 as a
+  complementary v0.25.2 child issue after reproducing `synlynk watch status`
+  crashing when the live watch process is found through its lock but
+  `.synlynk/watch.pid` is missing.
+- For #2532, kept `_project_root()` as the shared state-DB identity root and
+  added a separate current-checkout root for tracked generated docs and
+  archives. Updated linked-worktree regressions to require writes to remain
+  in the calling checkout.
+- Red/green evidence: both regression tests failed before the fix and pass
+  afterward. Focused generated-doc/root suites: 546 passed. Full suite:
+  4,924 passed, 12 failed, 17 skipped, 3 xfailed, 5 errors; loopback/process
+  permissions and PyPI network access explain several failures, while the
+  remaining unrelated failures need separate triage. Ruff reports 154
+  pre-existing findings across the checked files; `git diff --check` is clean.
+- `synlynk status` still reports Codex unavailable, Muse unsupported with no
+  measured capacity, an overdue capability sweep/smoke test, and 99 worktrees
+  with 20 flagged stale. No cleanup or live self-test was run. Interactive
+  cost was not independently available, so no amount was invented.
+[@codex]
+
+## 2026-10-23 — v0.25.2 stability blockers merged
+
+- PR #2538 closed #2532 and merged to `main` as `524a28c9`. Generated docs and
+  archives now resolve to the calling worktree, unsafe relative paths are
+  rejected, and dispatches no longer create incidental generated-file writes.
+  QA reviewed head `5e68e55c`; 629 focused tests passed, all six CI checks were
+  green, and `synlynk pr check` passed.
+- PR #2544 closed #2537 and merged as `6d047311`. Watch status/stop now handle
+  missing PID files and serialize stale cleanup against concurrent starts.
+  QA reviewed head `119e0b78`; all six CI checks and the merge policy passed,
+  16 focused daemon tests passed with the known shared-port case excluded, and
+  full collection reported 5,034 tests. The complete CI matrix passed.
+- Marked canonical stories `story-issue-2532` and `story-issue-2537` done via
+  the CLI and refreshed the generated roadmap note. The v0.25.2 arc remains
+  `planned`: other gate work remains and neither merge cuts a release tag.
+- Posted the combined rollup to roadmap parent #2458. Five completed dispatches
+  were missing `cost_entries` rows; their usage and resolved models were
+  verified from job records, then backfilled via the CLI. Regenerated
+  `costs.md` and its archive from canonical state. Interactive-session cost was
+  not independently available and was not invented.
+[@codex]
+
+## 2026-10-23 — v0.25.2 post-release bookkeeping
+
+- Verified tag `v0.25.2` is lightweight commit `4df4390da18d22070605d0cec6c4ddce11569863`, equal to `origin/main`. The GitHub Release is published, not a draft, and not a prerelease (2026-10-23T09:32:22Z, synlynk-synlynk-pm[bot]). No tag or release was created, moved, or republished.
+- Issue #2465 is closed. Parent #2458 stays open and already records the tag. Milestone #1 (`v0.25.2`) had zero open issues and was still open; it is now closed.
+- Canonical arc `v0.25.2` and stories `story-issue-2291`, `story-f5d725cc`, `story-60eea2c4`, `story-a846f2a5`, `story-54758ff8`, and `story-issue-2465` were still open or planned after those issues closed. Marked them done through `synlynk story done` and set the arc to `shipped` through `synlynk roadmap add --role pm`. `v0.25.3` stayed planned.
+- Goals `goal-3ef62232`, `goal-005ea87d`, and `goal-51c4be3f` stay active. `story-issue-2465` is still linked to `goal-51c4be3f`.
+[@grok]
 

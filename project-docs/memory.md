@@ -227,3 +227,50 @@
 - **2026-10-19 [LIVE-27] Canonical cleanse:** Migration 23 deprecates every malformed or non-current `execution_log` model in `harness_models` using the shared `is_plausible_model_id()` and `_curated_model_ids()` predicates. It preserves authoritative and valid execution-log rows, is idempotent, and has been applied to the canonical state database. [@codex]
 - **2026-10-21 [LIVE-27] Complete retirement:** Migration 28 deprecates every remaining non-deprecated `execution_log` row, including stale-but-plausible observations, so the full 75-row incident set cannot participate in resolution. Rows remain in place as audit history. [@codex]
 
+- **2026-10-22 #2530 job terminal truth design:** Nikhil approved independent
+  process-cleanup and effect-verification axes. Keep required contract/deadline
+  and predicate corrections in #2530; never automatically release capacity
+  while the worker might still execute. The implementation plan proposes a
+  5-second graceful-stop interval and a 300-second cleanup-verification bound,
+  followed by an audited operator override (not an automatic release). [@codex]
+
+- **2026-10-22 Roadmap daily-release rebaseline:** Nikhil approved a single
+  public stable release stream beginning 2026-10-23, targeting a gated
+  Developer Preview on 2026-11-06. There are no parallel RC/DEV/PROD
+  channels. Each day's work begins with a dependency sweep across goals,
+  stories, parent epics, issue comments, linked PRs, specs/plans, adjacent
+  past work, and relevant bugs/tech debt. Evidence-green work may move earlier
+  without waiting for its scheduled date, but no quality or human release gate
+  is bypassed. Local, OpenRouter, swarms, Universal Gateway, crawler/GTM, and
+  public announcement work are deferred; Muse is an early required core
+  harness. PR #2534 is merged; the canonical roadmap, release epics, 18
+  milestones, and parent #2458 now mirror the active daily schedule. Legacy
+  `1.0.0` preview, `v1.0.0-preview`, and `v1.0.0-rc1` arcs are superseded;
+  the separate future `v1.0.0` GA arc remains distinct. Ticket #2535 tracks
+  the missing governed phase-update path for legacy placement cleanup by the
+  Oct 27 ticket lock. [@nikhilsoman]
+
+- **2026-10-22 #2532 Generated-doc worktree isolation:** Keep `_project_root()`
+  tied to the shared Git common directory for canonical project/state DB
+  identity, but resolve tracked generated documentation and its per-checkout
+  archives from `git rev-parse --show-toplevel`. A command running in a linked
+  worktree must not mutate the main checkout's tracked `project-docs/` files.
+  [@codex]
+
+- **2026-10-23 #2537 Watch PID cleanup race:** After a health snapshot, stale
+  PID cleanup in `status()`/`stop()` must acquire the daemon lifetime lock and
+  re-read the PID path before unlinking. If a concurrent start owns the lock
+  or has published a fresh PID, leave both PID and state untouched. PR #2544
+  merged this behavior with deterministic status/stop race regressions.
+  [@codex]
+
+- **2026-10-23 v0.25.2 shipped:** Tag `v0.25.2` is commit
+  `4df4390da18d22070605d0cec6c4ddce11569863` and matches `origin/main`. The
+  GitHub Release was published 2026-10-23T09:32:22Z by synlynk-synlynk-pm[bot];
+  it is not a draft and not a prerelease. Release metadata is #2549. Catalog
+  issues #2448, #2449, #2450, #2291, and #2441 are closed; stability PRs
+  #2539, #2538, and #2544 were already merged; #2447 was closed by #2518.
+  Muse onboarding stays on v0.25.3 (#2466). Local stays deferred (#2534).
+  The same-day pre-tag note that the arc stayed planned applied only until
+  this tag. [@grok]
+

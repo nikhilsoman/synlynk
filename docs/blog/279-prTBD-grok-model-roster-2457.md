@@ -6,6 +6,7 @@ post: 279
 pr: 2513
 status: open
 author: "synlynk team"
+version: "0.25.1"
 tags: [posts]
 type: pr
 ---
