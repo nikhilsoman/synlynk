@@ -1,3 +1,41 @@
+## 2026-10-24 v0.25.4 Task C fully closed — PR #2599 genuinely MERGED, 4 worktrees cleaned, moving to Task E [@claude]
+
+- **job-26665e5b (Codex review cycle 2) reported `done` — and this time it was a genuine match,
+  not another false negative.** Verified directly via `gh pr view 2599 --json state,mergedAt,
+  reviewDecision,statusCheckRollup,mergeCommit`: `state: MERGED`, `reviewDecision: APPROVED`,
+  `mergeCommit: 5b084e20`. Review history (`gh pr view 2599 --json reviews`) confirmed the full
+  arc: `synlynk-synlynk-qa CHANGES_REQUESTED` at `11:08:49Z` (cycle 1, the real non-dict-JSON
+  finding) → `synlynk-synlynk-qa APPROVED` at `12:15:01Z` (cycle 2, after the fix). Codex's own
+  dispatch merged PR #2599 itself as the final step of the same job, per the Hardened PR Review
+  Policy. Updated tally: **6 false negatives** vs **4 genuine label matches** this session.
+- **Task C (job_timing_metrics extraction, part of gh:#2547) is fully closed**: spec → plan →
+  dispatch (Agy) → review cycle 1 (Codex, genuine CHANGES_REQUESTED) → fix (Agy) → review cycle 2
+  (Codex, genuine APPROVE + self-merge) → verified merged. Both PRs under #2547's scope (Task B's
+  #2598 and Task C's #2599) are now merged and verified.
+- **Worktree Hygiene: cleaned up all 4 worktrees from Task C's lifecycle** — `job-db67683d`
+  (implementer), `job-64a75f08` (review 1), `job-9a0eb77d` (fix), `job-26665e5b` (review 2). All
+  confirmed clean via `git status --short` before removal. Local branches
+  `dispatch/agy/job-db67683d`, `dispatch/codex/job-64a75f08`, `dispatch/agy/job-9a0eb77d`,
+  `dispatch/codex/job-26665e5b` force-deleted (`-D`, squash merge breaks `git branch -d`'s
+  ancestry check — PR's confirmed `MERGED` state is the source of truth). No matching remote
+  branches existed (`git ls-remote --heads origin` empty for all four — GitHub auto-deleted on
+  merge).
+- **Pushed the held checkpoint commits** now that no job is using `release/v0.25.4`/
+  `dispatch/agy/job-db67683d` as an active base. Origin had advanced to `5b084e20` (PR #2599's own
+  squash-merge commit) since the last fetch — rebased 4 local checkpoint commits cleanly on top,
+  then pushed.
+- **`--context-mode none` dispatch-reliability note carried forward**: Codex review-cycle-2
+  dispatch needed `--context-mode none` to clear preflight (both the default mode and
+  `--context-mode task` hit the identical `~153,915 input tokens` estimate against Codex's 110K
+  budget — `task` mode did not reduce it at all). Worth a follow-up ticket if this recurs on
+  Task E's dispatches.
+- **Next: Task E** (capability-sweep routing boundary audit + seed-provenance guard,
+  `docs/superpowers/plans/2026-10-24-v0.25.4-job-status-and-velocity-evidence.md` line 792,
+  GOVERNS `story-0293277d`) — reading its exact scope before dispatching. Confirmed via `grep -n
+  "^### Task\|^## Task"` on the plan file that the task structure is exactly: Task 0 (scaffold),
+  A1, A2, A3, B, C, E — no "Task D" heading exists in the committed plan; the earlier-session
+  reference to one was resolved as stale/incorrect.
+
 ## 2026-10-24 v0.25.4 Task C fix verified (6th false-negative label), review cycle 2 dispatched [@claude]
 
 - **job-9a0eb77d (Agy fix) reported `unpushed_branch` (exit 1)** — the **6th false-negative label**
