@@ -1,3 +1,32 @@
+## 2026-10-24 v0.25.4 Task A3 merged flow started (PR #2594), model-tier/capability-sweep gap flagged for RSI epic [@claude]
+
+- **job-464424a1 completed with a real commit** (`4476e06a`, verified directly: `git log
+  origin/main..HEAD`, `git diff origin/main --stat` — 3 files, 411/11 lines, matches the task spec
+  exactly) despite reporting `oracle_decision_missing` (exit code shown as 1) — another live
+  instance of the exact false-negative class this task fixes. Did not trust the label.
+- **Auto-PR creation was skipped** ("job is merge (task_type=implement, requires_gh_write=True)") —
+  the branch was pushed but no PR existed. Root cause: `release/v0.25.4` itself had never been
+  pushed to origin (local-only base branch), so GitHub had nothing to diff against
+  ("No commits between release/v0.25.4 and dispatch/agy/job-464424a1"). Pushed
+  `release/v0.25.4` to origin, then opened **PR #2594** manually citing all 3 fixtures and
+  `story-c8ff5e3c`.
+- **Reviewer dispatch (Hardened PR Review Policy):** requested Codex (next in
+  `_GH_WRITE_HARNESS_PRIORITY` after the implementer's Agy), capability router rerouted to
+  **Claude** instead (different harness from Agy either way, so cross-harness+model requirement
+  still holds) — **job-0b37b920**, tasked to run `synlynk pr check`, verify full test suite +
+  fixture coverage + that the fix only adds a transcript fallback (doesn't blanket-suppress real
+  failures), then self-merge if clean. Still in progress.
+- **New finding, not yet fixed (scope boundary respected):** Nikhil asked whether
+  `flash-high` was overkill for Agy's dispatch and whether capability-sweep data drives model-tier
+  choice at all. Confirmed by reading `synlynk/dispatch.py:493-584` — `resolve_model_tier()` picks
+  fast/pro/reasoning by **keyword-matching the task text** ("multi-file", "repo-wide",
+  "architecture", etc.) plus a static impact-score threshold; `_DEFAULT_MODELS_BY_TIER` (line 162)
+  is a hardcoded tier×harness dict. **Zero connection to `capability_sweep.py`/`capability_ratings`
+  anywhere in the resolution path** — confirmed via grep. This is real dispatch-allocation
+  mechanics, which the user explicitly scoped OUT of v0.25.4's #2547 fold-in (audit+guard boundary
+  only). Not fixed this session — flagged to feed Task D's RSI epic/goal scaffold as a tracked gap
+  rather than implemented now.
+
 ## 2026-10-24 v0.25.4 Task A3 grounded+dispatched (job-464424a1), Agy per-model quota gap root-caused (gh:#2592) [@claude]
 
 - **Task A3 (#2309 oracle self-transcript cross-check) grounded before dispatch, not taken on
