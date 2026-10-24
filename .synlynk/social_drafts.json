@@ -3646,5 +3646,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2597 \u2014 synlynk work loop design spec (held pending decision) (PR #2597, v0.25.3)\n\n\u2022 Merged improvements and fixes for PR #2597.\n\n#posts",
     "changelog": "### v0.25.3 (2026-10-24) - PR #2597\n- Merged improvements and fixes for PR #2597."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/475-pr2599-job-timing-metrics-extraction-gh-2547.md",
+    "title": "PR #2599 \u2014 job_timing_metrics extraction (gh:#2547)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-24",
+    "pr": "#2599",
+    "version": "0.25.3",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2599."
+    ],
+    "tweet": "\ud83d\ude80 PR #2599 \u2014 job_timing_metrics extraction (gh:#2547) (PR #2599, v0.25.3)\n\n\u2022 Merged improvements and fixes for PR #2599.\n\n#posts",
+    "changelog": "### v0.25.3 (2026-10-24) - PR #2599\n- Merged improvements and fixes for PR #2599."
   }
 ]
