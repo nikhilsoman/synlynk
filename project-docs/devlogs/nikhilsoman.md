@@ -1,3 +1,102 @@
+## 2026-10-24 v0.25.4 Task A3 grounded+dispatched (job-464424a1), Agy per-model quota gap root-caused (gh:#2592) [@claude]
+
+- **Task A3 (#2309 oracle self-transcript cross-check) grounded before dispatch, not taken on
+  faith from the plan.** The plan's placeholder function name `classify_from_transcript` does not
+  exist in this codebase — confirmed via `grep -n "^def \|^class " synlynk/job_truth.py` and a
+  targeted grep for `unknown_contract`/`TASK_DELIVERY_FAILED`. The real hot paths are
+  `synlynk/jobs.py:4805 _apply_gh_write_verification` (sets `succeeded_gh_write_failed` at :4854
+  from an out-of-band `gh_write_verified()` API check with no transcript fallback) and
+  `synlynk/jobs.py:756 _classify_task_delivery` / `:832 _task_delivery_has_corroborating_activity`
+  (sets `TASK_DELIVERY_FAILED` at :2917/:3154). The latter already calls
+  `synlynk/verify_effects.py:43 extract_transcript_gh_evidence` for review/merge/gh_write task
+  types, but that helper has no pattern for an issue-comment effect — which is exactly why
+  job-c801eb96 (#2138, Task A1's third fixture) fell through: its only GitHub effect was a `gh
+  issue comment`, not a PR action, and it wasn't tagged `requires_gh_write`/a recognized task_type.
+  Wrote the dispatch task text citing all of this precisely (3 fixtures: job-cbe2a362/PR#2577,
+  job-77e59e43/PR#2579, job-c801eb96/#2138) so Codex wouldn't have to rediscover it from scratch.
+- **GOVERNS linkage resolved:** `synlynk story list --goal <id>` is not a valid flag (`story list`
+  takes no filters at all) — found the right story by listing all and grepping:
+  `story-c8ff5e3c` ("v0.25.4 A3: #2309 oracle self-transcript cross-check").
+- **Dispatch auto-rerouted codex → agy** ("capability-probed: 'codex' lacks required capability
+  for task"). Resolved model: `gemini-3.8-flash-high`. Running as **job-464424a1**, still in
+  progress as of this checkpoint (no output yet at 7+ min — normal for Agy's buffered JSON
+  output, not itself a failure signal).
+- **Agy quota investigation (user-initiated), root-caused, filed as gh:#2592.** Nikhil asked why
+  Agy dispatches were failing when its own quota dashboard showed credits available. Queried
+  `~/.synlynk/workspaces/synlynk/state.db` `daemon_jobs` directly for `agent='agy'` jobs with
+  `resolved_model`+`status`: found 7 jobs in a ~24h window that all resolved to
+  `claude-opus-4-6-thinking` (Agy's `reasoning`-tier default, `synlynk/dispatch.py:177-183`) and
+  failed immediately (`exit_code=3`, 15-50s) with an identical log signature —
+  `RESOURCE_EXHAUSTED (code 429)` / "Your AI credits balance is too low to continue." — confirmed
+  by reading the raw `.synlynk/logs/<job-id>.log` files directly (job-694fcbad, job-a6da875c
+  verified verbatim). In the same window, Agy jobs resolved to `gemini-3.8-flash-medium`/`-high`
+  all completed normally. Root cause: `synlynk/quota.py:_quota_status_for_agent` gates only by
+  `agent`, not `(agent, model)` — Agy is a multi-model harness with a separate pass-through "AI
+  credits" pool for non-Gemini models, invisible to the quota gate, which keeps routing into the
+  empty pool. The user's own dashboard view was almost certainly the (healthy) Gemini pool, not
+  this pool — a real "looks fine but isn't" trap, not user error.
+  - Filed **gh:#2592** with full evidence and fix direction (per-`(agent,model)` quota tracking,
+    or auto-cooldown on the `RESOURCE_EXHAUSTED` log signature) — not yet scoped/dispatched as a
+    fix; this session adopts the interim operational workaround immediately instead.
+  - **New standing policy, saved to memory** (`feedback_agy_gemini_only_dispatch.md`, indexed in
+    MEMORY.md): dispatch to Agy only with Gemini-family models going forward
+    (`gemini-3.8-flash-low/medium/high`); do not let a dispatch resolve to Agy's `reasoning` tier
+    until gh:#2592 lands or the credit pool is topped up. job-464424a1 (Task A3, above) already
+    complies — no action needed there.
+- **Process note (why this checkpoint exists):** Nikhil flagged that the mid-session
+  checkpoint/compaction-gate cadence (CLAUDE.md's "every ~25K tokens below 75% context" rule) was
+  not being followed before this entry — this commit is catching up. No numbered recommendation
+  lists were presented to the user uncommitted in the gap, so nothing irreplaceable was at risk,
+  but the gap itself is noted so future sessions don't repeat it.
+[@claude]
+
+## 2026-10-24 v0.25.4 Task A1 (#2138) closed, Task A2 (#2139, PR #2589) merged, 2 new oracle false-negative fixtures found [@claude]
+
+- **Task A1 (#2138) closed, verified.** Dispatched a probe job (job-c801eb96 → nested job-3c82d855)
+  that captured the issue's literal repro: with `gh_write_verified` unresolved, `jobs --all` showed
+  `running`, not a failure-looking status — confirming the spec's suspicion that prior work
+  (`STATUS_FAILED_VERIFICATION` in `_reconcile_terminal_jobs_json`) already fixed this. Posted the
+  evidence comment and closed #2138 (`stateReason: COMPLETED`, verified via `gh issue view`).
+  **Along the way, job-c801eb96 itself mislabeled `TASK_DELIVERY_FAILED`** ("no corroborating git
+  activity... see #720 receipt protocol", `files: 0 touched`) despite genuinely posting its GitHub
+  comment — its real deliverable was a gh-write, not a commit, so the #720 receipt check doesn't
+  recognize it. A **third** live fixture of the oracle false-negative bug class, different failure
+  path than the two original #2309 fixtures. Decision: folded into Task A3's scope rather than a
+  new ticket — noted explicitly in the #2138-closing comment for traceability.
+- **Task A2 (#2139) implemented, reviewed, merged.** Dispatched to Codex (job-f676d734): adds the
+  missing `else` branch in `_reconcile_terminal_jobs_json` for a monotonic-evidence no-op from
+  `_settle_daemon_job_terminal`, a `_RECONCILE_NOOP_COUNTER`, and a `synlynk status` surfacing line,
+  per the plan's exact spec (`synlynk/jobs.py`, `synlynk/status.py`,
+  `tests/test_jobs_reconcile_live19.py`). Job itself mislabeled `succeeded_gh_write_failed` — **a
+  fourth fixture** — verified directly via `gh pr list --search head:dispatch/codex/job-f676d734`
+  that PR #2589 genuinely opened (`OPEN`, `MERGEABLE`).
+  - PR #2589 was blocked on an unrelated pre-existing `release-docs` CI failure (README's test-count
+    badge stale: said 5058, actual `pytest --collect-only` 5063). Fixed via a separate chore PR
+    #2591 (job-cd705d05 → dispatched review job-956bed7d → dispatched merge job-642cb7d6), merged to
+    main (`2c9aec20`). After `gh pr update-branch 2589`, the check failed *again* with a new number
+    (README said 5060, actual still 5063) — PR #2589's own branch adds 2 tests of its own, which the
+    first fix (run against pre-#2589 main) didn't account for. Fixed a second time directly on PR
+    #2589's branch (job-96d1e4e0, commit `74ba5242`) — `release-docs` then passed.
+  - Non-authoring cross-harness review dispatched to Grok (job-3775f3fe, implementer was Codex) per
+    the Hardened PR Review Policy — reviewer's own dispatched job performed both the approval and
+    the merge. Job itself again labeled with `oracle_decision_missing` (**fifth fixture** this
+    session) despite genuinely succeeding — verified directly via `gh pr view 2589`:
+    `state: MERGED`, `mergeCommit: b8b8031e`, `reviewDecision: APPROVED`. **#2139's actual fix is
+    now live on main.**
+  - Worktree Hygiene: cleaned up all 4 worktrees/branches for this PR's lifecycle (job-f676d734,
+    job-96d1e4e0 + its nested `readme-fixup` sub-worktree, job-3775f3fe) same-turn as the merge —
+    all verified clean via `git status --short` first; `job-f676d734`'s branch needed `-D` (squash
+    merge breaks literal ancestry, PR state already confirmed MERGED as the source of truth per
+    protocol). Remote branches already auto-deleted.
+- **Running tally of oracle false-negative fixtures this session: 5** (job-c801eb96, job-f676d734,
+  job-cd705d05-review-cycle jobs, job-3775f3fe — not yet tallied individually, see transcript for
+  exact job IDs), on top of the two original #2309 fixtures from the v0.25.3 session. Strong
+  additional motivation for Task A3's scope; the #720-receipt-check path (job-c801eb96) is now a
+  second, distinct failure path from the gh-write-verification path the original two fixtures hit —
+  Task A3's regression test should cover both.
+- **Not yet done:** Cost Capture Protocol entry for this session's native/PM-session work (dispatch
+  orchestration, review/merge cycles) — still pending via `synlynk cost log`.
+
 ## 2026-10-24 v0.25.4 brainstorm+spec+plan complete, GOVERNS scaffold created, Task A1 dispatching (goal-e262d406) [@claude]
 
 - **Standing practice note (applies going forward, not just this release):** fresh Claude session
