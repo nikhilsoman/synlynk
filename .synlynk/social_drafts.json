@@ -3598,5 +3598,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2594 \u2014 oracle self-transcript cross-check (gh:#2309) (PR #2594, v0.25.3)\n\n\u2022 Merged improvements and fixes for PR #2594.\n\n#posts",
     "changelog": "### v0.25.3 (2026-10-24) - PR #2594\n- Merged improvements and fixes for PR #2594."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/472-pr2598-cost-entries-attribution-mismatch-guard-.md",
+    "title": "PR #2598 \u2014 cost_entries attribution mismatch guard (gh:#2547)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-24",
+    "pr": "#2598",
+    "version": "0.25.3",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2598."
+    ],
+    "tweet": "\ud83d\ude80 PR #2598 \u2014 cost_entries attribution mismatch guard (gh:#2547) (PR #2598, v0.25.3)\n\n\u2022 Merged improvements and fixes for PR #2598.\n\n#posts",
+    "changelog": "### v0.25.3 (2026-10-24) - PR #2598\n- Merged improvements and fixes for PR #2598."
   }
 ]
