@@ -1,3 +1,34 @@
+## 2026-10-24 v0.25.4 Task B review cycle 1 resolved, fix landed on PR #2598, review cycle 2 dispatched [@claude]
+
+- **job-f1737930 (Codex, review 1) was a genuine CHANGES_REQUESTED** — real finding, label
+  matched reality for once: `scripts/audit_cost_attribution_mismatches.py` claimed to audit
+  both harness and model attribution but its SQL WHERE clause only ever compared
+  `ce.harness != dj.actual_harness`, never checking `resolved_model`. Confirmed directly by
+  reading the script in job-2f97d374's worktree before dispatching a fix.
+- **job-f63f911f (Agy, fix) got a confusing worktree branch name at dispatch time
+  (`dispatch/agy/job-f63f911f`) but actually did the right thing** — checked out the real
+  PR branch (`dispatch/agy/job-2f97d374`) as instructed and committed the fix there
+  (`aef31875`: extends the WHERE clause to `OR (ce.model IS NOT NULL AND
+  dj.resolved_model IS NOT NULL AND ce.model != dj.resolved_model)`). Its own status label
+  (`unpushed_branch`) was **also a false negative** — `git push` from this session reported
+  "Everything up-to-date," confirming the job had already pushed; `gh pr view 2598`'s head sha
+  matched `aef31875` exactly. No duplicate PR was ever opened (`gh pr list --search
+  "head:dispatch/agy/job-f63f911f"` → empty) — the worktree-branch-name confusion earlier this
+  session was a false alarm, not actual stacking. Removed the now-redundant second worktree.
+- **Review cycle 2 dispatched (job-c5afa28b).** Asked for Grok explicitly; router rerouted to
+  Codex again (message referenced "agy lacks required capability," which doesn't track — noise
+  in the reroute explanation, not investigated further). Still policy-compliant: differs from
+  Agy (implementer) in both harness and model, which is all the Hardened PR Review Policy
+  requires — it doesn't mandate differing from a prior reviewer. Same merge-it-yourself
+  instruction per PR #2149's Merge-Authority RCA.
+- Tally of false-negative/positive label mismatches this session so far, all independently
+  verified via direct `gh`/`git` checks rather than trusted: job-464424a1 (`oracle_decision_missing`
+  on real success), job-2f97d374 (`stale_base`/`failed_verification` on real success, self-
+  inflicted by this session's own checkpoint pushes), job-f63f911f (`unpushed_branch` on an
+  already-pushed commit). Genuine label matches: job-0b37b920 (real stall/failure), job-f1737930
+  (real CHANGES_REQUESTED). This release's thesis — job-status labels are not trustworthy
+  evidence on their own — keeps getting independently reconfirmed by this session's own work.
+
 ## 2026-10-24 v0.25.4 Task B implementer done (PR #2598), another false-negative label, reviewer dispatched [@claude]
 
 - **job-2f97d374 (Agy, Task B implementer) completed real work despite a `failed_verification`/
