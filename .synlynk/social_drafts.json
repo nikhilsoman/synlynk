@@ -3710,5 +3710,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2602 \u2014 flip v0.25.4 roadmap row to shipped (PR #2602, v0.25.4)\n\n\u2022 Merged improvements and fixes for PR #2602.\n\n#posts",
     "changelog": "### v0.25.4 (2026-10-24) - PR #2602\n- Merged improvements and fixes for PR #2602."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/479-pr2605-isolate-selftest-scratch-cleanup-by-owne.md",
+    "title": "PR #2605 \u2014 isolate selftest scratch cleanup by owner PID",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-24",
+    "pr": "#2605",
+    "version": "0.25.4",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2605."
+    ],
+    "tweet": "\ud83d\ude80 PR #2605 \u2014 isolate selftest scratch cleanup by owner PID (PR #2605, v0.25.4)\n\n\u2022 Merged improvements and fixes for PR #2605.\n\n#posts",
+    "changelog": "### v0.25.4 (2026-10-24) - PR #2605\n- Merged improvements and fixes for PR #2605."
   }
 ]
