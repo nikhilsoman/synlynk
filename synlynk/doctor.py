@@ -919,6 +919,7 @@ def _hc_pr_review_cycles() -> HealthCheck:
 def cleanup_selftest_workspaces(temp_root: str = None) -> int:
     """Remove orphaned synlynk selftest scratch workspaces under the temp dir."""
     root = temp_root or tempfile.gettempdir()
+    stale_before = time.time() - 3600
     removed = 0
     try:
         entries = os.listdir(root)
@@ -930,6 +931,26 @@ def cleanup_selftest_workspaces(temp_root: str = None) -> int:
         path = os.path.join(root, name)
         if not os.path.isdir(path):
             continue
+        owner_path = os.path.join(path, ".owner.json")
+        try:
+            with open(owner_path) as owner_file:
+                pid = json.load(owner_file)["pid"]
+            if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
+                raise ValueError("owner PID must be a positive integer")
+        except (OSError, TypeError, ValueError, KeyError, json.JSONDecodeError):
+            try:
+                if os.path.getmtime(path) > stale_before:
+                    continue
+            except OSError:
+                continue
+        else:
+            try:
+                os.kill(pid, 0)
+                continue
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                continue
         try:
             shutil.rmtree(path)
             removed += 1
