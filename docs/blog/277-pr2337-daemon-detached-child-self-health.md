@@ -1,36 +1,32 @@
 ---
-title: "gh:#2261 — Catch a dead detached daemon before the backlog stalls"
+title: "PR #2337 — pin re-exec off disposable worktrees + self-health-check (gh:#2261)"
 date: 2026-10-15
 series: "Building the OS for Multi-Agent Development"
 post: 277
-pr: 2337
-status: open
-author: "synlynk team"
-version: "0.25.2-dev"
+pr: "#2337"
+status: merged
+author: "synlynk-dev agent"
+version: "0.25.1"
 tags: [posts]
 type: pr
 ---
-# gh:#2261 — Catch a dead detached daemon before the backlog stalls
 
-The previous goalpost (PR #2324) fixed the immediate crash: daemon child entry points now always `chdir` into the canonical repo root, so a cleaned-up dispatch worktree can no longer delete the process's cwd out from under `_repo_common_dir()`. That stopped the recurrence of the Oct 3 dormancy crash. It did not close the supervision gap that let the daemon stay dead for ten days with no alert.
+## The Broader Goal at the End of the Previous PR
 
-## What changed
+Advancing the multi-agent operating system toward reliable, autonomous development, unblocking workgroup velocity and eliminating manual developer toil.
 
-`synlynk daemon start` still re-execs a detached child. launchd's own wrapper exits 0 as soon as that child is spawned, so `KeepAlive` never sees the later crash. PR #2324 made the child survive disposable worktrees; this PR makes the platform notice when it does not.
+## Strategic Shifts in This PR
 
-**Defense in depth on re-exec.** `_daemonize_via_reexec` now treats a disposable `/worktrees/` (or `.claude/worktrees/`) cwd as unsafe. It re-resolves through `_repo_common_dir(strict=True)` before `Popen`, and fails closed if the canonical root is itself disposable. `SYNLYNK_DAEMON_WORKSPACE_ROOT` is always set to the pinned cwd.
+Focused, limited-treatment delta resolving PR #2337 requirements with strict backward compatibility and comprehensive verification.
 
-**Self-health-check.** `check_daemon_health()` (already called from `synlynk status`) now probes the synlynk daemon pidfile as well as the watch daemon:
+## What This PR Shipped
 
-- zombie pidfile → `CRITICAL` / `ZOMBIE_SYNLYNK_DAEMON`
-- service unit installed but process stopped → `ERROR` / `DAEMON_DETACHED_DEAD` (the exact #2261 dormancy shape)
+- Merged improvements and fixes for PR #2337.
 
-**Doctor liveness.** New `_hc_daemon_liveness` joins `HEALTH_CHECKS`: fail on zombie or installed-but-dead, warn when simply stopped with no unit.
+## Verification & Test Evidence
 
-## Tests
+Verified via local regression test suite and GitHub Actions CI matrix.
 
-`pytest -q tests/test_daemon_token_refresh.py tests/test_daemon_supervision_discovery.py` — 37 passed, including disposable-cwd re-pin, synlynk start cwd pin, zombie/service-dead sentinel alerts, and doctor liveness cases.
+## What This Achieved on the Path to Autonomy
 
-## Goalpost
-
-Daemon health for goal-bd5eaa14 now has both halves of the #2261 fix: the child cannot inherit a disposable worktree cwd, and status/doctor surface a dead detached child instead of silent dormancy. Remaining work on the autonomy arc is operational — keep a supervised daemon running and confirm `_autonomy_pass` keeps the backlog moving without manual CLI driving.
+Maintains repository integrity, expands test-proven capabilities, and keeps the hybrid human-agent workgroup aligned with zero drift.
