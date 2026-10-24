@@ -3448,10 +3448,13 @@ def _extract_self_reported_timing(
         if not transcript:
             return None
         tail = transcript[-4000:]
-        match = re.search(r"SYNLYNK_TIMING_SELF_REPORT:\s*(\{.*\})", tail)
+        match = re.search(r"SYNLYNK_TIMING_SELF_REPORT:\s*(\S.*)", tail)
         if not match:
             return None
-        return json.loads(match.group(1))
+        result = json.loads(match.group(1))
+        if not isinstance(result, dict):
+            return None
+        return result
     except Exception:
         return None
     finally:
@@ -3504,9 +3507,29 @@ def _record_job_timing_metrics(conn, job_id: str, completed_at: str) -> None:
 
         cross_check = "absent"
         if self_reported is not None:
-            reported_active = self_reported.get("active_seconds")
-            if reported_active is not None and active_s is not None:
-                cross_check = "agree" if abs(reported_active - active_s) < 5 else "disagree"
+            try:
+                if isinstance(self_reported, dict):
+                    reported_active = self_reported.get("active_seconds")
+                    if (
+                        reported_active is not None
+                        and not isinstance(reported_active, bool)
+                        and isinstance(reported_active, (int, float))
+                        and active_s is not None
+                    ):
+                        cross_check = (
+                            "agree"
+                            if abs(reported_active - active_s) < 5
+                            else "disagree"
+                        )
+            except Exception:
+                cross_check = "absent"
+
+        self_reported_json = None
+        if self_reported is not None:
+            try:
+                self_reported_json = json.dumps(self_reported)
+            except Exception:
+                self_reported_json = None
 
         conn.execute(
             """INSERT INTO job_timing_metrics
@@ -3525,7 +3548,7 @@ def _record_job_timing_metrics(conn, job_id: str, completed_at: str) -> None:
                 model,
                 queue_s,
                 active_s,
-                json.dumps(self_reported) if self_reported else None,
+                self_reported_json,
                 cross_check,
             ),
         )
