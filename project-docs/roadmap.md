@@ -393,9 +393,11 @@ Superseded by the gated v0.27.5 Developer Preview stable tag on 2026-11-06 under
 - [ ] Phase 3: Release Gate & Launch (P0)
   v1.0.0-rc1 tagging, PyPI Trusted Publishing, 4,500+ test suite pass, 15-min time-to-wow screencast, and milestone synthesis blog.
 
-## v0.25.3 — Muse and model-capacity readiness [planned] (target: 2026-10-24)
+## v0.25.3 — Muse and model-capacity readiness [shipped] (target: 2026-10-24)
 
 Daily stable gate: onboard Muse with authenticated, allowlisted, low-privilege execution; validate model catalog, capability and cost evidence across core harnesses. Quota truth may follow later in the cycle. Parent #2458; release epic #2466; goals goal-adb60ccc, goal-079e2f37, goal-eacab0dc.
+
+Shipped 2026-10-24. Tag v0.25.3 is ce28b3b4f1ef2eda3432b706441d8d6187ac14b5 and is origin/main. GitHub Release https://github.com/nikhilsoman/synlynk/releases/tag/v0.25.3 was published by Nikhil (`gh release create`, native PM-session). Closed in this tag: #2554/#2562 (Muse implement/test readiness), #2552/#2560 (Codex tier-collapse fix), #2551/#2563 (`dispatch_rework_rate` replacing inert `pr_review_cycles`), #2170/#2570 (silent `quality_verified` fallback detection), #2567/#2568 (calibration diff base-SHA fix), #2553/#2564 (daemon pidfile crash fix). Quota/capacity truth for Muse and Grok deferred to a separately-scoped capability sweep, gh:#2576 — not addressed in this tag. Merged via PR #2575, non-authoring cross-harness (Codex) review+merge per the Hardened PR Review Policy. Parent #2458; release epic #2466.
 
 
 ## v0.25.4 — Accurate job status and completion evidence [planned] (target: 2026-10-25)
