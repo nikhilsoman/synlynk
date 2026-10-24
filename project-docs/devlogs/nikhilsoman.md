@@ -1,3 +1,29 @@
+## 2026-10-24 v0.25.4 Task B implementer done (PR #2598), another false-negative label, reviewer dispatched [@claude]
+
+- **job-2f97d374 (Agy, Task B implementer) completed real work despite a `failed_verification`/
+  `stale_base` label.** Root cause confirmed directly: this interactive session's own devlog
+  checkpoint commits advanced `release/v0.25.4`'s tip *while the dispatch was running*, which
+  the dispatcher's own staleness check flagged as `job job-2f97d374's base branch
+  'release/v0.25.4' has advanced since dispatch — status set to stale_base (re-dispatch fresh
+  rather than force-merging)`. Verified the actual work is sound regardless: PR **#2598**
+  (`fix: cost_entries attribution mismatch guard (gh:#2547)`) opened automatically,
+  `gh pr view 2598 --json mergeable,mergeStateStatus` → `MERGEABLE`/`CLEAN`, real commit
+  `0640dfd9` on top of `5e8876db` (built on a slightly earlier but still-valid tip). Another
+  instance of this release's own subject-matter bug class — not filing a new ticket since the
+  cause here is self-inflicted (my own checkpoint cadence racing the dispatch), but noting it as
+  a live example: **mid-dispatch interactive commits to the same base branch can trigger a false
+  `stale_base`/`failed_verification` label on otherwise-good work.** Worth feeding into Task D's
+  scaffold notes as a distinct trigger from the ones already catalogued.
+- **No CI triggered on the PR branch** (`gh pr checks 2598` → "no checks reported",
+  `gh run list --branch dispatch/agy/job-2f97d374` → empty) — not investigated further this
+  session; `release/v0.25.4` has no branch protection so this doesn't block merge (same
+  confirmed finding as PR #2594).
+- **Reviewer dispatched: job-f1737930 (Codex)**, cross-harness+model from Agy per the Hardened
+  PR Review Policy, role `qa`, story `story-fc0200e8`, `--model-tier fast`. Instructed to run
+  `synlynk pr check`, verify the guard + tests + audit script per the plan, and — per the
+  Merge-Authority RCA (PR #2149) — perform the merge itself as the final step of the same
+  dispatch rather than leaving it for this interactive session.
+
 ## 2026-10-24 v0.25.4 Task B dispatched (job-2f97d374, cost_entries/capability_ratings mismatch guard) [@claude]
 
 - Task A3 fully closed (see entry below): PR #2594 merged, verified, worktrees/branches cleaned,
