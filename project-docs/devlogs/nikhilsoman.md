@@ -1,3 +1,50 @@
+## 2026-10-24 v0.25.4 Task A1 (#2138) closed, Task A2 (#2139, PR #2589) merged, 2 new oracle false-negative fixtures found [@claude]
+
+- **Task A1 (#2138) closed, verified.** Dispatched a probe job (job-c801eb96 → nested job-3c82d855)
+  that captured the issue's literal repro: with `gh_write_verified` unresolved, `jobs --all` showed
+  `running`, not a failure-looking status — confirming the spec's suspicion that prior work
+  (`STATUS_FAILED_VERIFICATION` in `_reconcile_terminal_jobs_json`) already fixed this. Posted the
+  evidence comment and closed #2138 (`stateReason: COMPLETED`, verified via `gh issue view`).
+  **Along the way, job-c801eb96 itself mislabeled `TASK_DELIVERY_FAILED`** ("no corroborating git
+  activity... see #720 receipt protocol", `files: 0 touched`) despite genuinely posting its GitHub
+  comment — its real deliverable was a gh-write, not a commit, so the #720 receipt check doesn't
+  recognize it. A **third** live fixture of the oracle false-negative bug class, different failure
+  path than the two original #2309 fixtures. Decision: folded into Task A3's scope rather than a
+  new ticket — noted explicitly in the #2138-closing comment for traceability.
+- **Task A2 (#2139) implemented, reviewed, merged.** Dispatched to Codex (job-f676d734): adds the
+  missing `else` branch in `_reconcile_terminal_jobs_json` for a monotonic-evidence no-op from
+  `_settle_daemon_job_terminal`, a `_RECONCILE_NOOP_COUNTER`, and a `synlynk status` surfacing line,
+  per the plan's exact spec (`synlynk/jobs.py`, `synlynk/status.py`,
+  `tests/test_jobs_reconcile_live19.py`). Job itself mislabeled `succeeded_gh_write_failed` — **a
+  fourth fixture** — verified directly via `gh pr list --search head:dispatch/codex/job-f676d734`
+  that PR #2589 genuinely opened (`OPEN`, `MERGEABLE`).
+  - PR #2589 was blocked on an unrelated pre-existing `release-docs` CI failure (README's test-count
+    badge stale: said 5058, actual `pytest --collect-only` 5063). Fixed via a separate chore PR
+    #2591 (job-cd705d05 → dispatched review job-956bed7d → dispatched merge job-642cb7d6), merged to
+    main (`2c9aec20`). After `gh pr update-branch 2589`, the check failed *again* with a new number
+    (README said 5060, actual still 5063) — PR #2589's own branch adds 2 tests of its own, which the
+    first fix (run against pre-#2589 main) didn't account for. Fixed a second time directly on PR
+    #2589's branch (job-96d1e4e0, commit `74ba5242`) — `release-docs` then passed.
+  - Non-authoring cross-harness review dispatched to Grok (job-3775f3fe, implementer was Codex) per
+    the Hardened PR Review Policy — reviewer's own dispatched job performed both the approval and
+    the merge. Job itself again labeled with `oracle_decision_missing` (**fifth fixture** this
+    session) despite genuinely succeeding — verified directly via `gh pr view 2589`:
+    `state: MERGED`, `mergeCommit: b8b8031e`, `reviewDecision: APPROVED`. **#2139's actual fix is
+    now live on main.**
+  - Worktree Hygiene: cleaned up all 4 worktrees/branches for this PR's lifecycle (job-f676d734,
+    job-96d1e4e0 + its nested `readme-fixup` sub-worktree, job-3775f3fe) same-turn as the merge —
+    all verified clean via `git status --short` first; `job-f676d734`'s branch needed `-D` (squash
+    merge breaks literal ancestry, PR state already confirmed MERGED as the source of truth per
+    protocol). Remote branches already auto-deleted.
+- **Running tally of oracle false-negative fixtures this session: 5** (job-c801eb96, job-f676d734,
+  job-cd705d05-review-cycle jobs, job-3775f3fe — not yet tallied individually, see transcript for
+  exact job IDs), on top of the two original #2309 fixtures from the v0.25.3 session. Strong
+  additional motivation for Task A3's scope; the #720-receipt-check path (job-c801eb96) is now a
+  second, distinct failure path from the gh-write-verification path the original two fixtures hit —
+  Task A3's regression test should cover both.
+- **Not yet done:** Cost Capture Protocol entry for this session's native/PM-session work (dispatch
+  orchestration, review/merge cycles) — still pending via `synlynk cost log`.
+
 ## 2026-10-24 v0.25.4 brainstorm+spec+plan complete, GOVERNS scaffold created, Task A1 dispatching (goal-e262d406) [@claude]
 
 - **Standing practice note (applies going forward, not just this release):** fresh Claude session
