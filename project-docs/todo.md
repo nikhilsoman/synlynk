@@ -1,6 +1,8 @@
 # Tasks (generated - source of truth is state.db)
 # Edit via: synlynk story create/update | Do NOT hand-edit this file
 
+- [ ] Fix capability_calibration_results.quality_verified migration gap (gh:#2569) [backend] <!-- id:story-2349673f -->
+- [ ] Fix calibration output diff-base contamination (#2567) [backend] <!-- id:story-ec6e4acf -->
 - [ ] Rework-rate routing metric implementation (gh:#2551) [backend] <!-- id:story-3522f431 -->
 - [ ] Operationalize autonomous GOVERNS SDLC: governance, agent ownership, and cost provenance [testing] <!-- id:story-issue-2412 -->
 - [ ] Quota/capacity reservation hardening (candidate branches from scratch-worktree audit) <!-- id:story-8e0596fa -->
@@ -410,7 +412,15 @@ CRITICAL CONTEXT: your dispatch worktree  [testing] <!-- id:story-issue-2 -->
 - [ ] BS-8: stuck detection + one-shot consult from capability matrix + Expert Consult injection [dispatch] <!-- id:story-bs8-consult -->
 - [ ] BS-8: synlynk probe — ambient harness capability drift detection + publish pipeline [tooling] <!-- id:story-bs8-probe -->
 - [ ] BS-7: brainstorm — skill pack interoperability + benchmarks (Superpowers/GStack/GSD) [platform] <!-- id:story-bs7-interop -->
-- [ ] Fix calibration output diff-base contamination (#2567) [backend] <!-- id:story-ec6e4acf -->
+- [ ] Reconcile project-docs drift stranded in stale fix/claude/2567 worktree [backend] <!-- id:story-dda00e7b -->
+- [ ] Capability-sweep executor output is contaminated by stale worktree diff when dispatched from a non-main branch [testing] <!-- id:story-issue-2567 -->
+- [ ] Write a 3-bullet status update summarizing a completed feature. [backend] <!-- id:story-adhoc-1792806578 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  [testing] <!-- id:story-adhoc-1792806082 -->
+- [ ] Create a new file scratch_add.py containing a one-line Python function `def add(a, b): return a + b` and nothing else. [backend] <!-- id:story-adhoc-1792806023 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  [testing] <!-- id:story-adhoc-1792786096 -->
+- [ ] Write a one-line Python function `def add(a, b): return a + b` and nothing else. [backend] <!-- id:story-adhoc-1792786041 -->
 - [ ] synlynk daemon status crashes on missing pidfile — same #2537 fingerprint that #2544 fixed only for watch [testing] <!-- id:story-issue-2553 -->
 - [ ] Write a one-line Python function `def add(a, b): return a + b`. Respond with only the code. [backend] <!-- id:story-adhoc-1792782408 -->
 - [ ] Fix SynlynkDaemon.status() crash on missing pidfile (#2553) [backend] <!-- id:story-f058b9d6 -->
