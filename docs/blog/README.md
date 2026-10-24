@@ -545,6 +545,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [464](./464-pr2575-v0-25-3-muse-readiness-and-capacity-rout.md) | PR #2575 — v0.25.3 - Muse readiness and capacity-routing evidence | [#2575](https://github.com/nikhilsoman/synlynk/pull/2575) | 2026-10-24 |
 | [465](./465-pr2577-sync-cost-telemetry-write-through-after-.md) | PR #2577 — sync cost telemetry write-through after v0.25.3 release | [#2577](https://github.com/nikhilsoman/synlynk/pull/2577) | 2026-10-24 |
 | [466](./466-pr2578-record-the-shipped-v0-25-3-release-in-ro.md) | PR #2578 — record the shipped v0.25.3 release in roadmap bookkeeping | [#2578](https://github.com/nikhilsoman/synlynk/pull/2578) | 2026-10-24 |
+| [467](./467-pr2580-fold-2547-into-v0-25-4-s-roadmap-scope.md) | PR #2580 — fold #2547 into v0.25.4's roadmap scope | [#2580](https://github.com/nikhilsoman/synlynk/pull/2580) | 2026-10-24 |
 
 ## Per-PR Post Template
 
