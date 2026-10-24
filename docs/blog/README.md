@@ -552,6 +552,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [471](./471-pr2594-oracle-self-transcript-cross-check-gh-23.md) | PR #2594 — oracle self-transcript cross-check (gh:#2309) | [#2594](https://github.com/nikhilsoman/synlynk/pull/2594) | 2026-10-24 |
 | [472](./472-pr2598-cost-entries-attribution-mismatch-guard-.md) | PR #2598 — cost_entries attribution mismatch guard (gh:#2547) | [#2598](https://github.com/nikhilsoman/synlynk/pull/2598) | 2026-10-24 |
 | [473](./473-pr2596-synlynk-com-platform-vision-spec-account.md) | PR #2596 — synlynk.com platform vision spec (accounts, entitlements, hosted infra) | [#2596](https://github.com/nikhilsoman/synlynk/pull/2596) | 2026-10-24 |
+| [474](./474-pr2597-synlynk-work-loop-design-spec-held-pendi.md) | PR #2597 — synlynk work loop design spec (held pending decision) | [#2597](https://github.com/nikhilsoman/synlynk/pull/2597) | 2026-10-24 |
 
 ## Per-PR Post Template
 

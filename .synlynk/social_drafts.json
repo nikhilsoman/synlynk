@@ -3630,5 +3630,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2596 \u2014 synlynk.com platform vision spec (accounts, entitlements, hosted infra) (PR #2596, v0.25.3)\n\n\u2022 Merged improvements and fixes for PR #2596.\n\n#posts",
     "changelog": "### v0.25.3 (2026-10-24) - PR #2596\n- Merged improvements and fixes for PR #2596."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/474-pr2597-synlynk-work-loop-design-spec-held-pendi.md",
+    "title": "PR #2597 \u2014 synlynk work loop design spec (held pending decision)",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-24",
+    "pr": "#2597",
+    "version": "0.25.3",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2597."
+    ],
+    "tweet": "\ud83d\ude80 PR #2597 \u2014 synlynk work loop design spec (held pending decision) (PR #2597, v0.25.3)\n\n\u2022 Merged improvements and fixes for PR #2597.\n\n#posts",
+    "changelog": "### v0.25.3 (2026-10-24) - PR #2597\n- Merged improvements and fixes for PR #2597."
   }
 ]
