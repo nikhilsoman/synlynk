@@ -1,3 +1,37 @@
+## 2026-10-24 v0.25.4 Task C fix verified (6th false-negative label), review cycle 2 dispatched [@claude]
+
+- **job-9a0eb77d (Agy fix) reported `unpushed_branch` (exit 1)** — the **6th false-negative label**
+  this session (2nd instance of `unpushed_branch` specifically). Verified directly: worktree clean,
+  real commit `901718ae` present, and `git log origin/dispatch/agy/job-db67683d -1` showed the same
+  commit already on the remote — it was pushed, the label was wrong. Updated tally: **6 false
+  negatives** (oracle_decision_missing x2, stale_base/failed_verification x2, unpushed_branch x2)
+  vs **3 genuine label matches** (job-0b37b920 stall, job-f1737930 + job-64a75f08 real
+  CHANGES_REQUESTED).
+- **Verified the fix itself is correct**, not just that it exists: read the diff directly —
+  `_extract_self_reported_timing` now checks `isinstance(result, dict)` and returns `None`
+  otherwise (regex also loosened from `(\{.*\})` to `(\S.*)` so a non-dict JSON value like `[1,2,3]`
+  still matches and reaches the isinstance check instead of failing the match entirely);
+  `_record_job_timing_metrics`'s cross-check block now runs in its own `try/except` with an
+  `isinstance(reported_active, (int, float))` guard (excluding `bool`), defaulting
+  `cross_check_status` to `"absent"` on any malformed input, with the objective INSERT no longer
+  reachable by that exception path. `pytest tests/test_job_timing_metrics.py -v` → 5 passed
+  (3 original + 2 new: non-dict self-report, non-numeric `active_seconds`, both asserting the
+  objective row still inserts). `pytest tests/test_jobs.py tests/test_jobs_reconcile_live19.py
+  tests/test_jobs_gh_write_provisional.py tests/test_costs.py -q` → 201 passed.
+- **Dispatching review cycle 2 to Codex failed preflight twice** before succeeding: both the
+  default context mode and `--context-mode task` reported the identical estimate
+  (`task needs ~153,915 input tokens; codex budget is 110,000` — `--context-mode task` did not
+  change the number at all, suggesting the preflight token estimate isn't driven by the context
+  flag in this path, contrary to [[feedback_synlynk_dispatch_context_mode]]'s general guidance).
+  `--context-mode none` (combined with a shorter, still fully self-contained task string) finally
+  cleared preflight and dispatched as **job-26665e5b** against the correct base
+  (`dispatch/agy/job-db67683d @ 901718ae`, the fix commit). Worth a follow-up ticket if
+  `--context-mode task` reliably fails to reduce the preflight estimate — not filed yet, flagging
+  here first.
+- Still holding the push to `release/v0.25.4` — job-26665e5b is now running against
+  `dispatch/agy/job-db67683d` as base. Worktrees for job-db67683d/job-64a75f08/job-9a0eb77d still
+  correctly NOT cleaned up (PR #2599 not yet merged).
+
 ## 2026-10-24 v0.25.4 Task C review cycle 1: genuine CHANGES_REQUESTED on PR #2599, fix dispatched [@claude]
 
 - **job-64a75f08 (Codex reviewer) completed with the usual recurring `stale_base` warning line** —
