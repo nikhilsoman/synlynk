@@ -1,3 +1,28 @@
+## 2026-10-24 v0.25.4 Task E fully closed — PR #2600 genuinely MERGED, all workstreams complete [@claude]
+
+- **job-8aaf5f7a (Codex cross-harness reviewer) reported `done` — genuine match, not a false
+  negative.** Verified directly via `gh pr view 2600 --json state,mergedAt,reviewDecision,
+  statusCheckRollup,mergeCommit`: `state: MERGED`, `mergedAt: 2026-10-24T13:01:06Z`,
+  `reviewDecision: APPROVED`, merge commit `b4428f0f`. Review body confirmed the same four
+  checks independently: "additive and excludes baseline_seed only from the routing n>=5 sample
+  gate; no scoring/weighting or GH_WRITE_HARNESS_PRIORITY change. Passed: boundary guard 2/2;
+  capability suite 132/132; prescribed regression suite 22/22; synlynk pr check passed." Codex's
+  own dispatched job performed the merge itself, per the Hardened PR Review Policy.
+  **Session false-negative tally: still 6 false negatives vs 5 genuine label matches.**
+- Cleaned up `worktrees/job-1369054e` and `worktrees/job-8aaf5f7a` (both confirmed clean via
+  `git status --short`, then `git worktree remove`), deleted local branches
+  `dispatch/agy/job-1369054e` and `dispatch/codex/job-8aaf5f7a` with `-D` (squash merge breaks
+  `git branch -d`'s ancestry check; PR's confirmed `MERGED` state is the source of truth). No
+  remote branches existed for either (GitHub auto-deleted on merge).
+- Rebased the held checkpoint commit (`2c5ef465`) onto origin's new tip (`b4428f0f`, PR #2600's
+  own squash-merge commit) and pushed clean: `b4428f0f..bff944c9`.
+- **All five of this release's workstreams are now complete and merged: A1, A2, A3, B, C, E.**
+  (Workstream D was never a separate task — folded into Task 0's goal/story scaffold per the
+  plan's own Self-Review Notes.) Next: Named Release checklist — CHANGELOG entry, VERSION bump,
+  roadmap row flip to `[shipped]` (separate docs PR), `synlynk cost log` backfill for this
+  session's native/interactive PM work, `synlynk release --check-docs` validation, then
+  `gh release create v0.25.4`.
+
 ## 2026-10-24 v0.25.4 Task E implementer verified sound, Codex cross-harness review dispatched [@claude]
 
 - **job-1369054e (Agy implementer, gemini-3.8-flash-high, rerouted from codex) completed Task E**
