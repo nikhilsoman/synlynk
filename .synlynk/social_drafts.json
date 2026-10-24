@@ -3582,5 +3582,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2589 \u2014 log/count reconcile no-ops (gh:#2139) (PR #2589, v0.25.3)\n\n\u2022 Merged improvements and fixes for PR #2589.\n\n#posts",
     "changelog": "### v0.25.3 (2026-10-24) - PR #2589\n- Merged improvements and fixes for PR #2589."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/471-pr2594-oracle-self-transcript-cross-check-gh-23.md",
+    "title": "PR #2594 \u2014 oracle self-transcript cross-check (gh:#2309)",
+    "author": "nikhilsoman",
+    "date": "2026-10-24",
+    "pr": "#2594",
+    "version": "0.25.3",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2594."
+    ],
+    "tweet": "\ud83d\ude80 PR #2594 \u2014 oracle self-transcript cross-check (gh:#2309) (PR #2594, v0.25.3)\n\n\u2022 Merged improvements and fixes for PR #2594.\n\n#posts",
+    "changelog": "### v0.25.3 (2026-10-24) - PR #2594\n- Merged improvements and fixes for PR #2594."
   }
 ]

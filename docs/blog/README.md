@@ -549,6 +549,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [468](./468-pr2579-discover-muse-capability-sweep-models.md) | PR #2579 — discover Muse capability sweep models | [#2579](https://github.com/nikhilsoman/synlynk/pull/2579) | 2026-10-24 |
 | [469](./469-pr2591-sync-readme-test-count.md) | PR #2591 — sync README test count | [#2591](https://github.com/nikhilsoman/synlynk/pull/2591) | 2026-10-24 |
 | [470](./470-pr2589-log-count-reconcile-no-ops-gh-2139.md) | PR #2589 — log/count reconcile no-ops (gh:#2139) | [#2589](https://github.com/nikhilsoman/synlynk/pull/2589) | 2026-10-24 |
+| [471](./471-pr2594-oracle-self-transcript-cross-check-gh-23.md) | PR #2594 — oracle self-transcript cross-check (gh:#2309) | [#2594](https://github.com/nikhilsoman/synlynk/pull/2594) | 2026-10-24 |
 
 ## Per-PR Post Template
 
