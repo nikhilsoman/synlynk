@@ -652,3 +652,43 @@ def _seed_calibration_tasks(conn) -> None:
                 (str(uuid.uuid4()), role, "general", difficulty, template, now),
             )
     conn.commit()
+
+
+def _measured_sample_count(
+    conn,
+    agent: str | None = None,
+    *,
+    lookback_days: int | None = None,
+    as_of: str | None = None,
+) -> int:
+    """Return count of empirical capability_ratings samples gating routing decisions.
+
+    gh:#2547 Workstream E: rows with signal_source='baseline_seed' are synthetic
+    calibration seeds and must never count toward the n>=5 sample threshold that
+    gates routing decisions.
+    """
+    conditions = ["signal_source != 'baseline_seed'"]
+    params: list = []
+
+    if agent is not None:
+        conditions.append("agent = ?")
+        params.append(agent)
+
+    if as_of:
+        conditions.append("ts <= ?")
+        params.append(as_of)
+        if lookback_days is not None:
+            conditions.append("ts > datetime(?, ?)")
+            params.append(as_of)
+            params.append(f"-{int(lookback_days)} days")
+    elif lookback_days is not None:
+        conditions.append("ts > datetime('now', ?)")
+        params.append(f"-{int(lookback_days)} days")
+
+    where_clause = " AND ".join(conditions)
+    row = conn.execute(
+        f"SELECT COUNT(*) FROM capability_ratings WHERE {where_clause}",
+        params,
+    ).fetchone()
+    return int(row[0]) if row and row[0] is not None else 0
+

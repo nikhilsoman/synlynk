@@ -142,6 +142,24 @@ CREATE TABLE IF NOT EXISTS capability_ratings (
     ts                    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS job_timing_metrics (
+    job_id             TEXT PRIMARY KEY REFERENCES daemon_jobs(job_id),
+    harness            TEXT,
+    model              TEXT,
+    role               TEXT,
+    mode               TEXT CHECK (mode IS NULL OR mode IN ('home', 'headless')),
+    queue_seconds      REAL,
+    active_seconds     REAL,
+    ci_review_seconds  REAL,
+    human_wait_seconds REAL,
+    self_reported_json TEXT,
+    cross_check_status TEXT CHECK (
+        cross_check_status IS NULL OR
+        cross_check_status IN ('agree', 'disagree', 'absent')
+    ),
+    recorded_at        TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS pr_multiplier_applied (
     pr_number  INTEGER PRIMARY KEY,
     applied_at TEXT NOT NULL

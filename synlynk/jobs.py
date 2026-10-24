@@ -84,6 +84,12 @@ STATUS_CIRCUIT_BREAKER_TRIPPED = "circuit_breaker_tripped"
 # TERMINAL_JOB_STATUSES and from _reconcile_terminal_jobs_json's copy map.
 STATUS_PENDING_VERIFICATION = "pending_verification"
 
+
+class CostAttributionMismatch(Exception):
+    """Raised when a cost_entries write's harness/model disagrees with the
+    settled daemon_jobs row for the same job_id (gh:#2547 telemetry finding).
+    """
+
 ALL_JOB_STATUSES = frozenset({
     STATUS_COMPLETED,
     STATUS_FAILED,
@@ -837,14 +843,18 @@ def _task_delivery_has_corroborating_activity(job: Optional[dict], git_state, lo
         return True
     if _job_has_verified_gh_write_evidence(job):
         return True
-    if job:
+    if log_text:
+        from synlynk.verify_effects import extract_transcript_gh_evidence
+        ev = extract_transcript_gh_evidence(log_text)
+        if ev.get("comment_posted") or ev.get("pr_created") or ev.get("pr_merged") or ev.get("review_approved") or ev.get("closed"):
+            return True
+        if job:
+            task_type = (job.get("task_type") or "").strip().lower()
+            if job.get("requires_gh_write") or task_type in ("review", "merge", "gh_write", "github_write"):
+                return True
+    elif job:
         task_type = (job.get("task_type") or "").strip().lower()
         if job.get("requires_gh_write") or task_type in ("review", "merge", "gh_write", "github_write"):
-            if log_text:
-                from synlynk.verify_effects import extract_transcript_gh_evidence
-                ev = extract_transcript_gh_evidence(log_text)
-                if ev.get("review_approved") or ev.get("pr_merged") or ev.get("pr_created"):
-                    return True
             # For review/merge jobs that expect remote effects, zero diff / missing receipt is not a hard fail
             return True
     return False
@@ -3413,6 +3423,139 @@ def _persist_daemon_job_terminal(
     return (cursor.rowcount or 0) > 0
 
 
+def _extract_self_reported_timing(
+    job_id: str, conn: Optional[sqlite3.Connection] = None
+) -> Optional[dict]:
+    """Parses a structured timing block from the job's own final transcript
+    output, if present. Returns None when absent -- never raises."""
+    close_conn = False
+    try:
+        if conn is None:
+            get_db = _pkg("_get_db")
+            if get_db is None:
+                from synlynk import _get_db as get_db
+            conn = get_db()
+            close_conn = True
+        row = conn.execute(
+            "SELECT log_path FROM daemon_jobs WHERE job_id=?", (job_id,)
+        ).fetchone()
+        if not row:
+            return None
+        log_path = row[0]
+        if not log_path:
+            return None
+        transcript = _read_job_log(log_path)
+        if not transcript:
+            return None
+        tail = transcript[-4000:]
+        match = re.search(r"SYNLYNK_TIMING_SELF_REPORT:\s*(\S.*)", tail)
+        if not match:
+            return None
+        result = json.loads(match.group(1))
+        if not isinstance(result, dict):
+            return None
+        return result
+    except Exception:
+        return None
+    finally:
+        if close_conn and conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def _record_job_timing_metrics(conn, job_id: str, completed_at: str) -> None:
+    try:
+        row = conn.execute(
+            "SELECT actual_harness, resolved_model, requested_harness, "
+            "enqueued_at, started_at FROM daemon_jobs WHERE job_id=?",
+            (job_id,),
+        ).fetchone()
+        if not row:
+            return
+        harness, model, _requested, enqueued_at, started_at = row
+
+        def _parse(ts):
+            if not ts:
+                return None
+            try:
+                return time.mktime(time.strptime(ts, "%Y-%m-%dT%H:%M:%S"))
+            except Exception:
+                try:
+                    clean_ts = ts.replace("Z", "+00:00")
+                    return datetime.fromisoformat(clean_ts).timestamp()
+                except Exception:
+                    return None
+
+        queue_s = None
+        active_s = None
+        t_enq, t_start, t_end = _parse(enqueued_at), _parse(started_at), _parse(completed_at)
+        if t_enq is not None and t_start is not None:
+            queue_s = t_start - t_enq
+        if t_start is not None and t_end is not None:
+            active_s = t_end - t_start
+
+        try:
+            sig = inspect.signature(_extract_self_reported_timing)
+            if "conn" in sig.parameters:
+                self_reported = _extract_self_reported_timing(job_id, conn=conn)
+            else:
+                self_reported = _extract_self_reported_timing(job_id)
+        except TypeError:
+            self_reported = _extract_self_reported_timing(job_id)
+
+        cross_check = "absent"
+        if self_reported is not None:
+            try:
+                if isinstance(self_reported, dict):
+                    reported_active = self_reported.get("active_seconds")
+                    if (
+                        reported_active is not None
+                        and not isinstance(reported_active, bool)
+                        and isinstance(reported_active, (int, float))
+                        and active_s is not None
+                    ):
+                        cross_check = (
+                            "agree"
+                            if abs(reported_active - active_s) < 5
+                            else "disagree"
+                        )
+            except Exception:
+                cross_check = "absent"
+
+        self_reported_json = None
+        if self_reported is not None:
+            try:
+                self_reported_json = json.dumps(self_reported)
+            except Exception:
+                self_reported_json = None
+
+        conn.execute(
+            """INSERT INTO job_timing_metrics
+               (job_id, harness, model, queue_seconds, active_seconds,
+                self_reported_json, cross_check_status)
+               VALUES (?,?,?,?,?,?,?)
+               ON CONFLICT(job_id) DO UPDATE SET
+                 harness=excluded.harness, model=excluded.model,
+                 queue_seconds=excluded.queue_seconds,
+                 active_seconds=excluded.active_seconds,
+                 self_reported_json=excluded.self_reported_json,
+                 cross_check_status=excluded.cross_check_status""",
+            (
+                job_id,
+                harness,
+                model,
+                queue_s,
+                active_s,
+                self_reported_json,
+                cross_check,
+            ),
+        )
+    except Exception:
+        return
+
+
 def _settle_daemon_job_terminal(
     conn,
     job_id: str,
@@ -3455,6 +3598,7 @@ def _settle_daemon_job_terminal(
             else:
                 conn.rollback()
             return False
+        _record_job_timing_metrics(conn, job_id, completed_at)
         try:
             from synlynk.job_truth import canonical_status, record_evidence_and_reconcile
             terminal_ready = (
@@ -4661,6 +4805,15 @@ def _ensure_daemon_job_cost_entry(
         except Exception:
             return False
     try:
+        row = conn.execute(
+            "SELECT actual_harness, resolved_model FROM daemon_jobs WHERE job_id=?",
+            (job_id,),
+        ).fetchone()
+        if row and row[0] and agent and row[0] != agent:
+            raise CostAttributionMismatch(
+                f"cost_entries write for {job_id} requested agent={agent!r} but "
+                f"daemon_jobs.actual_harness={row[0]!r} -- refusing silent write"
+            )
         try:
             existing = conn.execute(
                 "SELECT 1 FROM cost_entries WHERE job_id=?", (job_id,)
@@ -4722,6 +4875,8 @@ def _ensure_daemon_job_cost_entry(
                 conn, job_id, "update_costs returned without a cost_entries row"
             )
             return False
+        except CostAttributionMismatch:
+            raise
         except Exception as exc:
             print(f"  ⚠ cost capture failed for {job_id}: {exc}")
             _mark_daemon_job_cost_missing(conn, job_id, f"{type(exc).__name__}: {exc}")
@@ -4813,10 +4968,57 @@ def _gtv_status_for_daemon_exit(
     return ("failed", exit_code, None, None)
 
 
+def _transcript_evidence_matches_target(
+    transcript_ev: dict,
+    gh_write_target: Optional[str],
+    expect: Optional[str] = None,
+) -> bool:
+    """Return True if positive transcript GitHub evidence matches the job target/expect."""
+    if not transcript_ev:
+        return False
+
+    target_str = str(gh_write_target or "").strip()
+    target_kind = None
+    target_num = None
+    if target_str:
+        if ":" in target_str:
+            target_kind, target_num = target_str.split(":", 1)
+            target_kind = target_kind.strip().lower()
+            target_num = target_num.strip()
+        elif target_str.isdigit():
+            target_num = target_str
+
+    # 1. PR review / merge evidence
+    if transcript_ev.get("pr_merged") or transcript_ev.get("review_approved"):
+        ev_pr = str(transcript_ev.get("pr_number") or "").strip()
+        if not target_num or ev_pr == target_num:
+            return True
+
+    # 2. PR creation evidence
+    if transcript_ev.get("pr_created"):
+        ev_pr = str(transcript_ev.get("pr_number") or "").strip()
+        if not target_num or target_kind == "issue" or ev_pr == target_num:
+            return True
+
+    # 3. Issue comment evidence
+    if transcript_ev.get("comment_posted"):
+        ev_issue = str(transcript_ev.get("issue_number") or "").strip()
+        if not target_num or ev_issue == target_num:
+            return True
+
+    # 4. Target close evidence
+    if transcript_ev.get("closed"):
+        ev_close = str(transcript_ev.get("closed_number") or "").strip()
+        if not target_num or ev_close == target_num:
+            return True
+
+    return False
+
+
 def _apply_gh_write_verification(
     conn, job_id: str, requires_gh_write, gh_write_target: Optional[str], status: str,
     since: Optional[str] = None, expect_author: Optional[str] = None,
-    expect: str = "closed",
+    expect: str = "closed", log_text: Optional[str] = None,
 ) -> tuple:
     """Consult GitHub state for a --requires-gh-write job and return status/outcome."""
     if not requires_gh_write:
@@ -4858,11 +5060,44 @@ def _apply_gh_write_verification(
     except Exception as exc:
         print(f"  ⚠ gh_write_verified failed for {job_id}: {exc}", file=sys.stderr)
         verified = None
+
+    if verified is not True:
+        if log_text is None and conn is not None and job_id:
+            try:
+                row = conn.execute(
+                    "SELECT log_path FROM daemon_jobs WHERE job_id=?",
+                    (job_id,),
+                ).fetchone()
+                if row and row[0] and os.path.exists(row[0]):
+                    with open(row[0], "r", errors="replace") as f:
+                        log_text = f.read()
+            except Exception:
+                pass
+        if log_text:
+            from synlynk.verify_effects import extract_transcript_gh_evidence
+            transcript_ev = extract_transcript_gh_evidence(log_text)
+            if _transcript_evidence_matches_target(transcript_ev, gh_write_target, expect=expect):
+                verified = True
+                evidence.update(transcript_ev)
+                evidence["source"] = "transcript"
+                if transcript_ev.get("pr_created") and transcript_ev.get("pr_number"):
+                    pr_num = transcript_ev["pr_number"]
+                    if not gh_write_target or gh_write_target.startswith("issue:"):
+                        try:
+                            conn.execute(
+                                "UPDATE daemon_jobs SET gh_write_target=?, gh_write_expect='pr_open' WHERE job_id=?",
+                                (f"pr:{pr_num}", job_id),
+                            )
+                        except sqlite3.OperationalError:
+                            pass
+
     verified_str = "true" if verified is True else ("false" if verified is False else "unknown")
     if verified_str == "unknown":
         attempts += 1
     if verified is False and status in ("done", "failed_unverified"):
         status = "succeeded_gh_write_failed"
+    elif verified is True and status in ("succeeded_gh_write_failed", "failed_unverified"):
+        status = "done"
     try:
         conn.execute(
             "UPDATE daemon_jobs SET gh_write_verified=?, gh_write_evidence=?, "
@@ -4991,6 +5226,7 @@ def _verify_daemon_terminal_status(
     gh_write_author: Optional[str],
     gh_write_expect: Optional[str],
     worktree_branch: Optional[str] = None,
+    log_text: Optional[str] = None,
 ) -> tuple:
     """Apply the configured GitHub-write check using daemon job metadata."""
     cross_branch_pr = _load_cross_branch_pr(conn, job_id)
@@ -5026,6 +5262,39 @@ def _verify_daemon_terminal_status(
             and not evidence.get("same_branch")
             and (gh_write_expect or "") not in ("merged", "pr_open", "created")
         ):
+            transcript_ok = False
+            if log_text is None and conn is not None and job_id:
+                try:
+                    row = conn.execute("SELECT log_path FROM daemon_jobs WHERE job_id=?", (job_id,)).fetchone()
+                    if row and row[0] and os.path.exists(row[0]):
+                        with open(row[0], "r", errors="replace") as f:
+                            log_text = f.read()
+                except Exception:
+                    pass
+            if log_text:
+                from synlynk.verify_effects import extract_transcript_gh_evidence
+                transcript_ev = extract_transcript_gh_evidence(log_text)
+                if _transcript_evidence_matches_target(transcript_ev, cross_branch_pr, expect=gh_write_expect):
+                    transcript_ok = True
+                    evidence.update(transcript_ev)
+                    evidence["source"] = "transcript"
+            if transcript_ok:
+                verified_str = "true"
+                try:
+                    conn.execute(
+                        "UPDATE daemon_jobs SET gh_write_verified=?, gh_write_evidence=? WHERE job_id=?",
+                        (verified_str, json.dumps(evidence) if evidence else None, job_id),
+                    )
+                except sqlite3.OperationalError:
+                    pass
+                _record_cross_branch_oracle(conn, job_id, evidence)
+                if status in (
+                    "timed_out", "failed_unverified", "succeeded_gh_write_failed",
+                    STATUS_COMPLETED_WITHOUT_CHANGES, STATUS_FAILED_NOOP_DENIED,
+                ):
+                    status = "done"
+                return status, verified_str
+
             verified_str = "false"
             try:
                 conn.execute(
@@ -5073,6 +5342,7 @@ def _verify_daemon_terminal_status(
         since=started_at,
         expect_author=gh_write_author,
         expect=resolved_expect,
+        log_text=log_text,
     )
 
 

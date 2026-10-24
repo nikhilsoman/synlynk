@@ -4814,14 +4814,27 @@ def cmd_cost_log(
 
     conn = _get_db()
     phase = None
-    if story_id:
-        row = conn.execute(
-            "SELECT discipline, phase FROM stories WHERE story_id=?",
-            (story_id,),
-        ).fetchone()
-        if row:
-            _, phase = row
-    conn.close()
+    try:
+        if job_id:
+            row = conn.execute(
+                "SELECT actual_harness, resolved_model FROM daemon_jobs WHERE job_id=?",
+                (job_id,),
+            ).fetchone()
+            if row and row[0] and agent and row[0] != agent:
+                from synlynk.jobs import CostAttributionMismatch
+                raise CostAttributionMismatch(
+                    f"cost_entries write for {job_id} requested agent={agent!r} but "
+                    f"daemon_jobs.actual_harness={row[0]!r} -- refusing silent write"
+                )
+        if story_id:
+            row = conn.execute(
+                "SELECT discipline, phase FROM stories WHERE story_id=?",
+                (story_id,),
+            ).fetchone()
+            if row:
+                _, phase = row
+    finally:
+        conn.close()
 
     model_version = model or extract_model_version("", agent=agent)
     payment_value = resolve_payment_value(agent, tokens_in, tokens_out, model=model_version)

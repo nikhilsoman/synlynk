@@ -1435,3 +1435,13 @@ def cmd_cost_billing(args=None) -> None:
             print(f"- {agent}: {mode}")
             
     print(f"\nTotal Monthly Subscription Fees: ${total_fee:.2f}")
+
+
+from synlynk.jobs import CostAttributionMismatch  # noqa: E402
+
+
+def cmd_cost_log(*args, **kwargs):
+    """CLI handler for `synlynk cost log`."""
+    from synlynk.db import cmd_cost_log as _cmd_cost_log
+    return _cmd_cost_log(*args, **kwargs)
+
