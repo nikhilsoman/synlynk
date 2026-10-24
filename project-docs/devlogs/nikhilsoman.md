@@ -1,3 +1,30 @@
+## 2026-10-24 v0.25.4 Task B closed — PR #2598 genuinely MERGED (4th self-inflicted/false-negative label this session), worktrees cleaned, moving to Task C [@claude]
+
+- **job-c5afa28b (Codex, review cycle 2) APPROVED, and PR #2598 is genuinely MERGED.**
+  Verified directly, not from the label: `gh pr view 2598 --json state,mergedAt,reviewDecision,
+  mergeCommit` → `state: MERGED`, `mergedAt: 2026-10-24T10:42:45Z`, `reviewDecision: APPROVED`,
+  `mergeCommit.oid: f1ac8f91e2dc2d42f15782128502ed66b25a4c76`. The review itself
+  (`gh pr view 2598 --json reviews`) confirms Codex's cycle-2 verdict was a real APPROVE on
+  commit `aef31875` ("attribution audit now detects both harness and model mismatches... 21
+  targeted tests passed, 9 mandated verification tests passed").
+- **`synlynk jobs --all` showed job-c5afa28b as `done` but with the same `stale_base` warning**
+  seen on job-2f97d374 — almost certainly self-inflicted again, from this session's own
+  checkpoint push (`7ce8b195`) advancing `release/v0.25.4` while the job ran against it as
+  base. **This is the 4th false/misleading status label this session on genuinely good work**
+  (`oracle_decision_missing` ×2, `stale_base`/`failed_verification`, `unpushed_branch`), vs. 2
+  genuine label matches (job-0b37b920's real stall, job-f1737930's real CHANGES_REQUESTED) —
+  directly relevant evidence for this release's own thesis.
+- **Worktree Hygiene Protocol applied:** `worktrees/job-2f97d374`, `worktrees/job-c5afa28b`,
+  `worktrees/job-f1737930` all confirmed clean (`git status --short` empty) and removed via
+  `git worktree remove`. Local branches `dispatch/agy/job-2f97d374`, `dispatch/codex/job-c5afa28b`,
+  `dispatch/codex/job-f1737930` force-deleted with `-D` (squash merge breaks literal `git branch -d`
+  ancestry check — PR's confirmed `state: MERGED` via `gh pr view` is the source of truth per
+  protocol). No matching remote branches existed (GitHub already auto-deleted on merge).
+- **Task B (gh:#2547 cost_entries/capability_ratings mismatch guard) is now fully closed**:
+  implementer (job-2f97d374) → genuine review 1 CHANGES_REQUESTED (job-f1737930) → fix
+  (job-f63f911f) → review 2 APPROVED+merged (job-c5afa28b). Next: Task C (job_timing_metrics
+  extraction), plan lines ~569-792 — reading exact scope/GOVERNS story id before dispatch.
+
 ## 2026-10-24 v0.25.4 Task B review cycle 1 resolved, fix landed on PR #2598, review cycle 2 dispatched [@claude]
 
 - **job-f1737930 (Codex, review 1) was a genuine CHANGES_REQUESTED** — real finding, label
