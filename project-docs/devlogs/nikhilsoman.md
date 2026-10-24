@@ -1,3 +1,43 @@
+## 2026-10-24 v0.25.4 Task C review cycle 1: genuine CHANGES_REQUESTED on PR #2599, fix dispatched [@claude]
+
+- **job-64a75f08 (Codex reviewer) completed with the usual recurring `stale_base` warning line** —
+  but this time, direct verification via `gh pr view 2599 --json state,mergedAt,reviewDecision,
+  statusCheckRollup,mergeCommit` + `--json reviews` showed a **genuine** `CHANGES_REQUESTED`, not
+  another false negative. Running session tally is now **5 false negatives** (oracle_decision_missing
+  x2, stale_base/failed_verification x2, unpushed_branch x1) vs **3 genuine label matches**
+  (job-0b37b920 real stall, job-f1737930 and job-64a75f08 real CHANGES_REQUESTED findings). The
+  `stale_base` warning line itself keeps being spurious noise (this session's own checkpoint
+  commits advancing the local `release/v0.25.4` ref while a job runs against it as base) — but the
+  underlying completion/review outcome must still be verified case-by-case; the warning predicts
+  nothing about whether the work/review itself is good or bad.
+- **Codex's finding is real and specific:** `_extract_self_reported_timing` (synlynk/jobs.py:3426)
+  is annotated `-> Optional[dict]` but actually returns `json.loads(match.group(1))` directly —
+  any JSON value, not necessarily a dict. A non-dict self-report (e.g. a bare list) then makes
+  `_record_job_timing_metrics`'s `self_reported.get("active_seconds")` raise `AttributeError`,
+  caught by the function's own outer `except Exception: return` (synlynk/jobs.py:3532-3533), which
+  silently suppresses the entire `job_timing_metrics` INSERT — including the objective
+  `queue_seconds`/`active_seconds` row that has nothing to do with the malformed self-report.
+  Same failure mode for a non-numeric `active_seconds` during the `abs(reported_active - active_s)`
+  subtraction at line 3509. Verified by direct read of both functions in the job-db67683d worktree
+  before drafting the fix dispatch, rather than taking the review comment's description on faith.
+- **Dispatched fix to Agy (job-9a0eb77d, `--model-tier fast` to force Gemini per
+  [[feedback_agy_gemini_only_dispatch]], `--base dispatch/agy/job-db67683d`, `--story
+  story-7adc5ff4`)** continuing the same branch — same pattern as Task B's review-cycle-2 fix.
+  Task: validate `isinstance(result, dict)` in `_extract_self_reported_timing` (return `None`
+  instead of a non-dict value); wrap the cross-check comparison in `_record_job_timing_metrics` so
+  a non-numeric `active_seconds` defaults `cross_check_status` to `"absent"` instead of raising
+  into the outer handler that currently swallows the whole INSERT; add 2 regression tests (non-dict
+  self-report, non-numeric `active_seconds`) asserting the objective metrics row is still inserted
+  in both cases. No reroute this time (stayed on Agy, unlike Task C's implementer dispatch which
+  rerouted codex→agy). Dispatch estimate: ~$0.16 (13,877 in / 8,000 out).
+- **Still holding the push to `release/v0.25.4`** — job-9a0eb77d is now running against
+  `dispatch/agy/job-db67683d` as base, and the branch itself still needs to land before that
+  checkpoint commit chain (`1e99c5a7` + this entry) can safely go up without disturbing an in-flight
+  job's base resolution.
+- Worktrees `worktrees/job-db67683d` and `worktrees/job-64a75f08` deliberately NOT cleaned up yet —
+  PR #2599 is still open, not merged. Correct per Worktree Hygiene Protocol (cleanup triggers on
+  merge, not on job completion).
+
 ## 2026-10-24 v0.25.4 Task C implementer done (PR #2599), 5th false-negative label, reviewer dispatched [@claude]
 
 - **job-db67683d reported `failed_verification` (exit 1) with the same `stale_base` warning**
