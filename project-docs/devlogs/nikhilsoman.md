@@ -1,3 +1,26 @@
+## 2026-10-24 v0.25.4 PR #2594 reviewer retry (job-0b37b920 genuine stall, redispatched as job-3eb944da) [@claude]
+
+- **job-0b37b920 (first reviewer attempt) was a genuine failure, not a false negative this time**
+  — verified directly: `gh pr view 2594` showed `state: OPEN`, `reviewDecision: ""`, no reviews,
+  no merge commit; its own log showed `files: 0 touched`, `FAILED_NOOP_DENIED`. Root cause: it ran
+  the full test suite as a background shell, which outlived the 10-minute wait ceiling and got
+  killed before the job ever reached the review/merge step. Correctly labeled this time — the
+  label matched reality, so no false-negative ticket needed.
+- **CI on PR #2594:** 5/6 checks green; the 1 failure (`release-docs`) is the known pre-existing
+  test-count drift (README says 5063, pytest now collects 5066 — expected churn from this
+  release's own test additions). `release/v0.25.4` has no branch protection
+  (`gh api .../protection` → 404), so this doesn't block merge; it only matters at actual
+  release-cut time via `synlynk release --check-docs`.
+- **Harness retry attempts:** Grok was blocked at dispatch preflight twice (`task needs ~153,658
+  input tokens; grok budget is 115,000` — `--context-mode task` didn't reduce the estimate).
+  Codex was blocked with `IncompatibleHarnessCapabilityError: forced harness 'codex' is excluded
+  from this dispatch` (likely a per-story exclusion after codex was rerouted away earlier in this
+  story's chain). Settled on redispatching to **Claude again** (job-3eb944da, `--model-tier fast`
+  this time, not the original's unspecified/pro-equivalent tier) with explicit instructions not to
+  run the full suite in the background — only the targeted new test file in the foreground.
+- Still cross-harness-compliant vs. the implementer (agy), even though this is Claude's 2nd
+  attempt.
+
 ## 2026-10-24 v0.25.4 Task A3 merged flow started (PR #2594), model-tier/capability-sweep gap flagged for RSI epic [@claude]
 
 - **job-464424a1 completed with a real commit** (`4476e06a`, verified directly: `git log
