@@ -3454,5 +3454,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2565 \u2014 add Synlynk onboarding guide + enable team mode (PR #2565, v0.25.2)\n\n\u2022 Merged improvements and fixes for PR #2565.\n\n#posts",
     "changelog": "### v0.25.2 (2026-10-24) - PR #2565\n- Merged improvements and fixes for PR #2565."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/463-pr2570-repair-capability-calibration-results-qu.md",
+    "title": "PR #2570 \u2014 repair capability_calibration_results.quality_verified unconditionally",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-24",
+    "pr": "#2570",
+    "version": "0.25.2",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2570."
+    ],
+    "tweet": "\ud83d\ude80 PR #2570 \u2014 repair capability_calibration_results.quality_verified unconditionally (PR #2570, v0.25.2)\n\n\u2022 Merged improvements and fixes for PR #2570.\n\n#posts",
+    "changelog": "### v0.25.2 (2026-10-24) - PR #2570\n- Merged improvements and fixes for PR #2570."
   }
 ]
