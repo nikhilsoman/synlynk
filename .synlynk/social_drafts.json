@@ -3534,5 +3534,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2580 \u2014 fold #2547 into v0.25.4's roadmap scope (PR #2580, v0.25.3)\n\n\u2022 Merged improvements and fixes for PR #2580.\n\n#posts",
     "changelog": "### v0.25.3 (2026-10-24) - PR #2580\n- Merged improvements and fixes for PR #2580."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/468-pr2579-discover-muse-capability-sweep-models.md",
+    "title": "PR #2579 \u2014 discover Muse capability sweep models",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-24",
+    "pr": "#2579",
+    "version": "0.25.3",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2579."
+    ],
+    "tweet": "\ud83d\ude80 PR #2579 \u2014 discover Muse capability sweep models (PR #2579, v0.25.3)\n\n\u2022 Merged improvements and fixes for PR #2579.\n\n#posts",
+    "changelog": "### v0.25.3 (2026-10-24) - PR #2579\n- Merged improvements and fixes for PR #2579."
   }
 ]
