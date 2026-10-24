@@ -3694,5 +3694,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2601 \u2014 release: v0.25.4 \u2014 accurate job status and completion evidence (PR #2601, v0.25.4)\n\n\u2022 Merged improvements and fixes for PR #2601.\n\n#posts",
     "changelog": "### v0.25.4 (2026-10-24) - PR #2601\n- Merged improvements and fixes for PR #2601."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/478-pr2602-flip-v0-25-4-roadmap-row-to-shipped.md",
+    "title": "PR #2602 \u2014 flip v0.25.4 roadmap row to shipped",
+    "author": "nikhilsoman",
+    "date": "2026-10-24",
+    "pr": "#2602",
+    "version": "0.25.4",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2602."
+    ],
+    "tweet": "\ud83d\ude80 PR #2602 \u2014 flip v0.25.4 roadmap row to shipped (PR #2602, v0.25.4)\n\n\u2022 Merged improvements and fixes for PR #2602.\n\n#posts",
+    "changelog": "### v0.25.4 (2026-10-24) - PR #2602\n- Merged improvements and fixes for PR #2602."
   }
 ]
