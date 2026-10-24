@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>v0.25.3 — Muse Readiness and Capacity-Routing Evidence | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 24, 2026</span>
+        
+          <span class="blog-post-pr">PR #TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">v0.25.3 — Muse Readiness and Capacity-Routing Evidence</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>Intent</h2>
+<p>v0.25.3 closes out the last open gate failures standing between the v0.25.x line and a clean release: giving Muse a real, bounded place in the fleet instead of leaving it unauthenticated and un-routable, and fixing three capability/cost-routing defects that were quietly feeding bad signal into the empirical capability policy this project runs on.</p>
+<h2>Context</h2>
+<p>The empirical capability policy (<code>.synlynk/policy.json</code>) only promotes a harness into a task-type's routing table once it clears a five-merged-job sample-size bar on measured <code>pr_review_cycles</code> and <code>total_cost_usd</code>. Muse couldn't clear that bar because it had never been authenticated or allowlisted for any dispatch — it had zero samples to measure. Separately, three defects were discovered that undermined the measurement itself: Codex's model-tier set collapsed to a single tier whenever discovery returned one model, <code>pr_review_cycles</code> turned out to be an inert metric that never varied across harnesses, and <code>capability_calibration_results.quality_verified</code> could silently default to a passing score instead of recording that verification never happened.</p>
+<h2>Pathway</h2>
+<p>Each fix went through its own design → plan → build cycle per this project's Brainstorm-First Policy:</p>
+<ul>
+<li><strong>Muse readiness (#2554):</strong> a short, approved spec turned the already-recorded decision — implement/test access only, no review or GitHub-write authority until Muse clears the five-merged-job bar — into <code>.synlynk/policy.json</code> changes: Muse added as a fallback harness for <code>implement</code>/<code>test</code> task types, explicitly excluded from <code>review</code>/<code>gh_write</code>/<code>pm</code>/<code>deploy</code>, and left in <code>not_yet_calibrated</code> until it has real samples.</li>
+<li><strong>Codex tier collapse (#2552):</strong> fixed so a single-model discovery response no longer erases the rest of Codex's known tier set.</li>
+<li><strong>Routing metric replacement (#2551):</strong> <code>pr_review_cycles</code> is retired as a routing signal and replaced with <code>dispatch_rework_rate</code>, which actually varies with harness performance.</li>
+<li><strong>Silent verification fallback (#2170):</strong> <code>quality_verified</code> defaulting silently to a passing value is now detected and surfaced rather than masquerading as a verified score; the calibration diff also now uses the recorded base SHA instead of a live merge-base, closing a second accuracy gap in the same code path.</li>
+<li><strong>Daemon pidfile crash (#2553):</strong> <code>status()</code> now tolerates a missing daemon pidfile instead of crashing, closing out an unrelated but blocking daemon-reliability gate.</li>
+</ul>
+<p>A deliberately separate decision was made <strong>not</strong> to bundle a capability sweep or a production backfill into this release. A prior sweep attempt under a $1.50 cost cap produced no useful output, and simply raising the cap isn't a fix for whatever bounded the sweep's scope — that work is being scoped fresh, as its own follow-up, with particular attention to Muse and Grok specifically now that Muse has a routable identity and Agy's prior quota exhaustion may no longer be a constraint.</p>
+<h2>Outcome</h2>
+<p>Muse is authenticated and usable at implement/test privilege. The routing and calibration signals that capability-based dispatch depends on are now measuring something real instead of a flat or silently-defaulted number. 5,058 tests collected. Quota/capacity truth for Muse remains explicitly unknown rather than estimated — that's the next piece of work, scoped separately rather than folded into this release.</p>
+<h2>Strategic Note: The Goal at the End of This Release</h2>
+<p>The next goalpost is the capability sweep itself: a bounded-scope, cost-estimated pass focused on Muse and Grok, run with Agy's quota status reconsidered, so the empirical policy has the samples it needs to actually promote or demote harnesses on measured evidence rather than interim defaults.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

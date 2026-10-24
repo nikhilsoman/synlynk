@@ -54,6 +54,23 @@ entitlement checks, and reconnect/status hardening remain follow-up work.</li>
 <li>Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.</li>
 <li>Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.</li>
 </ul>
+<div class="changelog-version-header"><span class="changelog-version">vv0.25.3</span><span class="changelog-date">2026-10-24</span></div>
+<h3 class="tag-added">Added</h3>
+- Muse authenticated, model-allowlisted, and usable at low privilege — implement/test access only, no review or GitHub-write authority until it clears the five-merged-job empirical capability bar (#2554, #2562).
+<h3 class="tag-fixed">Fixed</h3>
+- Keep Codex tiers when model-catalog discovery returns a single model, instead of collapsing the tier set (#2552, #2560).
+- Replace the inert `pr_review_cycles` metric with `dispatch_rework_rate` so capability/cost routing proposals are no longer computed from a signal that never varied (#2551, #2563).
+- Detect a silent `quality_verified` default-5.0 fallback in capability calibration results, so a missing verification signal can no longer masquerade as a real score (#2170, #2570), and use the recorded base SHA rather than a live merge-base for the calibration diff (#2567, #2568).
+- Tolerate a missing daemon pidfile in `status()` instead of crashing (#2553, #2564).
+<h3 class="tag-changed">Changed</h3>
+- Quota/capacity truth for Muse remains explicitly unknown rather than estimated; completing it is deferred to a separately-scoped capability sweep.
+- Onboarding guide and team mode documentation (#2565).
+- docs: reconcile project-docs drift stranded in stale fix/claude/2567 worktree (#2571)
+- docs: implementation plan for Muse capability readiness (gh:#2554) (#2559)
+- docs: Muse capability readiness design spec (gh:#2554) (#2556)
+- docs: record Nikhil's v0.25.3 sign-off on two design specs (#2555)
+- docs: record the shipped v0.25.2 release in roadmap bookkeeping (#2550)
+<hr>
 <div class="changelog-version-header"><span class="changelog-version">vv0.25.2</span><span class="changelog-date">2026-10-23</span></div>
 <h3 class="tag-fixed">Fixed</h3>
 - Rank `self_report` above `execution_log` so a scraped log row cannot outrank a probe or self-report (#2449, #2548).
