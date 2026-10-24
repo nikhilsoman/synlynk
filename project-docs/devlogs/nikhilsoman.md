@@ -1,3 +1,47 @@
+## 2026-10-24 v0.25.4 Task A3 closed — PR #2594 genuinely merged (job-3eb944da), "instruction receipt untrusted" warning anomaly flagged, worktrees cleaned [@claude]
+
+- **job-3eb944da (second reviewer retry) succeeded genuinely.** Verified directly, not from the
+  status label: `gh pr view 2594 --json state,mergedAt,reviewDecision,mergeCommit` →
+  `state: MERGED`, `mergedAt: 2026-10-24T09:40:12Z`, `reviewDecision: APPROVED`,
+  `mergeCommit.oid: d5f470ff7606afce9949252d8cccae55d0e6c600`. `gh pr view 2594 --json reviews` →
+  one real `APPROVED` review from the role-scoped GitHub App identity `synlynk-synlynk-qa` at
+  commit `4476e06af325a7dd142a4424c62f50f0a4c9f4de` (the correct implementer commit, matching
+  job-464424a1's work). Task A3 (#2309 oracle self-transcript cross-check fix) is done.
+- **New anomaly found, not yet explained — flagging rather than dropping it, since job-status
+  label accuracy is this release's own subject matter.** `synlynk jobs --all` showed a warning on
+  job-3eb944da never seen elsewhere this session: `⚠ job job-3eb944da instruction receipt is
+  untrusted (status='absent', expected='0.23.0-dev') — unattended completion/merge blocked`. The
+  job's own status was `done` and the merge genuinely happened (confirmed above) — so whatever
+  this check gates, it did not actually block anything here. This is the inverse of the usual
+  false-negative pattern this release is fixing (which claims failure on a real success): this
+  one claims a block that didn't occur. Two live hypotheses, neither confirmed: (a) the warning is
+  stale/cosmetic and refers to a different gate than the one that actually permitted the merge
+  (e.g. the merge went through the reviewer's own dispatched-job gh-write path, which may not be
+  subject to this particular "unattended" check at all); or (b) the check is real but was silently
+  bypassed. Not investigated further this session — noting here and leaving as a candidate for
+  Task D's RSI-epic scaffold or a standalone ticket; did not file a ticket yet pending a closer
+  look at where this warning string originates (`synlynk jobs`'s status-line formatter).
+- **Worktree Hygiene Protocol applied for both A3 jobs now that the merge is confirmed:**
+  `worktrees/job-464424a1` and `worktrees/job-3eb944da` both had clean `git status --short`
+  (verified before removal), both removed via `git worktree remove`; local branches
+  `dispatch/agy/job-464424a1` and `dispatch/claude/job-3eb944da` deleted (`git branch -d`, both
+  recognized as merged); remote branches checked via `git ls-remote --heads origin` — both
+  existed, both deleted via `git push origin --delete`. job-0b37b920's worktree/branch were
+  already cleaned up earlier this segment (genuine failure, 0 files touched, no artifacts to
+  preserve).
+- **Model-tier / capability-sweep gap (raised by Nikhil mid-session) — still unresolved, not
+  acted on.** Confirmed via direct code read that `dispatch.py`'s `resolve_model_tier()` and the
+  static `_DEFAULT_MODELS_BY_TIER` table have zero connection to `capability_sweep.py`/
+  `capability_ratings` — tier selection is pure keyword/impact-score heuristic. This is a real
+  gap, but conflicts with Nikhil's own earlier scope decision folding #2547 into v0.25.4 as
+  "audit+guard boundary only, capability-sweep/dispatch-allocation mechanics explicitly out of
+  scope." Asked Nikhil whether to file a standalone ticket now or fold into Task D's RSI scaffold
+  notes — not yet answered. Proceeding with Task B next per Nikhil's most recent explicit
+  instruction; will carry this question forward rather than block on it.
+- **Task A3 (#2309) is fully closed: spec → plan → dispatch → review → merge → verify → cleanup
+  → checkpoint.** Moving to Task B (cost_entries/capability_ratings mismatch guard, GOVERNS
+  story-fc0200e8) next.
+
 ## 2026-10-24 v0.25.4 PR #2594 reviewer retry (job-0b37b920 genuine stall, redispatched as job-3eb944da) [@claude]
 
 - **job-0b37b920 (first reviewer attempt) was a genuine failure, not a false negative this time**
