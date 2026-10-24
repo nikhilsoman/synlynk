@@ -543,6 +543,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [463](./463-pr2570-repair-capability-calibration-results-qu.md) | PR #2570 — repair capability_calibration_results.quality_verified unconditionally | [#2570](https://github.com/nikhilsoman/synlynk/pull/2570) | 2026-10-24 |
 | [280](./280-prTBD-v0.25.3.md) | v0.25.3 — Muse Readiness and Capacity-Routing Evidence | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-10-24 |
 | [464](./464-pr2575-v0-25-3-muse-readiness-and-capacity-rout.md) | PR #2575 — v0.25.3 - Muse readiness and capacity-routing evidence | [#2575](https://github.com/nikhilsoman/synlynk/pull/2575) | 2026-10-24 |
+| [465](./465-pr2577-sync-cost-telemetry-write-through-after-.md) | PR #2577 — sync cost telemetry write-through after v0.25.3 release | [#2577](https://github.com/nikhilsoman/synlynk/pull/2577) | 2026-10-24 |
 
 ## Per-PR Post Template
 

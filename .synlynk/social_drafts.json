@@ -3486,5 +3486,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2575 \u2014 v0.25.3 - Muse readiness and capacity-routing evidence (PR #2575, v0.25.3)\n\n\u2022 Merged improvements and fixes for PR #2575.\n\n#posts",
     "changelog": "### v0.25.3 (2026-10-24) - PR #2575\n- Merged improvements and fixes for PR #2575."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/465-pr2577-sync-cost-telemetry-write-through-after-.md",
+    "title": "PR #2577 \u2014 sync cost telemetry write-through after v0.25.3 release",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-24",
+    "pr": "#2577",
+    "version": "0.25.3",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2577."
+    ],
+    "tweet": "\ud83d\ude80 PR #2577 \u2014 sync cost telemetry write-through after v0.25.3 release (PR #2577, v0.25.3)\n\n\u2022 Merged improvements and fixes for PR #2577.\n\n#posts",
+    "changelog": "### v0.25.3 (2026-10-24) - PR #2577\n- Merged improvements and fixes for PR #2577."
   }
 ]
