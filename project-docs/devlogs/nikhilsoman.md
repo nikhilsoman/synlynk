@@ -1,3 +1,22 @@
+## 2026-10-24 v0.25.4 Task C dispatched (job-db67683d, job_timing_metrics extraction) [@claude]
+
+- Read Task C's exact scope from the plan (lines 569-790) before dispatching, confirmed
+  `story-7adc5ff4` (linked `goal-e262d406`) is the correct GOVERNS story per the recorded
+  scaffold (devlog line ~335-337).
+- **Corrected a stub in the plan before dispatch:** the plan's `_extract_self_reported_timing`
+  sketch calls a non-existent `_daemon_job_log_path` helper. Verified via
+  `grep -n "_daemon_job_log_path\|_settle_daemon_job_terminal" synlynk/jobs.py` — no such
+  function exists. The real pattern (used at jobs.py:1158/2487) is reading the `daemon_jobs`
+  row's `log_path` column directly (`job.get('log_file') or job.get('log_path')`), then
+  passing it to the existing `_read_job_log(log_path)` helper (jobs.py:407). Included this
+  correction directly in the dispatch task text rather than letting the implementer hit the
+  same dead end.
+- Dispatched `codex --model-tier fast --base release/v0.25.4 --story story-7adc5ff4`;
+  capability router rerouted `codex` → `agy` (same pattern seen earlier this session).
+  `--model-tier fast` keeps Agy on its Gemini tier per the standing
+  `feedback_agy_gemini_only_dispatch` memory — not the exhausted `claude-opus-4-6-thinking`
+  credit pool. job-db67683d, estimated ~$0.16 (13,699 in / 8,000 out).
+
 ## 2026-10-24 v0.25.4 Task B closed — PR #2598 genuinely MERGED (4th self-inflicted/false-negative label this session), worktrees cleaned, moving to Task C [@claude]
 
 - **job-c5afa28b (Codex, review cycle 2) APPROVED, and PR #2598 is genuinely MERGED.**
