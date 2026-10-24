@@ -142,3 +142,88 @@ def test_import_guard_from_costs():
     assert issubclass(CostAttributionMismatch, Exception)
     assert callable(cmd_cost_log)
 
+
+def test_audit_script_flags_model_mismatch_with_matching_harness(monkeypatch, project_dir, capsys):
+    import synlynk
+    from scripts.audit_cost_attribution_mismatches import main as audit_main
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, actual_harness, resolved_model) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("job-model-mismatch", "codex", "task", "done", 5, "[]", None,
+         "2026-10-02T00:00:00", "codex", "codex-5.1"),
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, actual_harness, resolved_model) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("job-all-match", "codex", "task", "done", 5, "[]", None,
+         "2026-10-02T00:00:00", "codex", "codex-5.1"),
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, actual_harness, resolved_model) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("job-null-model", "codex", "task", "done", 5, "[]", None,
+         "2026-10-02T00:00:00", "codex", None),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, harness, model, job_id, cost_source) "
+        "VALUES (?,?,?,?,?)",
+        ("2026-10-24", "codex", "codex-5.0", "job-model-mismatch", "test"),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, harness, model, job_id, cost_source) "
+        "VALUES (?,?,?,?,?)",
+        ("2026-10-24", "codex", "codex-5.1", "job-all-match", "test"),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, harness, model, job_id, cost_source) "
+        "VALUES (?,?,?,?,?)",
+        ("2026-10-24", "codex", "codex-5.1", "job-null-model", "test"),
+    )
+    conn.commit()
+    conn.close()
+
+    exit_code = audit_main()
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "1 mismatched cost_entries rows:" in captured.out
+    assert "job_id=job-model-mismatch" in captured.out
+    assert "'codex-5.0' vs 'codex-5.1'" in captured.out
+    assert "job-all-match" not in captured.out
+    assert "job-null-model" not in captured.out
+
+
+def test_audit_script_clean_when_no_mismatches(monkeypatch, project_dir, capsys):
+    import synlynk
+    from scripts.audit_cost_attribution_mismatches import main as audit_main
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, actual_harness, resolved_model) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("job-clean", "codex", "task", "done", 5, "[]", None,
+         "2026-10-02T00:00:00", "codex", "codex-5.1"),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, harness, model, job_id, cost_source) "
+        "VALUES (?,?,?,?,?)",
+        ("2026-10-24", "codex", "codex-5.1", "job-clean", "test"),
+    )
+    conn.commit()
+    conn.close()
+
+    exit_code = audit_main()
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "No attribution mismatches found." in captured.out
+
+

@@ -16,13 +16,16 @@ def main():
                   dj.actual_harness, dj.resolved_model
            FROM cost_entries ce
            JOIN daemon_jobs dj ON ce.job_id = dj.job_id
-           WHERE dj.actual_harness IS NOT NULL
-             AND ce.harness IS NOT NULL
-             AND ce.harness != dj.actual_harness"""
+           WHERE (dj.actual_harness IS NOT NULL
+                  AND ce.harness IS NOT NULL
+                  AND ce.harness != dj.actual_harness)
+              OR (ce.model IS NOT NULL
+                  AND dj.resolved_model IS NOT NULL
+                  AND ce.model != dj.resolved_model)"""
     ).fetchall()
     conn.close()
     if not rows:
-        print("No harness-attribution mismatches found.")
+        print("No attribution mismatches found.")
         return 0
     print(f"{len(rows)} mismatched cost_entries rows:")
     for r in rows:
