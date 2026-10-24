@@ -555,6 +555,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [474](./474-pr2597-synlynk-work-loop-design-spec-held-pendi.md) | PR #2597 — synlynk work loop design spec (held pending decision) | [#2597](https://github.com/nikhilsoman/synlynk/pull/2597) | 2026-10-24 |
 | [475](./475-pr2599-job-timing-metrics-extraction-gh-2547.md) | PR #2599 — job_timing_metrics extraction (gh:#2547) | [#2599](https://github.com/nikhilsoman/synlynk/pull/2599) | 2026-10-24 |
 | [476](./476-pr2600-capability-sweep-sample-gate-boundary-gu.md) | PR #2600 — capability-sweep sample-gate boundary guard (gh:#2547) | [#2600](https://github.com/nikhilsoman/synlynk/pull/2600) | 2026-10-24 |
+| [477](./477-pr2601-release-v0-25-4-accurate-job-status-and-.md) | PR #2601 — release: v0.25.4 — accurate job status and completion evidence | [#2601](https://github.com/nikhilsoman/synlynk/pull/2601) | 2026-10-24 |
 
 ## Per-PR Post Template
 

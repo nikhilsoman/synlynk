@@ -3678,5 +3678,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2600 \u2014 capability-sweep sample-gate boundary guard (gh:#2547) (PR #2600, v0.25.3)\n\n\u2022 Merged improvements and fixes for PR #2600.\n\n#posts",
     "changelog": "### v0.25.3 (2026-10-24) - PR #2600\n- Merged improvements and fixes for PR #2600."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/477-pr2601-release-v0-25-4-accurate-job-status-and-.md",
+    "title": "PR #2601 \u2014 release: v0.25.4 \u2014 accurate job status and completion evidence",
+    "author": "nikhilsoman",
+    "date": "2026-10-24",
+    "pr": "#2601",
+    "version": "0.25.4",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2601."
+    ],
+    "tweet": "\ud83d\ude80 PR #2601 \u2014 release: v0.25.4 \u2014 accurate job status and completion evidence (PR #2601, v0.25.4)\n\n\u2022 Merged improvements and fixes for PR #2601.\n\n#posts",
+    "changelog": "### v0.25.4 (2026-10-24) - PR #2601\n- Merged improvements and fixes for PR #2601."
   }
 ]
