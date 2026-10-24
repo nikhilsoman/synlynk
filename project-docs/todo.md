@@ -412,6 +412,7 @@ CRITICAL CONTEXT: your dispatch worktree  [testing] <!-- id:story-issue-2 -->
 - [ ] BS-8: stuck detection + one-shot consult from capability matrix + Expert Consult injection [dispatch] <!-- id:story-bs8-consult -->
 - [ ] BS-8: synlynk probe — ambient harness capability drift detection + publish pipeline [tooling] <!-- id:story-bs8-probe -->
 - [ ] BS-7: brainstorm — skill pack interoperability + benchmarks (Superpowers/GStack/GSD) [platform] <!-- id:story-bs7-interop -->
+- [ ] Fix capability_calibration_results.quality_verified migration gap (gh:#2569) [backend] <!-- id:story-2349673f -->
 - [ ] Reconcile project-docs drift stranded in stale fix/claude/2567 worktree [backend] <!-- id:story-dda00e7b -->
 - [ ] Capability-sweep executor output is contaminated by stale worktree diff when dispatched from a non-main branch [testing] <!-- id:story-issue-2567 -->
 - [ ] Write a 3-bullet status update summarizing a completed feature. [backend] <!-- id:story-adhoc-1792806578 -->

@@ -2342,6 +2342,17 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
         definition="INTEGER",
     )
 
+    # Same gap as capability_ratings above, for the sibling column on
+    # capability_calibration_results (gh:#2569): it was only ever added
+    # inside the version-gated legacy block (see the dead ALTER near the
+    # CREATE TABLE above), so it never reaches an already-migrated database.
+    _add_column_if_missing(
+        conn,
+        table="capability_calibration_results",
+        column="quality_verified",
+        definition="INTEGER",
+    )
+
     _migrate_onboarding_sessions(conn)
     conn.commit()
 
