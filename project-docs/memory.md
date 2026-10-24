@@ -274,3 +274,13 @@
   The same-day pre-tag note that the arc stayed planned applied only until
   this tag. [@grok]
 
+
+- **2026-10-24 v0.25.5 Scope Decision & CI Stabilization Spec:** Approved Option A
+  scope for `v0.25.5` with Nikhil: selftest isolation & xdist concurrency (#2527/#2526),
+  release-docs test-count decoupling (#2522), sparse-checkout cone verification
+  (#2320/#2202), CI path filtering / matrix acceleration under 180s (#2529 & directive),
+  and calibration diff-base contamination (#2567). Explicitly deferred review-sandbox
+  tickets (#2573, #2409, #2092, #2259, #2438) to v0.25.6 (tagged on #2535), and
+  home-claim / dispatch preflight tickets (#2511, #2185, #2233, #2133) to v0.26.1
+  (tagged on #2469). Spec committed to `docs/superpowers/specs/2026-10-24-ci-and-release-integrity-stabilization-design.md`.
+  [@agy]
