@@ -402,7 +402,7 @@ Shipped 2026-10-24. Tag v0.25.3 is ce28b3b4f1ef2eda3432b706441d8d6187ac14b5 and 
 
 ## v0.25.4 — Accurate job status and completion evidence [planned] (target: 2026-10-25)
 
-Daily stable gate: accurate, auditable job status and completion evidence, including GitHub-write outcomes. Revalidate #2138, #2139, #2309 and #2530 against current main. Parent #2458; release epic #2467; goals goal-079e2f37, goal-9ef9a965, goal-eacab0dc.
+Daily stable gate: accurate, auditable job status and completion evidence, including GitHub-write outcomes. Revalidate #2138, #2139, #2309 and #2530 against current main. Folded in 2026-10-24: #2547 ([Epic] Harness velocity: RSI loops) — its timing/telemetry investigation across Claude/Codex/Agy/Grok/Muse in home and headless modes is evidence toward this release's job-status/completion-evidence gate, not a separate code change. #2547 itself keeps running independently and is not to be redirected or merged into other in-flight work; this entry only gives it a landing release so it isn't an untracked loose thread. Parent #2458; release epic #2467; goals goal-079e2f37, goal-9ef9a965, goal-eacab0dc.
 
 
 ## v0.26.1 — Workspace-agent charter and role operations [planned] (target: 2026-10-29)
