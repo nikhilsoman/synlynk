@@ -54,6 +54,15 @@ entitlement checks, and reconnect/status hardening remain follow-up work.</li>
 <li>Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.</li>
 <li>Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.</li>
 </ul>
+<div class="changelog-version-header"><span class="changelog-version">vv0.25.4</span><span class="changelog-date">2026-10-24</span></div>
+<h3 class="tag-fixed">Fixed</h3>
+- Oracle self-transcript cross-check no longer false-negatives a genuinely successful review/merge job as `succeeded_gh_write_failed` (gh:#2309, #2594).
+- `cost_entries`/`capability_ratings` attribution mismatch guard catches a dispatched job's cost row being logged against the wrong harness/role before it silently corrupts routing evidence (gh:#2547, #2598).
+- Exclude synthetic `baseline_seed` calibration rows from the capability-sweep n≥5 sample gate that backs GitHub-write routing evidence, so a seeded calibration row can no longer count as a real measured sample (gh:#2547, #2600).
+<h3 class="tag-added">Added</h3>
+- `job_timing_metrics` extraction hook records structured post-job timing telemetry (active/idle seconds, self-reported vs. measured cross-check) for every dispatched job (gh:#2547, #2599).
+<h3 class="tag-changed">Changed</h3>
+- `_reconcile_terminal_jobs_json` now logs and surfaces a count when it no-ops on an already-terminal `daemon_jobs` row, instead of silently doing nothing (gh:#2139, #2589).
 <div class="changelog-version-header"><span class="changelog-version">vv0.25.3</span><span class="changelog-date">2026-10-24</span></div>
 <h3 class="tag-added">Added</h3>
 - Muse authenticated, model-allowlisted, and usable at low privilege — implement/test access only, no review or GitHub-write authority until it clears the five-merged-job empirical capability bar (#2554, #2562).
