@@ -84,6 +84,12 @@ STATUS_CIRCUIT_BREAKER_TRIPPED = "circuit_breaker_tripped"
 # TERMINAL_JOB_STATUSES and from _reconcile_terminal_jobs_json's copy map.
 STATUS_PENDING_VERIFICATION = "pending_verification"
 
+
+class CostAttributionMismatch(Exception):
+    """Raised when a cost_entries write's harness/model disagrees with the
+    settled daemon_jobs row for the same job_id (gh:#2547 telemetry finding).
+    """
+
 ALL_JOB_STATUSES = frozenset({
     STATUS_COMPLETED,
     STATUS_FAILED,
@@ -4665,6 +4671,15 @@ def _ensure_daemon_job_cost_entry(
         except Exception:
             return False
     try:
+        row = conn.execute(
+            "SELECT actual_harness, resolved_model FROM daemon_jobs WHERE job_id=?",
+            (job_id,),
+        ).fetchone()
+        if row and row[0] and agent and row[0] != agent:
+            raise CostAttributionMismatch(
+                f"cost_entries write for {job_id} requested agent={agent!r} but "
+                f"daemon_jobs.actual_harness={row[0]!r} -- refusing silent write"
+            )
         try:
             existing = conn.execute(
                 "SELECT 1 FROM cost_entries WHERE job_id=?", (job_id,)
@@ -4726,6 +4741,8 @@ def _ensure_daemon_job_cost_entry(
                 conn, job_id, "update_costs returned without a cost_entries row"
             )
             return False
+        except CostAttributionMismatch:
+            raise
         except Exception as exc:
             print(f"  ⚠ cost capture failed for {job_id}: {exc}")
             _mark_daemon_job_cost_missing(conn, job_id, f"{type(exc).__name__}: {exc}")
