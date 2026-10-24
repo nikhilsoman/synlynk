@@ -539,6 +539,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [459](./459-pr2568-use-recorded-base-sha-for-calibration-di.md) | PR #2568 — use recorded base_sha for calibration diff, not live merge-base (#2567) | [#2568](https://github.com/nikhilsoman/synlynk/pull/2568) | 2026-10-23 |
 | [460](./460-pr2571-reconcile-project-docs-drift-stranded-in.md) | PR #2571 — reconcile project-docs drift stranded in stale fix/claude/2567 worktree | [#2571](https://github.com/nikhilsoman/synlynk/pull/2571) | 2026-10-24 |
 | [461](./461-pr2572-reconcile-project-docs-drift-stranded-in.md) | PR #2572 — reconcile project-docs drift stranded in PR #2571's review worktree | [#2572](https://github.com/nikhilsoman/synlynk/pull/2572) | 2026-10-24 |
+| [462](./462-pr2565-add-synlynk-onboarding-guide-enable-team.md) | PR #2565 — add Synlynk onboarding guide + enable team mode | [#2565](https://github.com/nikhilsoman/synlynk/pull/2565) | 2026-10-24 |
 
 ## Per-PR Post Template
 

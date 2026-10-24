@@ -3438,5 +3438,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2572 \u2014 reconcile project-docs drift stranded in PR #2571's review worktree (PR #2572, v0.25.2)\n\n\u2022 Merged improvements and fixes for PR #2572.\n\n#posts",
     "changelog": "### v0.25.2 (2026-10-24) - PR #2572\n- Merged improvements and fixes for PR #2572."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/462-pr2565-add-synlynk-onboarding-guide-enable-team.md",
+    "title": "PR #2565 \u2014 add Synlynk onboarding guide + enable team mode",
+    "author": "nikhilsoman",
+    "date": "2026-10-24",
+    "pr": "#2565",
+    "version": "0.25.2",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2565."
+    ],
+    "tweet": "\ud83d\ude80 PR #2565 \u2014 add Synlynk onboarding guide + enable team mode (PR #2565, v0.25.2)\n\n\u2022 Merged improvements and fixes for PR #2565.\n\n#posts",
+    "changelog": "### v0.25.2 (2026-10-24) - PR #2565\n- Merged improvements and fixes for PR #2565."
   }
 ]
