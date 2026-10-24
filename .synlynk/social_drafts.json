@@ -3422,5 +3422,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2571 \u2014 reconcile project-docs drift stranded in stale fix/claude/2567 worktree (PR #2571, v0.25.2)\n\n\u2022 Merged improvements and fixes for PR #2571.\n\n#posts",
     "changelog": "### v0.25.2 (2026-10-24) - PR #2571\n- Merged improvements and fixes for PR #2571."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/461-pr2572-reconcile-project-docs-drift-stranded-in.md",
+    "title": "PR #2572 \u2014 reconcile project-docs drift stranded in PR #2571's review worktree",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-24",
+    "pr": "#2572",
+    "version": "0.25.2",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2572."
+    ],
+    "tweet": "\ud83d\ude80 PR #2572 \u2014 reconcile project-docs drift stranded in PR #2571's review worktree (PR #2572, v0.25.2)\n\n\u2022 Merged improvements and fixes for PR #2572.\n\n#posts",
+    "changelog": "### v0.25.2 (2026-10-24) - PR #2572\n- Merged improvements and fixes for PR #2572."
   }
 ]
