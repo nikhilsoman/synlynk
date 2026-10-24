@@ -3502,5 +3502,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2577 \u2014 sync cost telemetry write-through after v0.25.3 release (PR #2577, v0.25.3)\n\n\u2022 Merged improvements and fixes for PR #2577.\n\n#posts",
     "changelog": "### v0.25.3 (2026-10-24) - PR #2577\n- Merged improvements and fixes for PR #2577."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/466-pr2578-record-the-shipped-v0-25-3-release-in-ro.md",
+    "title": "PR #2578 \u2014 record the shipped v0.25.3 release in roadmap bookkeeping",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-24",
+    "pr": "#2578",
+    "version": "0.25.3",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2578."
+    ],
+    "tweet": "\ud83d\ude80 PR #2578 \u2014 record the shipped v0.25.3 release in roadmap bookkeeping (PR #2578, v0.25.3)\n\n\u2022 Merged improvements and fixes for PR #2578.\n\n#posts",
+    "changelog": "### v0.25.3 (2026-10-24) - PR #2578\n- Merged improvements and fixes for PR #2578."
   }
 ]
