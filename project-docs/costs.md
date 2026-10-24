@@ -1710,6 +1710,12 @@
 | 2026-10-24 07:12 | claude | claude-sonnet-4-6 | 58759 | 840 | $0.1479 [sub] (API: $0.1889) | estimated_token_rate | story-adhoc-1792806082 | exec: claude job job-6613a... |
 | 2026-10-24 07:21 | grok | grok-3 | 69796 | 6718 | $0.5017 [sub] (API: $0.3102) | estimated_token_rate | story-adhoc-1792806578 | exec: grok job job-628b605... |
 | 2026-10-24 07:21 | codex | o4-mini | 23661 | 395 | $0.0006 [sub] (API: $0.0404) | estimated_token_rate | story-issue-2567 | exec: codex job job-d4771d... |
+| 2026-10-24 08:25 | codex | o4-mini | 2246600 | 9346 | $0.0047 [sub] (API: $0.4083) | estimated_token_rate | story-2349673f | exec: codex job job-cbbc68... |
+| 2026-10-24 08:47 | claude | claude-sonnet-4-6 | 50000 | 8000 | $0.1439 [sub] (API: $0.2700) | estimated_manual | - | native PM-session work: spec/plan authoring, dispatch, verification, PR for gh:#2569 |
+| 2026-10-24 08:47 | codex | o4-mini | 2246600 | 9346 | $0.1078 [sub] (API: $6.8800) | estimated_manual | - | dispatched implementation for gh:#2569 |
+| 2026-10-24 08:47 | claude | claude-sonnet-4-6 | 50000 | 8000 | $0.1439 [sub] (API: $0.2700) | estimated_manual | story-2349673f | native PM-session work: spec/plan authoring, dispatch, verification, PR for gh:#2569 |
+| 2026-10-24 08:47 | codex | o4-mini | 2246600 | 9346 | $0.1078 [sub] (API: $6.8800) | estimated_manual | story-2349673f | dispatched implementation for gh:#2569 |
+| 2026-10-24 08:48 | agy | unknown | 0 | 0 | $0.0000 [sub] (API: $0.0000) | estimated_token_rate | story-2349673f | exec: agy job job-3e3d4a41 |
 | 2026-10-24 08:47 | codex | o4-mini | 2246600 | 9346 | $0.1078 [sub] (API: $6.8800) | estimated_manual | story-2349673f | dispatched implementation for gh:#2569 |
 | 2026-10-24 08:47 | claude | claude-sonnet-4-6 | 50000 | 8000 | $0.1439 [sub] (API: $0.2700) | estimated_manual | - | native PM-session work: spec/plan authoring, dispatch, verification, PR for gh:#2569 |
 | 2026-10-24 08:47 | claude | claude-sonnet-4-6 | 50000 | 8000 | $0.1439 [sub] (API: $0.2700) | estimated_manual | story-2349673f | native PM-session work: spec/plan authoring, dispatch, verification, PR for gh:#2569 |
@@ -1721,6 +1727,11 @@
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
+| claude | $20.00 | $64.2800 | $112.5390 | $48.2590 |
+| codex | $20.00 | $28.5712 | $1864.5264 | $1835.9552 |
+| agy | $20.00 | $23.9524 | $119.4768 | $95.5244 |
+| grok | $30.00 | $189.1337 | $139.7475 | $-49.3862 |
+| **Total** | **$90.00** | **$305.9373** | **$2236.2897** | **$1930.3524** |
 | claude | $20.00 | $64.3234 | $112.6215 | $48.2981 |
 | codex | $20.00 | $28.5712 | $1864.5264 | $1835.9552 |
 | agy | $20.00 | $23.9524 | $119.4768 | $95.5244 |
