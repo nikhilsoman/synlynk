@@ -3566,5 +3566,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2591 \u2014 sync README test count (PR #2591, v0.25.3)\n\n\u2022 Merged improvements and fixes for PR #2591.\n\n#posts",
     "changelog": "### v0.25.3 (2026-10-24) - PR #2591\n- Merged improvements and fixes for PR #2591."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/470-pr2589-log-count-reconcile-no-ops-gh-2139.md",
+    "title": "PR #2589 \u2014 log/count reconcile no-ops (gh:#2139)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-24",
+    "pr": "#2589",
+    "version": "0.25.3",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2589."
+    ],
+    "tweet": "\ud83d\ude80 PR #2589 \u2014 log/count reconcile no-ops (gh:#2139) (PR #2589, v0.25.3)\n\n\u2022 Merged improvements and fixes for PR #2589.\n\n#posts",
+    "changelog": "### v0.25.3 (2026-10-24) - PR #2589\n- Merged improvements and fixes for PR #2589."
   }
 ]
