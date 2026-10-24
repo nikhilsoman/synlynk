@@ -35,17 +35,6 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [v0.25.3] - 2026-10-24
-### Added
-- Muse authenticated, model-allowlisted, and usable at low privilege — implement/test access only, no review or GitHub-write authority until it clears the five-merged-job empirical capability bar (#2554).
-### Fixed
-- Keep Codex tiers when model-catalog discovery returns a single model, instead of collapsing the tier set (#2552).
-- Replace the inert `pr_review_cycles` metric with `dispatch_rework_rate` so capability/cost routing proposals are no longer computed from a signal that never varied (#2551).
-- Detect and surface a silent `quality_verified` default-5.0 fallback in capability calibration results, so a missing verification signal can no longer masquerade as a real score (#2170).
-- Tolerate a missing daemon pidfile in `status()` instead of crashing (#2553).
-### Changed
-- Quota/capacity truth for Muse remains explicitly unknown rather than estimated; completing it is deferred to a separately-scoped capability sweep.
-
 ## [v0.25.2] - 2026-10-23
 ### Fixed
 - Rank `self_report` above `execution_log` so a scraped log row cannot outrank a probe or self-report (#2449, #2548).

@@ -125,7 +125,6 @@ The AI tool is instructed (via `CLAUDE.md` / `GEMINI.md`) to read `.synlynk/cont
 Commands are grouped by where you'll reach for them in a typical project lifecycle.
 
 <!-- commands:start -->
-<!-- commands:start -->
 
 **Start here:**
 
@@ -145,5 +144,4 @@ Commands are grouped by where you'll reach for them in a typical project lifecyc
 
 Full command reference: [docs/reference/commands.md](docs/reference/commands.md)
 
-<!-- commands:end -->
 <!-- commands:end -->
