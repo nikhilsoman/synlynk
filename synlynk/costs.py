@@ -692,6 +692,7 @@ _HARDCODED_FALLBACK_RATES = {
         "gemini-2.5-pro": {"input": 0.00125, "output": 0.01, "cache_read": 0.000125},
         "grok-build": {"input": 0.001, "output": 0.002, "cache_read": 0.0000001},
         "grok-composer-2.5-fast": {"input": 0.002, "output": 0.01, "cache_read": 0.0000002},
+        "muse-spark-1.3": _DEFAULT_MODEL_RATE,
     },
     "default": _DEFAULT_MODEL_RATE,
     "billing_mode": {"default": "subscription", "local": "actual"},

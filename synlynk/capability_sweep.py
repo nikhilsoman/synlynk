@@ -40,6 +40,7 @@ def _discover_models(conn=None) -> dict:
                         "codex": ("gpt-",),
                         "agy": ("gemini-",),
                         "grok": ("grok-",),
+                        "muse": ("muse-",),
                     }
                     prefixes = harness_model_prefixes.get(harness, ())
                     prefix_models = [
@@ -83,6 +84,7 @@ def _fallback_models_for_harness(harness: str) -> list:
         "codex": ("gpt-",),
         "agy": ("gemini-",),
         "grok": ("grok-",),
+        "muse": ("muse-",),
     }
     prefixes = harness_model_prefixes.get(harness, ())
     return [
