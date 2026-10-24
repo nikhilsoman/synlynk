@@ -1,3 +1,34 @@
+## 2026-10-24 v0.25.4 Task C implementer done (PR #2599), 5th false-negative label, reviewer dispatched [@claude]
+
+- **job-db67683d reported `failed_verification` (exit 1) with the same `stale_base` warning**
+  seen before — but this time with a non-zero exit code, so verified more carefully than usual
+  rather than assuming the pattern held. Directly inspected the worktree: clean `git status`,
+  real commit `d67f3990` with the expected diff (`synlynk/db_schema.py` +18,
+  `synlynk/jobs.py` +111, `tests/test_job_timing_metrics.py` +122 new, all vs. the
+  `release/v0.25.4` merge-base). Ran the new tests directly: `pytest tests/test_job_timing_metrics.py`
+  → 3 passed. Ran the full mandated regression suite:
+  `pytest tests/test_jobs.py tests/test_jobs_reconcile_live19.py tests/test_jobs_gh_write_provisional.py
+  tests/test_costs.py -q` → 201 passed. `git push` → "Everything up-to-date" (already pushed).
+  `gh pr list --search "head:dispatch/agy/job-db67683d"` → PR **#2599**, OPEN, title correct.
+  `gh pr view 2599 --json state,mergedAt,reviewDecision,mergeable` → `state: OPEN`,
+  `mergeable: MERGEABLE`, no review yet. **5th false/misleading status label this session**
+  on genuinely good, fully-tested, already-pushed work (`oracle_decision_missing` ×2,
+  `stale_base`/`failed_verification` ×2, `unpushed_branch` ×1) vs. 2 genuine label matches —
+  the pattern is now overwhelming and strongly supports this release's own thesis.
+- **The implementer also corrected the plan's log-path stub itself** (per the correction I'd
+  included in the dispatch task text): used `daemon_jobs.log_path` + the existing
+  `_read_job_log` helper rather than the plan's nonexistent `_daemon_job_log_path`. Added a
+  3rd test (`test_extract_self_reported_timing_from_log_file`) beyond the plan's original two —
+  reasonable addition, not scope creep, since it directly tests the corrected log-reading path.
+- **Dispatched non-authoring cross-harness+model reviewer:** job-64a75f08, Codex (differs from
+  Agy's Gemini model in both harness+model per Hardened PR Review Policy), role `qa`,
+  `story-7adc5ff4`. Instructed to run `synlynk pr check`, re-run the full test suite itself,
+  and — if clean — merge the PR itself as the final step of its own dispatch (per PR #2149's
+  Merge-Authority RCA: the reviewer's dispatched job merges, not this interactive session).
+- Holding the push of this checkpoint — job-64a75f08 is now using `release/v0.25.4` as its
+  dispatch base, so pushing now would risk re-triggering the same self-inflicted `stale_base`
+  pattern on its own completion.
+
 ## 2026-10-24 v0.25.4 Task C dispatched (job-db67683d, job_timing_metrics extraction) [@claude]
 
 - Read Task C's exact scope from the plan (lines 569-790) before dispatching, confirmed
