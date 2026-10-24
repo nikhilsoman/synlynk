@@ -1,3 +1,55 @@
+## 2026-10-24 v0.25.4 Task A3 grounded+dispatched (job-464424a1), Agy per-model quota gap root-caused (gh:#2592) [@claude]
+
+- **Task A3 (#2309 oracle self-transcript cross-check) grounded before dispatch, not taken on
+  faith from the plan.** The plan's placeholder function name `classify_from_transcript` does not
+  exist in this codebase — confirmed via `grep -n "^def \|^class " synlynk/job_truth.py` and a
+  targeted grep for `unknown_contract`/`TASK_DELIVERY_FAILED`. The real hot paths are
+  `synlynk/jobs.py:4805 _apply_gh_write_verification` (sets `succeeded_gh_write_failed` at :4854
+  from an out-of-band `gh_write_verified()` API check with no transcript fallback) and
+  `synlynk/jobs.py:756 _classify_task_delivery` / `:832 _task_delivery_has_corroborating_activity`
+  (sets `TASK_DELIVERY_FAILED` at :2917/:3154). The latter already calls
+  `synlynk/verify_effects.py:43 extract_transcript_gh_evidence` for review/merge/gh_write task
+  types, but that helper has no pattern for an issue-comment effect — which is exactly why
+  job-c801eb96 (#2138, Task A1's third fixture) fell through: its only GitHub effect was a `gh
+  issue comment`, not a PR action, and it wasn't tagged `requires_gh_write`/a recognized task_type.
+  Wrote the dispatch task text citing all of this precisely (3 fixtures: job-cbe2a362/PR#2577,
+  job-77e59e43/PR#2579, job-c801eb96/#2138) so Codex wouldn't have to rediscover it from scratch.
+- **GOVERNS linkage resolved:** `synlynk story list --goal <id>` is not a valid flag (`story list`
+  takes no filters at all) — found the right story by listing all and grepping:
+  `story-c8ff5e3c` ("v0.25.4 A3: #2309 oracle self-transcript cross-check").
+- **Dispatch auto-rerouted codex → agy** ("capability-probed: 'codex' lacks required capability
+  for task"). Resolved model: `gemini-3.8-flash-high`. Running as **job-464424a1**, still in
+  progress as of this checkpoint (no output yet at 7+ min — normal for Agy's buffered JSON
+  output, not itself a failure signal).
+- **Agy quota investigation (user-initiated), root-caused, filed as gh:#2592.** Nikhil asked why
+  Agy dispatches were failing when its own quota dashboard showed credits available. Queried
+  `~/.synlynk/workspaces/synlynk/state.db` `daemon_jobs` directly for `agent='agy'` jobs with
+  `resolved_model`+`status`: found 7 jobs in a ~24h window that all resolved to
+  `claude-opus-4-6-thinking` (Agy's `reasoning`-tier default, `synlynk/dispatch.py:177-183`) and
+  failed immediately (`exit_code=3`, 15-50s) with an identical log signature —
+  `RESOURCE_EXHAUSTED (code 429)` / "Your AI credits balance is too low to continue." — confirmed
+  by reading the raw `.synlynk/logs/<job-id>.log` files directly (job-694fcbad, job-a6da875c
+  verified verbatim). In the same window, Agy jobs resolved to `gemini-3.8-flash-medium`/`-high`
+  all completed normally. Root cause: `synlynk/quota.py:_quota_status_for_agent` gates only by
+  `agent`, not `(agent, model)` — Agy is a multi-model harness with a separate pass-through "AI
+  credits" pool for non-Gemini models, invisible to the quota gate, which keeps routing into the
+  empty pool. The user's own dashboard view was almost certainly the (healthy) Gemini pool, not
+  this pool — a real "looks fine but isn't" trap, not user error.
+  - Filed **gh:#2592** with full evidence and fix direction (per-`(agent,model)` quota tracking,
+    or auto-cooldown on the `RESOURCE_EXHAUSTED` log signature) — not yet scoped/dispatched as a
+    fix; this session adopts the interim operational workaround immediately instead.
+  - **New standing policy, saved to memory** (`feedback_agy_gemini_only_dispatch.md`, indexed in
+    MEMORY.md): dispatch to Agy only with Gemini-family models going forward
+    (`gemini-3.8-flash-low/medium/high`); do not let a dispatch resolve to Agy's `reasoning` tier
+    until gh:#2592 lands or the credit pool is topped up. job-464424a1 (Task A3, above) already
+    complies — no action needed there.
+- **Process note (why this checkpoint exists):** Nikhil flagged that the mid-session
+  checkpoint/compaction-gate cadence (CLAUDE.md's "every ~25K tokens below 75% context" rule) was
+  not being followed before this entry — this commit is catching up. No numbered recommendation
+  lists were presented to the user uncommitted in the gap, so nothing irreplaceable was at risk,
+  but the gap itself is noted so future sessions don't repeat it.
+[@claude]
+
 ## 2026-10-24 v0.25.4 Task A1 (#2138) closed, Task A2 (#2139, PR #2589) merged, 2 new oracle false-negative fixtures found [@claude]
 
 - **Task A1 (#2138) closed, verified.** Dispatched a probe job (job-c801eb96 → nested job-3c82d855)
