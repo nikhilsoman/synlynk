@@ -1,3 +1,24 @@
+## 2026-10-24 v0.25.4 Task B dispatched (job-2f97d374, cost_entries/capability_ratings mismatch guard) [@claude]
+
+- Task A3 fully closed (see entry below): PR #2594 merged, verified, worktrees/branches cleaned,
+  checkpoint committed and pushed (`5e8876db`).
+- **Task B dispatched** per `docs/superpowers/plans/2026-10-24-v0.25.4-job-status-and-velocity-evidence.md`
+  (lines 386-567): `CostAttributionMismatch` guard on `_ensure_daemon_job_cost_entry` and the
+  `cost log --job-id` path, new regression test + one-off audit script, PR against
+  `release/v0.25.4`. GOVERNS `story-fc0200e8`.
+- Dispatched via `synlynk dispatch auto` (let the capability router pick rather than forcing
+  codex/grok, both of which hit infra friction on Task A3's review cycle this session) — routed
+  to **agy**, `--model-tier fast`. Per [[feedback_agy_gemini_only_dispatch]], confirmed via the
+  already-read `_DEFAULT_MODELS_BY_TIER` dict that agy's `fast` tier resolves to
+  `gemini-3.8-flash-medium`, not the exhausted `claude-opus-4-6-thinking` credit pool — safe,
+  did not need to force `--model` explicitly this time.
+- Dispatch estimate: ~$0.16 (13,569 in / 8,000 out). job-2f97d374, PID 50881, worktree base
+  `release/v0.25.4@5e8876db`.
+- Still unresolved from earlier this session: the model-tier/capability-sweep gap question
+  (asked Nikhil whether to ticket now or fold into Task D — no answer yet), and the
+  job-3eb944da "instruction receipt untrusted... merge blocked" warning anomaly (documented
+  below, not yet explained). Carrying both forward, not blocking on them.
+
 ## 2026-10-24 v0.25.4 Task A3 closed — PR #2594 genuinely merged (job-3eb944da), "instruction receipt untrusted" warning anomaly flagged, worktrees cleaned [@claude]
 
 - **job-3eb944da (second reviewer retry) succeeded genuinely.** Verified directly, not from the
