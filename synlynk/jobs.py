@@ -73,6 +73,8 @@ STATUS_FAILED_NOOP_DENIED = "failed_noop_denied"
 STATUS_FAILED_VERIFICATION = "failed_verification"
 STATUS_UNPUSHED_BRANCH = "unpushed_branch"
 
+_RECONCILE_NOOP_COUNTER = {"count": 0}
+
 # Mandatory Invariant 2 Status Constants
 STATUS_CIRCUIT_BREAKER_TRIPPED = "circuit_breaker_tripped"
 
@@ -4622,6 +4624,15 @@ def _reconcile_terminal_jobs_json(conn) -> int:
                     "source": "jobs.json",
                 },
                 emitted_by="_reconcile_terminal_jobs_json",
+            )
+        elif old_status != status:
+            _RECONCILE_NOOP_COUNTER["count"] += 1
+            print(
+                f"  [reconcile] no-op: jobs.json terminal record for {job_id} "
+                f"(attempted status={status}, evidence={evidence_strength}) "
+                f"could not be applied -- daemon_jobs row was not in a "
+                f"settleable state (old_status={old_status})",
+                file=sys.stderr,
             )
     if repaired:
         conn.commit()
