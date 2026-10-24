@@ -1,3 +1,51 @@
+## 2026-10-24 v0.25.4 brainstorm+spec+plan complete, GOVERNS scaffold created, Task A1 dispatching (goal-e262d406) [@claude]
+
+- **Standing practice note (applies going forward, not just this release):** fresh Claude session
+  per Named Release, with early self-compaction (~40-50% context used, not later) and devlog/memory
+  checkpoints every ~25K tokens below 75% context used / every ~5K above. Numbered lists of
+  fixes/options/recommendations go to devlog in the same turn they're presented, not deferred.
+  Decided explicitly this session (2026-10-24) per Nikhil's instruction; noting it here so future
+  release sessions inherit the pattern without being told again.
+- **Scope change mid-session:** gh:#2547 ("[Epic] Harness velocity: RSI loops") was originally
+  independent — not to be folded into this release. Nikhil reversed that explicitly
+  ("while I had kept it separate not much has been done on it... you will need to take over full
+  control of this"). Clarified via AskUserQuestion into a bounded cut: evidence-only reconstruction
+  of #2547's case PRs + fix the telemetry role/model mismatch bug + new post-job structured metric
+  extraction instrumentation (Option A: objective settlement-hook timestamps, primary; Option C:
+  agent self-report, cross-checked only, never trusted) + scaffold (not implement) a new RSI
+  epic/goal. A further scope question (does this extend to capability-sweep/dispatch-allocation
+  mechanics?) was explicitly bounded by Nikhil to a narrow boundary audit+guard only — sweep
+  scoring/allocation itself stays out of scope, upstream of this release.
+- **Revalidated #2138/#2139/#2309/#2530 against current main (`c2158427`) before writing any
+  code**, per Brainstorm-First Policy — avoided redundant work: #2530 already closed/fixed;
+  #2138 likely already fixed by prior work (`STATUS_FAILED_VERIFICATION` in `_reconcile_terminal_jobs_json`,
+  `synlynk/jobs.py:4594-4599`) pending a literal repro, not yet confirmed; #2139 confirmed still live
+  (`_settle_daemon_job_terminal`'s monotonic-evidence no-op has no logging/counting branch); #2309
+  confirmed still live via two fresh 2026-10-24 incidents (`job-cbe2a362`/PR#2577, `job-77e59e43`/
+  PR#2579 — both mislabeled `succeeded_gh_write_failed`/`FAILED_NOOP_DENIED` despite clean GitHub
+  effects already visible in their own transcripts).
+- **Design spec committed:** `docs/superpowers/specs/2026-10-24-v0.25.4-job-status-and-velocity-evidence-design.md`
+  (commit `8fedfddf`). Five workstreams: A (status/oracle correctness, #2138/#2139/#2309), B
+  (cost_entries/daemon_jobs harness-model attribution mismatch guard), C (new `job_timing_metrics`
+  table + settlement-hook extraction), D (RSI epic/goal scaffold, no code), E (capability-sweep
+  routing boundary audit — excludes `signal_source='baseline_seed'` rows from the n>=5 sample gate,
+  no scoring/allocation changes).
+- **Implementation plan committed:** `docs/superpowers/plans/2026-10-24-v0.25.4-job-status-and-velocity-evidence.md`
+  (commit `db2e1761`). Six tasks (0, A1, A2, A3, B, C, E), each independently dispatchable.
+- **GOVERNS scaffold created:** `goal-e262d406` + six linked stories: `story-c7688ea4` (A1),
+  `story-47248b4c` (A2), `story-c8ff5e3c` (A3), `story-fc0200e8` (B), `story-7adc5ff4` (C),
+  `story-0293277d` (E).
+- **Execution-model resolution (Mode A tension, resolved not escalated):** writing-plans' standard
+  handoff offers Subagent-Driven (Claude subagents) vs. Inline Execution (this session implements
+  directly) — neither fits CLAUDE.md's Default Agent Role split, which requires all implementation
+  routed to Agy/Grok/Codex via `synlynk dispatch`. Resolved as: this PM session drives execution by
+  running each task's own `synlynk dispatch` invocation and reviewing results — functionally
+  "Inline Execution" from the PM's seat, but the actual code in every task is written by the
+  dispatched harness, never by a Claude subagent or direct edit in this session.
+- **Worktree:** `/Users/nikhilsoman/dev/synlynk/.claude/worktrees/release+v0.25.4` on branch
+  `release/v0.25.4`, based on `origin/main` at `c2158427`.
+- Next: dispatch Task A1 (#2138 revalidation repro) to Codex per `--story story-c7688ea4`.
+
 ## 2026-10-20 Headless Chrome Test Isolation & Release Ceremony Guard (LIVE-28 #2463) [@agy, @nikhilsoman]
 
 - **Incident Investigation & Root Cause (LIVE-28):** Diagnosed `Google Chrome [9851]` crash during sandboxed Codex review job `job-d564fcc4` (`pytest tests/test_release_marketing.py`). Traced to `execute_release_ceremony()` and `cmd_marketing_ceremony()` calling `compile_docs_pdfs()` with `dry_run=False` while ignoring `skip_build=True`. On macOS, `/Applications/Google Chrome.app` aborts with SIGABRT in `HIServices!_RegisterApplication` (`TransformProcessType`) when executed inside a seatbelt sandbox lacking `com.apple.windowserver.active` Mach port lookup permissions.

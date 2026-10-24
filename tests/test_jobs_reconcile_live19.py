@@ -18,6 +18,117 @@ def _patch_reconcile_dependencies(monkeypatch, synlynk, jobs):
     monkeypatch.setattr(jobs, "_write_sentinel_alert", lambda *args, **kwargs: None)
 
 
+def test_reconcile_terminal_jobs_json_logs_noop_when_settle_declines(
+    monkeypatch, project_dir, capsys
+):
+    """gh:#2139 — an already-settled daemon row must log, not silently no-op."""
+    import synlynk
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, started_at, requires_gh_write, "
+        "terminal_evidence_strength) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            "job-2139-noop",
+            "claude",
+            "task",
+            "done",
+            5,
+            "[]",
+            None,
+            "2026-10-02T00:00:00",
+            "2026-10-02T00:00:00",
+            0,
+            "local",
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(
+        jobs_mod,
+        "_load_jobs",
+        lambda: [
+            {
+                "id": "job-2139-noop",
+                "status": "failed",
+                "ended_at": "2026-10-02T00:05:00",
+            }
+        ],
+    )
+
+    conn = synlynk._get_db()
+    repaired = jobs_mod._reconcile_terminal_jobs_json(conn)
+    conn.close()
+
+    captured = capsys.readouterr()
+    assert repaired == 0
+    assert "job-2139-noop" in captured.err
+    assert "no-op" in captured.err.lower()
+
+
+def test_reconcile_terminal_jobs_json_does_not_count_already_applied_status(
+    monkeypatch, project_dir, capsys
+):
+    """An idempotent terminal replay is already applied, not a failed repair."""
+    import synlynk
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(jobs_mod, "_RECONCILE_NOOP_COUNTER", {"count": 0})
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, started_at, requires_gh_write, "
+        "terminal_evidence_strength) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            "job-2139-applied",
+            "claude",
+            "task",
+            "done",
+            5,
+            "[]",
+            None,
+            "2026-10-02T00:00:00",
+            "2026-10-02T00:00:00",
+            0,
+            "local",
+        ),
+    )
+    conn.commit()
+    monkeypatch.setattr(
+        jobs_mod,
+        "_load_jobs",
+        lambda: [{"id": "job-2139-applied", "status": "done"}],
+    )
+
+    assert jobs_mod._reconcile_terminal_jobs_json(conn) == 0
+    conn.close()
+
+    captured = capsys.readouterr()
+    assert jobs_mod._RECONCILE_NOOP_COUNTER["count"] == 0
+    assert "no-op" not in captured.err.lower()
+
+
+def test_status_surfaces_reconcile_noop_counter(monkeypatch, capsys):
+    import synlynk.jobs as jobs_mod
+    import synlynk.status as status_mod
+
+    jobs_mod._RECONCILE_NOOP_COUNTER["count"] = 3
+    try:
+        status_mod.cmd_status()
+    finally:
+        jobs_mod._RECONCILE_NOOP_COUNTER["count"] = 0
+
+    captured = capsys.readouterr()
+    assert "3 reconcile no-ops" in captured.out
+
+
 def test_cli_reconcile_preserves_clean_exit_when_breaker_did_not_kill(monkeypatch, tmp_path):
     import synlynk
     import synlynk.jobs as jobs_mod

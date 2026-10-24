@@ -500,6 +500,14 @@ def cmd_status(
                 "⚠ capability sweep overdue - run `synlynk capability sweep` "
                 f"({reassessment['jobs_since_sweep']} jobs since last sweep)"
             )
+        from synlynk.jobs import _RECONCILE_NOOP_COUNTER
+
+        if _RECONCILE_NOOP_COUNTER["count"]:
+            extra_lines.append(
+                f"⚠ {_RECONCILE_NOOP_COUNTER['count']} reconcile no-ops this process "
+                "(gh:#2139) — jobs.json terminal records that could not be applied "
+                "to daemon_jobs"
+            )
         if is_smoke_test_stale(db_conn, threshold_days=7):
             extra_lines.append(
                 "⚠ smoke test overdue - run `synlynk selftest --live` or enable `auto_smoke_test` in config"
