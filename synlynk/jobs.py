@@ -3423,6 +3423,139 @@ def _persist_daemon_job_terminal(
     return (cursor.rowcount or 0) > 0
 
 
+def _extract_self_reported_timing(
+    job_id: str, conn: Optional[sqlite3.Connection] = None
+) -> Optional[dict]:
+    """Parses a structured timing block from the job's own final transcript
+    output, if present. Returns None when absent -- never raises."""
+    close_conn = False
+    try:
+        if conn is None:
+            get_db = _pkg("_get_db")
+            if get_db is None:
+                from synlynk import _get_db as get_db
+            conn = get_db()
+            close_conn = True
+        row = conn.execute(
+            "SELECT log_path FROM daemon_jobs WHERE job_id=?", (job_id,)
+        ).fetchone()
+        if not row:
+            return None
+        log_path = row[0]
+        if not log_path:
+            return None
+        transcript = _read_job_log(log_path)
+        if not transcript:
+            return None
+        tail = transcript[-4000:]
+        match = re.search(r"SYNLYNK_TIMING_SELF_REPORT:\s*(\S.*)", tail)
+        if not match:
+            return None
+        result = json.loads(match.group(1))
+        if not isinstance(result, dict):
+            return None
+        return result
+    except Exception:
+        return None
+    finally:
+        if close_conn and conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def _record_job_timing_metrics(conn, job_id: str, completed_at: str) -> None:
+    try:
+        row = conn.execute(
+            "SELECT actual_harness, resolved_model, requested_harness, "
+            "enqueued_at, started_at FROM daemon_jobs WHERE job_id=?",
+            (job_id,),
+        ).fetchone()
+        if not row:
+            return
+        harness, model, _requested, enqueued_at, started_at = row
+
+        def _parse(ts):
+            if not ts:
+                return None
+            try:
+                return time.mktime(time.strptime(ts, "%Y-%m-%dT%H:%M:%S"))
+            except Exception:
+                try:
+                    clean_ts = ts.replace("Z", "+00:00")
+                    return datetime.fromisoformat(clean_ts).timestamp()
+                except Exception:
+                    return None
+
+        queue_s = None
+        active_s = None
+        t_enq, t_start, t_end = _parse(enqueued_at), _parse(started_at), _parse(completed_at)
+        if t_enq is not None and t_start is not None:
+            queue_s = t_start - t_enq
+        if t_start is not None and t_end is not None:
+            active_s = t_end - t_start
+
+        try:
+            sig = inspect.signature(_extract_self_reported_timing)
+            if "conn" in sig.parameters:
+                self_reported = _extract_self_reported_timing(job_id, conn=conn)
+            else:
+                self_reported = _extract_self_reported_timing(job_id)
+        except TypeError:
+            self_reported = _extract_self_reported_timing(job_id)
+
+        cross_check = "absent"
+        if self_reported is not None:
+            try:
+                if isinstance(self_reported, dict):
+                    reported_active = self_reported.get("active_seconds")
+                    if (
+                        reported_active is not None
+                        and not isinstance(reported_active, bool)
+                        and isinstance(reported_active, (int, float))
+                        and active_s is not None
+                    ):
+                        cross_check = (
+                            "agree"
+                            if abs(reported_active - active_s) < 5
+                            else "disagree"
+                        )
+            except Exception:
+                cross_check = "absent"
+
+        self_reported_json = None
+        if self_reported is not None:
+            try:
+                self_reported_json = json.dumps(self_reported)
+            except Exception:
+                self_reported_json = None
+
+        conn.execute(
+            """INSERT INTO job_timing_metrics
+               (job_id, harness, model, queue_seconds, active_seconds,
+                self_reported_json, cross_check_status)
+               VALUES (?,?,?,?,?,?,?)
+               ON CONFLICT(job_id) DO UPDATE SET
+                 harness=excluded.harness, model=excluded.model,
+                 queue_seconds=excluded.queue_seconds,
+                 active_seconds=excluded.active_seconds,
+                 self_reported_json=excluded.self_reported_json,
+                 cross_check_status=excluded.cross_check_status""",
+            (
+                job_id,
+                harness,
+                model,
+                queue_s,
+                active_s,
+                self_reported_json,
+                cross_check,
+            ),
+        )
+    except Exception:
+        return
+
+
 def _settle_daemon_job_terminal(
     conn,
     job_id: str,
@@ -3465,6 +3598,7 @@ def _settle_daemon_job_terminal(
             else:
                 conn.rollback()
             return False
+        _record_job_timing_metrics(conn, job_id, completed_at)
         try:
             from synlynk.job_truth import canonical_status, record_evidence_and_reconcile
             terminal_ready = (
