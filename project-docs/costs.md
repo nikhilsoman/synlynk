@@ -1716,6 +1716,12 @@
 | 2026-10-24 08:47 | claude | claude-sonnet-4-6 | 50000 | 8000 | $0.1439 [sub] (API: $0.2700) | estimated_manual | story-2349673f | native PM-session work: spec/plan authoring, dispatch, verification, PR for gh:#2569 |
 | 2026-10-24 08:47 | codex | o4-mini | 2246600 | 9346 | $0.1078 [sub] (API: $6.8800) | estimated_manual | story-2349673f | dispatched implementation for gh:#2569 |
 | 2026-10-24 08:48 | agy | unknown | 0 | 0 | $0.0000 [sub] (API: $0.0000) | estimated_token_rate | story-2349673f | exec: agy job job-3e3d4a41 |
+| 2026-10-24 08:47 | codex | o4-mini | 2246600 | 9346 | $0.1078 [sub] (API: $6.8800) | estimated_manual | story-2349673f | dispatched implementation for gh:#2569 |
+| 2026-10-24 08:47 | claude | claude-sonnet-4-6 | 50000 | 8000 | $0.1439 [sub] (API: $0.2700) | estimated_manual | - | native PM-session work: spec/plan authoring, dispatch, verification, PR for gh:#2569 |
+| 2026-10-24 08:47 | claude | claude-sonnet-4-6 | 50000 | 8000 | $0.1439 [sub] (API: $0.2700) | estimated_manual | story-2349673f | native PM-session work: spec/plan authoring, dispatch, verification, PR for gh:#2569 |
+| 2026-10-24 08:48 | agy | unknown | 0 | 0 | $0.0000 [sub] (API: $0.0000) | estimated_token_rate | story-2349673f | exec: agy job job-3e3d4a41 |
+| 2026-10-24 08:56 | grok | grok-3 | 108070 | 45800 | $1.0090 [sub] (API: $1.0120) | estimated_token_rate | story-2349673f | exec: grok job job-d12fb81... |
+| 2026-10-24 08:57 | claude | claude-sonnet-4-6 | 15000 | 2500 | $0.0434 [sub] (API: $0.0825) | estimated_manual | story-dda00e7b | native PM-session work: diagnosed stale-worktree project-docs drift, reconciled onto its own branch/PR |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
@@ -1726,3 +1732,8 @@
 | agy | $20.00 | $23.9524 | $119.4768 | $95.5244 |
 | grok | $30.00 | $189.1337 | $139.7475 | $-49.3862 |
 | **Total** | **$90.00** | **$305.9373** | **$2236.2897** | **$1930.3524** |
+| claude | $20.00 | $64.3234 | $112.6215 | $48.2981 |
+| codex | $20.00 | $28.5712 | $1864.5264 | $1835.9552 |
+| agy | $20.00 | $23.9524 | $119.4768 | $95.5244 |
+| grok | $30.00 | $190.1427 | $140.7595 | $-49.3832 |
+| **Total** | **$90.00** | **$306.9898** | **$2237.3842** | **$1930.3945** |
