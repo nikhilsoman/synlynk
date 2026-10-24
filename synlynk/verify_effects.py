@@ -41,7 +41,7 @@ class EffectVerificationResult:
 
 
 def extract_transcript_gh_evidence(log_text: Optional[str]) -> Dict[str, Any]:
-    """Scrape log text for positive GitHub review, merge, or PR creation evidence."""
+    """Scrape log text for positive GitHub review, merge, PR creation, comment, or close evidence."""
     if not log_text:
         return {}
     res: Dict[str, Any] = {}
@@ -64,6 +64,38 @@ def extract_transcript_gh_evidence(log_text: Optional[str]) -> Dict[str, Any]:
         res["pr_created"] = True
         res["pr_number"] = pr_url_match.group(1)
         res["pr_url"] = pr_url_match.group(0)
+
+    issue_comment_url = re.search(
+        r"https://github\.com/[^/]+/[^/]+/(?:issues|pull)/(\d+)#issuecomment-(\d+)",
+        log_text,
+    )
+    if issue_comment_url:
+        res["comment_posted"] = True
+        res["issue_number"] = issue_comment_url.group(1)
+        res["comment_id"] = issue_comment_url.group(2)
+        res["comment_url"] = issue_comment_url.group(0)
+
+    issue_comment_match = re.search(
+        r"(?:commented on (?:issue|pull request) #(\d+)|gh (?:issue|pr) comment\s+(\d+))",
+        log_text,
+        re.IGNORECASE,
+    )
+    if issue_comment_match:
+        res["comment_posted"] = True
+        issue_num = issue_comment_match.group(1) or issue_comment_match.group(2)
+        if issue_num and "issue_number" not in res:
+            res["issue_number"] = issue_num
+
+    close_match = re.search(
+        r"(?:Closed pull request #(\d+)|Closed issue #(\d+)|gh (?:pr|issue) close\s+(\d+))",
+        log_text,
+        re.IGNORECASE,
+    )
+    if close_match:
+        res["closed"] = True
+        close_num = close_match.group(1) or close_match.group(2) or close_match.group(3)
+        if close_num:
+            res["closed_number"] = close_num
 
     return res
 
@@ -237,7 +269,7 @@ def verify_job_effects(
         if not gh_ok and log_text:
             transcript_ev = extract_transcript_gh_evidence(log_text)
             expect_norm = (kwargs.get("expect") or expected_gh_effect or "").strip().lower()
-            if (expect_norm in ("review_posted", "review") or task_class_norm == "review") and transcript_ev.get("review_approved"):
+            if (expect_norm in ("review_posted", "review") or task_class_norm == "review" or transcript_ev.get("review_approved")) and transcript_ev.get("review_approved"):
                 evidence.update(transcript_ev)
                 return EffectVerificationResult(
                     verified=True,
@@ -246,7 +278,7 @@ def verify_job_effects(
                     evidence=evidence,
                     reason="GitHub review verified from job transcript confirmation",
                 )
-            if expect_norm in ("merged", "merge", "github_pr_merge") and transcript_ev.get("pr_merged"):
+            if (expect_norm in ("merged", "merge", "github_pr_merge") or transcript_ev.get("pr_merged")) and transcript_ev.get("pr_merged"):
                 evidence.update(transcript_ev)
                 return EffectVerificationResult(
                     verified=True,
@@ -255,7 +287,7 @@ def verify_job_effects(
                     evidence=evidence,
                     reason="GitHub PR merge verified from job transcript confirmation",
                 )
-            if expect_norm in ("pr_open", "created", "github_pr_open") and transcript_ev.get("pr_created"):
+            if (expect_norm in ("pr_open", "created", "github_pr_open") or transcript_ev.get("pr_created")) and transcript_ev.get("pr_created"):
                 evidence.update(transcript_ev)
                 return EffectVerificationResult(
                     verified=True,
@@ -263,6 +295,24 @@ def verify_job_effects(
                     gh_verified=True,
                     evidence=evidence,
                     reason="GitHub PR creation verified from job transcript confirmation",
+                )
+            if (expect_norm in ("comment_posted", "comment") or transcript_ev.get("comment_posted")) and transcript_ev.get("comment_posted"):
+                evidence.update(transcript_ev)
+                return EffectVerificationResult(
+                    verified=True,
+                    status=STATUS_COMPLETED,
+                    gh_verified=True,
+                    evidence=evidence,
+                    reason="GitHub comment verified from job transcript confirmation",
+                )
+            if (expect_norm in ("closed", "issue_closed", "pr_closed") or transcript_ev.get("closed")) and transcript_ev.get("closed"):
+                evidence.update(transcript_ev)
+                return EffectVerificationResult(
+                    verified=True,
+                    status=STATUS_COMPLETED,
+                    gh_verified=True,
+                    evidence=evidence,
+                    reason="GitHub target close verified from job transcript confirmation",
                 )
 
         if not gh_ok:

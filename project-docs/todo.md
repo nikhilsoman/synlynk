@@ -1,6 +1,8 @@
 # Tasks (generated - source of truth is state.db)
 # Edit via: synlynk story create/update | Do NOT hand-edit this file
 
+- [ ] Reconcile project-docs drift stranded in PR #2571 review worktree (PR #2572) [backend] <!-- id:story-360c0d73 -->
+- [ ] Reconcile project-docs drift stranded in stale fix/claude/2567 worktree [backend] <!-- id:story-dda00e7b -->
 - [ ] Fix capability_calibration_results.quality_verified migration gap (gh:#2569) [backend] <!-- id:story-2349673f -->
 - [ ] Fix calibration output diff-base contamination (#2567) [backend] <!-- id:story-ec6e4acf -->
 - [ ] Rework-rate routing metric implementation (gh:#2551) [backend] <!-- id:story-3522f431 -->
@@ -412,8 +414,36 @@ CRITICAL CONTEXT: your dispatch worktree  [testing] <!-- id:story-issue-2 -->
 - [ ] BS-8: stuck detection + one-shot consult from capability matrix + Expert Consult injection [dispatch] <!-- id:story-bs8-consult -->
 - [ ] BS-8: synlynk probe — ambient harness capability drift detection + publish pipeline [tooling] <!-- id:story-bs8-probe -->
 - [ ] BS-7: brainstorm — skill pack interoperability + benchmarks (Superpowers/GStack/GSD) [platform] <!-- id:story-bs7-interop -->
-- [ ] Fix capability_calibration_results.quality_verified migration gap (gh:#2569) [backend] <!-- id:story-2349673f -->
-- [ ] Reconcile project-docs drift stranded in stale fix/claude/2567 worktree [backend] <!-- id:story-dda00e7b -->
+- [ ] v0.25.4 E: capability-sweep routing boundary audit [backend] <!-- id:story-0293277d -->
+- [ ] v0.25.4 C: job_timing_metrics extraction [backend] <!-- id:story-7adc5ff4 -->
+- [ ] v0.25.4 B: cost_entries/capability_ratings mismatch guard [backend] <!-- id:story-fc0200e8 -->
+- [ ] v0.25.4 A2: #2139 log/count reconcile no-op [backend] <!-- id:story-47248b4c -->
+- [ ] v0.25.4 A1: revalidate #2138 unverified-status repro [backend] <!-- id:story-c7688ea4 -->
+- [ ] v0.25.4 A3: #2309 oracle self-transcript cross-check [backend] <!-- id:story-c8ff5e3c -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text b [backend] <!-- id:story-adhoc-1792826861 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792826728 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below. DO NOT inspect your local [testing] <!-- id:story-adhoc-1792826694 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792826607 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  [testing] <!-- id:story-adhoc-1792826573 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792826443 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text b [testing] <!-- id:story-adhoc-1792826405 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792826265 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below. DO NOT inspect your local [testing] <!-- id:story-adhoc-1792826229 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792826142 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  [testing] <!-- id:story-adhoc-1792826113 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792826037 -->
+- [ ] Capability sweep follow-up: Muse + Grok, bounded scope (separately scoped from v0.25.3) [backend] <!-- id:story-issue-2576 -->
+- [ ] docs: record the shipped v0.25.3 release in roadmap bookkeeping [testing] <!-- id:story-issue-2578 -->
+- [ ] chore: sync cost telemetry write-through after v0.25.3 release [testing] <!-- id:story-issue-2577 -->
+- [ ] chore(release): v0.25.3 - Muse readiness and capacity-routing evidence [testing] <!-- id:story-issue-2575 -->
+- [ ] Maintainer role: post-merge housekeeping checklist + Vizor-editable charter instructions [devops] <!-- id:story-09c4a6f9 -->
+- [ ] docs: add Synlynk onboarding guide + enable team mode [testing] <!-- id:story-issue-2565 -->
 - [ ] Capability-sweep executor output is contaminated by stale worktree diff when dispatched from a non-main branch [testing] <!-- id:story-issue-2567 -->
 - [ ] Write a 3-bullet status update summarizing a completed feature. [backend] <!-- id:story-adhoc-1792806578 -->
 - [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
