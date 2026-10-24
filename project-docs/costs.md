@@ -1726,13 +1726,40 @@
 | 2026-10-24 09:37 | codex | o4-mini | 970703 | 5964 | $0.0027 [sub] (API: $0.2405) | estimated_token_rate | story-2349673f | exec: codex job job-17114d... |
 | 2026-10-24 09:43 | codex | o4-mini | 316755 | 2945 | $0.0015 [sub] (API: $0.1271) | estimated_token_rate | story-2349673f | exec: codex job job-99791c... |
 | 2026-10-24 11:53 | codex | o4-mini | 1453324 | 8185 | $0.0027 [sub] (API: $0.2668) | estimated_token_rate | story-issue-2575 | exec: codex job job-b83c69... |
+| 2026-10-24 11:59 | grok | grok-3 | 105224 | 7948 | $0.7421 [sub] (API: $0.4350) | estimated_token_rate | story-issue-2577 | exec: grok job job-cbe2a36... |
+| 2026-10-24 12:02 | grok | grok-3 | 61365 | 10284 | $0.4698 [sub] (API: $0.3386) | estimated_token_rate | story-issue-2578 | exec: grok job job-7c300d6... |
+| 2026-10-24 12:15 | codex | o4-mini | 732186 | 8099 | $0.0037 [sub] (API: $0.3314) | estimated_token_rate | story-issue-2576 | exec: codex job job-77e59e... |
+| 2026-10-24 12:18 | grok | grok-3 | 103837 | 4887 | $0.7129 [sub] (API: $0.3849) | estimated_token_rate | story-issue-2547 | exec: grok job job-7242de7... |
+| 2026-10-24 12:30 | agy | unknown | 183791 | 29095 | $0.1722 [sub] (API: $0.9887) | estimated_token_rate | story-issue-2576 | exec: agy job job-3500ef8f |
+| 2026-10-24 12:45 | grok | grok-3 | 45204 | 3594 | $0.3200 [sub] (API: $0.1897) | estimated_token_rate | story-adhoc-1792826037 | exec: grok job job-3ee50a4... |
+| 2026-10-24 12:46 | codex | o4-mini | 23906 | 576 | $0.0006 [sub] (API: $0.0439) | estimated_token_rate | story-adhoc-1792826113 | exec: codex job job-234f2e... |
+| 2026-10-24 12:47 | grok | grok-3 | 57144 | 4875 | $0.4067 [sub] (API: $0.2447) | estimated_token_rate | story-adhoc-1792826142 | exec: grok job job-c0ad1f6... |
+| 2026-10-24 12:48 | codex | o4-mini | 23465 | 934 | $0.0006 [sub] (API: $0.0479) | estimated_token_rate | story-adhoc-1792826229 | exec: codex job job-1222e7... |
+| 2026-10-24 12:50 | grok | grok-3 | 5000 | 2000 | $0.0459 [sub] (API: $0.0450) | estimated_tshirt | story-adhoc-1792826265 | exec: grok job job-3b8a77f... |
+| 2026-10-24 12:51 | codex | o4-mini | 23886 | 437 | $0.0006 [sub] (API: $0.0417) | estimated_token_rate | story-adhoc-1792826405 | exec: codex job job-368d8c... |
+| 2026-10-24 12:53 | grok | grok-3 | 96591 | 11737 | $0.7104 [sub] (API: $0.4660) | estimated_token_rate | story-adhoc-1792826443 | exec: grok job job-ffc6fd0... |
+| 2026-10-24 12:53 | codex | o4-mini | 23910 | 552 | $0.0006 [sub] (API: $0.0435) | estimated_token_rate | story-adhoc-1792826573 | exec: codex job job-3df444... |
+| 2026-10-24 12:55 | grok | grok-3 | 86260 | 6945 | $0.6112 [sub] (API: $0.3630) | estimated_token_rate | story-adhoc-1792826607 | exec: grok job job-8ec4bd0... |
+| 2026-10-24 12:55 | codex | o4-mini | 23136 | 486 | $0.0005 [sub] (API: $0.0402) | estimated_token_rate | story-adhoc-1792826694 | exec: codex job job-2779bd... |
+| 2026-10-24 12:57 | grok | grok-3 | 50034 | 13496 | $0.4166 [sub] (API: $0.3527) | estimated_token_rate | story-adhoc-1792826728 | exec: grok job job-cd06f7a... |
+| 2026-10-24 12:58 | codex | o4-mini | 25818 | 867 | $0.0007 [sub] (API: $0.0540) | estimated_token_rate | story-adhoc-1792826861 | exec: codex job job-31f1f7... |
+| 2026-10-24 13:11 | agy | unknown | 0 | 0 | $0.0000 [sub] (API: $0.0000) | estimated_token_rate | story-c7688ea4 | exec: agy job job-694fcbad |
+| 2026-10-24 13:20 | codex | o4-mini | 811907 | 7213 | $0.0027 [sub] (API: $0.2547) | estimated_token_rate | story-c7688ea4 | exec: codex job job-c801eb... |
+| 2026-10-24 13:20 | agy | unknown | 26408 | 3892 | $0.0245 [sub] (API: $0.1376) | estimated_token_rate | story-issue-2138 | exec: agy job job-3c82d855 |
+| 2026-10-24 13:28 | muse | unknown | 395840 | 2174 | $1.2202 | estimated_token_rate | story-adhoc-1792828630 | exec: muse job job-857d859... |
+| 2026-10-24 13:30 | claude | claude-sonnet-4-6 | 58906 | 800 | $0.1482 [sub] (API: $0.1887) | estimated_token_rate | story-adhoc-1792828737 | exec: claude job job-dae86... |
+| 2026-10-24 13:32 | muse | unknown | 400757 | 1666 | $1.2274 | estimated_token_rate | story-adhoc-1792828807 | exec: muse job job-2b5766a... |
+| 2026-10-24 13:32 | claude | claude-sonnet-4-6 | 45472 | 825 | $0.1149 [sub] (API: $0.1488) | estimated_token_rate | story-adhoc-1792828919 | exec: claude job job-b1dcb... |
+| 2026-10-24 13:34 | muse | unknown | 462790 | 3148 | $1.4357 | estimated_token_rate | story-adhoc-1792828967 | exec: muse job job-b4ad995... |
+| 2026-10-24 13:35 | codex | o4-mini | 3114111 | 14567 | $0.0044 [sub] (API: $0.4506) | estimated_token_rate | story-47248b4c | exec: codex job job-f676d7... |
+| 2026-10-24 13:37 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0174 [sub] (API: $0.0450) | estimated_tshirt | story-adhoc-1792829081 | exec: claude job job-90ebb... |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
-| claude | $20.00 | $64.3470 | $112.6680 | $48.3210 |
-| codex | $20.00 | $28.5848 | $1865.7734 | $1837.1886 |
-| agy | $20.00 | $23.9524 | $119.4768 | $95.5244 |
-| grok | $30.00 | $190.6280 | $141.2100 | $-49.4179 |
-| **Total** | **$90.00** | **$307.5122** | **$2239.1282** | **$1931.6161** |
+| claude | $20.00 | $64.6275 | $113.0505 | $48.4231 |
+| codex | $20.00 | $28.5992 | $1867.0814 | $1838.4823 |
+| agy | $20.00 | $24.1491 | $120.6031 | $96.4540 |
+| grok | $30.00 | $195.0636 | $144.0297 | $-51.0339 |
+| **Total** | **$90.00** | **$312.4393** | **$2244.7647** | **$1932.3255** |
