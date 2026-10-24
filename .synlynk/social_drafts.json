@@ -3550,5 +3550,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2579 \u2014 discover Muse capability sweep models (PR #2579, v0.25.3)\n\n\u2022 Merged improvements and fixes for PR #2579.\n\n#posts",
     "changelog": "### v0.25.3 (2026-10-24) - PR #2579\n- Merged improvements and fixes for PR #2579."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/469-pr2591-sync-readme-test-count.md",
+    "title": "PR #2591 \u2014 sync README test count",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-24",
+    "pr": "#2591",
+    "version": "0.25.3",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2591."
+    ],
+    "tweet": "\ud83d\ude80 PR #2591 \u2014 sync README test count (PR #2591, v0.25.3)\n\n\u2022 Merged improvements and fixes for PR #2591.\n\n#posts",
+    "changelog": "### v0.25.3 (2026-10-24) - PR #2591\n- Merged improvements and fixes for PR #2591."
   }
 ]
