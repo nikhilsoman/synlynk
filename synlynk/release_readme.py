@@ -228,12 +228,34 @@ def _unique_claim(values: Sequence[int]) -> Optional[int]:
     return None
 
 
+def _is_readme_modified_in_pr(root: str) -> bool:
+    """Return whether README.md differs from the pull request base.
+
+    A failed diff check is treated conservatively as modified so PR mode never
+    weakens validation when the base ref is unavailable.
+    """
+    base_branch = os.environ.get("GITHUB_BASE_REF", "main")
+    base_ref = f"origin/{base_branch}"
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", f"{base_ref}...HEAD", "--", "README.md"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return True
+    return result.returncode != 0 or bool(result.stdout.strip())
+
+
 def validate_readme_for_release(
     root: str,
     expected_version: str,
     collected_test_count: Optional[int] = None,
     waivers: Optional[Dict[str, str]] = None,
     verified_passing_count: Optional[int] = None,
+    pr_mode: bool = False,
 ) -> List[ReadmeFinding]:
     """Return unwaived README findings for a named-release version."""
     expected = expected_version.strip().lstrip("v")
@@ -316,6 +338,8 @@ def validate_readme_for_release(
                 )
             )
 
+    enforce_collected_count_equality = not pr_mode or _is_readme_modified_in_pr(root)
+
     if collected_test_count is None:
         collected_test_count = collect_pytest_test_count(root)
 
@@ -333,6 +357,7 @@ def validate_readme_for_release(
             if (
                 claimed_collected is not None
                 and claimed_collected != collected_test_count
+                and enforce_collected_count_equality
             ):
                 findings.append(
                     ReadmeFinding(

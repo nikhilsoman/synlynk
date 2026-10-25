@@ -2807,7 +2807,16 @@ def checkpoint() -> None:
         print(f"  Archived: {names}")
     print(f"  Budget: ${total_usd:.2f} / ${limit_usd:.2f} ({pct:.0f}%)  ·  {total_requests} requests")
 
-def cmd_release(dry_run: bool = False, version: Optional[str] = None, bump: bool = False, minor: bool = False, role: str = "pm", check_docs: bool = False, waive: Optional[list] = None) -> None:
+def cmd_release(
+    dry_run: bool = False,
+    version: Optional[str] = None,
+    bump: bool = False,
+    minor: bool = False,
+    role: str = "pm",
+    check_docs: bool = False,
+    pr_mode: bool = False,
+    waive: Optional[list] = None,
+) -> None:
     """Cut a named release: bump version, prepend CHANGELOG.md, write blog stub, print checklist."""
     import datetime
     import re
@@ -2877,7 +2886,7 @@ def cmd_release(dry_run: bool = False, version: Optional[str] = None, bump: bool
         expected_readme_version = next_version
 
     findings = validate_readme_for_release(
-        root, expected_readme_version, waivers=waivers
+        root, expected_readme_version, waivers=waivers, pr_mode=pr_mode
     )
     if findings and not check_docs:
         print(f"⚡ [Marketing Ceremony] Auto-synchronizing README.md for v{expected_readme_version}...")
@@ -2885,7 +2894,7 @@ def cmd_release(dry_run: bool = False, version: Optional[str] = None, bump: bool
         collected = collect_pytest_test_count(root)
         sync_readme_for_release(root, expected_readme_version, collected_count=collected)
         findings = validate_readme_for_release(
-            root, expected_readme_version, waivers=waivers
+            root, expected_readme_version, waivers=waivers, pr_mode=pr_mode
         )
 
     report = format_readme_check_report(
