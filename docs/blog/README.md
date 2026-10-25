@@ -559,6 +559,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [478](./478-pr2602-flip-v0-25-4-roadmap-row-to-shipped.md) | PR #2602 — flip v0.25.4 roadmap row to shipped | [#2602](https://github.com/nikhilsoman/synlynk/pull/2602) | 2026-10-24 |
 | [479](./479-pr2605-isolate-selftest-scratch-cleanup-by-owne.md) | PR #2605 — isolate selftest scratch cleanup by owner PID | [#2605](https://github.com/nikhilsoman/synlynk/pull/2605) | 2026-10-24 |
 | [480](./480-pr2608-decouple-pr-release-docs-test-count-gate.md) | PR #2608 — decouple PR release-docs test count gate (#2522) | [#2608](https://github.com/nikhilsoman/synlynk/pull/2608) | 2026-10-25 |
+| [481](./481-pr2611-scope-test-suite-to-code-changes-and-opt.md) | PR #2611 — scope test suite to code changes and optimize PR matrix (#2529) | [#2611](https://github.com/nikhilsoman/synlynk/pull/2611) | 2026-10-25 |
 
 ## Per-PR Post Template
 
