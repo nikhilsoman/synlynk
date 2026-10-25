@@ -307,3 +307,37 @@ session, two housekeeping items neither touched nor caused by this session's own
 Next session: run that cleanup pass first, then resume roadmap work (gh:#1925 part 2 —
 containerized execution — is the next queued item per the blog post's stated goalpost).
 [@claude]
+
+## 2026-10-25 — v0.25.4 shipped; Agy-as-conductor handoff prepped for v0.25.5
+
+- Drove v0.25.4 ("accurate job status and completion evidence") end-to-end as Mode A Home
+  Conductor: brainstormed/spec'd, wrote the implementation plan, dispatched the five workstreams
+  (A/B/C/D/E) via `synlynk dispatch`, reviewed cross-harness, merged PR #2601 (release tag) and
+  PR #2602 (roadmap shipped-flip). Detail already captured in prior devlog/memory entries and in
+  the PR bodies; not re-derived here.
+- At Nikhil's request, prepped a handoff so **Agy** can run v0.25.5 ("CI and release-integrity
+  stabilization") as conductor instead of Claude — a live test of the Empirical Capability
+  Assessment Policy's reassessment of the Default Agent Role lock (CLAUDE.md), which explicitly
+  includes Claude's own PM/review/deploy restriction as provisional, not exempt. Wrote the full
+  handoff prompt (role framing, four-ticket roadmap scope floor #2527/#2526/#2522/#2320, a
+  13-ticket adjacent-issue sweep with relevance rationale, three reusable prior-art docs, and the
+  concrete `test.yml`-lacks-a-`paths:`-filter finding supporting the CI-speed directive) and
+  delivered it to Nikhil in full.
+- Filed gh:#2603 (interactive home/conductor sessions need task-boundary context-pack injection,
+  mirroring headless dispatch's own context injection) — checked against the pre-existing related
+  #2574 (token-threshold-triggered compaction) first to avoid filing a duplicate; scoped #2603 as
+  complementary (task-boundary trigger) rather than overlapping. Posted the cross-link rollup on
+  release epic #2467 rather than pre-committing #2603 into the v0.25.5 roadmap scope myself, since
+  that scope decision belongs to Agy's own brainstorm per Brainstorm-First Policy.
+- Session-close housekeeping: confirmed the shared main checkout's uncommitted state
+  (`AGENTS.md`/`CLAUDE.md` modified) is synlynk's own automated harness-marker sync (version bump
+  `v2.1.275`→`v2.1.310`, re-verified timestamp, trailing-whitespace cleanup inside the managed
+  block) — not caused by this session, nothing to commit. The remaining pre-existing uncommitted
+  files (`project-docs/archive/.costs-archive.cursor`, `project-docs/archive/costs-2026-H10.md`,
+  `project-docs/costs.md`, `project-docs/todo.md`, untracked `sentinel.md`/`sentinel.md.lock`)
+  were already present at session start, confirmed not touched this session, and left as-is.
+  No PR-generating code work happened this segment (handoff prep + ticket filing only, both
+  already landed via `gh issue create`/`gh issue comment`), so there is no cost-log entry to
+  backfill against a PR per the Cost Capture Protocol — native-session cost for this segment is
+  PM/research time with no dispatched job attached.
+[@claude]
