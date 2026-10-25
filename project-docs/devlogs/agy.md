@@ -1327,3 +1327,17 @@
   - Updated `project-docs/roadmap.md`: flipped `v0.26.0 — Daemon reliability` row to `[shipped]`.
   - Updated `project-docs/memory.md` with v0.26.0 shipped architectural decisions.
 [@agy, @nikhilsoman]
+
+## 2026-10-26 — v0.26.1 Workspace-Agent Operations Architecture Specification & Harness² Alignment
+
+### Brainstorm & Spec Phase: v0.26.1 Design Specification & Architectural Alignment
+- **Conducted Architectural Decision Review:**
+  - Resolved charter schema convergence (Issue #2305) via Option 1A (Markdown-first canonical YAML frontmatter source of truth; deprecating `.synlynk/charters/*.json`).
+  - Resolved Superpowers skill binding via Option 2B (in-flight prompt injection gate + post-flight verification gate for test receipts).
+  - Resolved Maintainer autonomy via Option 3A (semi-autonomous advisory/triage with reproduction issue generation, paving path for probe execution).
+  - Adopted Google Research Harness² (arXiv:2610.14224) 8-component architecture and dual-recursion (Propose-Probe-Compose) model for workspace agent evolution.
+  - Authorized multi-harness Mode A Home Conductors (Claude, Agy, Codex, Grok) under strict non-author review separation (Issue #2488).
+- **Artifacts Authored:**
+  - `docs/superpowers/specs/2026-10-29-v0.26.1-workspace-agent-operations-design.md`: Comprehensive design specification covering Workstreams 1–5.
+  - `docs/architecture/harness-squared-mapping.md`: Formal mapping of Synlynk's subsystems to Harness² 8-component tuple.
+[@agy, @nikhilsoman]
