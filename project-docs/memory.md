@@ -274,3 +274,5 @@
   The same-day pre-tag note that the arc stayed planned applied only until
   this tag. [@grok]
 
+
+- **2026-10-25 v0.25.5 shipped:** Tag `v0.25.5` is commit `1f5734da25ebbc38d5e1dc80517748fa39e6a003` matching `origin/main`. The GitHub Release was published 2026-10-25T05:04:48Z by synlynk-synlynk-pm[bot]. Release epic #2467, parent tracking issue #2458, and closed issues #2527, #2526, #2522, #2529, #2320, #2202, #2567. CI matrix is scoped to required Linux legs on PRs while preserving the full matrix on releases. Agy served as home conductor end-to-end under the Empirical Capability Assessment. [@agy]
