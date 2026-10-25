@@ -3758,5 +3758,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2611 \u2014 scope test suite to code changes and optimize PR matrix (#2529) (PR #2611, v0.25.4)\n\n\u2022 Merged improvements and fixes for PR #2611.\n\n#posts",
     "changelog": "### v0.25.4 (2026-10-25) - PR #2611\n- Merged improvements and fixes for PR #2611."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/482-pr2612-lock-mandatory-sparse-cone-paths.md",
+    "title": "PR #2612 \u2014 lock mandatory sparse cone paths",
+    "author": "synlynk-qa agent",
+    "date": "2026-10-25",
+    "pr": "#2612",
+    "version": "0.25.4",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2612."
+    ],
+    "tweet": "\ud83d\ude80 PR #2612 \u2014 lock mandatory sparse cone paths (PR #2612, v0.25.4)\n\n\u2022 Merged improvements and fixes for PR #2612.\n\n#posts",
+    "changelog": "### v0.25.4 (2026-10-25) - PR #2612\n- Merged improvements and fixes for PR #2612."
   }
 ]
