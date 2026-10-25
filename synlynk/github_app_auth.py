@@ -18,24 +18,41 @@ _openssl_path_cache = None
 
 
 def _redaction_cache_path() -> str:
-    return os.path.join(".synlynk", "token_redaction_cache.json")
+    try:
+        from synlynk import _project_root
+        root = os.environ.get("SYNLYNK_DAEMON_WORKSPACE_ROOT")
+        if not root:
+            try:
+                root = _project_root()
+            except Exception:
+                root = "."
+        return os.path.abspath(os.path.join(root, ".synlynk", "token_redaction_cache.json"))
+    except Exception:
+        return os.path.abspath(os.path.join(".synlynk", "token_redaction_cache.json"))
 
 
 def _default_apps_dir() -> str:
     """Return the shared GitHub App directory for the current repository."""
     try:
+        from synlynk import _project_root
+        root = os.environ.get("SYNLYNK_DAEMON_WORKSPACE_ROOT")
+        if not root:
+            try:
+                root = _project_root()
+            except Exception:
+                root = "."
         configured = (
-            os.path.isfile(os.path.join(".synlynk", "workspace.json"))
-            or os.path.isfile(os.path.join(".synlynk", "config.json"))
+            os.path.isfile(os.path.join(root, ".synlynk", "workspace.json"))
+            or os.path.isfile(os.path.join(root, ".synlynk", "config.json"))
         )
         if not configured:
-            return os.path.join(".synlynk", "github_apps")
+            return os.path.abspath(os.path.join(root, ".synlynk", "github_apps"))
         from synlynk.product_store import resolve_github_apps_dir
-        return str(resolve_github_apps_dir("."))
+        return str(resolve_github_apps_dir(root))
     except Exception:
         # Preserve the historical behavior outside a repository or when the
         # daemon module cannot resolve the repository context.
-        return os.path.join(".synlynk", "github_apps")
+        return os.path.abspath(os.path.join(".synlynk", "github_apps"))
 
 
 def _role_token_cache_path(role: str, apps_dir: Optional[str] = None) -> str:
@@ -146,13 +163,14 @@ def _resolve_private_key_path(private_key_path: str, apps_dir: Optional[str] = N
         return private_key_path
 
     basename = os.path.basename(private_key_path)
+    effective_apps_dir = apps_dir if apps_dir is not None else _default_apps_dir()
 
-    # 1. Try relative to explicit apps_dir if provided
-    if apps_dir:
-        candidate = os.path.join(apps_dir, basename)
+    # 1. Try relative to explicit or resolved apps_dir
+    if effective_apps_dir:
+        candidate = os.path.join(effective_apps_dir, basename)
         if os.path.exists(candidate):
             return os.path.abspath(candidate)
-        candidate2 = os.path.join(apps_dir, private_key_path)
+        candidate2 = os.path.join(effective_apps_dir, private_key_path)
         if os.path.exists(candidate2):
             return os.path.abspath(candidate2)
 
@@ -198,9 +216,9 @@ def _resolve_private_key_path(private_key_path: str, apps_dir: Optional[str] = N
     if os.path.exists(private_key_path):
         return os.path.abspath(private_key_path)
 
-    # 6. Fallback: absolute path against apps_dir if provided else abspath
-    if apps_dir:
-        return os.path.abspath(os.path.join(apps_dir, basename))
+    # 6. Fallback: absolute path against effective_apps_dir if resolved else abspath
+    if effective_apps_dir:
+        return os.path.abspath(os.path.join(effective_apps_dir, basename))
     return os.path.abspath(private_key_path)
 
 
@@ -209,11 +227,15 @@ def _sign_jwt(app_id: str, private_key_path: str) -> str:
     resolved_key_path = _resolve_private_key_path(private_key_path)
     signing_input, _, _ = _build_jwt_signing_input(app_id)
     openssl = _resolve_openssl_path()
+    env = dict(os.environ)
+    env["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
     result = subprocess.run(
         [openssl, "dgst", "-sha256", "-sign", resolved_key_path],
         input=signing_input,
         capture_output=True,
         check=False,
+        close_fds=True,
+        env=env,
     )
     if result.returncode != 0:
         raise RuntimeError(

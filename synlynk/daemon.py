@@ -225,6 +225,39 @@ def _find_pid_listening_on_port(port: int) -> Optional[int]:
     return None
 
 
+def _process_matches_workspace(pid: int, workspace_root: str) -> bool:
+    """Verify that a given PID belongs to workspace_root."""
+    if not pid or pid <= 0:
+        return False
+    proc_cwd = f"/proc/{pid}/cwd"
+    if os.path.exists(proc_cwd):
+        try:
+            target = os.path.realpath(proc_cwd)
+            ws_real = os.path.realpath(workspace_root)
+            if target == ws_real or target.startswith(ws_real + os.sep):
+                return True
+        except (OSError, ValueError):
+            pass
+    try:
+        res = subprocess.run(
+            ["lsof", "-a", "-p", str(pid), "-d", "cwd", "-Fn"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=2.0,
+        )
+        if res.returncode == 0:
+            for line in res.stdout.splitlines():
+                if line.startswith("n/"):
+                    target = os.path.realpath(line[1:])
+                    ws_real = os.path.realpath(workspace_root)
+                    if target == ws_real or target.startswith(ws_real + os.sep):
+                        return True
+    except Exception:
+        pass
+    return False
+
+
 def _daemonize_via_reexec(entry_point: str, logfile: str, cwd: Optional[str] = None) -> None:
     """Spawn a detached child process running a module-level entry point.
 
@@ -1441,9 +1474,16 @@ class SynlynkDaemon(WatchDaemon):
             owner_pid = None
         target_pid = pid if (pid and _pid_is_alive(pid)) else (owner_pid if _pid_is_alive(owner_pid) else None)
         if not target_pid:
-            port_pid = _find_pid_listening_on_port(self.HTTP_PORT)
-            if port_pid and _pid_is_alive(port_pid) and port_pid != os.getpid():
-                target_pid = port_pid
+            # Guard against probing or reclaiming unrelated processes on the default port:
+            # Under test environments or when using default HTTP_PORT, verify workspace match.
+            if not (os.environ.get("SYNLYNK_TEST_PROJECT_DIR") == "1" and self.HTTP_PORT == SynlynkDaemon.HTTP_PORT):
+                port_pid = _find_pid_listening_on_port(self.HTTP_PORT)
+                if port_pid and _pid_is_alive(port_pid) and port_pid != os.getpid():
+                    if self.HTTP_PORT == SynlynkDaemon.HTTP_PORT:
+                        if _process_matches_workspace(port_pid, self.workspace_root):
+                            target_pid = port_pid
+                    else:
+                        target_pid = port_pid
         return target_pid
 
     def stop(self) -> None:
@@ -1506,9 +1546,23 @@ class SynlynkDaemon(WatchDaemon):
             print("  ✓ synlynk daemon stopped.")
         except (ProcessLookupError, ValueError):
             if os.path.exists(self.pidfile):
-                os.remove(self.pidfile)
+                try:
+                    os.remove(self.pidfile)
+                except OSError:
+                    pass
             if os.path.exists(start_file):
-                os.remove(start_file)
+                try:
+                    os.remove(start_file)
+                except OSError:
+                    pass
+            if os.path.exists(lock_path):
+                lock_fh = _try_acquire_daemon_lock(lock_path, blocking=False)
+                if lock_fh is not None:
+                    _release_daemon_lock(lock_fh)
+                    try:
+                        os.remove(lock_path)
+                    except OSError:
+                        pass
             print("  ✦ daemon not running (cleaned stale pidfile).")
         except OSError as e:
             print(f"  Error stopping daemon: {e}")

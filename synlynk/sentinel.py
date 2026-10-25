@@ -408,6 +408,108 @@ def _migrate_sentinel_content(existing, now):
     return "".join(output)
 
 
+def compact_sentinel_alerts(
+    sentinel_path: Optional[str] = None,
+    max_age_days: int = 30,
+    now: Optional[datetime] = None,
+) -> dict:
+    """Prune alerts older than *max_age_days*, consolidate duplicates, and strip malformed lines."""
+    sentinel_file = sentinel_path or ".synlynk/sentinel.md"
+    if not os.path.exists(sentinel_file):
+        return {"pruned": 0, "consolidated": 0, "sanitized": 0, "remaining": 0}
+
+    now_dt = now or datetime.now(timezone.utc)
+    if now_dt.tzinfo is None:
+        now_dt = now_dt.replace(tzinfo=timezone.utc)
+
+    max_age_seconds = max_age_days * 86400
+
+    pruned = 0
+    sanitized = 0
+    consolidated = 0
+
+    with _sentinel_file_lock(sentinel_file):
+        with open(sentinel_file, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+
+        valid_alerts = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped or stripped == "# Sentinel Alerts":
+                continue
+            parsed = _parse_sentinel_alert(stripped)
+            if parsed is None:
+                # Malformed / garbage lines (e.g. usage snippets, traces, corrupt text)
+                sanitized += 1
+                continue
+
+            last_dt = parsed.get("last_seen_dt") or parsed.get("timestamp_dt")
+            if last_dt is not None:
+                if last_dt.tzinfo is None:
+                    last_dt = last_dt.replace(tzinfo=timezone.utc)
+                age_seconds = (now_dt - last_dt).total_seconds()
+                if age_seconds > max_age_seconds:
+                    pruned += 1
+                    continue
+
+            valid_alerts.append(parsed)
+
+        # Group by identity to consolidate duplicates
+        from collections import OrderedDict
+        grouped = OrderedDict()
+        for alert in valid_alerts:
+            ident = _alert_identity(alert)
+            grouped.setdefault(ident, []).append(alert)
+
+        compacted_lines = ["# Sentinel Alerts\n"]
+        remaining = 0
+        for ident, group in grouped.items():
+            if len(group) > 1:
+                consolidated += len(group) - 1
+
+            severity = group[0]["severity"]
+            code = group[0]["code"]
+            message = group[0]["message"]
+            total_occurrences = sum(a.get("occurrences", 1) for a in group)
+
+            first_dt = min(
+                (a.get("first_seen_dt") or a.get("timestamp_dt") for a in group if (a.get("first_seen_dt") or a.get("timestamp_dt"))),
+                default=now_dt,
+            )
+            last_dt = max(
+                (a.get("last_seen_dt") or a.get("timestamp_dt") for a in group if (a.get("last_seen_dt") or a.get("timestamp_dt"))),
+                default=now_dt,
+            )
+            compacted_lines.append(
+                _format_sentinel_alert(severity, code, message, total_occurrences, first_dt, last_dt)
+            )
+            remaining += 1
+
+        output = "".join(compacted_lines)
+        parent = os.path.dirname(os.path.abspath(sentinel_file))
+        os.makedirs(parent, exist_ok=True)
+        fd, tmp_file = tempfile.mkstemp(prefix=".sentinel-compact-", dir=parent, text=True)
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(output)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_file, sentinel_file)
+        except Exception:
+            try:
+                os.unlink(tmp_file)
+            except OSError:
+                pass
+            raise
+
+    return {
+        "pruned": pruned,
+        "consolidated": consolidated,
+        "sanitized": sanitized,
+        "remaining": remaining,
+    }
+
+
 def capture_process_identity(pid: int, process=None) -> Optional[dict]:
     """Capture stable, OS-provided identity metadata for a process.
 
