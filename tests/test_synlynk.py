@@ -1377,7 +1377,7 @@ def test_cli_version_flags_reach_release_facing_subcommands(monkeypatch):
 
     assert roadmap["version"] == "v0.25.2"
     assert release == {"dry_run": True, "version": "0.25.2", "minor": False,
-                       "role": "dev", "check_docs": False, "waive": []}
+                       "role": "dev", "check_docs": False, "waive": [], "pr_mode": False}
 
 
 def test_cli_configure_agent_accepts_bare_flag(monkeypatch):

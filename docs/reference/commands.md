@@ -74,6 +74,8 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `backlog triage` (primary) — open
 - `backlog auto-promote` (secondary) — open
 - `roadmap add` (secondary) — sustain
+- `roadmap update` (secondary) — sustain
+- `roadmap reassign` (secondary) — sustain
 - `open` (primary) — open
 - `launch` (primary) — open
 - `roles` (secondary) — open

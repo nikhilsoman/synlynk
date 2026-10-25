@@ -128,16 +128,16 @@ def _job_has_implementation_purpose(conn, job_id: str | None) -> bool:
     ).fetchone()
     if not row:
         return False
+    from synlynk.provenance import get_valid_job_provenance_attestation
+    attestation = get_valid_job_provenance_attestation(conn, job_id)
+    if attestation:
+        return attestation["purpose"] == "implementation"
     attestation_exists = conn.execute(
         "SELECT 1 FROM job_provenance_attestations WHERE job_id=? LIMIT 1", (job_id,)
     ).fetchone() is not None
-    if row[0] == "implementation":
-        return not attestation_exists
-    if row[0] is not None:
+    if attestation_exists:
         return False
-    from synlynk.provenance import get_valid_job_provenance_attestation
-    attestation = get_valid_job_provenance_attestation(conn, job_id)
-    return bool(attestation and attestation["purpose"] == "implementation")
+    return row[0] == "implementation"
 
 
 def _job_provenance_source(conn, job_id: str) -> str:
@@ -4100,6 +4100,93 @@ def cmd_roadmap_add(
     _generate_roadmap_md()
     label = phase_title if phase_title else (title or version)
     print(f"  {_GREEN}✓{_RESET} Roadmap updated — {version}: {label}")
+
+def cmd_roadmap_update(
+    phase_id: int | None = None,
+    arc: str | None = None,
+    phase_title: str | None = None,
+    target_arc: str | None = None,
+    title: str | None = None,
+    status: str | None = None,
+    priority: str | None = None,
+    story_id: str | None = None,
+    notes: str | None = None,
+    role: str = "pm",
+) -> None:
+    """Update or reassign an existing roadmap phase.
+
+    Identifies phase by phase_id (if provided) or (arc, phase_title).
+    Validates authority, validates foreign keys, updates fields transactionally,
+    and regenerates roadmap projections.
+    """
+    import os
+    from synlynk import _GREEN, _RESET, _get_db
+    from synlynk.policy import check_authority
+
+    authority = check_authority("roadmap_edit", role=role, repo_path=os.getcwd())
+    if not authority.allowed:
+        raise RuntimeError(f"Roadmap edit refused: role {role!r} is not authorized per policy.json.")
+
+    if phase_id is None and (not arc or not phase_title):
+        raise ValueError("Must specify either --phase-id or both --arc and --phase-title")
+
+    allowed_statuses = {"planned", "in_progress", "done", "deferred", "superseded"}
+    if status is not None and status not in allowed_statuses:
+        raise ValueError(f"Invalid phase status: {status!r}. Allowed: {sorted(allowed_statuses)}")
+
+    conn = _get_db()
+    try:
+        if phase_id is not None:
+            row = conn.execute(
+                "SELECT id, arc_version, phase_title, status, priority, story_id, notes FROM roadmap_phases WHERE id=?",
+                (phase_id,),
+            ).fetchone()
+        else:
+            rows = conn.execute(
+                "SELECT id, arc_version, phase_title, status, priority, story_id, notes FROM roadmap_phases WHERE arc_version=? AND phase_title=?",
+                (arc, phase_title),
+            ).fetchall()
+            if len(rows) > 1:
+                raise ValueError(f"Multiple phases match arc={arc!r} and phase_title={phase_title!r}; specify --phase-id instead")
+            row = rows[0] if rows else None
+
+        if not row:
+            raise ValueError(f"No roadmap phase found matching identifier (phase_id={phase_id}, arc={arc}, phase_title={phase_title})")
+
+        new_arc = row[1]
+        if target_arc is not None:
+            arc_check = conn.execute(
+                "SELECT 1 FROM roadmap_arcs WHERE version=?", (target_arc,)
+            ).fetchone()
+            if not arc_check:
+                raise ValueError(f"Target arc version {target_arc!r} does not exist in roadmap_arcs")
+            new_arc = target_arc
+
+        new_story_id = row[5]
+        if story_id is not None:
+            story_check = conn.execute(
+                "SELECT 1 FROM stories WHERE story_id=?", (story_id,)
+            ).fetchone()
+            if not story_check:
+                raise ValueError(f"Story id {story_id!r} does not exist in stories table")
+            new_story_id = story_id
+
+        new_title = title if title is not None else row[2]
+        new_status = status if status is not None else row[3]
+        new_priority = priority if priority is not None else row[4]
+        new_notes = notes if notes is not None else row[6]
+
+        conn.execute(
+            "UPDATE roadmap_phases SET arc_version=?, phase_title=?, status=?, priority=?, story_id=?, notes=? WHERE id=?",
+            (new_arc, new_title, new_status, new_priority, new_story_id, new_notes, row[0]),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    _generate_roadmap_md()
+    print(f"  {_GREEN}✓{_RESET} Roadmap phase updated — ID {row[0]} ({new_arc}): {new_title}")
+
 
 def cmd_story_list() -> None:
     """Prints all stories in state.db."""

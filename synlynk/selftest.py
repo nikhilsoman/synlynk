@@ -11,6 +11,7 @@ import os
 import sqlite3
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List
@@ -64,8 +65,16 @@ def _workspace_dir(ctx: ScenarioContext) -> Path:
             path = Path(ctx.repo_path)
         else:
             path = Path(tempfile.mkdtemp(prefix="synlynk-selftest-"))
+            _write_workspace_owner(path)
         ctx.state["workspace_dir"] = path
     return Path(path)
+
+
+def _write_workspace_owner(workspace: Path) -> None:
+    """Record the process that owns a selftest scratch workspace."""
+    (workspace / ".owner.json").write_text(
+        json.dumps({"pid": os.getpid(), "created_at": time.time()})
+    )
 
 
 def _ensure_workspace_scaffold(ctx: ScenarioContext) -> Path:
@@ -1492,6 +1501,7 @@ def run_selftest(live: bool = False) -> List[ScenarioResult]:
     if live:
         with tempfile.TemporaryDirectory(prefix="synlynk-selftest-", ignore_cleanup_errors=True) as scratch_dir:
             scratch_workspace = Path(scratch_dir)
+            _write_workspace_owner(scratch_workspace)
             print(f"live selftest scratch workspace: {scratch_workspace}")
             ctx.state["workspace_dir"] = scratch_workspace
             scratch_workspace = _ensure_workspace_scaffold(ctx)

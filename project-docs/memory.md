@@ -7,6 +7,18 @@
 - **Directories:** bin, docs, project-docs, synlynk, tests, website
 
 ## Decisions
+- **2026-10-25 [v0.25.4 shipped; Agy nominated to run v0.25.5 as conductor, testing the Default Agent Role reassessment]:**
+  v0.25.4 ("accurate job status and completion evidence") shipped via PR #2601 (tag) + PR #2602
+  (roadmap shipped-flip). Nikhil then asked Claude to prep a handoff so Agy runs v0.25.5 ("CI and
+  release-integrity stabilization") as Mode A Home Conductor instead of Claude — the first live
+  test of the Empirical Capability Assessment Policy's reassessment of CLAUDE.md's Default Agent
+  Role lock, which explicitly includes Claude's own PM/review/deploy restriction as provisional.
+  Handoff covers the roadmap's four-ticket scope floor (#2527/#2526/#2522/#2320), a 13-ticket
+  adjacent-issue sweep, three reusable prior-art docs, and a concrete CI `paths:`-filter gap
+  finding. Filed gh:#2603 (task-boundary context-pack injection for interactive sessions,
+  complementary to #2574's token-threshold compaction) and cross-linked it on release epic #2467
+  rather than pre-deciding v0.25.5 scope — that decision is Agy's to make via its own brainstorm.
+  [@claude, @nikhilsoman]
 - **2026-10-20 [ncurses Signal Handler Re-entrancy Crash & conftest.py Signal Isolation (Issue #2486)]:**
   Resolved intermittent macOS daemon and test runner crash `BUG IN CLIENT OF LIBPLATFORM: Trying to recursively lock an os_unfair_lock (Abort Cause 259)` during `fork()`:
   (1) Diagnosis: `curses.initscr()` invoked in `conftest.py` installs C-level `sigaction` signal handlers for `SIGWINCH` (28), `SIGTSTP` (18), and `SIGTERM` (15). When an asynchronous signal arrived while Thread 0 was inside `fork()`, `libncurses`'s signal handler invoked `endwin()` -> `sprintf()` -> `localeconv_l()`, which attempted to re-entrantly acquire a non-recursive `os_unfair_lock`, triggering a fatal `_os_unfair_lock_recursive_abort`.
@@ -275,12 +287,6 @@
   this tag. [@grok]
 
 
-- **2026-10-24 v0.25.5 Scope Decision & CI Stabilization Spec:** Approved Option A
-  scope for `v0.25.5` with Nikhil: selftest isolation & xdist concurrency (#2527/#2526),
-  release-docs test-count decoupling (#2522), sparse-checkout cone verification
-  (#2320/#2202), CI path filtering / matrix acceleration under 180s (#2529 & directive),
-  and calibration diff-base contamination (#2567). Explicitly deferred review-sandbox
-  tickets (#2573, #2409, #2092, #2259, #2438) to v0.25.6 (tagged on #2535), and
-  home-claim / dispatch preflight tickets (#2511, #2185, #2233, #2133) to v0.26.1
-  (tagged on #2469). Spec committed to `docs/superpowers/specs/2026-10-24-ci-and-release-integrity-stabilization-design.md`.
-  [@agy]
+- **2026-10-25 v0.25.5 shipped:** Tag `v0.25.5` is commit `1f5734da25ebbc38d5e1dc80517748fa39e6a003` matching `origin/main`. The GitHub Release was published 2026-10-25T05:04:48Z by synlynk-synlynk-pm[bot]. Release epic #2467, parent tracking issue #2458, and closed issues #2527, #2526, #2522, #2529, #2320, #2202, #2567. CI matrix is scoped to required Linux legs on PRs while preserving the full matrix on releases. Agy served as home conductor end-to-end under the Empirical Capability Assessment. [@agy]
+
+- **2026-10-25 v0.25.6 shipped:** Tag `v0.25.6` is commit `67e9dcc11ac50e04e8bac7963c746f4f71e48c31` matching `origin/main`. The GitHub Release was published 2026-10-25 by Nikhil Soman. Parent epic #2458, milestone #14, and goal goal-9ef9a965. Delivered policy-gated `synlynk roadmap update` and `reassign` CLI/API (gh:#2535) with transactional verification and projection rebuilds. Resolved gh:#2606 by fixing dispatch purpose defaulting and permitting human attestation repair for historical jobs. Locked definitive dispositions for all 94 ticketless candidates across 24 Shipped, 44 Active Planned, and 26 Deferred Post-Preview. Established universal 4-point attribution (Goal, Epic, Milestone, Arc) verified across specs, plans, and story governance. Authored task-boundary context-pack injection architecture specification (gh:#2603). Agy served as home conductor end-to-end under the Empirical Capability Assessment. [@agy, @nikhilsoman]

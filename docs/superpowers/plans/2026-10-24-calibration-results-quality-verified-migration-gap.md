@@ -1,3 +1,14 @@
+---
+title: "gh:#2569 — capability_calibration_results.quality_verified migration gap — Implementation Plan"
+date: 2026-10-24
+status: approved
+goal: "goal-9ef9a965"
+epic: "#2458"
+milestone: "v0.25.5"
+arc: "governance"
+issue: "#2569"
+---
+
 # gh:#2569 — capability_calibration_results.quality_verified migration gap — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

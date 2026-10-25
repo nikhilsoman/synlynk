@@ -1297,15 +1297,22 @@ def _get_harness_gh_write_capability(harness_name: str, db_conn=None) -> dict:
             ).fetchone()
             if row:
                 mechanism = row[1]
-                can_write = mechanism not in (
-                    "sandbox_denied",
-                    "missing_allow_rules",
-                    "uninstalled",
-                    "gh_auth_failed",
-                    "sandbox_network_blocked",
-                    "execution_failed",
-                    "unsupported",
-                )
+                # Stale projection guard (gh:#2566): if the recorded row is a legacy
+                # non-live stub superseded by empirical baseline, defer to curated baseline.
+                baseline_can_write = HARNESS_CAPABILITY_BASELINES.get(harness_name, {}).get("can_gh_write", False)
+                if mechanism == "sandbox_denied" and baseline_can_write is True:
+                    can_write = True
+                    mechanism = "sandbox_allowed"
+                else:
+                    can_write = mechanism not in (
+                        "sandbox_denied",
+                        "missing_allow_rules",
+                        "uninstalled",
+                        "gh_auth_failed",
+                        "sandbox_network_blocked",
+                        "execution_failed",
+                        "unsupported",
+                    )
                 return {
                     "can_gh_write": can_write,
                     "mechanism": mechanism,

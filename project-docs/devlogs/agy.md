@@ -1223,3 +1223,43 @@
 - Tagged deferred home-claim and preflight tickets (#2511, #2185, #2233, #2133) via comment on v0.26.1 epic issue #2469.
 - Drafted, verified, and committed design specification `docs/superpowers/specs/2026-10-24-ci-and-release-integrity-stabilization-design.md` on branch `docs/agy/v0.25.5-ci-stabilization-spec`. Pushed branch to `origin`.
 [@agy]
+## 2026-10-25: v0.25.5 Shipped — Home Conductor Retrospective
+
+- Successfully completed release `v0.25.5 — CI and release-integrity stabilization` as interactive Home Conductor (Agy, powered by Gemini).
+- Delivered all 5 planned scope items via autonomous multi-agent coordination:
+  - Task 1 (#2527/#2526 selftest isolation) via Codex + Claude QA (PR #2605).
+  - Task 2 (#2522 release-docs --pr-mode) via Codex + Claude Sonnet 5 QA (PR #2608).
+  - Task 3 (#2529 & directive CI acceleration) via Grok + Claude Sonnet 5 QA (PR #2611).
+  - Task 4 (#2320/#2202 sparse-checkout mandatory cone) via Codex + Claude Sonnet 5 QA (PR #2612).
+  - Task 5 (#2567 diff contamination) verified and closed (#2568).
+  - Release collateral prepared and merged via PR #2613.
+- Optimized review model tier: transitioned from Opus ($1.35) to Sonnet 5 ($0.20-$0.22), slashing review spend by 84%.
+- Published release tag `v0.25.5` and GitHub release with human sign-off.
+[@agy]
+
+## 2026-10-25: v0.25.6 — Stability Closeout and Ticket Lock Implementation
+
+### Executed & Shipped Under Agy as Home Conductor
+- **Governed Roadmap Phase Update & Reassignment (gh:#2535):**
+  - Implemented `cmd_roadmap_update` in `synlynk/db.py` and CLI commands `synlynk roadmap update` and `synlynk roadmap reassign` in `synlynk/cli.py`.
+  - Transactionally updates `status`, `target_arc`, `priority`, `story_id`, and `notes` by stable identifier (`phase_id` or `arc` + `phase_title`).
+  - Gated by `roadmap_edit` authority check per `policy.json` and validated foreign keys against `roadmap_arcs` and `stories`.
+  - Registered in `synlynk/taxonomy.py` and verified via 8/8 unit tests in `tests/test_roadmap_governed_update.py`.
+- **Provenance & Job Purpose Resolution (gh:#2606):**
+  - Updated `synlynk/dispatch.py:_job_purpose` to properly default `role="dev"` to `"implementation"` and `role="qa"` to `"review"` even when `task_type` is unset at dispatch.
+  - Updated `synlynk/db.py:_job_has_implementation_purpose` and `synlynk/provenance.py` so valid human attestation rows can repair historical jobs where `purpose` was written as `"other"`.
+  - Verified with 12/12 passing tests across `tests/test_job_provenance_purpose_resolution.py` and `tests/test_provenance_attestation.py`.
+- **Universal 4-Point Attribution Mandate:**
+  - Enforced 4-coordinate frontmatter blocks (`goal`, `epic`, `milestone`, `arc`) across all recent specs and plans in `docs/superpowers/`.
+  - Created `synlynk/story_governance.py` with `verify_story_four_point_attribution` and verified in `tests/test_four_point_attribution.py`.
+- **Backlog Disposition & 94 Candidates Lock:**
+  - Audited all 94 candidates in `docs/strategy/2026-10-20-canonical-release-execution-schedule.md`.
+  - Categorized into 24 Shipped (v0.25.2–v0.25.4), 44 Active Planned (v0.26.0–v0.27.2), and 26 Deferred Post-Preview (v0.28.0–v0.29.0).
+- **Adjacent Stability & Mini-Specs:**
+  - Guarded against stale `harness_version_history` projections in `synlynk/probe.py` (gh:#2566).
+  - Authored task-boundary context-pack injection architecture specification in `docs/superpowers/specs/2026-10-25-task-boundary-context-injection-design.md` (gh:#2603).
+- **Release Shipped & Tagged:**
+  - Prepared release collateral in PR #2616 (bumping VERSION to 0.25.6, synchronizing README.md hero/badges with 5,107 collected tests, and updating CHANGELOG.md).
+  - Cut release tag `v0.25.6` (`67e9dcc1`) and published GitHub release with human sign-off.
+  - Flipped roadmap status to shipped.
+[@agy, @nikhilsoman]
