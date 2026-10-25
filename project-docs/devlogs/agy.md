@@ -1213,3 +1213,17 @@
   - Asynchronous `SIGWINCH` delivery after curses initialization does not trigger `libncurses` re-entrancy aborts.
 - **Test Results:** 12/12 curses/TUI tests and all 14 circuit breaker tests passed green in under 10s.
 [@agy]
+
+## 2026-10-25: v0.25.5 Shipped — Home Conductor Retrospective
+
+- Successfully completed release `v0.25.5 — CI and release-integrity stabilization` as interactive Home Conductor (Agy, powered by Gemini).
+- Delivered all 5 planned scope items via autonomous multi-agent coordination:
+  - Task 1 (#2527/#2526 selftest isolation) via Codex + Claude QA (PR #2605).
+  - Task 2 (#2522 release-docs --pr-mode) via Codex + Claude Sonnet 5 QA (PR #2608).
+  - Task 3 (#2529 & directive CI acceleration) via Grok + Claude Sonnet 5 QA (PR #2611).
+  - Task 4 (#2320/#2202 sparse-checkout mandatory cone) via Codex + Claude Sonnet 5 QA (PR #2612).
+  - Task 5 (#2567 diff contamination) verified and closed (#2568).
+  - Release collateral prepared and merged via PR #2613.
+- Optimized review model tier: transitioned from Opus ($1.35) to Sonnet 5 ($0.20-$0.22), slashing review spend by 84%.
+- Published release tag `v0.25.5` and GitHub release with human sign-off.
+[@agy]
