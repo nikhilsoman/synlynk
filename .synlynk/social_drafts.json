@@ -3822,5 +3822,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2615 \u2014 v0.25.6 stability closeout and ticket lock (gh:#2535, gh:#2606) (PR #2615, v0.25.5)\n\n\u2022 Merged improvements and fixes for PR #2615.\n\n#posts",
     "changelog": "### v0.25.5 (2026-10-25) - PR #2615\n- Merged improvements and fixes for PR #2615."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/486-pr2610-session-close-housekeeping-for-v0-25-4-s.md",
+    "title": "PR #2610 \u2014 session-close housekeeping for v0.25.4 ship + v0.25.5 handoff",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-25",
+    "pr": "#2610",
+    "version": "0.25.5",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2610."
+    ],
+    "tweet": "\ud83d\ude80 PR #2610 \u2014 session-close housekeeping for v0.25.4 ship + v0.25.5 handoff (PR #2610, v0.25.5)\n\n\u2022 Merged improvements and fixes for PR #2610.\n\n#posts",
+    "changelog": "### v0.25.5 (2026-10-25) - PR #2610\n- Merged improvements and fixes for PR #2610."
   }
 ]
