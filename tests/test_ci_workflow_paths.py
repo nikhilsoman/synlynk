@@ -1,0 +1,113 @@
+"""CI workflow path scoping and PR matrix contract for gh:#2529.
+
+The classifier is the production rule in ``synlynk.ci_paths``. The workflow
+YAML is parsed (Ruby YAML, which GitHub-hosted runners provide) so the
+matrix and required jobs cannot drift away from that rule.
+"""
+from __future__ import annotations
+
+import json
+import subprocess
+from pathlib import Path
+
+from synlynk.ci_paths import is_bookkeeping_only
+
+WORKFLOW = Path(".github/workflows/test.yml")
+
+
+def test_bookkeeping_classification():
+    assert is_bookkeeping_only(["project-docs/devlogs/agy.md", "docs/blog/01.md"])
+    assert is_bookkeeping_only(
+        [
+            "docs/brainstorm/session/notes.html",
+            "CHANGELOG.md",
+            ".gitattributes",
+            ".gitignore",
+            "roadmap.md",
+            "todo.md",
+            ".synlynk/config.json",
+        ]
+    )
+    assert not is_bookkeeping_only(["docs/superpowers/specs/new-spec.md"])
+    assert not is_bookkeeping_only(["docs/superpowers/plans/new-plan.md"])
+    assert not is_bookkeeping_only(["synlynk/cli.py", "project-docs/todo.md"])
+    assert not is_bookkeeping_only(["README.md"])
+    assert not is_bookkeeping_only(["tests/README.md"])
+    assert not is_bookkeeping_only([".github/workflows/test.yml"])
+    assert not is_bookkeeping_only([])
+
+
+def _load_workflow():
+    """Parse the workflow with a real YAML loader. ``on`` is a YAML 1.1 bool."""
+    proc = subprocess.run(
+        [
+            "ruby",
+            "-ryaml",
+            "-rjson",
+            "-e",
+            "puts JSON.generate(YAML.load_file(ARGV[0]))",
+            str(WORKFLOW),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    doc = json.loads(proc.stdout)
+    trigger = doc.get("on") or doc.get("true")
+    assert isinstance(trigger, dict), "workflow trigger block did not parse"
+    return doc, trigger
+
+
+def test_workflow_yaml_parses_and_scopes_the_pr_matrix():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    doc, trigger = _load_workflow()
+
+    assert trigger["push"]["branches"] == ["main", "unstable"]
+    assert "v*" in trigger["push"]["tags"]
+    assert trigger["pull_request"]["branches"] == ["main", "unstable"]
+    assert "workflow_dispatch" in trigger
+    # A trigger-level paths-ignore skips qa-gate and leaves required checks
+    # stuck on Expected (gh:#2505). Exemption is in-job instead.
+    assert "paths-ignore" not in trigger.get("pull_request", {})
+    assert "paths" not in trigger.get("pull_request", {})
+
+    jobs = doc["jobs"]
+    assert "qa-gate" in jobs
+    assert "release-docs" in jobs
+    assert "pull_request" in jobs["qa-gate"]["if"]
+    assert "workflow_dispatch" in jobs["qa-gate"]["if"]
+    assert "pull_request" in jobs["release-docs"]["if"]
+    assert "workflow_dispatch" in jobs["release-docs"]["if"]
+    assert "refs/tags/v" in jobs["release-docs"]["if"]
+
+    # Job-level if runs before matrix expansion. matrix.* there is an
+    # unrecognized named-value and GitHub refuses to parse the workflow.
+    for job_name, job in jobs.items():
+        assert "matrix." not in str(job.get("if") or ""), job_name
+
+    # Only pull_request narrows the matrix. Push (main, unstable, version
+    # tags) and workflow_dispatch keep every leg. The choice is made in
+    # matrix-plan, before the test job exists, so the job if never reads matrix.
+    plan = jobs["matrix-plan"]
+    script = "\n".join(
+        step.get("run", "") for step in plan["steps"] if isinstance(step, dict)
+    )
+    compact = "".join(script.split())
+    assert "pull_request" in script
+    # Branch protection requires both Linux checks: test (3.10) and test (3.12).
+    # macOS legs are not required and stay off pull_request events.
+    assert '{"os":["ubuntu-latest"],"python-version":["3.10","3.12"]}' in compact
+    assert '{"os":["ubuntu-latest"],"python-version":["3.12"]}' not in compact
+    assert (
+        '{"os":["ubuntu-latest","macos-latest"],"python-version":["3.10","3.12"]}'
+        in compact
+    )
+
+    test_job = jobs["test"]
+    needs = test_job["needs"]
+    assert needs == "matrix-plan" or needs == ["matrix-plan"]
+    assert test_job["strategy"]["matrix"] == "${{ fromJson(needs.matrix-plan.outputs.matrix) }}"
+    assert "format('test ({0})', matrix.python-version)" in text
+    assert "is_bookkeeping_only" in text
+    assert "bookkeeping_only" in text
+    assert "grep -qvE '^(docs/|project-docs/|.*\\.md$)'" not in text
