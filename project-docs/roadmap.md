@@ -446,7 +446,7 @@ Post-Preview scope; intentionally undated. Reproducible, privacy-safe, sample-fl
 Post-Preview scope; intentionally undated. Triage residual candidates, promote/archive/hold with evidence, and record the human Dev Preview follow-up decision. Parent #2458; release epic #2476; goal goal-51c4be3f.
 
 
-## v0.25.5 — CI and release-integrity stabilization [planned] (target: 2026-10-26)
+## v0.25.5 — CI and release-integrity stabilization [shipped] (shipped: 2026-10-25)
 
 Daily stable gate: resolve or evidence non-blocking dispositions for self-test/CI race #2527/#2526, release-doc count drift #2522, and generated command-doc/sparse-checkout blocker #2320. Parent #2458; release epic #2467.
 
