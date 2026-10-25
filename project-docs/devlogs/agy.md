@@ -1268,3 +1268,35 @@
   - Authored detailed TDD Implementation Plan in `docs/superpowers/plans/2026-10-28-v0.26.0-daemon-reliability.md`.
   - Incorporated architectural synthesis of Google Research's **Harness²** (Recursive Agent Harnessing, arXiv:2610.14224), aligning substrate reliability with upstream RSI loops (Epic #2547) and the Maintainer role charter (v0.26.1 / gh:#2469).
 [@agy]
+
+### v0.26.0 Build Phase: Tasks 1–5 Implementation & Verification Shipped
+- **Task 1: Daemon Stop Idempotence & State Truth (gh:#2464, commit `b2ef21ac`):**
+  - Updated `SynlynkDaemon._resolve_live_pid()` to verify process workspace match via `_process_matches_workspace` before claiming port listener PIDs.
+  - Guarded test environments against probing un-isolated host default `HTTP_PORT` (27471).
+  - Hardened pidfile, start_file, and lockfile unlinking under non-blocking acquisition.
+  - Expanded `test_synlynk_daemon_stop_idempotent` across unstarted, repeat-stop, running-to-stop, and post-stop turns.
+  - Isolated `HTTP_PORT` in `test_daemon_run_loop_handles_port_conflict` to eliminate false port conflict aborts.
+- **Task 2: macOS Fork-Safety & Canonical Absolute PEM Lookup (gh:#1884, commit `d299d0aa`):**
+  - Hardened `_default_apps_dir()` and `_redaction_cache_path()` to resolve absolute canonical paths across worktrees and subdirectories.
+  - Made `_resolve_private_key_path()` fall back to `_default_apps_dir()` when `apps_dir` is omitted.
+  - Added `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` and `close_fds=True` to child `openssl` invocations in `_sign_jwt()`.
+  - Added unit tests for shifted-CWD PEM resolution and fork-safety isolation in `tests/test_github_app_auth.py`.
+- **Task 3: Repair Scratch Cleanup Active Selftest Isolation (gh:#2407, commit `7696785c`):**
+  - Updated `cleanup_selftest_workspaces()` in `synlynk/doctor.py` to unconditionally preserve scratch workspaces whose owner PID is alive regardless of mtime.
+  - Enforced 600s creation grace period on unowned/unparseable scratch workspaces before deletion.
+  - Failed closed on `PermissionError` and `OSError` during liveness probes to prevent deleting active workspaces in concurrent runs.
+  - Verified with 9/9 passing tests in `tests/test_selftest_isolation.py`.
+- **Task 4: Live Command Selftest Real-Launch Coverage (gh:#422, commit `1f92ebd7`):**
+  - Implemented `_scenario_watch()` in `synlynk/selftest.py` testing `WatchDaemon` health snapshot, status, and stop idempotence.
+  - Implemented `_scenario_viz()` in `synlynk/selftest.py` testing Vizor daemon health and status without port collision.
+  - Hardened `vizor_daemon._read_pid()` and `_read_port()` to catch `OSError` and `PermissionError` gracefully.
+  - Supported `SYNLYNK_VIZOR_DAEMON_HOME` and `SYNLYNK_VIZOR_CACHE_ROOT` for isolated execution.
+  - Added `watch` and `viz` to `EXPECTED_LIVE_SCENARIOS` with passing tests in `tests/test_selftest.py`.
+- **Task 5: Sentinel Alert Aging & Deduplication Rollup (story-a4442387, commit `bd1a059e`):**
+  - Implemented `compact_sentinel_alerts()` in `synlynk/sentinel.py` to prune alerts older than 30 days.
+  - Consolidated duplicate alerts across identity buckets with total occurrences count and timestamps.
+  - Stripped malformed lines, usage fragments, and stray tracebacks atomically under file lock.
+  - Verified with 28/28 passing tests in `tests/test_sentinel.py`.
+- **Verification:**
+  - 157 passing tests across `test_daemon*.py`, `test_watch*.py`, `test_control_plane_daemon_health.py`, `test_github_app_auth.py`, `test_selftest_isolation.py`, `test_doctor_*.py`, and `test_sentinel*.py`.
+[@agy]
