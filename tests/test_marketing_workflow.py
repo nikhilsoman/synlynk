@@ -71,10 +71,16 @@ def test_test_workflow_scopes_bookkeeping_and_pr_matrix():
 
     assert "is_bookkeeping_only" in workflow
     assert "bookkeeping_only" in workflow
-    assert "github.event_name != 'pull_request'" in workflow
-    assert "matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'" in workflow
-    assert "os: [ubuntu-latest, macos-latest]" in workflow
-    assert 'python-version: ["3.10", "3.12"]' in workflow
+    # matrix.* is illegal in a job-level if (evaluated before expansion).
+    # matrix-plan emits the PR leg or the full matrix before test starts.
+    assert "matrix-plan:" in workflow
+    assert "fromJson(needs.matrix-plan.outputs.matrix)" in workflow
+    assert '{"os":["ubuntu-latest"],"python-version":["3.12"]}' in workflow.replace(" ", "")
+    assert "macos-latest" in workflow
+    assert "3.10" in workflow
+    # Legal in a job name or a step if. Illegal as the job-level matrix filter
+    # GitHub reported: matrix is not in scope until the matrix is expanded.
+    assert "matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'" not in workflow
     assert 'tags: ["v*"]' in workflow
     assert "\n  qa-gate:" in workflow
     assert "\n  release-docs:" in workflow

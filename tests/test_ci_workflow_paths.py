@@ -80,15 +80,30 @@ def test_workflow_yaml_parses_and_scopes_the_pr_matrix():
     assert "workflow_dispatch" in jobs["release-docs"]["if"]
     assert "refs/tags/v" in jobs["release-docs"]["if"]
 
-    test_job = jobs["test"]
-    matrix = test_job["strategy"]["matrix"]
-    assert matrix["os"] == ["ubuntu-latest", "macos-latest"]
-    assert matrix["python-version"] == ["3.10", "3.12"]
+    # Job-level if runs before matrix expansion. matrix.* there is an
+    # unrecognized named-value and GitHub refuses to parse the workflow.
+    for job_name, job in jobs.items():
+        assert "matrix." not in str(job.get("if") or ""), job_name
+
     # Only pull_request narrows the matrix. Push (main, unstable, version
-    # tags) and workflow_dispatch keep every leg.
-    assert "pull_request" in test_job["if"]
-    assert "ubuntu-latest" in test_job["if"]
-    assert "3.12" in test_job["if"]
+    # tags) and workflow_dispatch keep every leg. The choice is made in
+    # matrix-plan, before the test job exists, so the job if never reads matrix.
+    plan = jobs["matrix-plan"]
+    script = "\n".join(
+        step.get("run", "") for step in plan["steps"] if isinstance(step, dict)
+    )
+    compact = "".join(script.split())
+    assert "pull_request" in script
+    assert '{"os":["ubuntu-latest"],"python-version":["3.12"]}' in compact
+    assert (
+        '{"os":["ubuntu-latest","macos-latest"],"python-version":["3.10","3.12"]}'
+        in compact
+    )
+
+    test_job = jobs["test"]
+    needs = test_job["needs"]
+    assert needs == "matrix-plan" or needs == ["matrix-plan"]
+    assert test_job["strategy"]["matrix"] == "${{ fromJson(needs.matrix-plan.outputs.matrix) }}"
     assert "format('test ({0})', matrix.python-version)" in text
     assert "is_bookkeeping_only" in text
     assert "bookkeeping_only" in text

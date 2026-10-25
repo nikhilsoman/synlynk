@@ -4,31 +4,45 @@ on:
   push:
     branches: [main, unstable]
     # Version-tag pushes are release cuts. They are not pull_request events,
-    # so the job if below keeps the full four-leg matrix.
+    # so matrix-plan below keeps the full four-leg matrix.
     tags: ["v*"]
   pull_request:
     branches: [main, unstable]
   workflow_dispatch: {}
 
 jobs:
+  # Job-level if is evaluated before the matrix exists, so matrix.* there is
+  # an unrecognized named-value and the workflow fails to parse. Choose the
+  # axes here instead. Pull requests schedule Linux / Python 3.12 only — the
+  # primary required check ("test (3.12)"). Push to main or unstable,
+  # version-tag release cuts, and workflow_dispatch keep ubuntu 3.10, ubuntu
+  # 3.12, macOS 3.10, and macOS 3.12. This is not a trigger paths-ignore: a
+  # paths filter would skip qa-gate and release-docs and leave the required
+  # check stuck Expected (gh:#2505, gh:#2529).
+  matrix-plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - id: set
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            matrix='{"os":["ubuntu-latest"],"python-version":["3.12"]}'
+          else
+            matrix='{"os":["ubuntu-latest","macos-latest"],"python-version":["3.10","3.12"]}'
+          fi
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+
   test:
+    needs: matrix-plan
     # Keep the ubuntu legs named "test (3.x)" so the branch-protection required
     # checks keep reporting; other OS legs carry the OS in the name and are
     # informational until they are added to the required list.
     name: ${{ matrix.os == 'ubuntu-latest' && format('test ({0})', matrix.python-version) || format('test ({0}, {1})', matrix.os, matrix.python-version) }}
-    # Pull requests run Linux / Python 3.12 only — the primary required check
-    # ("test (3.12)"). Push to main or unstable, version-tag release cuts, and
-    # workflow_dispatch keep ubuntu 3.10, ubuntu 3.12, macOS 3.10, and macOS 3.12.
-    # This is a job if, not a trigger paths-ignore: a paths filter would skip
-    # qa-gate and release-docs and leave the required check stuck Expected
-    # (gh:#2505).
-    if: >-
-      github.event_name != 'pull_request' ||
-      (matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12')
     strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        python-version: ["3.10", "3.12"]
+      matrix: ${{ fromJson(needs.matrix-plan.outputs.matrix) }}
 
     runs-on: ${{ matrix.os }}
 
