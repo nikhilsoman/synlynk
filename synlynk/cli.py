@@ -1659,6 +1659,30 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     roadmap_add_parser.add_argument("--story-id", default=None, dest="story_id")
     roadmap_add_parser.add_argument("--role", default="pm")
 
+    roadmap_update_parser = roadmap_sub.add_parser("update", help="Update a roadmap phase")
+    roadmap_update_parser.add_argument("--phase-id", type=int, default=None, dest="phase_id")
+    roadmap_update_parser.add_argument("--arc", default=None)
+    roadmap_update_parser.add_argument("--phase-title", default=None, dest="phase_title")
+    roadmap_update_parser.add_argument("--target-arc", default=None, dest="target_arc")
+    roadmap_update_parser.add_argument("--title", default=None)
+    roadmap_update_parser.add_argument("--status", default=None)
+    roadmap_update_parser.add_argument("--priority", default=None)
+    roadmap_update_parser.add_argument("--story-id", default=None, dest="story_id")
+    roadmap_update_parser.add_argument("--notes", default=None)
+    roadmap_update_parser.add_argument("--role", default="pm")
+
+    roadmap_reassign_parser = roadmap_sub.add_parser("reassign", help="Reassign a roadmap phase to another arc")
+    roadmap_reassign_parser.add_argument("--phase-id", type=int, default=None, dest="phase_id")
+    roadmap_reassign_parser.add_argument("--arc", default=None)
+    roadmap_reassign_parser.add_argument("--phase-title", default=None, dest="phase_title")
+    roadmap_reassign_parser.add_argument("--target-arc", required=True, dest="target_arc")
+    roadmap_reassign_parser.add_argument("--title", default=None)
+    roadmap_reassign_parser.add_argument("--status", default=None)
+    roadmap_reassign_parser.add_argument("--priority", default=None)
+    roadmap_reassign_parser.add_argument("--story-id", default=None, dest="story_id")
+    roadmap_reassign_parser.add_argument("--notes", default=None)
+    roadmap_reassign_parser.add_argument("--role", default="pm")
+
     policy_parser = subparsers.add_parser("policy", help="Check policy authority")
     policy_subparsers = policy_parser.add_subparsers(dest="policy_command")
     policy_subparsers.add_parser("show", help="Show the resolved policy")
@@ -2350,6 +2374,7 @@ def main(argv=None) -> None:
         cmd_marketing_sync_pr,
         cmd_repair,
         cmd_roadmap_add,
+        cmd_roadmap_update,
         cmd_roles,
         cmd_run_trio,
         cmd_scan,
@@ -3113,6 +3138,23 @@ def main(argv=None) -> None:
                     phase_title=args.phase_title,
                     priority=args.priority,
                     story_id=args.story_id,
+                    role=args.role,
+                )
+            except ValueError as e:
+                print(f"Error: {e}")
+                sys.exit(1)
+        elif args.roadmap_action in ("update", "reassign"):
+            try:
+                cmd_roadmap_update(
+                    phase_id=args.phase_id,
+                    arc=args.arc,
+                    phase_title=args.phase_title,
+                    target_arc=args.target_arc,
+                    title=args.title,
+                    status=args.status,
+                    priority=args.priority,
+                    story_id=args.story_id,
+                    notes=args.notes,
                     role=args.role,
                 )
             except ValueError as e:

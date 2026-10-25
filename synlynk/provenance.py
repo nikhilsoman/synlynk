@@ -54,7 +54,9 @@ def get_valid_job_provenance_attestation(conn: sqlite3.Connection, job_id: str) 
     if not snapshot:
         return None
     if snapshot["purpose"] is not None:
-        return None
+        can_repair = snapshot["purpose"] == "other" and not snapshot["task_type"]
+        if not can_repair:
+            return None
     if snapshot["role"] and snapshot["role"] != attestation["role"]:
         return None
     if snapshot["task_type"] and snapshot["task_type"] != attestation["task_type"]:
@@ -93,10 +95,12 @@ def record_job_provenance_attestation(
         if not snapshot:
             raise ValueError(f"job {job_id!r} does not exist")
         if snapshot["purpose"] is not None:
-            raise ValueError(
-                f"job {job_id} already has typed purpose {snapshot['purpose']!r}; "
-                "an attestation cannot replace it"
-            )
+            can_repair = snapshot["purpose"] == "other" and not snapshot["task_type"]
+            if not can_repair:
+                raise ValueError(
+                    f"job {job_id} already has typed purpose {snapshot['purpose']!r}; "
+                    "an attestation cannot replace it"
+                )
         if snapshot["role"] and snapshot["role"] != role:
             raise ValueError(f"attested role {role!r} conflicts with recorded role {snapshot['role']!r}")
         if snapshot["task_type"] and snapshot["task_type"] != task_type:
