@@ -54,6 +54,15 @@ entitlement checks, and reconnect/status hardening remain follow-up work.</li>
 <li>Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.</li>
 <li>Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.</li>
 </ul>
+<div class="changelog-version-header"><span class="changelog-version">vv0.25.6</span><span class="changelog-date">2026-10-25</span></div>
+<h3 class="tag-added">Added</h3>
+- feat(roadmap): transactional, policy-gated roadmap phase update and reassignment CLI/API (`synlynk roadmap update`/`reassign`) with rollback on invalid target arcs and projection rebuilds (gh:#2535) (#2615)
+- feat(governance): universal 4-point attribution mandate (`goal`, `epic`, `milestone`, `arc`) across stories, design specs, and plans (#2615)
+- docs(architecture): task-boundary context-pack injection architecture specification (gh:#2603) (#2615)
+- docs(schedule): complete disposition lock for all 94 ticketless candidates across 24 Shipped, 44 Active Planned, and 26 Deferred Post-Preview (#2615)
+<h3 class="tag-fixed">Fixed</h3>
+- fix(provenance): default dispatch-side job purpose when task_type is unset and permit human attestation overrides for historical jobs (gh:#2606) (#2615)
+- fix(probe): guard harness version history projection against stale sandbox-denied baselines (gh:#2566) (#2615)
 <div class="changelog-version-header"><span class="changelog-version">vv0.25.5</span><span class="changelog-date">2026-10-25</span></div>
 <h3 class="tag-fixed">Fixed</h3>
 - fix: decouple PR release-docs test count gate with `--pr-mode` (#2522) (#2608)
