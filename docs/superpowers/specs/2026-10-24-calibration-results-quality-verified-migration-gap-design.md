@@ -1,3 +1,14 @@
+---
+title: "gh:#2569 — capability_calibration_results.quality_verified migration gap"
+date: 2026-10-24
+status: approved
+goal: "goal-9ef9a965"
+epic: "#2458"
+milestone: "v0.25.5"
+arc: "governance"
+issue: "#2569"
+---
+
 # gh:#2569 — `capability_calibration_results.quality_verified` migration gap
 
 **Status:** Approved pending Nikhil sign-off (small, bounded, already-scoped fix; root cause fully diagnosed — scaled down per the #2332 precedent for well-understood bug fixes).
