@@ -1773,13 +1773,24 @@
 | 2026-10-24 18:25 | agy | unknown | 418728 | 42241 | $0.3728 [sub] (API: $1.8929) | estimated_token_rate | story-0293277d | exec: agy job job-1369054e |
 | 2026-10-24 18:37 | codex | o4-mini | 628171 | 5538 | $0.0027 [sub] (API: $0.2336) | estimated_token_rate | story-0293277d | exec: codex job job-8aaf5f... |
 | 2026-10-24 19:09 | agy | unknown | 0 | 0 | $0.0000 [sub] (API: $0.0000) | estimated_token_rate | story-0293277d | exec: agy job job-f73466ed |
+| 2026-10-24 19:10 | agy | unknown | 0 | 0 | $0.0000 [sub] (API: $0.0000) | estimated_token_rate | story-0293277d | exec: agy job job-382c8617 |
+| 2026-10-24 19:44 | agy | unknown | 5000 | 2000 | $0.0057 [sub] (API: $0.0450) | estimated_tshirt | story-0293277d | exec: agy job job-0a611b74 |
+| 2026-10-24 19:50 | agy | unknown | 69064 | 7518 | $0.0619 [sub] (API: $0.3201) | estimated_token_rate | story-0293277d | exec: agy job job-0ff57905 |
+| 2026-10-24 20:08 | agy | unknown | 131061 | 23307 | $0.1248 [sub] (API: $0.7433) | estimated_token_rate | story-0293277d | exec: agy job job-559747d1 |
+| 2026-10-24 20:12 | claude | claude-sonnet-5 | 280000 | 65000 | $0.8562 [sub] (API: $1.8150) | estimated_manual | story-0293277d | native PM session: PR #2601 CONFLICTING-state fix (origin/main merge, README conflict resolution), merge-authority policy investigation (overrides.release_authority vs merge_authority), squash-merge execution, stalled-job (job-0a611b74) diagnosis/kill/redispatch oversight, v0.25.4 tag + gh release create, status rollup on issue #2467 |
+| 2026-10-24 20:12 | claude | claude-sonnet-5 | 40000 | 15000 | $0.1365 [sub] (API: $0.3450) | estimated_manual | story-0293277d | native PM session: authored docs-only roadmap v0.25.4 shipped-flip PR #2602 (worktree creation, Edit, commit, gh pr create), dispatched+verified Agy review/merge, worktree hygiene sweep (4 nested + 2 parent worktrees/branches removed) |
+| 2026-10-24 22:01 | agy | unknown | 0 | 0 | $0.0000 [sub] (API: $0.0000) | estimated_token_rate | story-44b6094e | exec: agy job job-433c71c6 |
+| 2026-10-24 23:29 | codex | gpt-5.6-sol | 3886645 | 10635 | $0.1862 [sub] (API: $11.8195) | estimated_manual | - | logged by reviewer (qa, claude/opus-5); tokens from job-3985b444 turn.completed usage |
+| 2026-10-25 06:12 | claude | claude-opus-5 | 82000 | 1800 | $0.2080 [sub] (API: $0.2730) | estimated_manual | story-44b6094e | Review and merge PR #2605 (selftest scratch isolation #2527) |
+| 2026-10-25 08:03 | claude | claude-sonnet-4-6 | 74069 | 11008 | $0.2112 [sub] (API: $0.3880) | estimated_token_rate | story-issue-2522 | exec: claude job job-a24bc... |
+| 2026-10-25 08:07 | claude | claude-sonnet-5 | 60000 | 30000 | $0.2234 [sub] (API: $0.6300) | estimated_manual | - | ~estimate: v0.25.5 Agy-conductor handoff prep (issue sweep, prior-art review, handoff doc) + gh:#2603 filing + session-close housekeeping, native PM session, no dispatched job |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
-| claude | $20.00 | $65.2854 | $114.2075 | $48.9221 |
-| codex | $20.00 | $28.6189 | $1868.9771 | $1840.3581 |
-| agy | $20.00 | $25.8241 | $130.5118 | $104.6877 |
+| claude | $20.00 | $66.9206 | $117.6585 | $50.7379 |
+| codex | $20.00 | $28.8052 | $1880.7965 | $1851.9914 |
+| agy | $20.00 | $26.0165 | $131.6202 | $105.6037 |
 | grok | $30.00 | $195.5738 | $144.4700 | $-51.1038 |
-| **Total** | **$90.00** | **$315.3022** | **$2258.1663** | **$1942.8641** |
+| **Total** | **$90.00** | **$317.3161** | **$2274.5452** | **$1957.2291** |
