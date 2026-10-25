@@ -274,3 +274,11 @@
   The same-day pre-tag note that the arc stayed planned applied only until
   this tag. [@grok]
 
+
+- **2026-10-25 v0.25.5 Task 1 merged (#2527 / #2526 selftest isolation):**
+  PR #2605 merged into \`main\` at \`6af67949\`. Implemented by Codex (\`gpt-5.6-sol\`,
+  \`job-3985b444\`), reviewed and merged by Claude QA (\`claude-opus-5\`, \`job-74d3da99\`).
+  \`cleanup_selftest_workspaces()\` now reads \`.owner.json\` and verifies PID liveness
+  via \`os.kill(pid, 0)\` before pruning scratch workspaces, preventing concurrent
+  selftest runs from deleting each other's workspaces under parallel/CI matrices.
+  [@agy]
