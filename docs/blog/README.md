@@ -569,6 +569,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [488](./488-pr2618-record-shipped-v0-25-6-in-roadmap-memory.md) | PR #2618 — record shipped v0.25.6 in roadmap, memory, and devlogs | [#2618](https://github.com/nikhilsoman/synlynk/pull/2618) | 2026-10-25 |
 | [489](./489-pr2604-v0-25-5-ci-and-release-integrity-stabili.md) | PR #2604 — v0.25.5 CI and release-integrity stabilization design spec | [#2604](https://github.com/nikhilsoman/synlynk/pull/2604) | 2026-10-25 |
 | [490](./490-pr2619-v0-26-0-daemon-reliability-2468.md) | PR #2619 — v0.26.0 daemon reliability (#2468) | [#2619](https://github.com/nikhilsoman/synlynk/pull/2619) | 2026-10-25 |
+| [491](./491-pr2620-prepare-collateral-and-readme-for-v0-26-.md) | PR #2620 — prepare collateral and README for v0.26.0 | [#2620](https://github.com/nikhilsoman/synlynk/pull/2620) | 2026-10-25 |
 
 ## Per-PR Post Template
 
