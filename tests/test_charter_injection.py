@@ -141,3 +141,22 @@ def test_render_charter_section_unchanged_for_pre_migration_charter(project_dir,
     section = render_charter_section(repo_path=str(project_dir))
 
     assert section == f"## Role Charter (pm, revision 1)\n\n{legacy}\n\n---\n\n"
+
+
+def test_render_charter_section_includes_mandatory_superpowers_skill_contracts(project_dir, tmp_path, monkeypatch):
+    monkeypatch.chdir(project_dir)
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr("os.path.expanduser", lambda path: path.replace("~", str(fake_home)))
+    skills = ["test-driven-development", "systematic-debugging", "brainstorming"]
+    agent_store.register_agent("dev-primary-tdd", [{"kind": "role_slug", "value": "dev"}])
+    agent_store.propose_charter_revision(
+        "dev-primary-tdd", _charter_with_skills("dev", skills), actor="test", parent_revision=0
+    )
+
+    section = render_charter_section(repo_path=str(project_dir), role="dev")
+    assert "[MANDATORY SKILL CONTRACT: test-driven-development]" in section
+    assert "Author a reproduction/verification test first." in section
+    assert "[MANDATORY SKILL CONTRACT: systematic-debugging]" in section
+    assert "Formulate testable root-cause hypotheses" in section
+    assert "[MANDATORY SKILL CONTRACT: brainstorming]" in section
+

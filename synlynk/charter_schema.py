@@ -9,7 +9,7 @@ See docs/superpowers/specs/2026-08-27-charter-content-structure-design.md.
 from __future__ import annotations
 
 KNOWN_ROLES = (
-    "dev", "qa", "pm", "architect", "tpm", "designer", "marketing", "synlynk-bot",
+    "dev", "qa", "pm", "architect", "tpm", "designer", "marketing", "synlynk-bot", "maintainer",
 )
 VALID_DURABILITY = ("durable", "session-only", "dispatch-only")
 REQUIRED_SECTIONS = ("Instructions", "Authority & Escalation", "Workflow Ownership")
@@ -71,8 +71,22 @@ def parse_frontmatter(frontmatter_text: str) -> dict:
                 block_lines.append(lines[j])
                 j += 1
             non_blank = [bl for bl in block_lines if bl.strip()]
-            if non_blank and all(bl.strip().startswith("- ") for bl in non_blank):
+            if not non_blank:
+                data[key] = [] if key in (
+                    "tools", "credentials", "skills", "sops", "autonomous_authorities",
+                    "escalation_triggers", "wake_cycle_sop", "verification_contracts"
+                ) else ""
+            elif all(bl.strip().startswith("- ") for bl in non_blank):
                 data[key] = [bl.strip()[2:].strip() for bl in non_blank]
+            elif non_blank and all(":" in bl and not bl.strip().startswith("- ") and bl.partition(":")[2].strip() != "" for bl in non_blank):
+                dict_val = {}
+                for bl in non_blank:
+                    k, _, v = bl.strip().partition(":")
+                    v_clean = v.strip()
+                    if len(v_clean) >= 2 and v_clean[0] in ('"', "'") and v_clean[-1] == v_clean[0]:
+                        v_clean = v_clean[1:-1]
+                    dict_val[k.strip()] = v_clean
+                data[key] = dict_val
             else:
                 data[key] = "\n".join(block_lines)
             i = j
@@ -120,7 +134,10 @@ def validate_charter(content: str, known_roles=KNOWN_ROLES) -> dict:
             f"must be one of {', '.join(VALID_DURABILITY)}"
         )
 
-    for list_key in ("tools", "credentials"):
+    for list_key in (
+        "tools", "credentials", "autonomous_authorities", "escalation_triggers",
+        "skills", "sops", "wake_cycle_sop", "verification_contracts"
+    ):
         if list_key in data and not isinstance(data[list_key], list):
             errors.append(f"{list_key!r} must be a list (use '[]' for empty)")
 

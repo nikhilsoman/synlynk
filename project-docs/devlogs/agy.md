@@ -1342,3 +1342,31 @@
   - `docs/architecture/harness-squared-mapping.md`: Formal mapping of Synlynk's subsystems to Harness² 8-component tuple.
   - `docs/superpowers/plans/2026-10-29-v0.26.1-workspace-agent-operations.md`: Implementation plan breaking down Tasks 1–5 with TDD red/green/verify steps.
 [@agy, @nikhilsoman]
+
+### v0.26.1 Build Phase: Tasks 1–5 Implementation & Verification Complete
+- **Task 1: Charter Schema Expansion & JSON Retirement (gh:#2305):**
+  - Updated `synlynk/charter_schema.py`: expanded `KNOWN_ROLES` with `"maintainer"`, enabled parsing of flat nested dictionaries (e.g. `behavioral_weights`), and added validation for expanded 2.0 schema fields (`mandate`, `autonomous_authorities`, `escalation_triggers`, `skills`, `sops`, `verification_contracts`).
+  - Updated `synlynk/charters.py`: expanded `AgentCharter` dataclass, updated `load_charter()` to read directly from `agent_store` registered Markdown charters before legacy `.json`, and registered `"maintainer"` in `ALL_ADAPT_ROLES`.
+  - Added seed charter for `maintainer` in `synlynk/agent_cli.py`.
+  - Verified with 37/37 passing tests across `tests/test_charter_schema.py` and `tests/test_charters.py`.
+- **Task 2: Superpowers Skill Binding & Post-Flight Gate (gh:#2305):**
+  - Updated `synlynk/charter_injection.py`: rendered binding non-negotiable prompt contract blocks (`[MANDATORY SKILL CONTRACT: ...]`) for `test-driven-development`, `systematic-debugging`, and `brainstorming`.
+  - Updated `synlynk/jobs.py`: implemented `check_job_verification_contract()` verifying test receipts / test modifications when contracts demand `mandatory_reproduction_test`.
+  - Verified with passing tests in `tests/test_charter_injection.py` and `tests/test_jobs.py`.
+- **Task 3: Autonomous Maintainer Role Charter & Sentinel Triage Loop (story-2e48a8c5):**
+  - Expanded `synlynk/maintainer.py`: implemented `triage_sentinel_alerts()` grouping active alerts by fingerprint and ranking by severity and frequency, `format_triage_issue()` producing standardized GitHub issue markdown with reproduction recipes, and `probe_reproduction()`.
+  - Added CLI commands `synlynk maintainer triage` and `synlynk maintainer probe` in `synlynk/cli.py`.
+  - Hooked Maintainer triage pass into `_autonomy_pass` in `synlynk/scheduler.py`.
+  - Verified with 3/3 passing tests in `tests/test_maintainer.py`.
+- **Task 4: Multi-Harness Mode A Home Conductor Authorization (gh:#2488):**
+  - Updated `synlynk/policy.py`: added `DEFAULT_CONDUCTOR_AUTHORITY` and implemented `check_conductor_authority()`.
+  - Updated `.synlynk/policy.json`: added `"conductor_authority": ["claude", "agy", "codex", "grok"]`.
+  - Updated `CLAUDE.md`, `GEMINI.md`, and `AGENTS.md` documenting Mode A Conductor profiles across all 4 harnesses under strict non-author review separation.
+  - Verified with 27/27 passing tests in `tests/test_policy.py`.
+- **Task 5: Dispatch Preflight & Worktree Hardening (#2511, #2185, #2233):**
+  - Updated `synlynk/session.py`: wrapped active claim read/write operations in atomic flock file locks (`_claims_lock`), preventing concurrent multi-session race conditions (#2511).
+  - Updated `synlynk/dispatch.py`: implemented `_cleanup_stale_worktree_preflight()` to prune orphaned dead-PID worktree directories prior to spawn (#2185), and updated `_task_requires_gh_write` to honor explicit `task_type="review"` (#2233).
+  - Verified with 3/3 passing tests in `tests/test_dispatch_preflight_hardening.py`.
+- **Full Verification:**
+  - 79 passing tests across all modified and impacted modules.
+[@agy, @nikhilsoman]

@@ -5148,6 +5148,40 @@ def _effect_state_after_verification(
     return "unknown"
 
 
+def check_job_verification_contract(job: dict, worktree_dir: Optional[str] = None) -> bool:
+    """Check whether a job satisfied its verification contracts.
+
+    If verification_contracts mandates 'mandatory_reproduction_test',
+    inspect whether tests were modified or executed in the worktree.
+    """
+    contracts = job.get("verification_contracts") or []
+    if isinstance(contracts, str):
+        contracts = [c.strip() for c in contracts.split(",") if c.strip()]
+    if not contracts or "mandatory_reproduction_test" not in contracts:
+        return True
+
+    if job.get("exit_code") not in (0, None):
+        return False
+
+    if worktree_dir and os.path.exists(worktree_dir):
+        try:
+            res = subprocess.run(
+                ["git", "diff", "--name-only", "origin/main...HEAD"],
+                cwd=worktree_dir,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            files = res.stdout.strip().split("\n")
+            has_tests = any(f.startswith("tests/") or "test" in f for f in files if f.strip())
+            return has_tests
+        except Exception:
+            pass
+    if job.get("test_receipt") is True:
+        return True
+    return False
+
+
 def _unpushed_branch_retry_pending(conn, job_id: str, pre_guard_status: str, post_guard_status: str) -> bool:
     """Return whether an inconclusive unpushed-branch check should defer terminal settlement."""
     if post_guard_status != pre_guard_status:

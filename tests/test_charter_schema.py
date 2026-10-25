@@ -218,3 +218,58 @@ def test_set_frontmatter_block_preserves_other_keys():
 def test_set_frontmatter_block_raises_without_frontmatter():
     with pytest.raises(charter_schema.CharterValidationError):
         charter_schema.set_frontmatter_block("no frontmatter here", "dispatch_routing", "x: y\n")
+
+
+def test_parse_frontmatter_nested_flat_dict():
+    text = (
+        "behavioral_weights:\n"
+        "  verbosity: concise\n"
+        "  risk_tolerance: conservative\n"
+    )
+    data = charter_schema.parse_frontmatter(text)
+    assert data == {
+        "behavioral_weights": {
+            "verbosity": "concise",
+            "risk_tolerance": "conservative",
+        }
+    }
+
+
+def test_validate_charter_accepts_maintainer_role():
+    content = _valid_charter(role="maintainer")
+    data = charter_schema.validate_charter(content)
+    assert data["role"] == "maintainer"
+
+
+def test_validate_charter_accepts_v2_schema_with_expanded_keys():
+    extra = (
+        "mandate: \"Maintain workspace hygiene and triage sentinel faults.\"\n"
+        "autonomous_authorities:\n"
+        "  - triage_sentinel_alerts\n"
+        "  - probe_scratch_worktree\n"
+        "escalation_triggers:\n"
+        "  - recurring_sev1_fault\n"
+        "skills:\n"
+        "  - systematic-debugging\n"
+        "sops:\n"
+        "  - wake_cycle: read sentinel -> deduplicate -> probe\n"
+        "verification_contracts:\n"
+        "  - mandatory_reproduction_test\n"
+    )
+    content = _valid_charter(role="maintainer", extra_frontmatter=extra)
+    data = charter_schema.validate_charter(content)
+    assert data["role"] == "maintainer"
+    assert data["mandate"] == "Maintain workspace hygiene and triage sentinel faults."
+    assert data["autonomous_authorities"] == ["triage_sentinel_alerts", "probe_scratch_worktree"]
+    assert data["escalation_triggers"] == ["recurring_sev1_fault"]
+    assert data["skills"] == ["systematic-debugging"]
+    assert data["verification_contracts"] == ["mandatory_reproduction_test"]
+
+
+def test_validate_charter_rejects_invalid_list_fields():
+    extra = "autonomous_authorities: not-a-list\n"
+    content = _valid_charter(role="maintainer", extra_frontmatter=extra)
+    with pytest.raises(charter_schema.CharterValidationError) as exc_info:
+        charter_schema.validate_charter(content)
+    assert "autonomous_authorities" in str(exc_info.value)
+

@@ -23,6 +23,7 @@ synlynk is a Python CLI with a modular architecture across the `synlynk/` packag
 | Frontend & CSS Architecture | templates, styles, HTML layouts, subpages | |
 | Content & Documentation | project documentation, blogs, specs, guides | |
 | Test Implementation & QA | verification tests, TDD suites, compliance suites | |
+| Mode A Home Conductor | interactive orchestration, release governance, dispatch delegation | Per Empirical Capability Assessment (#2488) |
 
 ## Shared synlynk Protocol
 

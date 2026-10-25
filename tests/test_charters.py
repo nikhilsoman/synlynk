@@ -138,3 +138,59 @@ def test_adapt_charters_no_duplicate_skills(tmp_path, monkeypatch):
     updated = adapt_charters_for_installed_tools()
 
     assert updated["dev"]["skills"].count("test-driven-development") == 1
+
+
+def test_load_charter_from_markdown_frontmatter(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr("os.path.expanduser", lambda path: path.replace("~", str(fake_home)))
+    content = (
+        "---\n"
+        "schema_version: 2\n"
+        "role: maintainer\n"
+        'description: "Autonomous maintenance and sentinel triage."\n'
+        'mandate: "Maintain substrate health and triage sentinel alerts."\n'
+        "durability: durable\n"
+        "autonomous_authorities:\n"
+        "  - triage_sentinel_alerts\n"
+        "  - probe_scratch_worktree\n"
+        "escalation_triggers:\n"
+        "  - recurring_sev1_fault\n"
+        "skills:\n"
+        "  - systematic-debugging\n"
+        "sops:\n"
+        "  - wake_cycle: read sentinel -> deduplicate -> probe\n"
+        "tools:\n"
+        "  - pytest\n"
+        "credentials: []\n"
+        "verification_contracts:\n"
+        "  - mandatory_reproduction_test\n"
+        "---\n\n"
+        "## Instructions\n\nMaintain things.\n\n"
+        "## Authority & Escalation\n\nEscalate as needed.\n\n"
+        "## Workflow Ownership\n\nOwn maintenance.\n"
+    )
+    agent_id = "maintainer-agent-1"
+    agent_store.register_agent(agent_id, [{"kind": "role_slug", "value": "maintainer"}])
+    agent_store.propose_charter_revision(agent_id, content, actor="test", parent_revision=0)
+
+    charter = load_charter("maintainer")
+    assert charter.role == "maintainer"
+    assert charter.mandate == "Maintain substrate health and triage sentinel alerts."
+    assert "triage_sentinel_alerts" in charter.autonomous_authorities
+    assert "recurring_sev1_fault" in charter.escalation_triggers
+    assert "systematic-debugging" in charter.skills
+    assert "mandatory_reproduction_test" in charter.verification_contracts
+    assert validate_charter(charter)
+
+
+def test_adapt_charters_includes_maintainer_role(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr("os.path.expanduser", lambda path: path.replace("~", str(fake_home)))
+    monkeypatch.setattr("synlynk.tool_installer.is_tool_available", lambda tool: False)
+
+    updated = adapt_charters_for_installed_tools()
+    assert "maintainer" in updated
+    assert "systematic-debugging" in updated["maintainer"]["skills"]
+

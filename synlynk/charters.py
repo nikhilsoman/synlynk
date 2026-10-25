@@ -21,6 +21,12 @@ class AgentCharter:
     behavioral_weights: Dict[str, str]
     durability: Optional[str] = None
     wake_cycle_sop: List[str] = field(default_factory=list)
+    skills: List[str] = field(default_factory=list)
+    sops: List[str] = field(default_factory=list)
+    tools: List[str] = field(default_factory=list)
+    credentials: List[str] = field(default_factory=list)
+    verification_contracts: List[str] = field(default_factory=list)
+    description: Optional[str] = None
 
 
 def _charters_dir() -> str:
@@ -36,6 +42,43 @@ def validate_charter(charter: AgentCharter) -> bool:
 
 
 def load_charter(role: str) -> AgentCharter:
+    # 1. Try reading from registered agent store Markdown charter
+    try:
+        from synlynk import agent_store, charter_schema
+        entries = agent_store.list_agents()
+        for entry in entries:
+            role_slug = next(
+                (alias["value"] for alias in entry.get("aliases", []) if alias.get("kind") == "role_slug"),
+                None,
+            )
+            if role_slug == role and not entry.get("disabled"):
+                content, _rev = agent_store.read_charter(entry["agent_id"])
+                if content and content.strip():
+                    frontmatter_text, _body = charter_schema.split_frontmatter(content)
+                    if frontmatter_text:
+                        parsed = charter_schema.parse_frontmatter(frontmatter_text)
+                        mandate = parsed.get("mandate") or parsed.get("description", f"Operating charter for {role}")
+                        wake_cycle_sop = parsed.get("wake_cycle_sop") or parsed.get("sops", [])
+                        return AgentCharter(
+                            role=parsed.get("role", role),
+                            harness_bindings=parsed.get("harness_bindings", []),
+                            mandate=mandate,
+                            autonomous_authorities=parsed.get("autonomous_authorities", []),
+                            escalation_triggers=parsed.get("escalation_triggers", []),
+                            behavioral_weights=parsed.get("behavioral_weights", {}) if isinstance(parsed.get("behavioral_weights"), dict) else {},
+                            durability=parsed.get("durability"),
+                            wake_cycle_sop=wake_cycle_sop,
+                            skills=parsed.get("skills", []),
+                            sops=parsed.get("sops", []),
+                            tools=parsed.get("tools", []),
+                            credentials=parsed.get("credentials", []),
+                            verification_contracts=parsed.get("verification_contracts", []),
+                            description=parsed.get("description"),
+                        )
+    except Exception:
+        pass
+
+    # 2. Legacy fallback to .synlynk/charters/<role>.json
     path = os.path.join(_charters_dir(), f"{role}.json")
     if not os.path.exists(path):
         return AgentCharter(
@@ -58,6 +101,12 @@ def load_charter(role: str) -> AgentCharter:
         behavioral_weights=data.get("behavioral_weights", {}),
         durability=data.get("durability"),
         wake_cycle_sop=data.get("wake_cycle_sop", []),
+        skills=data.get("skills", []),
+        sops=data.get("sops", []),
+        tools=data.get("tools", []),
+        credentials=data.get("credentials", []),
+        verification_contracts=data.get("verification_contracts", []),
+        description=data.get("description"),
     )
 
 
@@ -172,6 +221,7 @@ ROLE_SUPERPOWERS_SKILLS: dict[str, list[str]] = {
     "architect": ["brainstorming"],
     "pm": ["brainstorming"],
     "tpm": ["brainstorming"],
+    "maintainer": ["systematic-debugging"],
 }
 
 ALL_ADAPT_ROLES = (
@@ -185,6 +235,7 @@ ALL_ADAPT_ROLES = (
     "designer",
     "marketing",
     "synlynk-bot",
+    "maintainer",
 )
 
 
