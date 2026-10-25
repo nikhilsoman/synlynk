@@ -6,15 +6,15 @@
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
 <p align="center">
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5107%20collected-brightgreen" alt="Tests"</a>
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.25.6-blue" alt="Version"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5115%20collected-brightgreen" alt="Tests"</a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.26.0-blue" alt="Version"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
 </p>
 
 Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. The Python CLI injects scoped project context into every dispatch, uses empirical harness allocation only after a harness has at least five completed, merged jobs for the relevant task type, and follows the documented interim policy until then. See the [empirical capability policy](docs/blog/244-chore-empirical-capability-policy.md) and [routing policy](.synlynk/policy.json). Synlynk also tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
-**v0.25.6:** Stability closeout and ticket lock. Introduces transactional, policy-gated roadmap phase updates and reassignments (gh:#2535), resolves dispatch job purpose defaulting and attestation repair (gh:#2606), locks all 94 backlog candidates to explicit dispositions, enforces universal 4-point attribution across specs and stories, and specifies task-boundary context-pack injection (gh:#2603), with 5107 tests collected.
+**v0.26.0:** Daemon reliability. Guarantees daemon stop idempotence across unstarted, stopped, and running states (gh:#2464), enforces macOS fork-safety and canonical absolute PEM resolution across worktrees (gh:#1884), isolates active selftest workspaces with PID liveness protection (gh:#2407), adds dedicated live launch scenarios for `watch` and `viz` (gh:#422), and introduces 30-day TTL aging and deduplication rollups for sentinel alerts (story-a4442387), with 5115 tests collected.
 
 ## Documentation
 
