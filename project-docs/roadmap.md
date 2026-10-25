@@ -327,7 +327,7 @@ Deferred until after the first Developer Preview stable tag. Local harness (oMLX
 - [ ] Offline Zero-Cloud AST Tier-0 Routing (P1)
   Automatic fallback and tier-0 cost routing for self-hosted models
 
-## v0.26.0 — Daemon reliability [planned] (target: 2026-10-28)
+## v0.26.0 — Daemon reliability [shipped] (shipped: 2026-10-26)
 
 Daily stable gate: daemon restart, cancellation, recovery, scan containment, replay and stop idempotence are evidence-tested. Revalidate #2464 and #1884; #2477 stays closed without a new reproduction. Legacy provider/OpenRouter/Fal.ai/driver phase rows under this arc are not part of the daemon gate and remain non-authoritative pending freshness disposition via #2535 by the Oct 27 ticket lock. Parent #2458; release epic #2468; goals goal-bd5eaa14, goal-06758149, goal-eacab0dc.
 
