@@ -566,6 +566,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [485](./485-pr2615-v0-25-6-stability-closeout-and-ticket-lo.md) | PR #2615 — v0.25.6 stability closeout and ticket lock (gh:#2535, gh:#2606) | [#2615](https://github.com/nikhilsoman/synlynk/pull/2615) | 2026-10-25 |
 | [486](./486-pr2610-session-close-housekeeping-for-v0-25-4-s.md) | PR #2610 — session-close housekeeping for v0.25.4 ship + v0.25.5 handoff | [#2610](https://github.com/nikhilsoman/synlynk/pull/2610) | 2026-10-25 |
 | [487](./487-pr2616-prepare-collateral-and-readme-for-v0-25-.md) | PR #2616 — prepare collateral and README for v0.25.6 | [#2616](https://github.com/nikhilsoman/synlynk/pull/2616) | 2026-10-25 |
+| [488](./488-pr2618-record-shipped-v0-25-6-in-roadmap-memory.md) | PR #2618 — record shipped v0.25.6 in roadmap, memory, and devlogs | [#2618](https://github.com/nikhilsoman/synlynk/pull/2618) | 2026-10-25 |
 
 ## Per-PR Post Template
 

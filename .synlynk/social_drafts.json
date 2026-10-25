@@ -3854,5 +3854,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2616 \u2014 prepare collateral and README for v0.25.6 (PR #2616, v0.25.6)\n\n\u2022 Merged improvements and fixes for PR #2616.\n\n#posts",
     "changelog": "### v0.25.6 (2026-10-25) - PR #2616\n- Merged improvements and fixes for PR #2616."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/488-pr2618-record-shipped-v0-25-6-in-roadmap-memory.md",
+    "title": "PR #2618 \u2014 record shipped v0.25.6 in roadmap, memory, and devlogs",
+    "author": "nikhilsoman",
+    "date": "2026-10-25",
+    "pr": "#2618",
+    "version": "0.25.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2618."
+    ],
+    "tweet": "\ud83d\ude80 PR #2618 \u2014 record shipped v0.25.6 in roadmap, memory, and devlogs (PR #2618, v0.25.6)\n\n\u2022 Merged improvements and fixes for PR #2618.\n\n#posts",
+    "changelog": "### v0.25.6 (2026-10-25) - PR #2618\n- Merged improvements and fixes for PR #2618."
   }
 ]
