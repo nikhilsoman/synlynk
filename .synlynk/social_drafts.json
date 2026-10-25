@@ -3870,5 +3870,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2618 \u2014 record shipped v0.25.6 in roadmap, memory, and devlogs (PR #2618, v0.25.6)\n\n\u2022 Merged improvements and fixes for PR #2618.\n\n#posts",
     "changelog": "### v0.25.6 (2026-10-25) - PR #2618\n- Merged improvements and fixes for PR #2618."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/489-pr2604-v0-25-5-ci-and-release-integrity-stabili.md",
+    "title": "PR #2604 \u2014 v0.25.5 CI and release-integrity stabilization design spec",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-25",
+    "pr": "#2604",
+    "version": "0.25.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2604."
+    ],
+    "tweet": "\ud83d\ude80 PR #2604 \u2014 v0.25.5 CI and release-integrity stabilization design spec (PR #2604, v0.25.6)\n\n\u2022 Merged improvements and fixes for PR #2604.\n\n#posts",
+    "changelog": "### v0.25.6 (2026-10-25) - PR #2604\n- Merged improvements and fixes for PR #2604."
   }
 ]
