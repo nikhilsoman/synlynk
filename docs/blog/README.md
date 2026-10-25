@@ -563,6 +563,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [482](./482-pr2612-lock-mandatory-sparse-cone-paths.md) | PR #2612 — lock mandatory sparse cone paths | [#2612](https://github.com/nikhilsoman/synlynk/pull/2612) | 2026-10-25 |
 | [483](./483-pr2613-prepare-collateral-and-readme-for-v0-25-.md) | PR #2613 — prepare collateral and README for v0.25.5 | [#2613](https://github.com/nikhilsoman/synlynk/pull/2613) | 2026-10-25 |
 | [484](./484-pr2614-record-shipped-v0-25-5-in-roadmap-memory.md) | PR #2614 — record shipped v0.25.5 in roadmap, memory, and devlogs | [#2614](https://github.com/nikhilsoman/synlynk/pull/2614) | 2026-10-25 |
+| [485](./485-pr2615-v0-25-6-stability-closeout-and-ticket-lo.md) | PR #2615 — v0.25.6 stability closeout and ticket lock (gh:#2535, gh:#2606) | [#2615](https://github.com/nikhilsoman/synlynk/pull/2615) | 2026-10-25 |
 
 ## Per-PR Post Template
 
