@@ -1340,4 +1340,5 @@
 - **Artifacts Authored:**
   - `docs/superpowers/specs/2026-10-29-v0.26.1-workspace-agent-operations-design.md`: Comprehensive design specification covering Workstreams 1–5.
   - `docs/architecture/harness-squared-mapping.md`: Formal mapping of Synlynk's subsystems to Harness² 8-component tuple.
+  - `docs/superpowers/plans/2026-10-29-v0.26.1-workspace-agent-operations.md`: Implementation plan breaking down Tasks 1–5 with TDD red/green/verify steps.
 [@agy, @nikhilsoman]
