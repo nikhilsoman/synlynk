@@ -128,6 +128,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -138,4 +140,4 @@ jobs:
         run: python -m pip install pytest
 
       - name: Enforce named-release README and version gate
-        run: python3 bin/synlynk.py release --check-docs
+        run: python3 bin/synlynk.py release --check-docs ${{ github.event_name == 'pull_request' && '--pr-mode' || '' }}

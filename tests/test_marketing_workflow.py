@@ -62,6 +62,8 @@ def test_release_docs_runs_for_pull_requests_dispatch_or_version_tags():
     assert "github.event_name == 'workflow_dispatch'" in release_docs
     assert "startsWith(github.ref, 'refs/tags/v')" in release_docs
     assert "github.event_name == 'pull_request'" in release_docs
+    assert "github.event_name == 'pull_request' && '--pr-mode'" in release_docs
+    assert "fetch-depth: 0" in release_docs
 
 def test_marketing_sync_stages_blog_and_social_draft_outputs():
     workflow = WORKFLOW.read_text(encoding="utf-8")
