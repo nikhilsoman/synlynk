@@ -3886,5 +3886,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2604 \u2014 v0.25.5 CI and release-integrity stabilization design spec (PR #2604, v0.25.6)\n\n\u2022 Merged improvements and fixes for PR #2604.\n\n#posts",
     "changelog": "### v0.25.6 (2026-10-25) - PR #2604\n- Merged improvements and fixes for PR #2604."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/490-pr2619-v0-26-0-daemon-reliability-2468.md",
+    "title": "PR #2619 \u2014 v0.26.0 daemon reliability (#2468)",
+    "author": "nikhilsoman",
+    "date": "2026-10-25",
+    "pr": "#2619",
+    "version": "0.25.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2619."
+    ],
+    "tweet": "\ud83d\ude80 PR #2619 \u2014 v0.26.0 daemon reliability (#2468) (PR #2619, v0.25.6)\n\n\u2022 Merged improvements and fixes for PR #2619.\n\n#posts",
+    "changelog": "### v0.25.6 (2026-10-25) - PR #2619\n- Merged improvements and fixes for PR #2619."
   }
 ]
