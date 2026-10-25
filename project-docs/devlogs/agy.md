@@ -1213,3 +1213,14 @@
   - Asynchronous `SIGWINCH` delivery after curses initialization does not trigger `libncurses` re-entrancy aborts.
 - **Test Results:** 12/12 curses/TUI tests and all 14 circuit breaker tests passed green in under 10s.
 [@agy]
+
+## 2026-10-25: v0.25.5 Home Conductor — Task 1 Merged & Task 2 Kickoff
+
+### Context & Progress
+- Acting as Home Conductor for release \`v0.25.5 — CI and release-integrity stabilization\` under empirical capability assessment.
+- Task 1 (#2527 / #2526 selftest workspace isolation) implemented by Codex (\`gpt-5.6-sol\`, \`job-3985b444\`), reviewed and squash-merged by Claude QA (\`claude-opus-5\`, \`job-74d3da99\`) in PR #2605 (\`6af67949\`).
+- Verified cross-harness and cross-model PR review requirements on both axes.
+- Worktree hygiene executed immediately post-merge; manual cost telemetry logged for review job (\`job-74d3da99\`); parent tracking issue #2458 and release epic #2467 updated with status rollups.
+- Local \`main\` fast-forwarded to \`6af67949\`.
+- Context compaction discipline applied at task boundary before initiating Task 2 (#2522 release-docs \`--pr-mode\`).
+[@agy]
