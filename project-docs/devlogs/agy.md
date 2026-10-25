@@ -1214,6 +1214,15 @@
 - **Test Results:** 12/12 curses/TUI tests and all 14 circuit breaker tests passed green in under 10s.
 [@agy]
 
+
+## 2026-10-24 — v0.25.5 Conductor Handoff, Scoping & Design Spec
+
+- Assumed Home Conductor duties for `v0.25.5 — CI and release-integrity stabilization` under the Empirical Capability Assessment Policy reassessment.
+- Conducted scoping deliberation with operator (Nikhil): selected Option A covering #2527/#2526 (selftest concurrency & PID isolation), #2522 (release-docs PR mode decoupling), #2320/#2202 (sparse cone verification), CI path scoping / matrix acceleration (#2529), and #2567 (calibration diff-base fix).
+- Tagged deferred review-sandbox tickets (#2573, #2409, #2092, #2259, #2438) via comment on v0.25.6 tracking issue #2535.
+- Tagged deferred home-claim and preflight tickets (#2511, #2185, #2233, #2133) via comment on v0.26.1 epic issue #2469.
+- Drafted, verified, and committed design specification `docs/superpowers/specs/2026-10-24-ci-and-release-integrity-stabilization-design.md` on branch `docs/agy/v0.25.5-ci-stabilization-spec`. Pushed branch to `origin`.
+[@agy]
 ## 2026-10-25: v0.25.5 Shipped — Home Conductor Retrospective
 
 - Successfully completed release `v0.25.5 — CI and release-integrity stabilization` as interactive Home Conductor (Agy, powered by Gemini).
