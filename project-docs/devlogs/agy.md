@@ -1309,3 +1309,21 @@
 - **Verification:**
   - 157 passing tests across `test_daemon*.py`, `test_watch*.py`, `test_control_plane_daemon_health.py`, `test_github_app_auth.py`, `test_selftest_isolation.py`, `test_doctor_*.py`, and `test_sentinel*.py`.
 [@agy]
+
+### v0.26.0 Release Phase: PR #2619 Review, Merge & Release v0.26.0 Prep
+- **PR #2619 QA Verification & Merge:**
+  - Ran `synlynk pr check` in worktree: all model versions attested, QA gate green.
+  - GitHub Actions CI checks on PR #2619: 5/5 green (`matrix-plan`, `qa-gate`, `release-docs`, `test (3.10)`, `test (3.12)`).
+  - Executed QA review on PR #2619 with explicit sign-off checklist.
+  - Rebased against latest main via `gh pr update-branch` and confirmed all re-run checks passed green.
+  - Squash merged PR #2619 into `main` (`4e7e47d7`).
+  - Pruned feature worktree `.worktrees/feat-agy-v0260-daemon-reliability` and branch `feat/agy/v0260-daemon-reliability`.
+- **Release Collateral Preparation:**
+  - Created worktree `.worktrees/chore-v0260-release-prep` on branch `chore/v0260-release-prep`.
+  - Bumped `VERSION` from `0.25.6` to `0.26.0`.
+  - Updated `CHANGELOG.md` with `[v0.26.0] - 2026-10-26` entry covering Tasks 1–5.
+  - Updated `README.md` hero badge, version summary, and test count (5115 collected tests).
+  - Validated via `synlynk release --check-docs` (all 6 checks green, VERSION v0.26.0 synchronized).
+  - Updated `project-docs/roadmap.md`: flipped `v0.26.0 — Daemon reliability` row to `[shipped]`.
+  - Updated `project-docs/memory.md` with v0.26.0 shipped architectural decisions.
+[@agy, @nikhilsoman]

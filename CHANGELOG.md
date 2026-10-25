@@ -16,6 +16,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
 
+## [v0.26.0] - 2026-10-26
+### Added
+- feat(selftest): dedicated real-launch live command selftest scenarios for long-running daemons (`watch` and `viz`) with health and port verification (gh:#422) (#2619)
+- feat(sentinel): sentinel alert 30-day TTL aging, duplicate identity deduplication rollup, and file compaction (story-a4442387) (#2619)
+### Fixed
+- fix(daemon): daemon stop idempotence and workspace-scoped live PID resolution across unstarted, stopped, and running states (gh:#2464) (#2619)
+- fix(auth): macOS Foundation/Security fork-safety flags and canonical absolute PEM resolution across worktrees (gh:#1884) (#2619)
+- fix(doctor): active selftest scratch isolation with PID liveness protection and grace period against indiscriminate cleanup (gh:#2407) (#2619)
+
 ## [v0.25.6] - 2026-10-25
 ### Added
 - feat(roadmap): transactional, policy-gated roadmap phase update and reassignment CLI/API (`synlynk roadmap update`/`reassign`) with rollback on invalid target arcs and projection rebuilds (gh:#2535) (#2615)
