@@ -296,3 +296,56 @@ def test_default_apps_dir_resolves_via_product_store_after_migration(tmp_path, m
     result = _default_apps_dir()
     # Must not silently fall back to the bare legacy dir once the repo is configured.
     assert result != os.path.join(".synlynk", "github_apps")
+
+
+def test_resolve_private_key_path_with_shifted_cwd_resolves_canonical_path(tmp_path, monkeypatch):
+    from synlynk import github_app_auth as gh_auth
+
+    repo_dir = tmp_path / "canonical_repo"
+    apps_dir = repo_dir / ".synlynk" / "github_apps"
+    apps_dir.mkdir(parents=True)
+    pem_file = apps_dir / "dev.pem"
+    pem_file.write_text("fake-dev-pem")
+
+    monkeypatch.setenv("SYNLYNK_DAEMON_WORKSPACE_ROOT", str(repo_dir))
+
+    # Shift CWD to a completely disconnected temporary tree
+    nested_dir = tmp_path / "disconnected" / "subfolder"
+    nested_dir.mkdir(parents=True)
+    monkeypatch.chdir(nested_dir)
+
+    # Resolution without explicit apps_dir must resolve to the canonical repo PEM
+    resolved = gh_auth._resolve_private_key_path(".synlynk/github_apps/dev.pem")
+    assert os.path.isabs(resolved)
+    assert os.path.samefile(resolved, pem_file)
+
+    # Bare filename resolution without explicit apps_dir must also resolve
+    resolved_bare = gh_auth._resolve_private_key_path("dev.pem")
+    assert os.path.isabs(resolved_bare)
+    assert os.path.samefile(resolved_bare, pem_file)
+
+
+def test_sign_jwt_fork_safety_and_descriptor_isolation(tmp_path, monkeypatch):
+    import subprocess
+    from synlynk import github_app_auth as gh_auth
+
+    pem_file = tmp_path / "test.pem"
+    pem_file.write_text("fake-pem")
+
+    captured_kwargs = {}
+
+    def mock_subprocess_run(cmd, **kwargs):
+        captured_kwargs.update(kwargs)
+        class DummyResult:
+            returncode = 0
+            stdout = b"mock-signature"
+            stderr = b""
+        return DummyResult()
+
+    monkeypatch.setattr(subprocess, "run", mock_subprocess_run)
+    monkeypatch.setattr(gh_auth, "_resolve_openssl_path", lambda: "/usr/bin/openssl")
+
+    jwt = gh_auth._sign_jwt("12345", str(pem_file))
+    assert jwt.startswith("eyJ")
+    assert captured_kwargs.get("close_fds") is True
+    assert captured_kwargs.get("env", {}).get("OBJC_DISABLE_INITIALIZE_FORK_SAFETY") == "YES"

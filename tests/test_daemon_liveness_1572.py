@@ -381,6 +381,12 @@ def test_daemon_run_loop_handles_port_conflict(tmp_path, monkeypatch):
     daemon.logfile = logfile
     daemon.sentinel_path = sentinel
 
+    # Isolate HTTP_PORT to an ephemeral port to avoid colliding with live daemons
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        test_port = probe.getsockname()[1]
+    monkeypatch.setattr(daemon, "HTTP_PORT", test_port)
+
     # Bind the daemon HTTP port to simulate another process holding it
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

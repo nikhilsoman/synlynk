@@ -526,3 +526,35 @@ def test_sentinel_clear_preserves_malformed_history(tmp_path):
     path.write_text("# Sentinel Alerts\nmalformed historical note\n- [WARN] [2026-09-08 10:00] STALL: old\n")
     assert _clear_sentinel_alerts(code="STALL", sentinel_file=str(path)) == 1
     assert "malformed historical note" in path.read_text()
+
+
+def test_compact_sentinel_alerts_prunes_aged_and_consolidates_duplicates(tmp_path):
+    from datetime import datetime, timezone
+    from synlynk.sentinel import compact_sentinel_alerts
+
+    now = datetime(2026, 10, 26, 12, 0, tzinfo=timezone.utc)
+    path = tmp_path / "sentinel.md"
+    path.write_text(
+        "# Sentinel Alerts\n"
+        "- [CRITICAL] [2026-09-01 10:00:00 UTC] STALE_ALERT: very old alert from 55 days ago\n"
+        "- [WARN] [2026-10-25 08:00:00 UTC] TOKEN_BLOAT: High tokens consumed [occurrences: 1; first seen: 2026-10-25 08:00:00 UTC; last seen: 2026-10-25 08:00:00 UTC]\n"
+        "- [WARN] [2026-10-25 18:00:00 UTC] TOKEN_BLOAT: High tokens consumed [occurrences: 2; first seen: 2026-10-25 18:00:00 UTC; last seen: 2026-10-25 18:00:00 UTC]\n"
+        "usage: synlynk [-h] [--version] {help,init,...}\n"
+        "Traceback (most recent call last):\n"
+        "- [INFO] [2026-10-26 10:00:00 UTC] DISPATCH_NOTICE: Normal notice\n"
+    )
+
+    stats = compact_sentinel_alerts(str(path), max_age_days=30, now=now)
+    assert stats["pruned"] == 1
+    assert stats["consolidated"] == 1
+    assert stats["sanitized"] == 2
+    assert stats["remaining"] == 2
+
+    content = path.read_text()
+    assert "# Sentinel Alerts" in content
+    assert "STALE_ALERT" not in content
+    assert "usage: synlynk" not in content
+    assert "Traceback" not in content
+    assert "TOKEN_BLOAT" in content
+    assert "[occurrences: 3;" in content
+    assert "DISPATCH_NOTICE" in content

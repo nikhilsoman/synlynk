@@ -7672,10 +7672,49 @@ def test_synlynk_daemon_is_not_running_without_pidfile(project_dir):
 
 
 def test_synlynk_daemon_stop_idempotent(project_dir, capsys):
+    import subprocess
+    import sys
+    import time
+
     d = synlynk.SynlynkDaemon()
+
+    # Turn 1: Stop on unstarted daemon reports not running
     d.stop()
     captured = capsys.readouterr()
     assert "not running" in captured.out
+
+    # Turn 2: Repeat stop on already-stopped daemon is strictly idempotent
+    d.stop()
+    captured = capsys.readouterr()
+    assert "not running" in captured.out
+
+    # Turn 3: Start a mock daemon process, verify stop terminates it and reports stopped
+    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        with open(d.pidfile, "w") as f:
+            f.write(f"{proc.pid}\n")
+        assert os.path.exists(d.pidfile)
+
+        d.stop()
+        captured = capsys.readouterr()
+        assert "synlynk daemon stopped" in captured.out
+        assert not os.path.exists(d.pidfile)
+
+        # Ensure target process exited cleanly
+        for _ in range(20):
+            if proc.poll() is not None:
+                break
+            time.sleep(0.1)
+        assert proc.poll() is not None
+
+        # Turn 4: Calling stop again immediately after termination reports not running
+        d.stop()
+        captured = capsys.readouterr()
+        assert "not running" in captured.out
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
 
 
 # ── HTTP handler tests ───────────────────────────────────────────────────────
