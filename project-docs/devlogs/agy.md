@@ -1254,3 +1254,17 @@
   - Cut release tag `v0.25.6` (`67e9dcc1`) and published GitHub release with human sign-off.
   - Flipped roadmap status to shipped.
 [@agy, @nikhilsoman]
+
+### v0.26.0 Kickoff: Daemon Reliability Spec & Architecture 2026-10-25
+- **v0.26.0 Milestone Kickoff (Goal goal-079e2f37, Release Epic #2468, Milestone #15):**
+  - Assumed incoming Home Conductor role for release `v0.26.0` ("Daemon Reliability").
+  - Created isolated task worktree `.worktrees/feat-agy-v0260-daemon-reliability` on branch `feat/agy/v0260-daemon-reliability`.
+  - Authored comprehensive Design Specification in `docs/superpowers/specs/2026-10-28-v0.26.0-daemon-reliability-design.md` covering:
+    1. Daemon Stop Idempotence & State Truth (gh:#2464).
+    2. macOS Objective-C Fork-Safety Crash & Canonical Absolute PEM Lookup Fix (gh:#1884).
+    3. Repair Scratch Cleanup Active Selftest Isolation (gh:#2407).
+    4. Live Command Selftest Real-Launch Coverage for Long-Running Daemons (gh:#422).
+    5. Sentinel Alert Aging, Deduplication Rollup & Compaction (`story-a4442387`, `story-2e48a8c5`).
+  - Authored detailed TDD Implementation Plan in `docs/superpowers/plans/2026-10-28-v0.26.0-daemon-reliability.md`.
+  - Incorporated architectural synthesis of Google Research's **Harness²** (Recursive Agent Harnessing, arXiv:2610.14224), aligning substrate reliability with upstream RSI loops (Epic #2547) and the Maintainer role charter (v0.26.1 / gh:#2469).
+[@agy]
