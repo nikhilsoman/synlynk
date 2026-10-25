@@ -3726,5 +3726,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2605 \u2014 isolate selftest scratch cleanup by owner PID (PR #2605, v0.25.4)\n\n\u2022 Merged improvements and fixes for PR #2605.\n\n#posts",
     "changelog": "### v0.25.4 (2026-10-24) - PR #2605\n- Merged improvements and fixes for PR #2605."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/480-pr2608-decouple-pr-release-docs-test-count-gate.md",
+    "title": "PR #2608 \u2014 decouple PR release-docs test count gate (#2522)",
+    "author": "synlynk-qa agent",
+    "date": "2026-10-25",
+    "pr": "#2608",
+    "version": "0.25.4",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2608."
+    ],
+    "tweet": "\ud83d\ude80 PR #2608 \u2014 decouple PR release-docs test count gate (#2522) (PR #2608, v0.25.4)\n\n\u2022 Merged improvements and fixes for PR #2608.\n\n#posts",
+    "changelog": "### v0.25.4 (2026-10-25) - PR #2608\n- Merged improvements and fixes for PR #2608."
   }
 ]
