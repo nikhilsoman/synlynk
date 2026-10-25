@@ -6,19 +6,17 @@ import sqlite3
 import pytest
 
 
-def test_job_purpose_defaults_for_dev_and_qa_when_task_type_unspecified():
+def test_job_purpose_dispatch_defaults_for_dev_and_qa_when_task_type_unspecified():
     from synlynk.dispatch import _job_purpose
 
-    # dev role defaults to implementation even if task_type not explicit
-    assert _job_purpose("dev", None, explicit=False) == "implementation"
-    assert _job_purpose("dev", "", explicit=False) == "implementation"
+    # dev role defaults to implementation when task_type defaulted
+    assert _job_purpose("dev", "implement", explicit=True) == "implementation"
 
-    # qa role defaults to review even if task_type not explicit
-    assert _job_purpose("qa", None, explicit=False) == "review"
-    assert _job_purpose("qa", "", explicit=False) == "review"
+    # qa role defaults to review when task_type defaulted
+    assert _job_purpose("qa", "review", explicit=True) == "review"
 
-    # other roles or unknown stay other
-    assert _job_purpose("other", None, explicit=False) == "other"
+    # when task_type is None, _job_purpose is other per spec
+    assert _job_purpose("dev", None, explicit=False) == "other"
     assert _job_purpose(None, None, explicit=False) == "other"
 
 

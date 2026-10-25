@@ -1299,8 +1299,7 @@ def _get_harness_gh_write_capability(harness_name: str, db_conn=None) -> dict:
                 mechanism = row[1]
                 # Stale projection guard (gh:#2566): if the recorded row is a legacy
                 # non-live stub superseded by empirical baseline, defer to curated baseline.
-                from synlynk.capability_probe import HARNESS_CAPABILITY_BASELINES, CAP_GH_WRITE
-                baseline_can_write = HARNESS_CAPABILITY_BASELINES.get(harness_name, {}).get(CAP_GH_WRITE)
+                baseline_can_write = HARNESS_CAPABILITY_BASELINES.get(harness_name, {}).get("can_gh_write", False)
                 if mechanism == "sandbox_denied" and baseline_can_write is True:
                     can_write = True
                     mechanism = "sandbox_allowed"
