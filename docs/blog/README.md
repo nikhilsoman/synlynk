@@ -561,6 +561,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [480](./480-pr2608-decouple-pr-release-docs-test-count-gate.md) | PR #2608 — decouple PR release-docs test count gate (#2522) | [#2608](https://github.com/nikhilsoman/synlynk/pull/2608) | 2026-10-25 |
 | [481](./481-pr2611-scope-test-suite-to-code-changes-and-opt.md) | PR #2611 — scope test suite to code changes and optimize PR matrix (#2529) | [#2611](https://github.com/nikhilsoman/synlynk/pull/2611) | 2026-10-25 |
 | [482](./482-pr2612-lock-mandatory-sparse-cone-paths.md) | PR #2612 — lock mandatory sparse cone paths | [#2612](https://github.com/nikhilsoman/synlynk/pull/2612) | 2026-10-25 |
+| [483](./483-pr2613-prepare-collateral-and-readme-for-v0-25-.md) | PR #2613 — prepare collateral and README for v0.25.5 | [#2613](https://github.com/nikhilsoman/synlynk/pull/2613) | 2026-10-25 |
 
 ## Per-PR Post Template
 

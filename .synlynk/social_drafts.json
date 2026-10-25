@@ -3774,5 +3774,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2612 \u2014 lock mandatory sparse cone paths (PR #2612, v0.25.4)\n\n\u2022 Merged improvements and fixes for PR #2612.\n\n#posts",
     "changelog": "### v0.25.4 (2026-10-25) - PR #2612\n- Merged improvements and fixes for PR #2612."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/483-pr2613-prepare-collateral-and-readme-for-v0-25-.md",
+    "title": "PR #2613 \u2014 prepare collateral and README for v0.25.5",
+    "author": "synlynk-qa agent",
+    "date": "2026-10-25",
+    "pr": "#2613",
+    "version": "0.25.5",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2613."
+    ],
+    "tweet": "\ud83d\ude80 PR #2613 \u2014 prepare collateral and README for v0.25.5 (PR #2613, v0.25.5)\n\n\u2022 Merged improvements and fixes for PR #2613.\n\n#posts",
+    "changelog": "### v0.25.5 (2026-10-25) - PR #2613\n- Merged improvements and fixes for PR #2613."
   }
 ]
