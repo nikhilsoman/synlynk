@@ -7,6 +7,18 @@
 - **Directories:** bin, docs, project-docs, synlynk, tests, website
 
 ## Decisions
+- **2026-10-25 [v0.25.4 shipped; Agy nominated to run v0.25.5 as conductor, testing the Default Agent Role reassessment]:**
+  v0.25.4 ("accurate job status and completion evidence") shipped via PR #2601 (tag) + PR #2602
+  (roadmap shipped-flip). Nikhil then asked Claude to prep a handoff so Agy runs v0.25.5 ("CI and
+  release-integrity stabilization") as Mode A Home Conductor instead of Claude — the first live
+  test of the Empirical Capability Assessment Policy's reassessment of CLAUDE.md's Default Agent
+  Role lock, which explicitly includes Claude's own PM/review/deploy restriction as provisional.
+  Handoff covers the roadmap's four-ticket scope floor (#2527/#2526/#2522/#2320), a 13-ticket
+  adjacent-issue sweep, three reusable prior-art docs, and a concrete CI `paths:`-filter gap
+  finding. Filed gh:#2603 (task-boundary context-pack injection for interactive sessions,
+  complementary to #2574's token-threshold compaction) and cross-linked it on release epic #2467
+  rather than pre-deciding v0.25.5 scope — that decision is Agy's to make via its own brainstorm.
+  [@claude, @nikhilsoman]
 - **2026-10-20 [ncurses Signal Handler Re-entrancy Crash & conftest.py Signal Isolation (Issue #2486)]:**
   Resolved intermittent macOS daemon and test runner crash `BUG IN CLIENT OF LIBPLATFORM: Trying to recursively lock an os_unfair_lock (Abort Cause 259)` during `fork()`:
   (1) Diagnosis: `curses.initscr()` invoked in `conftest.py` installs C-level `sigaction` signal handlers for `SIGWINCH` (28), `SIGTSTP` (18), and `SIGTERM` (15). When an asynchronous signal arrived while Thread 0 was inside `fork()`, `libncurses`'s signal handler invoked `endwin()` -> `sprintf()` -> `localeconv_l()`, which attempted to re-entrantly acquire a non-recursive `os_unfair_lock`, triggering a fatal `_os_unfair_lock_recursive_abort`.
