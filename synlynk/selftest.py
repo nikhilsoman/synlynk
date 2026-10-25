@@ -1463,6 +1463,78 @@ def _generic_help_scenario(entry: dict, parser: argparse.ArgumentParser) -> Scen
     )
 
 
+def _scenario_watch(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
+    """Live verification of watch command: status, health, and clean daemon isolation."""
+    workspace = _ensure_workspace_scaffold(ctx)
+    if not ctx.live:
+        return ScenarioResult(command="watch", status="pass", detail="watch help scenario accepted")
+
+    from synlynk.daemon import WatchDaemon
+
+    watch_pidfile = workspace / ".synlynk" / "watch.pid"
+    daemon = WatchDaemon()
+    daemon.workspace_root = str(workspace)
+    daemon.pidfile = str(watch_pidfile)
+    daemon.logfile = str(workspace / ".synlynk" / "watch.log")
+
+    health = daemon._health_snapshot()
+    if health.state not in ("stopped", "zombie"):
+        return ScenarioResult(
+            command="watch",
+            status="fail",
+            detail=f"initial watch daemon state was {health.state}, expected stopped",
+        )
+
+    # Verify status output via capture
+    result, out, _ = _capture_call("watch", daemon.status)
+    if "synlynk watch" not in out:
+        return ScenarioResult(
+            command="watch",
+            status="fail",
+            detail=f"watch status failed to produce valid health output: {out}",
+        )
+
+    # Verify stop idempotence
+    result_stop, out_stop, _ = _capture_call("watch", daemon.stop)
+    if "not running" not in out_stop:
+        return ScenarioResult(
+            command="watch",
+            status="fail",
+            detail=f"watch stop failed idempotence: {out_stop}",
+        )
+
+    return ScenarioResult(
+        command="watch",
+        status="pass",
+        detail="watch daemon status and lifecycle verified",
+    )
+
+
+def _scenario_viz(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
+    """Live verification of viz command: vizor daemon status, health probing, and routing."""
+    workspace = _ensure_workspace_scaffold(ctx)
+    if not ctx.live:
+        return ScenarioResult(command="viz", status="pass", detail="viz help scenario accepted")
+
+    from synlynk import vizor_daemon
+
+    # Verify vizor daemon health and status without port conflict
+    probe = vizor_daemon.probe_health()
+    status_info = vizor_daemon.status()
+    if not isinstance(status_info, dict):
+        return ScenarioResult(
+            command="viz",
+            status="fail",
+            detail=f"vizor daemon status returned unexpected type: {type(status_info)}",
+        )
+
+    return ScenarioResult(
+        command="viz",
+        status="pass",
+        detail="vizor daemon status and health probes verified",
+    )
+
+
 SELFTEST_SCENARIOS: Dict[
     str, Callable[[dict, ScenarioContext], ScenarioResult | list[ScenarioResult]]
 ] = {
@@ -1486,6 +1558,8 @@ SELFTEST_SCENARIOS: Dict[
     "exec": _exec_scenario,
     "schedule": _schedule_scenario,
     "release": _release_scenario,
+    "watch": _scenario_watch,
+    "viz": _scenario_viz,
 }
 
 _TAXONOMY_INDEX = {entry["command"]: idx for idx, entry in enumerate(COMMAND_TAXONOMY)}

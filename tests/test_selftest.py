@@ -23,6 +23,8 @@ EXPECTED_LIVE_SCENARIOS = [
     "status",
     "instructions status",
     "upgrade",
+    "watch",
+    "viz",
 ]
 
 
@@ -664,3 +666,23 @@ def test_synlynk_rollback_last_via_cli(tmp_path, monkeypatch):
 
     rollback.cmd_rollback(last=True)
     assert tracked.read_text() == "v1\n"
+
+
+def test_live_selftest_watch_scenario_passes(tmp_path):
+    from synlynk import selftest as selftest_mod
+
+    ctx = selftest_mod.ScenarioContext(repo_path=str(tmp_path), live=True)
+    entry = {"command": "watch"}
+    result = selftest_mod.SELFTEST_SCENARIOS["watch"](entry, ctx)
+    assert result.status == "pass"
+    assert "watch daemon status" in result.detail
+
+
+def test_live_selftest_viz_scenario_passes(tmp_path):
+    from synlynk import selftest as selftest_mod
+
+    ctx = selftest_mod.ScenarioContext(repo_path=str(tmp_path), live=True)
+    entry = {"command": "viz"}
+    result = selftest_mod.SELFTEST_SCENARIOS["viz"](entry, ctx)
+    assert result.status == "pass"
+    assert "vizor daemon status" in result.detail

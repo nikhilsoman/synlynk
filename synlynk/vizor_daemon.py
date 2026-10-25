@@ -16,11 +16,11 @@ import threading
 from pathlib import Path
 from typing import Optional
 
-DAEMON_HOME = Path(os.path.expanduser("~/.synlynk/vizor-daemon"))
+DAEMON_HOME = Path(os.environ.get("SYNLYNK_VIZOR_DAEMON_HOME", os.path.expanduser("~/.synlynk/vizor-daemon")))
 PIDFILE = DAEMON_HOME / "pidfile"
 PORTFILE = DAEMON_HOME / "port"
 LOGFILE = DAEMON_HOME / "daemon.log"
-CACHE_ROOT = Path(os.path.expanduser("~/.synlynk/vizor-cache"))
+CACHE_ROOT = Path(os.environ.get("SYNLYNK_VIZOR_CACHE_ROOT", os.path.expanduser("~/.synlynk/vizor-cache")))
 DEFAULT_POLL_INTERVAL = 15
 
 _RENDER_LOCK = threading.Lock()
@@ -778,14 +778,14 @@ def _write_state(pid: int, port: int) -> None:
 def _read_pid() -> Optional[int]:
     try:
         return int(PIDFILE.read_text().strip())
-    except (FileNotFoundError, ValueError):
+    except (OSError, ValueError):
         return None
 
 
 def _read_port() -> Optional[int]:
     try:
         return int(PORTFILE.read_text().strip())
-    except (FileNotFoundError, ValueError):
+    except (OSError, ValueError):
         return None
 
 
