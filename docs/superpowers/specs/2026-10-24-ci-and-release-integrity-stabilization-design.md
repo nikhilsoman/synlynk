@@ -1,3 +1,11 @@
+---
+goal: goal-9ef9a965
+epic: "#2467"
+milestone: v0.25.5
+arc: release-integrity
+parent: "#2458"
+---
+
 # v0.25.5 — CI and Release-Integrity Stabilization Design
 
 **Date:** 2026-10-24
