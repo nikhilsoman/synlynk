@@ -1,10 +1,62 @@
 import json
-import pytest
+import subprocess
 from pathlib import Path
+
 from synlynk.worktree_sparse import (
+    create_sparse_cone_worktree,
     derive_sparse_cone_paths_from_graph,
     MANDATORY_SPARSE_CONE_DIRS,
 )
+
+
+def test_fresh_sparse_worktree_cone_includes_github_and_scripts(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(
+        ["git", "init", "-b", "main"], cwd=repo, check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    for directory in (".github", "scripts"):
+        path = repo / directory
+        path.mkdir()
+        (path / "tracked.txt").write_text(directory)
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "initial"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+
+    worktree = tmp_path / "worktree"
+    assert create_sparse_cone_worktree(
+        repo_root=str(repo),
+        worktree_path=str(worktree),
+        branch="dispatch/codex/sparse-cone-test",
+        base_ref="HEAD",
+    )
+
+    result = subprocess.run(
+        ["git", "sparse-checkout", "list"],
+        cwd=worktree,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    cone = set(result.stdout.splitlines())
+    assert ".github" in cone
+    assert "scripts" in cone
 
 
 def test_derive_sparse_cone_paths_from_graph_extracts_directories(tmp_path):
