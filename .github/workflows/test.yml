@@ -13,12 +13,13 @@ on:
 jobs:
   # Job-level if is evaluated before the matrix exists, so matrix.* there is
   # an unrecognized named-value and the workflow fails to parse. Choose the
-  # axes here instead. Pull requests schedule Linux / Python 3.12 only — the
-  # primary required check ("test (3.12)"). Push to main or unstable,
-  # version-tag release cuts, and workflow_dispatch keep ubuntu 3.10, ubuntu
-  # 3.12, macOS 3.10, and macOS 3.12. This is not a trigger paths-ignore: a
+  # axes here instead. Pull requests schedule Linux 3.10 and Linux 3.12 —
+  # branch protection requires both "test (3.10)" and "test (3.12)". The
+  # macOS legs are not required. Push to main or unstable, version-tag
+  # release cuts, and workflow_dispatch keep ubuntu 3.10, ubuntu 3.12,
+  # macOS 3.10, and macOS 3.12. This is not a trigger paths-ignore: a
   # paths filter would skip qa-gate and release-docs and leave the required
-  # check stuck Expected (gh:#2505, gh:#2529).
+  # checks stuck Expected (gh:#2505, gh:#2529).
   matrix-plan:
     runs-on: ubuntu-latest
     outputs:
@@ -29,7 +30,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            matrix='{"os":["ubuntu-latest"],"python-version":["3.12"]}'
+            matrix='{"os":["ubuntu-latest"],"python-version":["3.10","3.12"]}'
           else
             matrix='{"os":["ubuntu-latest","macos-latest"],"python-version":["3.10","3.12"]}'
           fi
@@ -52,8 +53,9 @@ jobs:
           fetch-depth: 0
 
       # Pure bookkeeping diffs skip the heavy steps below. The job itself still
-      # runs so the required "test (3.12)" check reports success. Exempt paths
-      # are the closed set in synlynk/ci_paths.py (project-docs/**, docs/blog/**,
+      # runs so the required "test (3.10)" and "test (3.12)" checks report
+      # success. Exempt paths are the closed set in synlynk/ci_paths.py
+      # (project-docs/**, docs/blog/**,
       # docs/brainstorm/**, CHANGELOG.md, .gitattributes, .gitignore, roadmap.md,
       # todo.md, .synlynk/config.json). docs/superpowers/** and README.md run
       # the suite. See gh:#2505 and gh:#2529.

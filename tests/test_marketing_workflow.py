@@ -66,16 +66,18 @@ def test_release_docs_runs_for_pull_requests_dispatch_or_version_tags():
     assert "fetch-depth: 0" in release_docs
 
 def test_test_workflow_scopes_bookkeeping_and_pr_matrix():
-    """Required checks stay present while PRs run the Linux 3.12 leg."""
+    """Required checks stay present while PRs run Linux 3.10 and 3.12."""
     workflow = Path(".github/workflows/test.yml").read_text(encoding="utf-8")
 
     assert "is_bookkeeping_only" in workflow
     assert "bookkeeping_only" in workflow
     # matrix.* is illegal in a job-level if (evaluated before expansion).
-    # matrix-plan emits the PR leg or the full matrix before test starts.
+    # matrix-plan emits the PR legs or the full matrix before test starts.
     assert "matrix-plan:" in workflow
     assert "fromJson(needs.matrix-plan.outputs.matrix)" in workflow
-    assert '{"os":["ubuntu-latest"],"python-version":["3.12"]}' in workflow.replace(" ", "")
+    compact = workflow.replace(" ", "")
+    assert '{"os":["ubuntu-latest"],"python-version":["3.10","3.12"]}' in compact
+    assert '{"os":["ubuntu-latest"],"python-version":["3.12"]}' not in compact
     assert "macos-latest" in workflow
     assert "3.10" in workflow
     # Legal in a job name or a step if. Illegal as the job-level matrix filter

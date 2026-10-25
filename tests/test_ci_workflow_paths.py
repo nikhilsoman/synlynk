@@ -94,7 +94,10 @@ def test_workflow_yaml_parses_and_scopes_the_pr_matrix():
     )
     compact = "".join(script.split())
     assert "pull_request" in script
-    assert '{"os":["ubuntu-latest"],"python-version":["3.12"]}' in compact
+    # Branch protection requires both Linux checks: test (3.10) and test (3.12).
+    # macOS legs are not required and stay off pull_request events.
+    assert '{"os":["ubuntu-latest"],"python-version":["3.10","3.12"]}' in compact
+    assert '{"os":["ubuntu-latest"],"python-version":["3.12"]}' not in compact
     assert (
         '{"os":["ubuntu-latest","macos-latest"],"python-version":["3.10","3.12"]}'
         in compact
