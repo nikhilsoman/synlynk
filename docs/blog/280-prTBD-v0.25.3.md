@@ -5,6 +5,10 @@ series: "Building the OS for Multi-Agent Development"
 post: 280
 pr: "#TBD"
 status: open
+author: "synlynk team"
+version: "0.25.3"
+tags: [posts]
+type: release
 ---
 
 ## Intent
