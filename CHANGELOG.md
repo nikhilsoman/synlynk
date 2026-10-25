@@ -16,6 +16,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
 
+## [v0.25.5] - 2026-10-25
+### Fixed
+- fix: decouple PR release-docs test count gate with `--pr-mode` (#2522) (#2608)
+- fix: isolate selftest scratch cleanup by owner PID (#2527) (#2605)
+- fix: capability-sweep calibration diff-base contamination (#2567) (#2568)
+### Changed
+- test(worktree): lock mandatory sparse cone paths (#2320, #2202) (#2612)
+- chore(ci): scope test suite to code changes and optimize PR matrix (#2529) (#2611)
+
 ## [v0.25.4] - 2026-10-24
 ### Fixed
 - Oracle self-transcript cross-check no longer false-negatives a genuinely successful review/merge job as `succeeded_gh_write_failed` (gh:#2309, #2594).
