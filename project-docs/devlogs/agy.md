@@ -1249,4 +1249,8 @@
 - **Adjacent Stability & Mini-Specs:**
   - Guarded against stale `harness_version_history` projections in `synlynk/probe.py` (gh:#2566).
   - Authored task-boundary context-pack injection architecture specification in `docs/superpowers/specs/2026-10-25-task-boundary-context-injection-design.md` (gh:#2603).
-[@agy]
+- **Release Shipped & Tagged:**
+  - Prepared release collateral in PR #2616 (bumping VERSION to 0.25.6, synchronizing README.md hero/badges with 5,107 collected tests, and updating CHANGELOG.md).
+  - Cut release tag `v0.25.6` (`67e9dcc1`) and published GitHub release with human sign-off.
+  - Flipped roadmap status to shipped.
+[@agy, @nikhilsoman]
