@@ -1,3 +1,14 @@
+---
+title: "Calibration Output Diff-Base Contamination Design"
+date: 2026-10-24
+status: approved
+goal: "goal-9ef9a965"
+epic: "#2458"
+milestone: "v0.25.5"
+arc: "governance"
+issue: "#2567"
+---
+
 # Calibration Output Diff-Base Contamination Design
 
 **Status:** Approved.

@@ -148,15 +148,16 @@ def _start_dispatch_circuit_breaker_watchdog(proc, job: dict, config: Optional[d
 
 def _job_purpose(role: str | None, task_type: str | None, *, explicit: bool = True) -> str:
     """Classify provenance from dispatch's explicit role and task type."""
+    if role == "qa" and (task_type == "review" or not task_type):
+        return "review"
+    if role == "dev":
+        if not task_type or task_type in {
+            "implement", "test", "css", "templates", "content", "subpages",
+            "canvas", "js", "infra", "refactor", "cli-plumbing",
+        }:
+            return "implementation"
     if not explicit:
         return "other"
-    if role == "qa" and task_type == "review":
-        return "review"
-    if role == "dev" and task_type in {
-        "implement", "test", "css", "templates", "content", "subpages",
-        "canvas", "js", "infra", "refactor", "cli-plumbing",
-    }:
-        return "implementation"
     return "other"
 
 _DEFAULT_MODELS_BY_TIER = {
