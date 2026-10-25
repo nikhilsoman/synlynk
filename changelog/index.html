@@ -54,6 +54,14 @@ entitlement checks, and reconnect/status hardening remain follow-up work.</li>
 <li>Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.</li>
 <li>Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.</li>
 </ul>
+<div class="changelog-version-header"><span class="changelog-version">vv0.25.5</span><span class="changelog-date">2026-10-25</span></div>
+<h3 class="tag-fixed">Fixed</h3>
+- fix: decouple PR release-docs test count gate with `--pr-mode` (#2522) (#2608)
+- fix: isolate selftest scratch cleanup by owner PID (#2527) (#2605)
+- fix: capability-sweep calibration diff-base contamination (#2567) (#2568)
+<h3 class="tag-changed">Changed</h3>
+- test(worktree): lock mandatory sparse cone paths (#2320, #2202) (#2612)
+- chore(ci): scope test suite to code changes and optimize PR matrix (#2529) (#2611)
 <div class="changelog-version-header"><span class="changelog-version">vv0.25.4</span><span class="changelog-date">2026-10-24</span></div>
 <h3 class="tag-fixed">Fixed</h3>
 - Oracle self-transcript cross-check no longer false-negatives a genuinely successful review/merge job as `succeeded_gh_write_failed` (gh:#2309, #2594).
