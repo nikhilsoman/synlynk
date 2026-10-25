@@ -65,6 +65,26 @@ def test_release_docs_runs_for_pull_requests_dispatch_or_version_tags():
     assert "github.event_name == 'pull_request' && '--pr-mode'" in release_docs
     assert "fetch-depth: 0" in release_docs
 
+def test_test_workflow_scopes_bookkeeping_and_pr_matrix():
+    """Required checks stay present while PRs run the Linux 3.12 leg."""
+    workflow = Path(".github/workflows/test.yml").read_text(encoding="utf-8")
+
+    assert "is_bookkeeping_only" in workflow
+    assert "bookkeeping_only" in workflow
+    assert "github.event_name != 'pull_request'" in workflow
+    assert "matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'" in workflow
+    assert "os: [ubuntu-latest, macos-latest]" in workflow
+    assert 'python-version: ["3.10", "3.12"]' in workflow
+    assert 'tags: ["v*"]' in workflow
+    assert "\n  qa-gate:" in workflow
+    assert "\n  release-docs:" in workflow
+    assert "format('test ({0})', matrix.python-version)" in workflow
+    assert "grep -qvE '^(docs/|project-docs/|.*\\.md$)'" not in workflow
+    # Trigger-level filters would skip qa-gate and release-docs on bookkeeping PRs.
+    header = workflow.split("\njobs:", 1)[0]
+    assert "paths-ignore:" not in header
+
+
 def test_marketing_sync_stages_blog_and_social_draft_outputs():
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
