@@ -2050,6 +2050,9 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         '--check-docs', action='store_true',
         help='Validate README against release metadata without cutting a release')
     release_parser.add_argument(
+        '--pr-mode', action='store_true',
+        help='Allow collected-test-count drift when README.md is unchanged from the PR base')
+    release_parser.add_argument(
         '--waive', action='append', default=[],
         help='Skip a waivable README check: check=reason (repeatable)')
 
@@ -3612,6 +3615,7 @@ def main(argv=None) -> None:
             minor=getattr(args, "minor", False),
             role=getattr(args, "role", "dev"),
             check_docs=getattr(args, "check_docs", False),
+            pr_mode=getattr(args, "pr_mode", False),
             waive=getattr(args, "waive", None),
         )
     elif args.command == "marketing":
