@@ -4251,6 +4251,12 @@ def _verify_dispatch_story_lease(story_id: str, override: bool = False, conn=Non
                         (lease["lease_id"],),
                     )
                     conn.commit()
+    except (sqlite3.OperationalError, sqlite3.DatabaseError) as e:
+        import logging
+        logging.getLogger("synlynk").warning(
+            "Advisory: dispatch story lease check bypassed due to database error: %s", e
+        )
+        return
     finally:
         if owns_conn:
             try:

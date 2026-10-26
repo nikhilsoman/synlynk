@@ -4285,6 +4285,19 @@ def reclaim_stranded_stories(
     return reclaimed
 
 
+def _ensure_task_leases_columns(conn) -> None:
+    """Ensure pid and harness columns exist on task_leases if table is present."""
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(task_leases)")}
+        if cols and "pid" not in cols:
+            conn.execute("ALTER TABLE task_leases ADD COLUMN pid INTEGER")
+        if cols and "harness" not in cols:
+            conn.execute("ALTER TABLE task_leases ADD COLUMN harness TEXT")
+        conn.commit()
+    except Exception:
+        pass
+
+
 def acquire_task_lease(
     story_id: str,
     leased_by: str,
@@ -4317,6 +4330,7 @@ def acquire_task_lease(
         conn = _get_db()
         owns_conn = True
 
+    _ensure_task_leases_columns(conn)
     now = time.time()
     expires_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + duration_seconds))
     now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
@@ -4507,6 +4521,7 @@ def get_active_lease(story_id: str, conn=None) -> Optional[dict]:
         owns_conn = True
 
     try:
+        _ensure_task_leases_columns(conn)
         row = conn.execute(
             "SELECT lease_id, story_id, leased_by, pid, harness, acquired_at, heartbeat_at, expires_at, status "
             "FROM task_leases WHERE story_id=? AND status='active' ORDER BY rowid DESC LIMIT 1",
