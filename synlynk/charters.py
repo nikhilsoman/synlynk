@@ -21,10 +21,104 @@ class AgentCharter:
     behavioral_weights: Dict[str, str]
     durability: Optional[str] = None
     wake_cycle_sop: List[str] = field(default_factory=list)
+    skills: List[str] = field(default_factory=list)
+    sops: List[str] = field(default_factory=list)
+    tools: List[str] = field(default_factory=list)
+    credentials: List[str] = field(default_factory=list)
+    verification_contracts: List[str] = field(default_factory=list)
+    description: Optional[str] = None
+
+
+DEFAULT_ROLE_CHARTERS: Dict[str, dict] = {
+    "architect": {
+        "role": "architect",
+        "harness_bindings": ["claude", "codex"],
+        "mandate": "Own system design, specs, and architectural invariants. Draft specs and plans before implementation begins.",
+        "autonomous_authorities": ["draft_spec", "draft_plan", "review_architecture"],
+        "escalation_triggers": ["invariant_violation_detected", "budget_exceeded", "cross_repo_breaking_change"],
+        "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "conservative"},
+    },
+    "dev": {
+        "role": "dev",
+        "harness_bindings": ["codex", "agy", "grok"],
+        "mandate": "Implement and test approved specs/plans. Write code, tests, and small fixes within the assigned task scope.",
+        "autonomous_authorities": ["implement", "test", "refactor"],
+        "escalation_triggers": ["invariant_violation_detected", "budget_exceeded", "spec_ambiguous"],
+        "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "moderate"},
+    },
+    "maintainer": {
+        "role": "maintainer",
+        "harness_bindings": ["claude"],
+        "mandate": "Maintain workspace hygiene: worktree cleanup, policy sync, release cuts, and long-running housekeeping tasks.",
+        "autonomous_authorities": ["worktree_cleanup", "policy_sync", "release_cut"],
+        "escalation_triggers": ["invariant_violation_detected", "budget_exceeded", "irreversible_action_required"],
+        "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "conservative"},
+        "durability": "durable",
+        "wake_cycle_sop": [
+            "Check for pending cleanup/release work: merged-and-unswept worktrees, policy drift, or a queued release.",
+            "If pending work exists, perform it per the existing Worktree Hygiene Protocol and Named Release Policy.",
+            "If no pending cleanup/release work exists, do not exit idle: run a proactive dependency/policy-drift sweep instead, checking .synlynk/policy.json fields against the current config schema, stale GitHub label sets, and orphaned branches with no PR.",
+        ],
+    },
+    "pm": {
+        "role": "pm",
+        "harness_bindings": [],
+        "mandate": "Approve and prioritize TPM's drafted intake proposals; author and reprioritize stories; own the spec-approval gate; block for human sign-off on major decisions (release cuts, budget, charter changes).",
+        "autonomous_authorities": ["approve_priority", "author_story", "approve_spec"],
+        "escalation_triggers": ["budget_exceeded", "cross_story_conflict", "charter_change_requested"],
+        "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "conservative"},
+        "durability": "durable",
+        "wake_cycle_sop": [
+            "Pull TPM's pending-approval queue (proposals TPM drafted from raw issue intake, or new plans awaiting priority sign-off).",
+            "For each item: approve, reject with reason, or request rework from TPM.",
+            "Tag approved items with a priority (this is the 'PM triages and tags priority' step from the original pipeline, now applied to TPM's drafted proposals rather than raw issues).",
+            "Idle-avoidance: if the approval queue is empty, do not exit immediately -- reconcile open stories/goals against state.db (stale status, orphaned links, goals with no linked story) before exiting. An empty queue means 'nothing new to approve,' not 'nothing useful to do.'",
+        ],
+    },
+    "qa": {
+        "role": "qa",
+        "harness_bindings": ["codex", "agy"],
+        "mandate": "Non-authoring review and verification of PRs. Confirm correctness, run tests, and gate merges.",
+        "autonomous_authorities": ["review", "verify", "approve_pr"],
+        "escalation_triggers": ["invariant_violation_detected", "self_approval_conflict", "budget_exceeded"],
+        "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "conservative"},
+    },
+    "tpm": {
+        "role": "tpm",
+        "harness_bindings": [],
+        "mandate": "Own raw-issue intake, dedup, and draft-plan authoring; track previously-dispatched work through to completion; route ambiguity to the appropriate owner and surface clean items to PM's approval queue.",
+        "autonomous_authorities": ["triage_issue", "draft_plan", "dispatch_track"],
+        "escalation_triggers": ["technical_ambiguity", "priority_ambiguity", "dispatch_blocked_twice"],
+        "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "moderate"},
+        "durability": "durable",
+        "wake_cycle_sop": [
+            "Poll new GitHub issues opened since the last-seen marker.",
+            "Dedupe each new issue against existing open stories.",
+            "For genuinely new items, draft a scoping outline.",
+            "Route technical ambiguity to architect and priority ambiguity to pm.",
+            "For clean (unambiguous) items, place them in the PM approval queue.",
+            "On PM approval, convert the drafted proposal into a tracked plan/story via existing story create and goal link mechanics.",
+            "Continue tracking previously-dispatched work via existing tpm suggest; if the dispatch queue is empty, fall back to raw backlog triage rather than exiting idle.",
+        ],
+    },
+}
 
 
 def _charters_dir() -> str:
-    return os.path.join(os.getcwd(), ".synlynk", "charters")
+    cwd = os.getcwd()
+    candidate = os.path.join(cwd, ".synlynk", "charters")
+    if os.path.exists(candidate):
+        return candidate
+    try:
+        from synlynk.scan import _find_repo_root
+        root = _find_repo_root(cwd)
+        if root:
+            root_candidate = os.path.join(root, ".synlynk", "charters")
+            if os.path.exists(root_candidate):
+                return root_candidate
+    except Exception:
+        pass
+    return candidate
 
 
 def validate_charter(charter: AgentCharter) -> bool:
@@ -36,28 +130,110 @@ def validate_charter(charter: AgentCharter) -> bool:
 
 
 def load_charter(role: str) -> AgentCharter:
+    # 1. Load legacy JSON data or canonical built-in data if present as baseline fallback
     path = os.path.join(_charters_dir(), f"{role}.json")
-    if not os.path.exists(path):
-        return AgentCharter(
-            role=role,
-            harness_bindings=["claude", "codex"] if role in ("architect", "tpm") else ["codex", "agy", "grok"],
-            mandate=f"Default operating charter for role {role}",
-            autonomous_authorities=["draft_spec", "implement", "test"] if role != "qa" else ["review", "verify"],
-            escalation_triggers=["invariant_violation_detected", "budget_exceeded"],
-            behavioral_weights={"verbosity": "concise", "risk_tolerance": "conservative"},
-        )
+    json_data: dict = {}
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                json_data = json.load(f)
+        except Exception:
+            pass
+    if not json_data and role in DEFAULT_ROLE_CHARTERS:
+        json_data = dict(DEFAULT_ROLE_CHARTERS[role])
 
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    if json_data:
+        default_bindings = json_data.get("harness_bindings", [])
+        default_mandate = json_data.get("mandate", f"Default operating charter for role {role}")
+        default_authorities = json_data.get("autonomous_authorities", [])
+        default_escalation = json_data.get("escalation_triggers", [])
+        default_weights = json_data.get("behavioral_weights", {})
+    else:
+        default_bindings = ["claude", "codex"] if role in ("architect", "tpm") else ["codex", "agy", "grok"]
+        default_mandate = f"Default operating charter for role {role}"
+        default_authorities = ["draft_spec", "implement", "test"] if role != "qa" else ["review", "verify"]
+        default_escalation = ["invariant_violation_detected", "budget_exceeded"]
+        default_weights = {"verbosity": "concise", "risk_tolerance": "conservative"}
+    default_durability = json_data.get("durability")
+    default_wake_cycle = json_data.get("wake_cycle_sop", [])
+    default_skills = json_data.get("skills", [])
+    default_sops = json_data.get("sops", [])
+    default_tools = json_data.get("tools", [])
+    default_credentials = json_data.get("credentials", [])
+    default_contracts = json_data.get("verification_contracts", [])
+    default_description = json_data.get("description")
+
+    # 2. Try reading from registered agent store Markdown charter
+    try:
+        from synlynk import agent_store, charter_schema
+        entries = agent_store.list_agents()
+        for entry in entries:
+            role_slug = next(
+                (alias["value"] for alias in entry.get("aliases", []) if alias.get("kind") == "role_slug"),
+                None,
+            )
+            if role_slug == role and not entry.get("disabled"):
+                content, _rev = agent_store.read_charter(entry["agent_id"])
+                if content and content.strip():
+                    frontmatter_text, _body = charter_schema.split_frontmatter(content)
+                    if frontmatter_text:
+                        parsed = charter_schema.parse_frontmatter(frontmatter_text)
+                        mandate = parsed.get("mandate") or parsed.get("description") or default_mandate
+                        wake_cycle_sop = parsed.get("wake_cycle_sop") or parsed.get("sops") or default_wake_cycle
+                        autonomous_authorities = (
+                            parsed["autonomous_authorities"]
+                            if parsed.get("autonomous_authorities") is not None and len(parsed["autonomous_authorities"]) > 0
+                            else default_authorities
+                        )
+                        escalation_triggers = (
+                            parsed["escalation_triggers"]
+                            if parsed.get("escalation_triggers") is not None and len(parsed["escalation_triggers"]) > 0
+                            else default_escalation
+                        )
+                        behavioral_weights = (
+                            parsed["behavioral_weights"]
+                            if parsed.get("behavioral_weights") and isinstance(parsed.get("behavioral_weights"), dict)
+                            else default_weights
+                        )
+                        harness_bindings = (
+                            parsed["harness_bindings"]
+                            if parsed.get("harness_bindings") is not None
+                            else default_bindings
+                        )
+                        return AgentCharter(
+                            role=parsed.get("role", role),
+                            harness_bindings=harness_bindings,
+                            mandate=mandate,
+                            autonomous_authorities=autonomous_authorities,
+                            escalation_triggers=escalation_triggers,
+                            behavioral_weights=behavioral_weights,
+                            durability=parsed.get("durability") or default_durability,
+                            wake_cycle_sop=wake_cycle_sop,
+                            skills=parsed.get("skills") or default_skills,
+                            sops=parsed.get("sops") or default_sops,
+                            tools=parsed.get("tools") or default_tools,
+                            credentials=parsed.get("credentials") or default_credentials,
+                            verification_contracts=parsed.get("verification_contracts") or default_contracts,
+                            description=parsed.get("description") or default_description,
+                        )
+    except Exception:
+        pass
+
     return AgentCharter(
-        role=data["role"],
-        harness_bindings=data.get("harness_bindings", []),
-        mandate=data["mandate"],
-        autonomous_authorities=data.get("autonomous_authorities", []),
-        escalation_triggers=data.get("escalation_triggers", []),
-        behavioral_weights=data.get("behavioral_weights", {}),
-        durability=data.get("durability"),
-        wake_cycle_sop=data.get("wake_cycle_sop", []),
+        role=role,
+        harness_bindings=default_bindings,
+        mandate=default_mandate,
+        autonomous_authorities=default_authorities,
+        escalation_triggers=default_escalation,
+        behavioral_weights=default_weights,
+        durability=default_durability,
+        wake_cycle_sop=default_wake_cycle,
+        skills=default_skills,
+        sops=default_sops,
+        tools=default_tools,
+        credentials=default_credentials,
+        verification_contracts=default_contracts,
+        description=default_description,
     )
 
 
@@ -172,6 +348,7 @@ ROLE_SUPERPOWERS_SKILLS: dict[str, list[str]] = {
     "architect": ["brainstorming"],
     "pm": ["brainstorming"],
     "tpm": ["brainstorming"],
+    "maintainer": ["systematic-debugging"],
 }
 
 ALL_ADAPT_ROLES = (
@@ -185,6 +362,7 @@ ALL_ADAPT_ROLES = (
     "designer",
     "marketing",
     "synlynk-bot",
+    "maintainer",
 )
 
 

@@ -266,6 +266,14 @@ def _autonomy_pass_interval_seconds() -> int:
     return 1800
 
 
+def _run_maintainer_triage_pass() -> None:
+    try:
+        from synlynk.maintainer import triage_sentinel_alerts
+        triage_sentinel_alerts(max_age_days=7)
+    except Exception:
+        pass
+
+
 def _autonomy_pass(conn=None) -> None:
     """Backlog bookkeeping (always) + capability-aware scheduling (mode-gated).
 
@@ -282,6 +290,7 @@ def _autonomy_pass(conn=None) -> None:
         ("ingest_backlog", lambda: ingest_backlog(db_conn=conn)),
         ("triage_backlog", lambda: triage_backlog(db_conn=conn)),
         ("auto_promote_backlog", lambda: auto_promote_backlog(db_conn=conn)),
+        ("maintainer_triage", lambda: _run_maintainer_triage_pass()),
     ):
         try:
             stage_fn()

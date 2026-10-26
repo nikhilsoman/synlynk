@@ -60,6 +60,7 @@ DEFAULT_WORKSPACE_POLICY: Dict[str, Any] = {
             "require_non_authoring_review": True,
             "review_fallback": "same_identity_comment_checklist",
         },
+        "conductor_authority": ["claude", "agy", "codex", "grok"],
         "release_authority": {"can_cut_release": ["pm"], "requires_human_approval": True},
         "human_authority_role": {"role": "pm", "requires_human_approval": True},
         "approval_required_for": [
@@ -343,5 +344,20 @@ def get_role_permission_profile(role: str, repo_path: str = ".") -> Dict[str, An
     policy = load_policy(repo_path=repo_path)
     profiles = policy.get("permission_profiles") or DEFAULT_WORKSPACE_POLICY["defaults"].get("permission_profiles", {})
     return profiles.get(role, profiles.get("dev", {}))
+
+
+DEFAULT_CONDUCTOR_AUTHORITY: List[str] = ["claude", "agy", "codex", "grok"]
+
+
+def check_conductor_authority(harness: str, repo_path: str = ".") -> bool:
+    """Return True if *harness* is authorized as a Mode A Home Conductor."""
+    policy = load_policy(repo_path=repo_path)
+    allowed = (
+        policy.get("conductor_authority")
+        or policy.get("defaults", {}).get("conductor_authority")
+        or DEFAULT_CONDUCTOR_AUTHORITY
+    )
+    return str(harness).lower() in [str(h).lower() for h in allowed]
+
 
 

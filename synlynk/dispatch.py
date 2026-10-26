@@ -2260,12 +2260,28 @@ def _task_requires_gh_write(task: str, task_type: str = None) -> bool:
     GitHub write actions directly paired with target objects (PRs/issues), preventing
     false positives on file paths, tracking issue mentions, and non-action prose.
     """
-    if task_type in ("calibration", "calibration_verify", "eval"):
+    if task_type in ("calibration", "calibration_verify", "eval", "review"):
         return False
     text = task or ""
     if _GH_CLI_WRITE_RE.search(text):
         return True
     return bool(_GH_ACTION_TARGET_RE.search(text))
+
+
+def _cleanup_stale_worktree_preflight(worktree_path: str) -> bool:
+    """Safely remove a stale worktree directory before dispatch spawn (#2185)."""
+    if not worktree_path or not os.path.exists(worktree_path):
+        return True
+    try:
+        import shutil
+        subprocess.run(["git", "worktree", "remove", "--force", worktree_path], cwd=os.getcwd(), capture_output=True)
+        if os.path.exists(worktree_path):
+            shutil.rmtree(worktree_path, ignore_errors=True)
+        subprocess.run(["git", "worktree", "prune"], cwd=os.getcwd(), capture_output=True)
+        return not os.path.exists(worktree_path)
+    except Exception:
+        return False
+
 
 
 
@@ -3368,6 +3384,7 @@ def _create_job_worktree(
         except Exception as exc:
             print(f"  warning: sparse worktree creation failed ({exc}); falling back to full worktree")
 
+    _cleanup_stale_worktree_preflight(worktree_path)
     worktree_cmd = ["git", "worktree", "add", worktree_path, "-b", worktree_branch]
     if base_sha:
         worktree_cmd.append(base_sha)

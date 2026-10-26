@@ -17,6 +17,7 @@
 | CLI Plumbing & Core Subsystems | synlynk/cli.py, synlynk/dispatch.py, core engine | |
 | Refactoring & Architecture | typing, modular packaging, optimizations | |
 | Testing & Verification Contracts | Pytest suite, Invariant 1 verifications, test fixtures | |
+| Mode A Home Conductor | interactive orchestration, release governance, dispatch delegation | Per Empirical Capability Assessment (#2488) |
 
 ## Shared synlynk Protocol
 
