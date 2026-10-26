@@ -576,6 +576,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [495](./495-pr2625-cli-binary-integrity-multi-user-isolatio.md) | PR #2625 — CLI binary integrity, multi-user isolation & E2E endpoint verification (#2624) | [#2625](https://github.com/nikhilsoman/synlynk/pull/2625) | 2026-10-26 |
 | [496](./496-pr2626-prepare-collateral-and-readme-for-v0-26-.md) | PR #2626 — prepare collateral and README for v0.26.2 (#2624) | [#2626](https://github.com/nikhilsoman/synlynk/pull/2626) | 2026-10-26 |
 | [497](./497-pr2627-expand-v0-26-3-v0-26-8-releases-and-sync.md) | PR #2627 — expand v0.26.3-v0.26.8 releases and synchronize canonical roadmap | [#2627](https://github.com/nikhilsoman/synlynk/pull/2627) | 2026-10-26 |
+| [498](./498-pr2628-v0-26-3-safe-autonomous-operations-work-.md) | PR #2628 — v0.26.3 — Safe Autonomous Operations & Work-Start Claim Enforcement | [#2628](https://github.com/nikhilsoman/synlynk/pull/2628) | 2026-10-26 |
 
 ## Per-PR Post Template
 

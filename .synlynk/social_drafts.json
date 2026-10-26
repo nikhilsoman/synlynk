@@ -4014,5 +4014,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2627 \u2014 expand v0.26.3-v0.26.8 releases and synchronize canonical roadmap (PR #2627, v0.26.2)\n\n\u2022 Merged improvements and fixes for PR #2627.\n\n#posts",
     "changelog": "### v0.26.2 (2026-10-26) - PR #2627\n- Merged improvements and fixes for PR #2627."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/498-pr2628-v0-26-3-safe-autonomous-operations-work-.md",
+    "title": "PR #2628 \u2014 v0.26.3 \u2014 Safe Autonomous Operations & Work-Start Claim Enforcement",
+    "author": "nikhilsoman",
+    "date": "2026-10-26",
+    "pr": "#2628",
+    "version": "0.26.3",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2628."
+    ],
+    "tweet": "\ud83d\ude80 PR #2628 \u2014 v0.26.3 \u2014 Safe Autonomous Operations & Work-Start Claim Enforcement (PR #2628, v0.26.3)\n\n\u2022 Merged improvements and fixes for PR #2628.\n\n#posts",
+    "changelog": "### v0.26.3 (2026-10-26) - PR #2628\n- Merged improvements and fixes for PR #2628."
   }
 ]
