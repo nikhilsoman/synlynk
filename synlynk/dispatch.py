@@ -4228,6 +4228,8 @@ def _verify_dispatch_story_lease(story_id: str, override: bool = False, conn=Non
                 "Advisory: database unavailable for dispatch lease check: %s", e
             )
             return
+    if conn is None:
+        return
 
     try:
         from synlynk.jobs import get_active_lease, _pid_is_alive
@@ -4239,7 +4241,8 @@ def _verify_dispatch_story_lease(story_id: str, override: bool = False, conn=Non
             is_dead = False
             if holder_pid is not None:
                 is_dead = not _pid_is_alive(holder_pid)
-            if not is_expired and not is_dead:
+            is_dispatch_worker = (lease.get("leased_by") or "").startswith("dispatch:")
+            if not is_expired and not is_dead and not is_dispatch_worker:
                 if not override:
                     leased_by = lease.get("leased_by") or f"{lease.get('harness')}:{holder_pid}"
                     raise RuntimeError(
@@ -4251,6 +4254,8 @@ def _verify_dispatch_story_lease(story_id: str, override: bool = False, conn=Non
                         (lease["lease_id"],),
                     )
                     conn.commit()
+    except RuntimeError:
+        raise
     except (sqlite3.OperationalError, sqlite3.DatabaseError) as e:
         import logging
         logging.getLogger("synlynk").warning(
@@ -4258,7 +4263,7 @@ def _verify_dispatch_story_lease(story_id: str, override: bool = False, conn=Non
         )
         return
     finally:
-        if owns_conn:
+        if owns_conn and conn is not None:
             try:
                 conn.close()
             except Exception:

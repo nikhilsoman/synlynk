@@ -4204,9 +4204,14 @@ def reclaim_stranded_stories(
     """
     owns_conn = False
     if conn is None:
-        from synlynk import _get_db
-        conn = _get_db()
-        owns_conn = True
+        try:
+            from synlynk import _get_db
+            conn = _get_db()
+            owns_conn = True
+        except Exception:
+            return []
+    if conn is None:
+        return []
 
     now = time.time()
     reclaimed = []
@@ -4279,14 +4284,19 @@ def reclaim_stranded_stories(
             except Exception:
                 pass
     finally:
-        if owns_conn:
-            conn.close()
+        if owns_conn and conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
     return reclaimed
 
 
 def _ensure_task_leases_columns(conn) -> None:
     """Ensure pid and harness columns exist on task_leases if table is present."""
+    if conn is None:
+        return
     try:
         cols = {row[1] for row in conn.execute("PRAGMA table_info(task_leases)")}
         if cols and "pid" not in cols:
@@ -4326,9 +4336,14 @@ def acquire_task_lease(
     """
     owns_conn = False
     if conn is None:
-        from synlynk import _get_db
-        conn = _get_db()
-        owns_conn = True
+        try:
+            from synlynk import _get_db
+            conn = _get_db()
+            owns_conn = True
+        except Exception:
+            return {"acquired": False, "reason": "db_unavailable"}
+    if conn is None:
+        return {"acquired": False, "reason": "db_unavailable"}
 
     _ensure_task_leases_columns(conn)
     now = time.time()
@@ -4384,8 +4399,11 @@ def acquire_task_lease(
             "expires_at": expires_at,
         }
     finally:
-        if owns_conn:
-            conn.close()
+        if owns_conn and conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def renew_task_lease(
@@ -4397,9 +4415,14 @@ def renew_task_lease(
     """Send a heartbeat to renew the active task lease on a story."""
     owns_conn = False
     if conn is None:
-        from synlynk import _get_db
-        conn = _get_db()
-        owns_conn = True
+        try:
+            from synlynk import _get_db
+            conn = _get_db()
+            owns_conn = True
+        except Exception:
+            return False
+    if conn is None:
+        return False
 
     now = time.time()
     expires_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + extend_seconds))
@@ -4414,17 +4437,25 @@ def renew_task_lease(
         conn.commit()
         return res.rowcount > 0
     finally:
-        if owns_conn:
-            conn.close()
+        if owns_conn and conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def heartbeat_claims_for_pid(pid: int, extend_seconds: int = 2700, conn=None) -> int:
     """Renew every active task_lease held by the given PID. Returns count renewed."""
     owns_conn = False
     if conn is None:
-        from synlynk import _get_db
-        conn = _get_db()
-        owns_conn = True
+        try:
+            from synlynk import _get_db
+            conn = _get_db()
+            owns_conn = True
+        except Exception:
+            return 0
+    if conn is None:
+        return 0
 
     try:
         now = time.time()
@@ -4439,8 +4470,11 @@ def heartbeat_claims_for_pid(pid: int, extend_seconds: int = 2700, conn=None) ->
     except sqlite3.OperationalError:
         return 0
     finally:
-        if owns_conn:
-            conn.close()
+        if owns_conn and conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def heartbeat_claims_by_story_ids(claim_leases: dict, extend_seconds: int = 2700, conn=None) -> int:
@@ -4457,9 +4491,14 @@ def heartbeat_claims_by_story_ids(claim_leases: dict, extend_seconds: int = 2700
         return 0
     owns_conn = False
     if conn is None:
-        from synlynk import _get_db
-        conn = _get_db()
-        owns_conn = True
+        try:
+            from synlynk import _get_db
+            conn = _get_db()
+            owns_conn = True
+        except Exception:
+            return 0
+    if conn is None:
+        return 0
 
     try:
         now = time.time()
@@ -4478,8 +4517,11 @@ def heartbeat_claims_by_story_ids(claim_leases: dict, extend_seconds: int = 2700
     except sqlite3.OperationalError:
         return 0
     finally:
-        if owns_conn:
-            conn.close()
+        if owns_conn and conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def release_task_lease(
@@ -4491,9 +4533,14 @@ def release_task_lease(
     """Release a task lease and update story status."""
     owns_conn = False
     if conn is None:
-        from synlynk import _get_db
-        conn = _get_db()
-        owns_conn = True
+        try:
+            from synlynk import _get_db
+            conn = _get_db()
+            owns_conn = True
+        except Exception:
+            return False
+    if conn is None:
+        return False
 
     try:
         conn.execute(
@@ -4508,17 +4555,25 @@ def release_task_lease(
         conn.commit()
         return True
     finally:
-        if owns_conn:
-            conn.close()
+        if owns_conn and conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def get_active_lease(story_id: str, conn=None) -> Optional[dict]:
     """Retrieve the currently active lease for a story."""
     owns_conn = False
     if conn is None:
-        from synlynk import _get_db
-        conn = _get_db()
-        owns_conn = True
+        try:
+            from synlynk import _get_db
+            conn = _get_db()
+            owns_conn = True
+        except Exception:
+            return None
+    if conn is None:
+        return None
 
     try:
         _ensure_task_leases_columns(conn)
@@ -4541,8 +4596,11 @@ def get_active_lease(story_id: str, conn=None) -> Optional[dict]:
             "status": row[8],
         }
     finally:
-        if owns_conn:
-            conn.close()
+        if owns_conn and conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def cmd_story_reclaim(max_age_minutes: int = 30, dry_run: bool = False) -> int:
