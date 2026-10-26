@@ -6,15 +6,15 @@
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
 <p align="center">
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5132%20collected-brightgreen" alt="Tests"</a>
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.26.2-blue" alt="Version"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5144%20collected-brightgreen" alt="Tests"</a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.26.3-blue" alt="Version"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
 </p>
 
 Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. The Python CLI injects scoped project context into every dispatch, uses empirical harness allocation only after a harness has at least five completed, merged jobs for the relevant task type, and follows the documented interim policy until then. See the [empirical capability policy](docs/blog/244-chore-empirical-capability-policy.md) and [routing policy](.synlynk/policy.json). Synlynk also tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
-**v0.26.2:** CLI binary integrity, multi-user isolation, and E2E endpoint verification. Implements doctor health checks for CLI entrypoint health and PATH shadowing detection with automated remediation (synlynk doctor --fix cli), audits user-local PATH precedence in install.sh and upgrade, namespaces user state in /tmp/synlynk-{uid} (0700), and adds comprehensive E2E distribution and packaging CI gates (gh:#2624), with 5132 tests collected.
+**v0.26.3:** Safe autonomous operations & work-start claim enforcement. Wires mandatory lease acquisition into story in-progress state transitions (synlynk story update <id> --status in_progress) and pre-dispatch claim verification into synlynk dispatch --story, adds lease audit and auto-remediation in synlynk doctor (_hc_task_leases_integrity / synlynk doctor --fix leases), preventing runaway double-dispatch collisions and dead-PID lease stranding (gh:#2511, #2528), with 5144 tests collected.
 
 ## Documentation
 

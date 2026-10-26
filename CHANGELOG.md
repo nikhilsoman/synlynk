@@ -16,6 +16,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
 
+## [v0.26.3] - 2026-10-27
+### Added
+- feat(claims): automatic rolling task lease acquisition and active checkout tracking wired into `synlynk story update <id> --status in_progress` (gh:#2511, #2528)
+- feat(dispatch): pre-dispatch story lease verification gate refusing conflicts with active home sessions and preemption via `--override`/`--force` (gh:#2511, #2528)
+- feat(dispatch): automatic recording of background dispatch worker leases in canonical `task_leases` upon task spawn (gh:#2511, #2528)
+- feat(doctor): active task lease integrity diagnostic check (`_hc_task_leases_integrity`) and automated stale lease/orphaned story recovery in `synlynk doctor --fix leases` (gh:#2511, #2528)
+
 ## [v0.26.2] - 2026-10-26
 ### Added
 - feat(doctor): multi-user CLI entrypoint integrity and PATH shadowing diagnostic check with automated remediation via `synlynk doctor --fix cli` (gh:#2624) (#2625)

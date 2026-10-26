@@ -331,6 +331,11 @@ _TOP_LEVEL_COMMANDS = (
 )
 
 
+def cmd_story_update(*args, **kwargs):
+    from synlynk.db import cmd_story_update as _impl
+    return _impl(*args, **kwargs)
+
+
 class _LazyParserStub:
     """No-op parser returned while registering a non-selected command."""
 
@@ -1229,6 +1234,10 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "--force-harness", "--force-agent", action="store_true", dest="force_agent",
         help="Bypass capability routing — dispatch to the exact harness specified",
     )
+    dispatch_parser.add_argument(
+        "--override", "--force", action="store_true", dest="override_claim",
+        help="Force-take or preempt active story lease for this dispatch (gh:#2511, #2528)",
+    )
     dispatch_parser.add_argument("--static-baseline", action="store_true", dest="static_baseline",
         help="Bypass learned capability-score routing for this dispatch — use the "
              "deterministic static baseline pick instead (Phase 2, #914-adjacent)")
@@ -1569,6 +1578,15 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     story_claim_parser.add_argument("--harness", default=None, help="Harness identity; auto-detected if omitted")
     story_claim_parser.add_argument("--duration", type=int, default=2700, help="Claim TTL in seconds (default: 45min)")
     story_claim_parser.add_argument("--override", action="store_true", help="Force-take the claim even if another live session holds it")
+    story_update_parser = story_sub.add_parser("update", help="Update a story's status, stage, or attributes (gh:#2511, #2528)")
+    story_update_parser.add_argument("story_id")
+    story_update_parser.add_argument("--status", choices=["draft", "ready", "in_progress", "done"], default=None, help="Update story status")
+    story_update_parser.add_argument("--stage", default=None, help="Update GOVERNS stage")
+    story_update_parser.add_argument("--title", default=None, help="Update story title")
+    story_update_parser.add_argument("--role", default=None, help="Update story role")
+    story_update_parser.add_argument("--phase", default=None, help="Update story phase")
+    story_update_parser.add_argument("--harness", default=None, help="Harness identity; auto-detected if omitted")
+    story_update_parser.add_argument("--override", action="store_true", help="Force-take claim if transitioning to in_progress")
 
     pm_parser = subparsers.add_parser("pm", help="PM agent commands")
     pm_subparsers = pm_parser.add_subparsers(dest="pm_command")
@@ -2397,6 +2415,7 @@ def main(argv=None) -> None:
         cmd_story_draft,
         cmd_story_list,
         cmd_story_ready,
+        cmd_story_update,
         cmd_sync,
         cmd_configure_agent,
         cmd_team_status,
@@ -2881,7 +2900,8 @@ def main(argv=None) -> None:
                                  local_pilot_receipt=local_pilot_receipt,
                                  local_pilot_requested=bool(
                                      getattr(args, "local_pilot_class", None)
-                                 ))
+                                 ),
+                                 override=getattr(args, "override_claim", False))
             if isinstance(job, dict) and job.get("status") == "blocked" and not job.get("pid"):
                 print(f"Error: {job.get('reason')}")
                 remediation = job.get("remediation")
@@ -2910,7 +2930,7 @@ def main(argv=None) -> None:
                 from synlynk.fencing import render_task_fence
 
                 print(render_task_fence(job["fence"]))
-        except ValueError as e:
+        except (ValueError, RuntimeError) as e:
             print(f"Error: {e}")
             sys.exit(1)
     elif args.command == "agent":
@@ -3087,6 +3107,17 @@ def main(argv=None) -> None:
                 duration_seconds=getattr(args, "duration", 2700),
                 override=getattr(args, "override", False),
             ))
+        elif args.story_action == "update":
+            sys.exit(cmd_story_update(
+                args.story_id,
+                status=getattr(args, "status", None),
+                stage=getattr(args, "stage", None),
+                title=getattr(args, "title", None),
+                role=getattr(args, "role", None),
+                phase=getattr(args, "phase", None),
+                override=getattr(args, "override", False),
+                harness=getattr(args, "harness", None),
+            ) or 0)
     elif args.command == "pm" and args.pm_command == "sweep":
         from synlynk.pm_agent import cmd_pm_sweep
 
