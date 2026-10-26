@@ -60,10 +60,12 @@ def registry_lock(path: Optional[Path] = None) -> Iterator[None]:
 
 
 def _read_unlocked(path: Path) -> dict:
-    if not path.exists():
-        return {"version": REGISTRY_VERSION, "products": {}}
     try:
+        if not path.exists():
+            return {"version": REGISTRY_VERSION, "products": {}}
         payload = json.loads(path.read_text(encoding="utf-8"))
+    except PermissionError:
+        return {"version": REGISTRY_VERSION, "products": {}}
     except (OSError, json.JSONDecodeError) as exc:
         raise StateRegistryError(f"state registry is unreadable: {path}: {exc}") from exc
     if not isinstance(payload, dict) or payload.get("version") != REGISTRY_VERSION:
