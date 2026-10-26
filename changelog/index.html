@@ -54,6 +54,12 @@ entitlement checks, and reconnect/status hardening remain follow-up work.</li>
 <li>Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.</li>
 <li>Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.</li>
 </ul>
+<div class="changelog-version-header"><span class="changelog-version">vv0.26.3</span><span class="changelog-date">2026-10-27</span></div>
+<h3 class="tag-added">Added</h3>
+- feat(claims): automatic rolling task lease acquisition and active checkout tracking wired into `synlynk story update <id> --status in_progress` (gh:#2511, #2528)
+- feat(dispatch): pre-dispatch story lease verification gate refusing conflicts with active home sessions and preemption via `--override`/`--force` (gh:#2511, #2528)
+- feat(dispatch): automatic recording of background dispatch worker leases in canonical `task_leases` upon task spawn (gh:#2511, #2528)
+- feat(doctor): active task lease integrity diagnostic check (`_hc_task_leases_integrity`) and automated stale lease/orphaned story recovery in `synlynk doctor --fix leases` (gh:#2511, #2528)
 <div class="changelog-version-header"><span class="changelog-version">vv0.26.2</span><span class="changelog-date">2026-10-26</span></div>
 <h3 class="tag-added">Added</h3>
 - feat(doctor): multi-user CLI entrypoint integrity and PATH shadowing diagnostic check with automated remediation via `synlynk doctor --fix cli` (gh:#2624) (#2625)
