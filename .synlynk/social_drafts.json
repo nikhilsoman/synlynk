@@ -3998,5 +3998,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2626 \u2014 prepare collateral and README for v0.26.2 (#2624) (PR #2626, v0.26.2)\n\n\u2022 Merged improvements and fixes for PR #2626.\n\n#posts",
     "changelog": "### v0.26.2 (2026-10-26) - PR #2626\n- Merged improvements and fixes for PR #2626."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/497-pr2627-expand-v0-26-3-v0-26-8-releases-and-sync.md",
+    "title": "PR #2627 \u2014 expand v0.26.3-v0.26.8 releases and synchronize canonical roadmap",
+    "author": "nikhilsoman",
+    "date": "2026-10-26",
+    "pr": "#2627",
+    "version": "0.26.2",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2627."
+    ],
+    "tweet": "\ud83d\ude80 PR #2627 \u2014 expand v0.26.3-v0.26.8 releases and synchronize canonical roadmap (PR #2627, v0.26.2)\n\n\u2022 Merged improvements and fixes for PR #2627.\n\n#posts",
+    "changelog": "### v0.26.2 (2026-10-26) - PR #2627\n- Merged improvements and fixes for PR #2627."
   }
 ]
