@@ -1,6 +1,7 @@
 """End-to-End Multi-Node Acceptance and Soak Scenarios."""
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
 from typing import List, Optional
@@ -27,9 +28,11 @@ class ScenarioRunner:
 
     def run_brownfield_init(self, node: NodeHandle) -> ScenarioResult:
         start_t = time.time()
+        uid = os.getuid() if hasattr(os, "getuid") else "0"
+        repo_dir = f"/tmp/synlynk-{uid}/test-repo"
         # Initialize a test git repo and run synlynk init --brownfield
         cmd = (
-            "rm -rf /tmp/test-repo && mkdir -p /tmp/test-repo && cd /tmp/test-repo && "
+            f"rm -rf {repo_dir} && mkdir -p -m 0700 {repo_dir} && cd {repo_dir} && "
             "git init && echo '# Test App' > README.md && git add . && git commit -m 'initial' && "
             "synlynk init --brownfield"
         )
