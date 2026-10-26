@@ -825,7 +825,7 @@ def _run_tc1(harness_name: str, timeout: int = 5) -> dict:
         if _sys.platform == "win32":
             return {"requires_pty": True, "passed": False, "stdout_method": "pty"}
         return {"requires_pty": True, "passed": False, "stdout_method": "unavailable"}
-    except FileNotFoundError:
+    except (FileNotFoundError, PermissionError, OSError):
         return {"requires_pty": False, "passed": False, "stdout_method": "not_found"}
 
 
@@ -847,7 +847,7 @@ def _run_tc2(harness_name: str, flags_spec: dict) -> dict:
             flag_name = flag.lstrip("-")
             if flag_name and flag_name not in help_text and flag not in help_text:
                 failed.append(flag)
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (FileNotFoundError, PermissionError, OSError, subprocess.TimeoutExpired):
         pass
     return {"failed_flags": failed, "passed": len(failed) == 0}
 
@@ -899,7 +899,7 @@ def _run_tc4(harness_name: str, db_conn) -> dict:
             continue
         try:
             subprocess.run([cmd, "--help"], capture_output=True, timeout=3)
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except (FileNotFoundError, PermissionError, OSError, subprocess.TimeoutExpired):
             failed.append(verb)
     return {"failed_verbs": failed, "passed": len(failed) == 0}
 
@@ -938,7 +938,7 @@ def _run_tc6(harness_name: str, env: Optional[dict] = None, timeout: int = 5) ->
             ["gh", "auth", "status"],
             **run_kwargs,
         )
-    except FileNotFoundError:
+    except (FileNotFoundError, PermissionError, OSError):
         return {"passed": False, "error": "gh CLI not found", "output": ""}
     except subprocess.TimeoutExpired:
         return {"passed": False, "error": "gh auth status timed out", "output": ""}

@@ -84,16 +84,36 @@ if [ -n "$INSTALLED_VERSION" ]; then
     echo "  ✓ Installed synlynk v$INSTALLED_VERSION"
 fi
 
-# Health check & PATH check. Print a hint only; do not edit shell rc files.
-case ":$PATH:" in
-    *:"$BIN_DIR":*) ;;
-    *)
+# Health check & PATH precedence audit.
+RESOLVED_BIN=$(command -v synlynk 2>/dev/null || true)
+if [ -z "$RESOLVED_BIN" ]; then
+    echo ""
+    echo "  ⚠ Warning: 'synlynk' command not found on your PATH."
+    echo "    Add user-local bin directory to your PATH by adding this line to ~/.zshrc or ~/.bashrc:"
+    echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+    echo ""
+else
+    IS_USER_LOCAL=0
+    case "$RESOLVED_BIN" in
+        "$HOME"/*) IS_USER_LOCAL=1 ;;
+        *) IS_USER_LOCAL=0 ;;
+    esac
+
+    if [ "$IS_USER_LOCAL" -eq 0 ]; then
+        echo ""
+        echo "  ⚠ WARNING: PATH SHADOWING DETECTED!"
+        echo "    'synlynk' resolves to: $RESOLVED_BIN"
+        echo "    This is an unisolated shared system location that shadows your user-local installation."
+        echo "    To ensure your shell executes your user-isolated synlynk, add this line to your ~/.zshrc or ~/.bashrc:"
+        echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+        echo ""
+    elif case ":$PATH:" in *:"$BIN_DIR":*) false;; *) true;; esac; then
         echo ""
         echo "  ⚠ Action needed: $BIN_DIR is not on your PATH."
         echo "    Add it by adding this line to your ~/.zshrc or ~/.bashrc:"
         echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
         echo ""
-        ;;
-esac
+    fi
+fi
 
 echo "  ✦ Run 'synlynk doctor' to verify complete environment health."

@@ -5,6 +5,8 @@ import subprocess
 import shutil
 import pytest
 
+os.environ.setdefault("SYNLYNK_REGISTRY_PATH", "/tmp/synlynk-test-registry.json")
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 @pytest.fixture(autouse=True)

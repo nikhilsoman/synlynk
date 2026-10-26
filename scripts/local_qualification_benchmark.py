@@ -226,17 +226,19 @@ def _docker_executor(
     # container anyway so a killed Docker CLI can be cleaned up precisely
     # after a model-request timeout, without touching the shared relay or a
     # concurrent qualification run.
-    container_name = f"synlynk-qualification-{task.task_id}-{uuid.uuid4().hex[:12]}"
+    # Aider defaults its histories into the mounted worktree. Keep those
+    # runner artifacts in the container tmpfs so they cannot be mistaken
+    # for model edits by the benchmark safety checks.
+    bench_uid = os.getuid() if hasattr(os, "getuid") else "0"
+    bench_tmp = f"/tmp/synlynk-{bench_uid}"
+    os.makedirs(bench_tmp, mode=0o700, exist_ok=True)
     command = [
         "docker", "compose", "-f", str(COMPOSE_FILE), "run", "--rm", "--name", container_name, "aider",
         "--model", f"openai/{model_id}", "--openai-api-base", "http://omlx:8000/v1",
         "--edit-format", edit_format, "--message", task.prompt,
-        # Aider defaults its histories into the mounted worktree. Keep those
-        # runner artifacts in the container tmpfs so they cannot be mistaken
-        # for model edits by the benchmark safety checks.
-        "--chat-history-file", "/tmp/aider-chat.md",
-        "--input-history-file", "/tmp/aider-input",
-        "--llm-history-file", "/tmp/aider-llm.md",
+        "--chat-history-file", f"{bench_tmp}/aider-chat.md",
+        "--input-history-file", f"{bench_tmp}/aider-input",
+        "--llm-history-file", f"{bench_tmp}/aider-llm.md",
         "--no-restore-chat-history",
         "--no-stream", "--no-auto-commits", "--yes-always", "--no-auto-lint", "--no-auto-test",
         "--map-tokens", "0", "--no-check-update", "--no-analytics", "--no-show-model-warnings", "--no-gitignore",

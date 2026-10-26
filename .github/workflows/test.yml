@@ -131,11 +131,33 @@ jobs:
       # Timing-sensitive cold-start checks run in the dedicated performance
       # workflow so shared-runner CPU variance cannot block unrelated changes.
 
+  test-package-e2e:
+    name: test-package-e2e
+    needs: matrix-plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build wheel and verify CLI entrypoints in clean venv
+        run: |
+          python -m pip install build
+          python -m build --wheel
+          python -m venv /tmp/clean-test-env
+          /tmp/clean-test-env/bin/pip install dist/*.whl
+          /tmp/clean-test-env/bin/synlynk --version
+          /tmp/clean-test-env/bin/synlynk --help
+          /tmp/clean-test-env/bin/synlynk doctor
+
   # Same-workflow needs: is required — separate workflow files run in
   # parallel with no cross-file ordering, so a standalone qa-gate.yml
   # almost always saw the test matrix as pending and fail-closed.
   qa-gate:
-    needs: test
+    needs: [test, test-package-e2e]
     if: >-
       github.event_name == 'pull_request' ||
       github.event_name == 'workflow_dispatch'

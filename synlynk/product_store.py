@@ -306,14 +306,17 @@ def migrate_repo_apps_if_needed(repo_path: PathLike = ".") -> Path:
         return source
     dest = write_apps_dir_for_init(repo_path)
     if source.is_dir() and source != dest:
-        for path in source.iterdir():
-            if path.suffix not in {".json", ".pem"}:
-                continue
-            target = dest / path.name
-            if not target.exists():
-                shutil.copy2(path, target)
-                try:
-                    os.chmod(target, 0o600)
-                except OSError:
-                    pass
+        try:
+            for path in source.iterdir():
+                if path.suffix not in {".json", ".pem"}:
+                    continue
+                target = dest / path.name
+                if not target.exists():
+                    shutil.copy2(path, target)
+                    try:
+                        os.chmod(target, 0o600)
+                    except OSError:
+                        pass
+        except (OSError, PermissionError):
+            pass
     return dest
