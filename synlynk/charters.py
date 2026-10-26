@@ -42,7 +42,38 @@ def validate_charter(charter: AgentCharter) -> bool:
 
 
 def load_charter(role: str) -> AgentCharter:
-    # 1. Try reading from registered agent store Markdown charter
+    # 1. Load legacy JSON data if present as baseline fallback
+    path = os.path.join(_charters_dir(), f"{role}.json")
+    json_data: dict = {}
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                json_data = json.load(f)
+        except Exception:
+            pass
+
+    if json_data:
+        default_bindings = json_data.get("harness_bindings", [])
+        default_mandate = json_data.get("mandate", f"Default operating charter for role {role}")
+        default_authorities = json_data.get("autonomous_authorities", [])
+        default_escalation = json_data.get("escalation_triggers", [])
+        default_weights = json_data.get("behavioral_weights", {})
+    else:
+        default_bindings = ["claude", "codex"] if role in ("architect", "tpm") else ["codex", "agy", "grok"]
+        default_mandate = f"Default operating charter for role {role}"
+        default_authorities = ["draft_spec", "implement", "test"] if role != "qa" else ["review", "verify"]
+        default_escalation = ["invariant_violation_detected", "budget_exceeded"]
+        default_weights = {"verbosity": "concise", "risk_tolerance": "conservative"}
+    default_durability = json_data.get("durability")
+    default_wake_cycle = json_data.get("wake_cycle_sop", [])
+    default_skills = json_data.get("skills", [])
+    default_sops = json_data.get("sops", [])
+    default_tools = json_data.get("tools", [])
+    default_credentials = json_data.get("credentials", [])
+    default_contracts = json_data.get("verification_contracts", [])
+    default_description = json_data.get("description")
+
+    # 2. Try reading from registered agent store Markdown charter
     try:
         from synlynk import agent_store, charter_schema
         entries = agent_store.list_agents()
@@ -57,56 +88,62 @@ def load_charter(role: str) -> AgentCharter:
                     frontmatter_text, _body = charter_schema.split_frontmatter(content)
                     if frontmatter_text:
                         parsed = charter_schema.parse_frontmatter(frontmatter_text)
-                        mandate = parsed.get("mandate") or parsed.get("description", f"Operating charter for {role}")
-                        wake_cycle_sop = parsed.get("wake_cycle_sop") or parsed.get("sops", [])
+                        mandate = parsed.get("mandate") or parsed.get("description") or default_mandate
+                        wake_cycle_sop = parsed.get("wake_cycle_sop") or parsed.get("sops") or default_wake_cycle
+                        autonomous_authorities = (
+                            parsed["autonomous_authorities"]
+                            if parsed.get("autonomous_authorities") is not None and len(parsed["autonomous_authorities"]) > 0
+                            else default_authorities
+                        )
+                        escalation_triggers = (
+                            parsed["escalation_triggers"]
+                            if parsed.get("escalation_triggers") is not None and len(parsed["escalation_triggers"]) > 0
+                            else default_escalation
+                        )
+                        behavioral_weights = (
+                            parsed["behavioral_weights"]
+                            if parsed.get("behavioral_weights") and isinstance(parsed.get("behavioral_weights"), dict)
+                            else default_weights
+                        )
+                        harness_bindings = (
+                            parsed["harness_bindings"]
+                            if parsed.get("harness_bindings") is not None
+                            else default_bindings
+                        )
                         return AgentCharter(
                             role=parsed.get("role", role),
-                            harness_bindings=parsed.get("harness_bindings", []),
+                            harness_bindings=harness_bindings,
                             mandate=mandate,
-                            autonomous_authorities=parsed.get("autonomous_authorities", []),
-                            escalation_triggers=parsed.get("escalation_triggers", []),
-                            behavioral_weights=parsed.get("behavioral_weights", {}) if isinstance(parsed.get("behavioral_weights"), dict) else {},
-                            durability=parsed.get("durability"),
+                            autonomous_authorities=autonomous_authorities,
+                            escalation_triggers=escalation_triggers,
+                            behavioral_weights=behavioral_weights,
+                            durability=parsed.get("durability") or default_durability,
                             wake_cycle_sop=wake_cycle_sop,
-                            skills=parsed.get("skills", []),
-                            sops=parsed.get("sops", []),
-                            tools=parsed.get("tools", []),
-                            credentials=parsed.get("credentials", []),
-                            verification_contracts=parsed.get("verification_contracts", []),
-                            description=parsed.get("description"),
+                            skills=parsed.get("skills") or default_skills,
+                            sops=parsed.get("sops") or default_sops,
+                            tools=parsed.get("tools") or default_tools,
+                            credentials=parsed.get("credentials") or default_credentials,
+                            verification_contracts=parsed.get("verification_contracts") or default_contracts,
+                            description=parsed.get("description") or default_description,
                         )
     except Exception:
         pass
 
-    # 2. Legacy fallback to .synlynk/charters/<role>.json
-    path = os.path.join(_charters_dir(), f"{role}.json")
-    if not os.path.exists(path):
-        return AgentCharter(
-            role=role,
-            harness_bindings=["claude", "codex"] if role in ("architect", "tpm") else ["codex", "agy", "grok"],
-            mandate=f"Default operating charter for role {role}",
-            autonomous_authorities=["draft_spec", "implement", "test"] if role != "qa" else ["review", "verify"],
-            escalation_triggers=["invariant_violation_detected", "budget_exceeded"],
-            behavioral_weights={"verbosity": "concise", "risk_tolerance": "conservative"},
-        )
-
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
     return AgentCharter(
-        role=data["role"],
-        harness_bindings=data.get("harness_bindings", []),
-        mandate=data["mandate"],
-        autonomous_authorities=data.get("autonomous_authorities", []),
-        escalation_triggers=data.get("escalation_triggers", []),
-        behavioral_weights=data.get("behavioral_weights", {}),
-        durability=data.get("durability"),
-        wake_cycle_sop=data.get("wake_cycle_sop", []),
-        skills=data.get("skills", []),
-        sops=data.get("sops", []),
-        tools=data.get("tools", []),
-        credentials=data.get("credentials", []),
-        verification_contracts=data.get("verification_contracts", []),
-        description=data.get("description"),
+        role=role,
+        harness_bindings=default_bindings,
+        mandate=default_mandate,
+        autonomous_authorities=default_authorities,
+        escalation_triggers=default_escalation,
+        behavioral_weights=default_weights,
+        durability=default_durability,
+        wake_cycle_sop=default_wake_cycle,
+        skills=default_skills,
+        sops=default_sops,
+        tools=default_tools,
+        credentials=default_credentials,
+        verification_contracts=default_contracts,
+        description=default_description,
     )
 
 

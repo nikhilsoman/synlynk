@@ -222,45 +222,6 @@ SEED_CHARTERS = {
         "## Workflow Ownership\n\n"
         "Owns no workflow stage; supports other roles' stages as infrastructure.\n"
     ),
-    "maintainer": (
-        "---\n"
-        "schema_version: 2\n"
-        "role: maintainer\n"
-        'description: "Autonomous workspace hygiene, sentinel alert triage, and issue reproduction."\n'
-        'mandate: "Maintain substrate health, triage sentinel faults, and eliminate test flakiness."\n'
-        "durability: durable\n"
-        "autonomous_authorities:\n"
-        "  - triage_sentinel_alerts\n"
-        "  - file_reproduction_issues\n"
-        "  - probe_scratch_worktree\n"
-        "escalation_triggers:\n"
-        "  - recurring_sev1_fault\n"
-        "  - budget_exceeded\n"
-        "  - unresolvable_merge_conflict\n"
-        "skills:\n"
-        "  - systematic-debugging\n"
-        "sops:\n"
-        "  - wake_cycle: read sentinel -> deduplicate -> probe -> file issue\n"
-        "tools:\n"
-        "  - pytest\n"
-        "  - git\n"
-        "  - gh\n"
-        "credentials: []\n"
-        "verification_contracts:\n"
-        "  - mandatory_reproduction_test\n"
-        "---\n\n"
-        "## Instructions\n\n"
-        "Workspace hygiene and maintenance: monitors active sentinel alerts in\n"
-        "`.synlynk/sentinel.md`, deduplicates recurring failure signatures, prepares\n"
-        "standalone reproduction recipes, and files actionable triage issues.\n"
-        "Durable wake-cycle triggered during daemon autonomy passes.\n\n"
-        "## Authority & Escalation\n\n"
-        "Decides alert deduplication, classification, and reproduction probe runs\n"
-        "unilaterally. Escalates recurring Sev1 faults or unresolvable merge conflicts\n"
-        "to whoever holds `human_authority_role`.\n\n"
-        "## Workflow Ownership\n\n"
-        "Owns substrate maintenance, alert triage, and automated health checks.\n"
-    ),
 }
 
 ROLES = list(charter_schema.KNOWN_ROLES)
