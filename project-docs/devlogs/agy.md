@@ -1373,7 +1373,7 @@
 
 ### v0.26.1 CI Harmonization:
 - Restored `SEED_CHARTERS` in `synlynk/agent_cli.py` to the 8 bootstrap roles (`len == 8`) required by onboarding safety assertions.
-- Added `maintainer triage` and `maintainer probe` to `COMMAND_TAXONOMY` in `synlynk/taxonomy.py`.
-- Hardened `load_charter()` in `synlynk/charters.py` to fall back cleanly to baseline JSON attributes when Markdown charters omit schema 2.0 fields.
-- 86/86 passing tests locally across all related suites.
+- Added `maintainer triage` and `maintainer probe` to `COMMAND_TAXONOMY` in `synlynk/taxonomy.py` and regenerated `docs/reference/commands.md`.
+- Embedded `DEFAULT_ROLE_CHARTERS` canonical fallback in `synlynk/charters.py`, guaranteeing all roles resolve rich attributes in isolated worktrees.
+- 88/88 passing tests locally across all related suites.
 [@agy, @nikhilsoman]

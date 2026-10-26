@@ -134,6 +134,8 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `shell` (secondary) — execute
 - `sentinel list` (secondary) — execute
 - `sentinel clear` (secondary) — execute
+- `maintainer triage` (secondary) — sustain
+- `maintainer probe` (secondary) — sustain
 - `cost log` (secondary) — sustain
 - `cost true-up` (secondary) — sustain
 - `cost billing` (secondary) — sustain

@@ -29,8 +29,96 @@ class AgentCharter:
     description: Optional[str] = None
 
 
+DEFAULT_ROLE_CHARTERS: Dict[str, dict] = {
+    "architect": {
+        "role": "architect",
+        "harness_bindings": ["claude", "codex"],
+        "mandate": "Own system design, specs, and architectural invariants. Draft specs and plans before implementation begins.",
+        "autonomous_authorities": ["draft_spec", "draft_plan", "review_architecture"],
+        "escalation_triggers": ["invariant_violation_detected", "budget_exceeded", "cross_repo_breaking_change"],
+        "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "conservative"},
+    },
+    "dev": {
+        "role": "dev",
+        "harness_bindings": ["codex", "agy", "grok"],
+        "mandate": "Implement and test approved specs/plans. Write code, tests, and small fixes within the assigned task scope.",
+        "autonomous_authorities": ["implement", "test", "refactor"],
+        "escalation_triggers": ["invariant_violation_detected", "budget_exceeded", "spec_ambiguous"],
+        "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "moderate"},
+    },
+    "maintainer": {
+        "role": "maintainer",
+        "harness_bindings": ["claude"],
+        "mandate": "Maintain workspace hygiene: worktree cleanup, policy sync, release cuts, and long-running housekeeping tasks.",
+        "autonomous_authorities": ["worktree_cleanup", "policy_sync", "release_cut"],
+        "escalation_triggers": ["invariant_violation_detected", "budget_exceeded", "irreversible_action_required"],
+        "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "conservative"},
+        "durability": "durable",
+        "wake_cycle_sop": [
+            "Check for pending cleanup/release work: merged-and-unswept worktrees, policy drift, or a queued release.",
+            "If pending work exists, perform it per the existing Worktree Hygiene Protocol and Named Release Policy.",
+            "If no pending cleanup/release work exists, do not exit idle: run a proactive dependency/policy-drift sweep instead, checking .synlynk/policy.json fields against the current config schema, stale GitHub label sets, and orphaned branches with no PR.",
+        ],
+    },
+    "pm": {
+        "role": "pm",
+        "harness_bindings": [],
+        "mandate": "Approve and prioritize TPM's drafted intake proposals; author and reprioritize stories; own the spec-approval gate; block for human sign-off on major decisions (release cuts, budget, charter changes).",
+        "autonomous_authorities": ["approve_priority", "author_story", "approve_spec"],
+        "escalation_triggers": ["budget_exceeded", "cross_story_conflict", "charter_change_requested"],
+        "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "conservative"},
+        "durability": "durable",
+        "wake_cycle_sop": [
+            "Pull TPM's pending-approval queue (proposals TPM drafted from raw issue intake, or new plans awaiting priority sign-off).",
+            "For each item: approve, reject with reason, or request rework from TPM.",
+            "Tag approved items with a priority (this is the 'PM triages and tags priority' step from the original pipeline, now applied to TPM's drafted proposals rather than raw issues).",
+            "Idle-avoidance: if the approval queue is empty, do not exit immediately -- reconcile open stories/goals against state.db (stale status, orphaned links, goals with no linked story) before exiting. An empty queue means 'nothing new to approve,' not 'nothing useful to do.'",
+        ],
+    },
+    "qa": {
+        "role": "qa",
+        "harness_bindings": ["codex", "agy"],
+        "mandate": "Non-authoring review and verification of PRs. Confirm correctness, run tests, and gate merges.",
+        "autonomous_authorities": ["review", "verify", "approve_pr"],
+        "escalation_triggers": ["invariant_violation_detected", "self_approval_conflict", "budget_exceeded"],
+        "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "conservative"},
+    },
+    "tpm": {
+        "role": "tpm",
+        "harness_bindings": [],
+        "mandate": "Own raw-issue intake, dedup, and draft-plan authoring; track previously-dispatched work through to completion; route ambiguity to the appropriate owner and surface clean items to PM's approval queue.",
+        "autonomous_authorities": ["triage_issue", "draft_plan", "dispatch_track"],
+        "escalation_triggers": ["technical_ambiguity", "priority_ambiguity", "dispatch_blocked_twice"],
+        "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "moderate"},
+        "durability": "durable",
+        "wake_cycle_sop": [
+            "Poll new GitHub issues opened since the last-seen marker.",
+            "Dedupe each new issue against existing open stories.",
+            "For genuinely new items, draft a scoping outline.",
+            "Route technical ambiguity to architect and priority ambiguity to pm.",
+            "For clean (unambiguous) items, place them in the PM approval queue.",
+            "On PM approval, convert the drafted proposal into a tracked plan/story via existing story create and goal link mechanics.",
+            "Continue tracking previously-dispatched work via existing tpm suggest; if the dispatch queue is empty, fall back to raw backlog triage rather than exiting idle.",
+        ],
+    },
+}
+
+
 def _charters_dir() -> str:
-    return os.path.join(os.getcwd(), ".synlynk", "charters")
+    cwd = os.getcwd()
+    candidate = os.path.join(cwd, ".synlynk", "charters")
+    if os.path.exists(candidate):
+        return candidate
+    try:
+        from synlynk.scan import _find_repo_root
+        root = _find_repo_root(cwd)
+        if root:
+            root_candidate = os.path.join(root, ".synlynk", "charters")
+            if os.path.exists(root_candidate):
+                return root_candidate
+    except Exception:
+        pass
+    return candidate
 
 
 def validate_charter(charter: AgentCharter) -> bool:
@@ -42,7 +130,7 @@ def validate_charter(charter: AgentCharter) -> bool:
 
 
 def load_charter(role: str) -> AgentCharter:
-    # 1. Load legacy JSON data if present as baseline fallback
+    # 1. Load legacy JSON data or canonical built-in data if present as baseline fallback
     path = os.path.join(_charters_dir(), f"{role}.json")
     json_data: dict = {}
     if os.path.exists(path):
@@ -51,6 +139,8 @@ def load_charter(role: str) -> AgentCharter:
                 json_data = json.load(f)
         except Exception:
             pass
+    if not json_data and role in DEFAULT_ROLE_CHARTERS:
+        json_data = dict(DEFAULT_ROLE_CHARTERS[role])
 
     if json_data:
         default_bindings = json_data.get("harness_bindings", [])
