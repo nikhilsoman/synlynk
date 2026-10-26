@@ -3982,5 +3982,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2625 \u2014 CLI binary integrity, multi-user isolation & E2E endpoint verification (#2624) (PR #2625, v0.26.1)\n\n\u2022 Merged improvements and fixes for PR #2625.\n\n#posts",
     "changelog": "### v0.26.1 (2026-10-26) - PR #2625\n- Merged improvements and fixes for PR #2625."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/496-pr2626-prepare-collateral-and-readme-for-v0-26-.md",
+    "title": "PR #2626 \u2014 prepare collateral and README for v0.26.2 (#2624)",
+    "author": "nikhilsoman",
+    "date": "2026-10-26",
+    "pr": "#2626",
+    "version": "0.26.2",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2626."
+    ],
+    "tweet": "\ud83d\ude80 PR #2626 \u2014 prepare collateral and README for v0.26.2 (#2624) (PR #2626, v0.26.2)\n\n\u2022 Merged improvements and fixes for PR #2626.\n\n#posts",
+    "changelog": "### v0.26.2 (2026-10-26) - PR #2626\n- Merged improvements and fixes for PR #2626."
   }
 ]

@@ -574,6 +574,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [493](./493-pr2622-prepare-collateral-and-readme-for-v0-26-.md) | PR #2622 — prepare collateral and README for v0.26.1 (#2621) | [#2622](https://github.com/nikhilsoman/synlynk/pull/2622) | 2026-10-26 |
 | [494](./494-pr2623-post-v0-26-1-housekeeping-sync-for-todo-.md) | PR #2623 — post-v0.26.1 housekeeping sync for todo, costs, and memory | [#2623](https://github.com/nikhilsoman/synlynk/pull/2623) | 2026-10-26 |
 | [495](./495-pr2625-cli-binary-integrity-multi-user-isolatio.md) | PR #2625 — CLI binary integrity, multi-user isolation & E2E endpoint verification (#2624) | [#2625](https://github.com/nikhilsoman/synlynk/pull/2625) | 2026-10-26 |
+| [496](./496-pr2626-prepare-collateral-and-readme-for-v0-26-.md) | PR #2626 — prepare collateral and README for v0.26.2 (#2624) | [#2626](https://github.com/nikhilsoman/synlynk/pull/2626) | 2026-10-26 |
 
 ## Per-PR Post Template
 
