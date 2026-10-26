@@ -3918,5 +3918,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2620 \u2014 prepare collateral and README for v0.26.0 (PR #2620, v0.26.0)\n\n\u2022 Merged improvements and fixes for PR #2620.\n\n#posts",
     "changelog": "### v0.26.0 (2026-10-25) - PR #2620\n- Merged improvements and fixes for PR #2620."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/492-pr2621-implement-workspace-agent-operations-and.md",
+    "title": "PR #2621 \u2014 implement workspace-agent operations and role governance (v0.26.1)",
+    "author": "nikhilsoman",
+    "date": "2026-10-26",
+    "pr": "#2621",
+    "version": "0.26.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2621."
+    ],
+    "tweet": "\ud83d\ude80 PR #2621 \u2014 implement workspace-agent operations and role governance (v0.26.1) (PR #2621, v0.26.0)\n\n\u2022 Merged improvements and fixes for PR #2621.\n\n#posts",
+    "changelog": "### v0.26.0 (2026-10-26) - PR #2621\n- Merged improvements and fixes for PR #2621."
   }
 ]
