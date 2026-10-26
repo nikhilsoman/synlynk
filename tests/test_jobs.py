@@ -4969,3 +4969,36 @@ def test_unpushed_commit_blocks_verified_gh_write_zombie_completion(
 
     assert row == ("unpushed_branch", 1, "false")
     assert wt.exists(), "stranded local commits must not be reaped"
+
+
+def test_check_job_verification_contract():
+    from synlynk.jobs import check_job_verification_contract
+    # No contracts required
+    assert check_job_verification_contract({"job_id": "test-1"}) is True
+
+    # Contract requires reproduction test, but exit code failed
+    job_failed = {
+        "job_id": "test-2",
+        "verification_contracts": ["mandatory_reproduction_test"],
+        "exit_code": 1,
+    }
+    assert check_job_verification_contract(job_failed) is False
+
+    # Contract requires reproduction test with valid test receipt
+    job_receipt = {
+        "job_id": "test-3",
+        "verification_contracts": ["mandatory_reproduction_test"],
+        "exit_code": 0,
+        "test_receipt": True,
+    }
+    assert check_job_verification_contract(job_receipt) is True
+
+    # Contract requires reproduction test but no receipt and no worktree
+    job_no_receipt = {
+        "job_id": "test-4",
+        "verification_contracts": ["mandatory_reproduction_test"],
+        "exit_code": 0,
+        "test_receipt": False,
+    }
+    assert check_job_verification_contract(job_no_receipt) is False
+

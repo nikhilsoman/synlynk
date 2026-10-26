@@ -1204,6 +1204,14 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     sentinel_clear_parser.add_argument("--code",
                                        help="Clear only alerts with this code")
 
+    maintainer_parser = subparsers.add_parser("maintainer",
+                                              help="Workspace maintainer operations and sentinel triage")
+    maintainer_sub = maintainer_parser.add_subparsers(dest="maintainer_action")
+    maintainer_triage_parser = maintainer_sub.add_parser("triage", help="Triage active sentinel alerts")
+    maintainer_triage_parser.add_argument("--max-age-days", type=int, default=7, help="Max age in days to consider")
+    maintainer_probe_parser = maintainer_sub.add_parser("probe", help="Probe reproduction for an alert code")
+    maintainer_probe_parser.add_argument("--code", required=True, help="Alert code to probe")
+
     dispatch_parser = subparsers.add_parser(
         "dispatch", help="Dispatch a harness to run a task in the background")
     known_agents = sorted(HARNESS_CAPABILITY_BASELINES)
@@ -2689,6 +2697,24 @@ def main(argv=None) -> None:
             )
         else:
             sentinel_list()  # default: list
+    elif args.command == "maintainer":
+        from synlynk.maintainer import triage_sentinel_alerts, probe_reproduction
+        action = getattr(args, "maintainer_action", None)
+        if action == "probe":
+            code = getattr(args, "code", "")
+            res = probe_reproduction({"code": code})
+            status = "reproduced" if res["reproduced"] else "not reproduced"
+            print(f"Probe {code}: {status} (exit code {res['exit_code']})")
+        else:
+            groups = triage_sentinel_alerts(max_age_days=getattr(args, "max_age_days", 7))
+            if not groups:
+                print("No active sentinel alerts to triage.")
+            else:
+                print(f"Found {len(groups)} recurring sentinel alert group(s):\n")
+                for g in groups:
+                    print(f"  [{g['severity']}] {g['code']} ({g['total_occurrences']} occurrences)")
+                    for m in g.get("sample_messages", [])[:2]:
+                        print(f"    - {m}")
     elif args.command == "dispatch":
         _warn_deprecated_harness_flag(cli_tokens)
         known_agents = sorted(HARNESS_CAPABILITY_BASELINES)

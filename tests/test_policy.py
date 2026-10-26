@@ -349,3 +349,13 @@ def test_get_role_permission_profile_reads_defaults_and_overrides(tmp_path, monk
     override_profile = get_role_permission_profile("qa", repo_path=str(repo))
     assert override_profile["allowed_tools"] == ["custom_qa_tool"]
 
+
+def test_check_conductor_authority_allows_quad_harnesses():
+    from synlynk.policy import check_conductor_authority
+    assert check_conductor_authority("claude") is True
+    assert check_conductor_authority("agy") is True
+    assert check_conductor_authority("codex") is True
+    assert check_conductor_authority("grok") is True
+    assert check_conductor_authority("unknown-harness") is False
+
+
