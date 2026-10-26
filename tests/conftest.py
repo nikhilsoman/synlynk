@@ -5,7 +5,7 @@ import subprocess
 import shutil
 import pytest
 
-os.environ.setdefault("SYNLYNK_REGISTRY_PATH", "/tmp/synlynk-test-registry.json")
+os.environ.setdefault("SYNLYNK_REGISTRY_PATH", f"/tmp/synlynk-test-reg-{os.getpid()}.json")
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -45,6 +45,7 @@ def isolated_db(tmp_path, monkeypatch):
 
     monkeypatch.setattr(synlynk, "DB_PATH", str(tmp_path / "state.db"))
     monkeypatch.setenv("SYNLYNK_TEST_ISOLATED_DB", "1")
+    monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(tmp_path / "registry.json"))
 
 
 @pytest.fixture(autouse=True)
