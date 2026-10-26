@@ -16,6 +16,18 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
 
+## [v0.26.1] - 2026-10-26
+### Added
+- feat(charters): Markdown-first canonical schema 2.0 unification with expanded authorities, escalation triggers, and embedded `DEFAULT_ROLE_CHARTERS` fallback (gh:#2305) (#2621)
+- feat(charters): superpowers skill binding (`test-driven-development`, `systematic-debugging`, `brainstorming`) with in-flight mandatory prompt contracts and post-flight test receipt verification gates (gh:#2305) (#2621)
+- feat(maintainer): autonomous Maintainer role charter and sentinel alert triage loop (`synlynk maintainer triage` / `synlynk maintainer probe`) with automated reproduction issue generation (story-2e48a8c5) (#2621)
+- feat(policy): multi-harness Mode A Home Conductor authorization for Claude, Agy, Codex, and Grok with strict non-author review separation (gh:#2488) (#2621)
+- docs(architecture): Google Research Harness² (arXiv:2610.14224) 8-component architecture mapping and dual-recursion Propose-Probe-Compose model (#2621)
+### Fixed
+- fix(session): cross-session active claim atomic flock locking preventing concurrent multi-session race collisions (gh:#2511) (#2621)
+- fix(dispatch): preflight worktree collision resilience with stale orphan `job-<id>` directory pruning (gh:#2185) (#2621)
+- fix(dispatch): preflight capacity gate respecting explicit `--task-type` over raw prompt regex heuristics (gh:#2233) (#2621)
+
 ## [v0.26.0] - 2026-10-26
 ### Added
 - feat(selftest): dedicated real-launch live command selftest scenarios for long-running daemons (`watch` and `viz`) with health and port verification (gh:#422) (#2619)

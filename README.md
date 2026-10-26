@@ -6,15 +6,15 @@
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
 <p align="center">
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5115%20collected-brightgreen" alt="Tests"</a>
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.26.0-blue" alt="Version"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5124%20collected-brightgreen" alt="Tests"</a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.26.1-blue" alt="Version"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
 </p>
 
 Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. The Python CLI injects scoped project context into every dispatch, uses empirical harness allocation only after a harness has at least five completed, merged jobs for the relevant task type, and follows the documented interim policy until then. See the [empirical capability policy](docs/blog/244-chore-empirical-capability-policy.md) and [routing policy](.synlynk/policy.json). Synlynk also tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
-**v0.26.0:** Daemon reliability. Guarantees daemon stop idempotence across unstarted, stopped, and running states (gh:#2464), enforces macOS fork-safety and canonical absolute PEM resolution across worktrees (gh:#1884), isolates active selftest workspaces with PID liveness protection (gh:#2407), adds dedicated live launch scenarios for `watch` and `viz` (gh:#422), and introduces 30-day TTL aging and deduplication rollups for sentinel alerts (story-a4442387), with 5115 tests collected.
+**v0.26.1:** Workspace-agent charter and role operations. Unifies Markdown-first canonical charter schema 2.0 with embedded fallback (gh:#2305), binds superpowers skills with mandatory prompt contracts and post-flight test receipt verification gates (gh:#2305), operationalizes autonomous Maintainer role with sentinel alert triage and automated reproduction issue generation (story-2e48a8c5), authorizes multi-harness Mode A Home Conductors with strict non-author review separation (gh:#2488), incorporates Google Research Harness² architecture (arXiv:2610.14224), and hardens dispatch worktrees and claim concurrency (#2511, #2185, #2233), with 5124 tests collected.
 
 ## Documentation
 
