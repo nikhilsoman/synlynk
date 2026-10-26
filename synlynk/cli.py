@@ -401,7 +401,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     help_parser.add_argument("--all", action="store_true", help="Show every taxonomy command")
 
     init_parser = subparsers.add_parser("init", help="Initialize synlynk in a repository")
-    init_parser.add_argument("--yes", "--non-interactive", action="store_true",
+    init_parser.add_argument("--yes", "--non-interactive", "--auto-defaults", action="store_true",
                              dest="non_interactive",
                              help="Use safe defaults without prompting (also used when stdin is not a terminal)")
     init_parser.add_argument("--force", action="store_true",
@@ -769,7 +769,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
 
     doctor_parser = subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
     doctor_parser.add_argument("--fix", default=None,
-                               help="Apply a targeted remediation (agy or roadmap)")
+                               help="Apply a targeted remediation (agy, roadmap, or cli)")
     doctor_parser.add_argument("--yes", action="store_true",
                                help="Write the proposed remediation without prompting")
     doctor_parser.add_argument("--live-probe", action="store_true",

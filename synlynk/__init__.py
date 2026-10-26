@@ -319,6 +319,9 @@ def _get_project_root() -> str:
 
 def _resolve_db_path() -> str:
     """Resolve the product graph, migrating the legacy path once if needed."""
+    if os.environ.get("SYNLYNK_STATE_DB_PATH"):
+        return os.environ["SYNLYNK_STATE_DB_PATH"]
+
     from synlynk.product_store import identity_slug_from_config, migrate_state_db_if_needed, state_db_path
     from synlynk.state_registry import canonical_path
 

@@ -81,6 +81,125 @@ def _hc_python_version() -> HealthCheck:
     )
 
 
+def _find_all_synlynk_on_path() -> _List[str]:
+    path_dirs = os.environ.get("PATH", "").split(os.pathsep)
+    candidates: _List[str] = []
+    seen = set()
+    for d in path_dirs:
+        d = d.strip()
+        if not d:
+            continue
+        candidate = os.path.join(d, "synlynk")
+        try:
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                norm = os.path.normpath(candidate)
+                if norm not in seen:
+                    seen.add(norm)
+                    candidates.append(norm)
+        except OSError:
+            continue
+    return candidates
+
+
+def _hc_cli_entrypoint_health() -> HealthCheck:
+    """Verifies that the active synlynk binary is executable, clean of import errors,
+    owned by the current user, and not shadowed by shared/system paths.
+    """
+    active_bin = shutil.which("synlynk")
+    if not active_bin:
+        return HealthCheck(
+            "cli_entrypoint_health",
+            "fail",
+            "synlynk CLI binary not found on PATH",
+            fix="Install via pipx: pipx install synlynk or curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | sh",
+        )
+
+    if not os.access(active_bin, os.X_OK):
+        return HealthCheck(
+            "cli_entrypoint_health",
+            "fail",
+            f"synlynk binary at {active_bin} is not executable",
+            fix=f"Run: chmod +x {active_bin}",
+        )
+
+    # 1. Test execution of synlynk --version
+    try:
+        proc = subprocess.run(
+            [active_bin, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        output = (proc.stdout or proc.stderr).strip()
+        if proc.returncode != 0:
+            return HealthCheck(
+                "cli_entrypoint_health",
+                "fail",
+                f"Active synlynk binary at {active_bin} failed execution (code {proc.returncode}): {output}",
+                fix="Reinstall via pipx or install.sh to repair broken entrypoint",
+            )
+        if "ModuleNotFoundError" in output:
+            return HealthCheck(
+                "cli_entrypoint_health",
+                "fail",
+                f"Active synlynk binary at {active_bin} has missing module dependencies: {output}",
+                fix="Reinstall via pipx or install.sh to repair broken entrypoint",
+            )
+    except Exception as exc:
+        return HealthCheck(
+            "cli_entrypoint_health",
+            "fail",
+            f"Failed to execute synlynk binary at {active_bin}: {exc}",
+            fix="Reinstall via pipx or install.sh to repair broken entrypoint",
+        )
+
+    # 2. Check ownership
+    current_uid = os.getuid() if hasattr(os, "getuid") else None
+    try:
+        st = os.stat(active_bin)
+        bin_uid = st.st_uid
+    except OSError:
+        bin_uid = None
+
+    if current_uid is not None and bin_uid is not None and bin_uid != current_uid:
+        return HealthCheck(
+            "cli_entrypoint_health",
+            "warn",
+            f"Active synlynk binary at {active_bin} is owned by foreign UID {bin_uid} (current UID {current_uid}), risking permission lockouts and profile collisions.",
+            fix="Install synlynk in user-local space via 'pipx install synlynk' and clean up foreign binary",
+        )
+
+    # 3. Check for PATH shadowing: shared location shadowing user-local location
+    home = os.path.expanduser("~")
+    all_bins = _find_all_synlynk_on_path()
+    if len(all_bins) > 1:
+        first_is_user = os.path.abspath(all_bins[0]).startswith(os.path.abspath(home))
+        user_binaries = [b for b in all_bins[1:] if os.path.abspath(b).startswith(os.path.abspath(home))]
+        if not first_is_user and user_binaries:
+            user_bin = user_binaries[0]
+            return HealthCheck(
+                "cli_entrypoint_health",
+                "warn",
+                f"Shared binary at {all_bins[0]} shadows user-isolated installation at {user_bin}. Prioritize user directory in PATH.",
+                fix="Add 'export PATH=\"$HOME/.local/bin:$PATH\"' to ~/.zshrc or ~/.bashrc, or run 'synlynk doctor --fix cli'",
+            )
+
+    # 4. Check version parity
+    if VERSION not in output:
+        return HealthCheck(
+            "cli_entrypoint_health",
+            "warn",
+            f"Active synlynk binary reports '{output}', differing from package version v{VERSION}.",
+            fix="Run 'synlynk upgrade' or reinstall via pipx to sync versions",
+        )
+
+    return HealthCheck(
+        "cli_entrypoint_health",
+        "ok",
+        f"Active CLI binary at {active_bin} (v{VERSION}) is healthy and user-isolated",
+    )
+
+
 def _hc_project_init() -> HealthCheck:
     if os.path.exists(".synlynk/workspace.json") or os.path.exists(".synlynk/config.json"):
         return HealthCheck("project_init", "ok", ".synlynk/workspace.json present")
@@ -804,9 +923,54 @@ def _apply_fix_plan(plan: FixPlan, operator: str) -> None:
     )
 
 
+def _fix_cli_path(args=None) -> int:
+    home = Path(os.path.expanduser("~"))
+    shell = os.environ.get("SHELL", "")
+    if "zsh" in shell:
+        rc_file = home / ".zshrc"
+    else:
+        rc_file = home / ".bashrc"
+
+    if not rc_file.exists():
+        fallback_rc = home / ".zshrc" if (home / ".zshrc").exists() else home / ".bashrc"
+        rc_file = fallback_rc
+
+    export_line = 'export PATH="$HOME/.local/bin:$PATH"'
+    content = rc_file.read_text(encoding="utf-8") if rc_file.exists() else ""
+
+    if export_line not in content:
+        should_write = True
+        if args is not None and not getattr(args, "yes", False):
+            should_write = _confirm_fix(f"Add user-local PATH precedence to {rc_file}?", args=args)
+        if should_write:
+            with open(rc_file, "a", encoding="utf-8") as f:
+                f.write(f"\n# Added by synlynk doctor --fix cli: ensure user-local binaries precede shared binaries\n{export_line}\n")
+            print(f"  Wrote user-local PATH precedence to {rc_file}")
+        else:
+            print(f"  Aborted adding PATH precedence to {rc_file}")
+            return 1
+    else:
+        print(f"  PATH configuration in {rc_file} already includes user-local bin precedence.")
+
+    # Check for foreign/broken shared binaries
+    for shared_path in ["/opt/homebrew/bin/synlynk", "/usr/local/bin/synlynk"]:
+        p = Path(shared_path)
+        if p.exists():
+            try:
+                p.unlink()
+                print(f"  Removed obsolete shared binary {shared_path}")
+            except OSError:
+                print(f"  ⚠ Notice: To remove foreign-owned shared binary, run:")
+                print(f"    sudo rm -f {shared_path}")
+
+    return 0
+
+
 def cmd_doctor_fix(agent: str, args=None) -> int:
+    if agent == "cli":
+        return _fix_cli_path(args=args)
     if agent != "agy":
-        raise ValueError("synlynk doctor --fix currently supports only agy")
+        raise ValueError("synlynk doctor --fix currently supports agy, roadmap, or cli")
 
     plans = [_build_agy_fix_plan(), _build_agy_stitch_fix_plan()]
     active_plans = [p for p in plans if p.needs_write]
@@ -1217,6 +1381,7 @@ def _hc_daemon_liveness() -> HealthCheck:
 
 HEALTH_CHECKS = [
     _hc_python_version,
+    _hc_cli_entrypoint_health,
     _hc_project_init,
     _hc_identity_slug,
     _hc_config_schema,

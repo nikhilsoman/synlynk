@@ -36,34 +36,72 @@ class TargetResolver:
             return ResolvedTarget(kind="git_ref", ref=target)
 
 
+def _build_pure_wheel(workspace_root: Path, out_dir: Path) -> Path:
+    """Build a PEP 427 pure-Python wheel directly without external build dependencies."""
+    import zipfile
+    from synlynk._constants import VERSION
+
+    whl_name = f"synlynk-{VERSION}-py3-none-any.whl"
+    whl_path = out_dir / whl_name
+    synlynk_dir = workspace_root / "synlynk"
+
+    with zipfile.ZipFile(whl_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for root, dirs, files in os.walk(synlynk_dir):
+            dirs[:] = [d for d in dirs if d != "__pycache__" and not d.startswith(".")]
+            for f in files:
+                if f.endswith(".pyc") or f.startswith("."):
+                    continue
+                full_path = Path(root) / f
+                rel_path = full_path.relative_to(workspace_root)
+                zf.write(full_path, str(rel_path))
+
+        dist_info = f"synlynk-{VERSION}.dist-info"
+        zf.writestr(
+            f"{dist_info}/METADATA",
+            f"Metadata-Version: 2.1\nName: synlynk\nVersion: {VERSION}\nSummary: Coordination OS for multi-agent development\n",
+        )
+        zf.writestr(
+            f"{dist_info}/WHEEL",
+            "Wheel-Version: 1.0\nGenerator: synlynk-wheel-builder\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+        )
+        zf.writestr(
+            f"{dist_info}/entry_points.txt",
+            "[console_scripts]\nsynlynk = synlynk:main\n",
+        )
+        zf.writestr(f"{dist_info}/RECORD", "")
+
+    return whl_path
+
+
 def build_local_wheel(workspace_root: Path, output_dir: Optional[Path] = None) -> Path:
     """Builds a Python wheel or installable package from local workspace."""
     out_dir = output_dir or Path(tempfile.mkdtemp(prefix="synlynk_testbed_wheel_"))
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Use python -m build or flit or pip wheel
+    # Try standard tools first (build or pip wheel)
     try:
         subprocess.run(
-            ["python3", "-m", "pip", "wheel", "--no-deps", "-w", str(out_dir), str(workspace_root)],
+            [sys.executable, "-m", "build", "--wheel", "-o", str(out_dir), str(workspace_root)],
             capture_output=True,
             text=True,
             check=True,
         )
     except Exception:
-        # Fallback to direct directory copy / tarball if build tool unavailable
-        archive_path = out_dir / "synlynk_pkg.tar.gz"
-        subprocess.run(
-            ["tar", "-czf", str(archive_path), "-C", str(workspace_root), "synlynk", "pyproject.toml"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return archive_path
+        try:
+            subprocess.run(
+                ["python3", "-m", "pip", "wheel", "--no-deps", "-w", str(out_dir), str(workspace_root)],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except Exception:
+            # Build wheel directly via zipfile generator
+            return _build_pure_wheel(workspace_root, out_dir)
 
     wheels = list(out_dir.glob("*.whl"))
     if wheels:
         return wheels[0]
-    raise RuntimeError(f"Failed to generate wheel in {out_dir}")
+    return _build_pure_wheel(workspace_root, out_dir)
 
 
 def install_target_on_node(
@@ -83,21 +121,27 @@ def install_target_on_node(
         "which python3 || (sudo apt-get update -y && sudo apt-get install -y python3 python3-pip git sqlite3 iptables iproute2)",
     )
 
+    uid = os.getuid() if hasattr(os, "getuid") else "0"
+    remote_tmp = f"/tmp/synlynk-{uid}"
+    driver.exec_command(node_id, f"mkdir -p -m 0700 {remote_tmp}")
+
     if resolved.kind == "local_build":
         root = workspace_root or Path.cwd()
         wheel_path = build_local_wheel(root)
-        remote_dest = f"/tmp/{wheel_path.name}"
+        remote_dest = f"{remote_tmp}/{wheel_path.name}"
         driver.copy_file(node_id, str(wheel_path), remote_dest)
         res = driver.exec_command(node_id, f"pip3 install --break-system-packages --force-reinstall {remote_dest} || pip3 install --force-reinstall {remote_dest}")
         return res.ok
 
     elif resolved.kind == "git_ref":
-        cmd = f"rm -rf /tmp/synlynk_src && git clone --depth 1 -b {resolved.ref} {repo_url} /tmp/synlynk_src && pip3 install --break-system-packages -e /tmp/synlynk_src || pip3 install -e /tmp/synlynk_src"
+        src_dir = f"{remote_tmp}/synlynk_src"
+        cmd = f"rm -rf {src_dir} && git clone --depth 1 -b {resolved.ref} {repo_url} {src_dir} && pip3 install --break-system-packages -e {src_dir} || pip3 install -e {src_dir}"
         res = driver.exec_command(node_id, cmd)
         return res.ok
 
     elif resolved.kind == "git_commit":
-        cmd = f"rm -rf /tmp/synlynk_src && git clone {repo_url} /tmp/synlynk_src && cd /tmp/synlynk_src && git checkout {resolved.ref} && (pip3 install --break-system-packages -e . || pip3 install -e .)"
+        src_dir = f"{remote_tmp}/synlynk_src"
+        cmd = f"rm -rf {src_dir} && git clone {repo_url} {src_dir} && cd {src_dir} && git checkout {resolved.ref} && (pip3 install --break-system-packages -e . || pip3 install -e .)"
         res = driver.exec_command(node_id, cmd)
         return res.ok
 

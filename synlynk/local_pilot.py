@@ -17,6 +17,8 @@ import sys
 from pathlib import PurePosixPath
 from typing import Optional
 
+from synlynk.runtime import get_user_tmp_dir
+
 
 PILOT_CLASSES = frozenset(
     {
@@ -316,11 +318,12 @@ def build_isolated_compose_shell(
     else:
         isolated_args.extend(["--openai-api-base", endpoint])
     isolated_args.extend(["--no-check-update", "--no-analytics"])
+    user_tmp = get_user_tmp_dir()
     isolated_args.extend(
         [
-            "--chat-history-file", "/tmp/aider-chat.md",
-            "--input-history-file", "/tmp/aider-input",
-            "--llm-history-file", "/tmp/aider-llm.md",
+            "--chat-history-file", str(user_tmp / "aider-chat.md"),
+            "--input-history-file", str(user_tmp / "aider-input"),
+            "--llm-history-file", str(user_tmp / "aider-llm.md"),
             "--no-restore-chat-history", "--no-stream", "--no-gitignore",
         ]
     )

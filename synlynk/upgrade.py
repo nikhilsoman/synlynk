@@ -179,6 +179,31 @@ def _warn_stale_script_install() -> None:
     print("    Your pipx install at ~/.local/bin/synlynk is the active version")
 
 
+def _audit_cli_path_precedence() -> None:
+    """Audit PATH precedence post-upgrade to ensure user-local installation is not shadowed."""
+    import shutil
+
+    resolved = shutil.which("synlynk")
+    if not resolved:
+        print("  ⚠ Warning: 'synlynk' binary not found on PATH.")
+        print('    Add user-local bin to PATH: export PATH="$HOME/.local/bin:$PATH"')
+        return
+
+    home = os.path.expanduser("~")
+    resolved_abs = os.path.abspath(resolved)
+    if not resolved_abs.startswith(os.path.abspath(home)):
+        user_local_bin = os.path.join(home, ".local", "bin", "synlynk")
+        standalone_bin = os.path.join(home, ".synlynk", "releases", "current", "bin", "synlynk")
+        if os.path.exists(user_local_bin) or os.path.exists(standalone_bin):
+            target = user_local_bin if os.path.exists(user_local_bin) else standalone_bin
+            print("  ⚠ WARNING: PATH SHADOWING DETECTED!")
+            print(f"    Active 'synlynk' resolves to shared system binary: {resolved_abs}")
+            print(f"    This shadows your user-isolated installation at: {target}")
+            print("    To prioritize your user-isolated installation, run:")
+            print('      export PATH="$HOME/.local/bin:$PATH"')
+            print("    Or run: synlynk doctor --fix cli")
+
+
 def _ensure_vizor_daemon_installed() -> None:
     """Idempotently register the Vizor daemon service for existing installs."""
     try:
@@ -244,6 +269,7 @@ def upgrade(dry_run: bool = False) -> None:
             print("  Check manually: https://github.com/nikhilsoman/synlynk/releases")
     finally:
         warn_stale_script_install()
+        _audit_cli_path_precedence()
         package = sys.modules.get("synlynk")
         ensure_vizor_daemon_installed = getattr(
             package, "_ensure_vizor_daemon_installed", _ensure_vizor_daemon_installed
