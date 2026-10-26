@@ -3950,5 +3950,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2622 \u2014 prepare collateral and README for v0.26.1 (#2621) (PR #2622, v0.26.1)\n\n\u2022 Merged improvements and fixes for PR #2622.\n\n#posts",
     "changelog": "### v0.26.1 (2026-10-26) - PR #2622\n- Merged improvements and fixes for PR #2622."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/494-pr2623-post-v0-26-1-housekeeping-sync-for-todo-.md",
+    "title": "PR #2623 \u2014 post-v0.26.1 housekeeping sync for todo, costs, and memory",
+    "author": "nikhilsoman",
+    "date": "2026-10-26",
+    "pr": "#2623",
+    "version": "0.26.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2623."
+    ],
+    "tweet": "\ud83d\ude80 PR #2623 \u2014 post-v0.26.1 housekeeping sync for todo, costs, and memory (PR #2623, v0.26.1)\n\n\u2022 Merged improvements and fixes for PR #2623.\n\n#posts",
+    "changelog": "### v0.26.1 (2026-10-26) - PR #2623\n- Merged improvements and fixes for PR #2623."
   }
 ]

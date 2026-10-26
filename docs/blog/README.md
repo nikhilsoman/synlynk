@@ -572,6 +572,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [491](./491-pr2620-prepare-collateral-and-readme-for-v0-26-.md) | PR #2620 — prepare collateral and README for v0.26.0 | [#2620](https://github.com/nikhilsoman/synlynk/pull/2620) | 2026-10-25 |
 | [492](./492-pr2621-implement-workspace-agent-operations-and.md) | PR #2621 — implement workspace-agent operations and role governance (v0.26.1) | [#2621](https://github.com/nikhilsoman/synlynk/pull/2621) | 2026-10-26 |
 | [493](./493-pr2622-prepare-collateral-and-readme-for-v0-26-.md) | PR #2622 — prepare collateral and README for v0.26.1 (#2621) | [#2622](https://github.com/nikhilsoman/synlynk/pull/2622) | 2026-10-26 |
+| [494](./494-pr2623-post-v0-26-1-housekeeping-sync-for-todo-.md) | PR #2623 — post-v0.26.1 housekeeping sync for todo, costs, and memory | [#2623](https://github.com/nikhilsoman/synlynk/pull/2623) | 2026-10-26 |
 
 ## Per-PR Post Template
 
