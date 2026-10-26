@@ -966,11 +966,71 @@ def _fix_cli_path(args=None) -> int:
     return 0
 
 
+def _fix_task_leases() -> int:
+    """Auto-remediation for orphaned/expired task leases (gh:#2511, #2528)."""
+    import time
+    try:
+        from synlynk import _get_db
+        conn = _get_db()
+    except Exception as e:
+        print(f"  Error: database unavailable: {e}")
+        return 1
+
+    try:
+        from synlynk.jobs import _pid_is_alive
+        rows = conn.execute(
+            "SELECT lease_id, story_id, pid, expires_at FROM task_leases WHERE status='active'"
+        ).fetchall()
+        now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        reclaimed_count = 0
+        affected_stories = set()
+
+        for lease_id, story_id, pid, exp in rows:
+            is_expired = exp < now_str
+            is_dead = False
+            if pid is not None:
+                is_dead = not _pid_is_alive(pid)
+            if is_expired or is_dead:
+                conn.execute(
+                    "UPDATE task_leases SET status='expired' WHERE lease_id=?",
+                    (lease_id,),
+                )
+                reclaimed_count += 1
+                if story_id:
+                    affected_stories.add(story_id)
+
+        for story_id in affected_stories:
+            active_worker = conn.execute(
+                "SELECT 1 FROM daemon_jobs WHERE story_id=? AND status IN ('running', 'queued')",
+                (story_id,),
+            ).fetchone()
+            active_other_lease = conn.execute(
+                "SELECT 1 FROM task_leases WHERE story_id=? AND status='active'",
+                (story_id,),
+            ).fetchone()
+            if not active_worker and not active_other_lease:
+                conn.execute(
+                    "UPDATE stories SET status='ready', readiness='ready' WHERE story_id=? AND (status='in_progress' OR readiness='in_progress')",
+                    (story_id,),
+                )
+
+        conn.commit()
+        print(f"  ✓ Reclaimed {reclaimed_count} orphaned task lease(s).")
+        return 0
+    finally:
+        conn.close()
+
+
 def cmd_doctor_fix(agent: str, args=None) -> int:
     if agent == "cli":
         return _fix_cli_path(args=args)
+    if agent in ("leases", "task_leases"):
+        return _fix_task_leases()
+    if agent == "roadmap":
+        repair_roadmap_merge_parity()
+        return 0
     if agent != "agy":
-        raise ValueError("synlynk doctor --fix currently supports agy, roadmap, or cli")
+        raise ValueError("synlynk doctor --fix currently supports agy, roadmap, cli, or leases")
 
     plans = [_build_agy_fix_plan(), _build_agy_stitch_fix_plan()]
     active_plans = [p for p in plans if p.needs_write]
@@ -1344,6 +1404,53 @@ def _hc_daemon_service() -> HealthCheck:
     )
 
 
+def _hc_task_leases_integrity() -> HealthCheck:
+    """Verify task leases in state.db are live and unexpired (gh:#2511, #2528)."""
+    import time
+    try:
+        from synlynk import _get_db
+        conn = _get_db(read_only=True)
+    except Exception as e:
+        return HealthCheck(
+            "task_leases_integrity",
+            "ok",
+            f"Database unavailable ({e}); check skipped",
+        )
+
+    try:
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        if "task_leases" not in tables:
+            return HealthCheck("task_leases_integrity", "ok", "task_leases table not present")
+
+        rows = conn.execute(
+            "SELECT lease_id, story_id, leased_by, pid, harness, expires_at FROM task_leases WHERE status='active'"
+        ).fetchall()
+
+        now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        from synlynk.jobs import _pid_is_alive
+
+        orphaned = []
+        for row in rows:
+            lease_id, story_id, leased_by, pid, harness, exp = row
+            is_expired = exp < now_str
+            is_dead = False
+            if pid is not None:
+                is_dead = not _pid_is_alive(pid)
+            if is_expired or is_dead:
+                orphaned.append(row)
+
+        if orphaned:
+            return HealthCheck(
+                "task_leases_integrity",
+                "warn",
+                f"{len(orphaned)} orphaned or expired lease(s) detected",
+                fix="Run 'synlynk doctor --fix leases' (or 'synlynk story reclaim')",
+            )
+        return HealthCheck("task_leases_integrity", "ok", "All active task leases are healthy")
+    finally:
+        conn.close()
+
+
 def _hc_daemon_liveness() -> HealthCheck:
     """Detect a dead synlynk daemon process, including the gh:#2261 detached-child case."""
     from synlynk.daemon import (
@@ -1410,6 +1517,7 @@ HEALTH_CHECKS = [
     _hc_memory_leak,
     _hc_daemon_service,
     _hc_daemon_liveness,
+    _hc_task_leases_integrity,
 ]
 
 
@@ -1446,6 +1554,8 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
     if args is not None and getattr(args, "fix", None) == "roadmap":
         repair_roadmap_merge_parity()
         return 0
+    if args is not None and getattr(args, "fix", None) in ("leases", "task_leases"):
+        return _fix_task_leases()
     if args is not None and getattr(args, "version", False) is True:
         from synlynk.release_authority import (
             format_version_authority_report,

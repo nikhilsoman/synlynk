@@ -4208,6 +4208,56 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
     return candidate
 
 
+def _verify_dispatch_story_lease(story_id: str, override: bool = False, conn=None) -> None:
+    """Pre-dispatch lease verification in story resolution (gh:#2511, #2528).
+
+    If an interactive home session holds an unexpired claim on story_id,
+    dispatch fails immediately unless override is passed.
+    """
+    if not story_id or str(story_id).startswith("story-adhoc-"):
+        return
+    owns_conn = False
+    if conn is None:
+        try:
+            from synlynk import _get_db
+            conn = _get_db()
+            owns_conn = True
+        except Exception as e:
+            import logging
+            logging.getLogger("synlynk").warning(
+                "Advisory: database unavailable for dispatch lease check: %s", e
+            )
+            return
+
+    try:
+        from synlynk.jobs import get_active_lease, _pid_is_alive
+        lease = get_active_lease(story_id, conn=conn)
+        if lease and lease.get("status") == "active":
+            now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            is_expired = lease["expires_at"] < now_str
+            holder_pid = lease.get("pid")
+            is_dead = False
+            if holder_pid is not None:
+                is_dead = not _pid_is_alive(holder_pid)
+            if not is_expired and not is_dead:
+                if not override:
+                    leased_by = lease.get("leased_by") or f"{lease.get('harness')}:{holder_pid}"
+                    raise RuntimeError(
+                        f"Story {story_id} is currently claimed by active home session {leased_by}"
+                    )
+                else:
+                    conn.execute(
+                        "UPDATE task_leases SET status='expired' WHERE lease_id=?",
+                        (lease["lease_id"],),
+                    )
+                    conn.commit()
+    finally:
+        if owns_conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
 
 def dispatch_agent(agent: str, task: str, story_id: str = None,
                    agent_id: str = None,
@@ -4243,7 +4293,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    container_image: str | None = None,
                    routing_fallback: Optional[dict] = None,
                    local_pilot_receipt: Optional[dict] = None,
-                   local_pilot_requested: bool = False) -> dict:
+                   local_pilot_requested: bool = False,
+                   override: bool = False) -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
@@ -4270,7 +4321,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             task_domain=task_domain, criticality=criticality, lambda_=lambda_,
             db_conn=None, _startup_failover=_startup_failover, pr=pr,
             skip_permissions=skip_permissions, container_image=None,
-            local_pilot_requested=False,
+            local_pilot_requested=False, override=override,
         )
     if local_pilot_receipt:
         if (
@@ -4751,6 +4802,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             )
         else:
             story_id = resolve_or_create_story_id(task, issue=issue, timestamp=dispatch_time)
+
+    # Pre-dispatch lease verification in story resolution (gh:#2511, #2528)
+    _verify_dispatch_story_lease(caller_story_id or story_id, override=override, conn=dconn)
 
     baselines = baselines_map[agent]
     cli = baselines["cli"]
@@ -5517,6 +5571,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 container_image=container_image,
                 skip_permissions=skip_permissions,
                 routing_fallback=failover_route,
+                override=override,
             )
 
     if local_pilot_receipt:
@@ -5847,6 +5902,23 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn.close()
             except Exception:
                 pass
+
+    effective_story = caller_story_id or story_id
+    if effective_story and not str(effective_story).startswith("story-adhoc-") and not container_failed:
+        try:
+            from synlynk.jobs import acquire_task_lease
+            dispatch_session = f"dispatch:{agent}:{job_id}"
+            acquire_task_lease(
+                effective_story,
+                dispatch_session,
+                duration_seconds=3600,
+                pid=getattr(proc, "pid", None),
+                harness=agent,
+                override=True,
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger("synlynk").warning("Advisory: could not record dispatch task lease: %s", e)
 
     if local_pilot_control is not None:
         threading.Thread(

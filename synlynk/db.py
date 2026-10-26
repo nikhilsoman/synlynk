@@ -4359,6 +4359,124 @@ def cmd_story_done(story_id: str, conn=None) -> None:
     print(f"  {_GREEN}✓{_RESET} Story {story_id} marked done")
 
 
+def cmd_story_update(
+    story_id: str,
+    status: Optional[str] = None,
+    stage: Optional[str] = None,
+    title: Optional[str] = None,
+    role: Optional[str] = None,
+    phase: Optional[str] = None,
+    override: bool = False,
+    harness: Optional[str] = None,
+    duration_seconds: int = 2700,
+    conn=None,
+) -> int:
+    """Updates story fields in state.db.
+
+    When transitioning to status='in_progress', automatically acquires a task_lease
+    and registers an active claim. If a conflicting active lease exists and override=False,
+    refuses transition with exit code 1.
+    """
+    import os
+    import socket
+    from synlynk import _GREEN, _RESET, _get_db
+    from synlynk.jobs import acquire_task_lease
+    from synlynk.context import detect_active_home_harness
+    from synlynk.session import _add_active_claim, _remove_active_claim
+
+    owns_conn = False
+    if conn is None:
+        try:
+            conn = _get_db()
+            owns_conn = True
+        except Exception as e:
+            import logging
+            logging.getLogger("synlynk").warning(
+                "Advisory warning: database unavailable for story update: %s", e
+            )
+            return 0
+
+    try:
+        story = conn.execute(
+            "SELECT story_id, title, status, readiness FROM stories WHERE story_id=?",
+            (story_id,),
+        ).fetchone()
+        if not story:
+            print(f"  Error: Story '{story_id}' not found.")
+            return 1
+
+        if status == "in_progress":
+            effective_harness = harness or detect_active_home_harness()
+            session_id = f"{effective_harness}:{socket.gethostname()}:{os.getpid()}"
+            result = acquire_task_lease(
+                story_id,
+                session_id,
+                duration_seconds=duration_seconds,
+                pid=os.getpid(),
+                harness=effective_harness,
+                override=override,
+                conn=conn,
+            )
+            if not result.get("acquired"):
+                print(f"\n  synlynk story update REFUSED — story={story_id} already claimed")
+                print(f"  Held by harness={result.get('harness')}  leased_by={result.get('leased_by')}  expires_at={result.get('expires_at')}")
+                print("  Pass --override to force-take this claim.\n")
+                return 1
+            try:
+                _add_active_claim(story_id, result["lease_id"])
+            except OSError:
+                pass
+        elif status == "done":
+            cmd_story_done(story_id, conn=conn)
+        elif status in ("ready", "draft"):
+            conn.execute(
+                "UPDATE stories SET status=?, readiness=? WHERE story_id=?",
+                (status, status, story_id),
+            )
+            conn.execute(
+                "UPDATE task_leases SET status='released' WHERE story_id=? AND status='active'",
+                (story_id,),
+            )
+            conn.commit()
+            try:
+                _remove_active_claim(story_id)
+            except OSError:
+                pass
+        elif status is not None:
+            conn.execute(
+                "UPDATE stories SET status=? WHERE story_id=?",
+                (status, story_id),
+            )
+            conn.commit()
+
+        # Update other fields if supplied
+        updates = []
+        params = []
+        if title is not None:
+            updates.append("title=?")
+            params.append(title)
+        if stage is not None:
+            updates.append("stage=?")
+            params.append(stage)
+        if role is not None:
+            updates.append("role=?")
+            params.append(role)
+        if phase is not None:
+            updates.append("phase=?")
+            params.append(phase)
+        if updates:
+            params.append(story_id)
+            conn.execute(f"UPDATE stories SET {', '.join(updates)} WHERE story_id=?", params)
+            conn.commit()
+
+        print(f"  {_GREEN}✓{_RESET} Story {story_id} updated successfully")
+        return 0
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+
 def mark_story_done_after_merge(story_id: str, pr_number=None) -> bool:
     """Mark the story linked to a successfully merged PR as done.
 
