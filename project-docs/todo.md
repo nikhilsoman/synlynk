@@ -9,7 +9,7 @@
 - [ ] Operationalize autonomous GOVERNS SDLC: governance, agent ownership, and cost provenance [testing] <!-- id:story-issue-2412 -->
 - [ ] Quota/capacity reservation hardening (candidate branches from scratch-worktree audit) <!-- id:story-8e0596fa -->
 - [ ] Cost-entries turn-usage-JSON migration (candidate branch from scratch-worktree audit) <!-- id:story-ae1b3cda -->
-- [ ] Roadmap v0.26.1: Workspace-agent operations <!-- id:story-97f99c0d -->
+- [x] Roadmap v0.26.1: Workspace-agent operations <!-- id:story-97f99c0d -->
 - [ ] Operationalize autonomous GOVERNS SDLC: governance, agent ownership, and cost provenance [architecture] <!-- id:story-ee4529d9 -->
 - [ ] BS-15: Harness independence — home/away paradigm, OpenRouter direct API, 3rd-party IDE plugins <!-- id:story-ec2802d6 -->
 - [ ] chore(deps-dev): bump markdown-it from 14.2.0 to 14.3.2 in /website [frontend] <!-- id:story-issue-1900 -->
@@ -414,6 +414,29 @@ CRITICAL CONTEXT: your dispatch worktree  [testing] <!-- id:story-issue-2 -->
 - [ ] BS-8: stuck detection + one-shot consult from capability matrix + Expert Consult injection [dispatch] <!-- id:story-bs8-consult -->
 - [ ] BS-8: synlynk probe — ambient harness capability drift detection + publish pipeline [tooling] <!-- id:story-bs8-probe -->
 - [ ] BS-7: brainstorm — skill pack interoperability + benchmarks (Superpowers/GStack/GSD) [platform] <!-- id:story-bs7-interop -->
+- [ ] chore(release): prepare collateral and README for v0.26.1 (#2621) [testing] <!-- id:story-issue-2622 -->
+- [ ] feat(charters): implement workspace-agent operations and role governance (v0.26.1) [testing] <!-- id:story-issue-2621 -->
+- [ ] chore(release): prepare collateral and README for v0.26.0 [testing] <!-- id:story-issue-2620 -->
+- [ ] feat(daemon): v0.26.0 daemon reliability (#2468) [testing] <!-- id:story-issue-2619 -->
+- [ ] docs: session-close housekeeping for v0.25.4 ship + v0.25.5 handoff [testing] <!-- id:story-issue-2610 -->
+- [ ] chore(release): prepare collateral and README for v0.25.5 [testing] <!-- id:story-issue-2613 -->
+- [x] Scope test suite to code changes and optimize PR matrix (#2529) [backend] <!-- id:story-365ec05a -->
+- [x] Fix cleanup_selftest_workspaces PID liveness check (#2527, #2526) [backend] <!-- id:story-44b6094e -->
+- [ ] Review + merge PR #2596: synlynk.com platform vision spec [backend] <!-- id:story-ca8afaf8 -->
+- [ ] Review + merge PR #2597: synlynk work loop design spec (held pending decision) [backend] <!-- id:story-3e509e97 -->
+- [ ] synlynk.com platform vision spec: accounts, entitlements, hosted infra (design-only) [backend] <!-- id:story-6da127b4 -->
+- [ ] chore: sync README test count [testing] <!-- id:story-issue-2591 -->
+- [ ] The README.md test-count badge is stale: 'synlynk release --check-docs' reports README claims 5058 tests collected but 'pytest --collect-only' on current main actually collects 5063. Update README.md' [testing] <!-- id:story-adhoc-1792829412 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text b [testing] <!-- id:story-adhoc-1792829081 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1792828967 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below. DO NOT inspect your local [testing] <!-- id:story-adhoc-1792828919 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1792828807 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  [testing] <!-- id:story-adhoc-1792828737 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792828630 -->
+- [ ] synlynk jobs --all should flag unverified gh-write status instead of surfacing a best-guess failure [docs] <!-- id:story-issue-2138 -->
 - [ ] v0.25.4 E: capability-sweep routing boundary audit [backend] <!-- id:story-0293277d -->
 - [ ] v0.25.4 C: job_timing_metrics extraction [backend] <!-- id:story-7adc5ff4 -->
 - [ ] v0.25.4 B: cost_entries/capability_ratings mismatch guard [backend] <!-- id:story-fc0200e8 -->
@@ -444,7 +467,7 @@ IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  
 - [ ] chore(release): v0.25.3 - Muse readiness and capacity-routing evidence [testing] <!-- id:story-issue-2575 -->
 - [ ] Maintainer role: post-merge housekeeping checklist + Vizor-editable charter instructions [devops] <!-- id:story-09c4a6f9 -->
 - [ ] docs: add Synlynk onboarding guide + enable team mode [testing] <!-- id:story-issue-2565 -->
-- [ ] Capability-sweep executor output is contaminated by stale worktree diff when dispatched from a non-main branch [testing] <!-- id:story-issue-2567 -->
+- [x] Capability-sweep executor output is contaminated by stale worktree diff when dispatched from a non-main branch [testing] <!-- id:story-issue-2567 -->
 - [ ] Write a 3-bullet status update summarizing a completed feature. [backend] <!-- id:story-adhoc-1792806578 -->
 - [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
 IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  [testing] <!-- id:story-adhoc-1792806082 -->
@@ -493,7 +516,7 @@ IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  
 - [ ] CI runtime: retarget rc1 <180s bar off closed #1492, demote 3.10 legs, blocked on #2527 (#2529) [testing] <!-- id:story-63df4546 -->
 - [ ] Local Pilot: Docker relay cannot connect to host auth socket [backend] <!-- id:story-issue-2525 -->
 - [ ] feat: story home claims via task_leases extension (gh:#2511) [testing] <!-- id:story-issue-2524 -->
-- [ ] release-docs stale test-count check breaks under concurrent PR landings [testing] <!-- id:story-issue-2522 -->
+- [x] release-docs stale test-count check breaks under concurrent PR landings [testing] <!-- id:story-issue-2522 -->
 - [ ] Fill Grok & Muse model-roster gaps in .synlynk/models.json [backend] <!-- id:story-issue-2457 -->
 - [ ] feat(local): add fail-closed operational resume control [backend] <!-- id:story-issue-2512 -->
 - [ ] Home-harness claim mechanism is per-checkout/gitignored — doesn't prevent cross-harness collisions <!-- id:story-975493d1 -->
@@ -629,7 +652,7 @@ IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  
 - [ ] synlynk pr check: cross-harness review gate misattributes fix jobs whose task text mentions a prior review <!-- id:story-fa4da945 -->
 - [ ] [Local Harness] P1: qualify Ornith, Qwen 3.6, Bonsai, and Gemma 4 profiles [testing] <!-- id:story-issue-2348 -->
 - [ ] [Local Harness] P1: graduated local-routing pilot and isolated Aider evaluation boundary [testing] <!-- id:story-issue-2349 -->
-- [ ] Dispatch worktrees' default sparse-checkout is too narrow, causes false review blockers [backend] <!-- id:story-issue-2320 -->
+- [x] Dispatch worktrees' default sparse-checkout is too narrow, causes false review blockers [backend] <!-- id:story-issue-2320 -->
 - [ ] Parity/probe SOP-fence injection ignores per-harness reload tier (gh:#2243 follow-up) [backend] <!-- id:story-issue-2284 -->
 - [ ] pr check reports green when dispatch branch has no resolvable PR [testing] <!-- id:story-issue-2260 -->
 - [ ] Align architect PR-review instructions with enforced role policy and dry-run checks [security] <!-- id:story-issue-2258 -->
@@ -1063,6 +1086,5 @@ If reviewer identity allows approval, submit a [testing] <!-- id:story-issue-189
 - [ ] docs: blog posts for PRs #584, #588, #589, #591, #592 [testing] <!-- id:story-issue-594 -->
 - [ ] synlynk doctor: TC-1/TC-2/TC-3/TC-5 silently no-op for most agents due to AGENT_CAPABILITY_BASELINES schema inconsistency [testing] <!-- id:story-issue-339 -->
 - [ ] docs: reapply PR #528/#530 devlog + backfill PR #533 cost rows [testing] <!-- id:story-issue-564 -->
-- [ ] docs: blog posts for PR #542 and PR #549 (LIVE-3) [testing] <!-- id:story-issue-552 -->
 
-> 16 legacy story omitted from the active queue (older than 90 days).
+> 17 legacy story omitted from the active queue (older than 90 days).

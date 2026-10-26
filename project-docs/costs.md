@@ -1784,13 +1784,35 @@
 | 2026-10-25 06:12 | claude | claude-opus-5 | 82000 | 1800 | $0.2080 [sub] (API: $0.2730) | estimated_manual | story-44b6094e | Review and merge PR #2605 (selftest scratch isolation #2527) |
 | 2026-10-25 08:03 | claude | claude-sonnet-4-6 | 74069 | 11008 | $0.2112 [sub] (API: $0.3880) | estimated_token_rate | story-issue-2522 | exec: claude job job-a24bc... |
 | 2026-10-25 08:07 | claude | claude-sonnet-5 | 60000 | 30000 | $0.2234 [sub] (API: $0.6300) | estimated_manual | - | ~estimate: v0.25.5 Agy-conductor handoff prep (issue sweep, prior-art review, handoff doc) + gh:#2603 filing + session-close housekeeping, native PM session, no dispatched job |
+| 2026-10-25 08:08 | claude | claude-sonnet-5 | 68000 | 1200 | $0.1717 [sub] (API: $0.2220) | estimated_manual | story-issue-2522 | Review and merge PR #2608 (--pr-mode release-docs #2522) |
+| 2026-10-25 08:21 | grok | grok-3 | 97862 | 58610 | $1.0261 [sub] (API: $1.1738) | estimated_token_rate | story-365ec05a | exec: grok job job-818aa0d... |
+| 2026-10-25 08:41 | grok | grok-3 | 95618 | 54059 | $0.9815 [sub] (API: $1.0984) | estimated_token_rate | story-365ec05a | exec: grok job job-451010d... |
+| 2026-10-25 09:09 | claude | claude-sonnet-5 | 65000 | 1100 | $0.1641 [sub] (API: $0.2115) | estimated_manual | story-365ec05a | Review and merge PR #2611 (CI path scoping & matrix acceleration #2529) |
+| 2026-10-25 09:01 | grok | grok-3 | 81705 | 27906 | $0.7188 [sub] (API: $0.6644) | estimated_token_rate | story-365ec05a | exec: grok job job-ab1363e... |
+| 2026-10-25 09:25 | codex | o4-mini | 3438227 | 13253 | $0.0049 [sub] (API: $0.4664) | estimated_token_rate | story-issue-2320 | exec: codex job job-f2afcc... |
+| 2026-10-25 09:39 | claude | claude-sonnet-5 | 62000 | 950 | $0.1562 [sub] (API: $0.2002) | estimated_manual | story-issue-2320 | Review and merge PR #2612 (lock mandatory sparse cone paths #2320) |
+| 2026-10-25 09:42 | codex | gpt-5.6-sol | 59891 | 3519 | $0.0030 [sub] (API: $0.2325) | estimated_token_rate | story-issue-2567 | exec: codex job job-a2386d... |
+| 2026-10-25 10:31 | claude | claude-sonnet-4-6 | 52747 | 4000 | $0.1408 [sub] (API: $0.2185) | estimated_token_rate | story-issue-2613 | exec: claude job job-7201b... |
+| 2026-10-25 12:41 | agy | gemini-3.8-flash-medium | 120000 | 15000 | $0.1092 [sub] (API: $0.5850) | estimated_manual | - | Agy Home Conductor v0.25.6 stability closeout implementation |
+| 2026-10-25 12:43 | claude | claude-sonnet-5 | 45000 | 3500 | $0.1204 [sub] (API: $0.1875) | estimated_manual | - | Claude QA non-author review approval for PR #2615 |
+| 2026-10-25 12:54 | codex | gpt-5.3-codex | 1 | 1 | $0.0000 [sub] (API: $0.0000) | estimated_manual | - | QA review provenance for PR #2610 |
+| 2026-10-25 12:56 | codex | o4-mini | 1240792 | 5380 | $0.0027 [sub] (API: $0.2338) | estimated_token_rate | story-issue-2610 | exec: codex job job-73c904... |
+| 2026-10-26 00:31 | agy | gemini-1.5-pro | 65000 | 8500 | $0.0594 [sub] (API: $0.3225) | estimated_manual | - | v0.26.0 daemon reliability tasks 1-5 implementation |
+| 2026-10-26 00:34 | agy | gemini-1.5-pro | 24000 | 1200 | $0.0204 [sub] (API: $0.0900) | estimated_manual | - | Task 6 QA verification and review for PR #2619 |
+| 2026-10-26 01:00 | codex | gpt-5.6-luna | 42167 | 4982 | $0.0023 [sub] (API: $0.2012) | estimated_token_rate | story-issue-2619 | exec: codex job job-560558... |
+| 2026-10-26 01:04 | codex | gpt-5.6-luna | 49734 | 5009 | $0.0026 [sub] (API: $0.2243) | estimated_token_rate | story-issue-2620 | exec: codex job job-014af2... |
+| 2026-10-26 01:18 | claude | claude-sonnet-4-6 | 52095 | 1621 | $0.1333 [sub] (API: $0.1807) | estimated_token_rate | story-issue-2620 | exec: claude job job-dd453... |
+| 2026-10-26 06:49 | claude | claude-sonnet-4-6 | 65064 | 9833 | $0.1859 [sub] (API: $0.3432) | estimated_token_rate | story-issue-2621 | exec: claude job job-d1b51... |
+| 2026-10-26 07:11 | claude | claude-sonnet-4-6 | 41498 | 5123 | $0.1157 [sub] (API: $0.2016) | estimated_token_rate | story-issue-2621 | exec: claude job job-c0c55... |
+| 2026-10-26 07:14 | agy | gemini-2.5-pro | 85000 | 12000 | $0.0784 [sub] (API: $0.2263) | estimated_manual | - | v0.26.1 Workspace-Agent Operations implementation and CI harmonization |
+| 2026-10-26 07:38 | claude | claude-sonnet-4-6 | 57070 | 257 | $0.1423 [sub] (API: $0.1751) | estimated_token_rate | story-issue-2622 | exec: claude job job-9dc14... |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
-| claude | $20.00 | $66.9206 | $117.6585 | $50.7379 |
-| codex | $20.00 | $28.8052 | $1880.7965 | $1851.9914 |
-| agy | $20.00 | $26.0165 | $131.6202 | $105.6037 |
-| grok | $30.00 | $195.5738 | $144.4700 | $-51.1038 |
-| **Total** | **$90.00** | **$317.3161** | **$2274.5452** | **$1957.2291** |
+| claude | $20.00 | $68.0399 | $119.2108 | $51.1709 |
+| codex | $20.00 | $28.8206 | $1882.1547 | $1853.3341 |
+| agy | $20.00 | $26.2840 | $132.8440 | $106.5600 |
+| grok | $30.00 | $198.3001 | $147.4066 | $-50.8935 |
+| **Total** | **$90.00** | **$321.4446** | **$2281.6161** | **$1960.1715** |
