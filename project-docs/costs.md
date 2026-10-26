@@ -1806,13 +1806,17 @@
 | 2026-10-26 07:11 | claude | claude-sonnet-4-6 | 41498 | 5123 | $0.1157 [sub] (API: $0.2016) | estimated_token_rate | story-issue-2621 | exec: claude job job-c0c55... |
 | 2026-10-26 07:14 | agy | gemini-2.5-pro | 85000 | 12000 | $0.0784 [sub] (API: $0.2263) | estimated_manual | - | v0.26.1 Workspace-Agent Operations implementation and CI harmonization |
 | 2026-10-26 07:38 | claude | claude-sonnet-4-6 | 57070 | 257 | $0.1423 [sub] (API: $0.1751) | estimated_token_rate | story-issue-2622 | exec: claude job job-9dc14... |
+| 2026-10-26 10:32 | claude | claude-sonnet-4-6 | 35160 | 1111 | $0.0900 [sub] (API: $0.1222) | estimated_token_rate | story-issue-2623 | exec: claude job job-d7bf5... |
+| 2026-10-26 10:55 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0174 [sub] (API: $0.0450) | estimated_tshirt | story-issue-2623 | exec: claude job job-de487... |
+| 2026-10-26 23:16 | claude | claude-sonnet-4-6 | 101747 | 20901 | $0.3044 [sub] (API: $0.6199) | estimated_token_rate | story-issue-2625 | exec: claude job job-670ab... |
+| 2026-10-26 23:40 | agy | gemini-2.5-pro | 110000 | 16000 | $0.1016 [sub] (API: $0.2975) | estimated_manual | - | v0.26.2 Hotfix: CLI binary integrity, multi-user isolation & E2E verification |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
-| claude | $20.00 | $68.0399 | $119.2108 | $51.1709 |
+| claude | $20.00 | $68.4517 | $119.9979 | $51.5462 |
 | codex | $20.00 | $28.8206 | $1882.1547 | $1853.3341 |
-| agy | $20.00 | $26.2840 | $132.8440 | $106.5600 |
+| agy | $20.00 | $26.3856 | $133.1415 | $106.7559 |
 | grok | $30.00 | $198.3001 | $147.4066 | $-50.8935 |
-| **Total** | **$90.00** | **$321.4446** | **$2281.6161** | **$1960.1715** |
+| **Total** | **$90.00** | **$321.9580** | **$2282.7007** | **$1960.7427** |
