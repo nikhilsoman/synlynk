@@ -16,6 +16,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
 
+## [v0.26.2] - 2026-10-26
+### Added
+- feat(doctor): multi-user CLI entrypoint integrity and PATH shadowing diagnostic check with automated remediation via `synlynk doctor --fix cli` (gh:#2624) (#2625)
+- feat(packaging): user-level UID-namespaced isolation for temporary runtime files in `/tmp/synlynk-{uid}` (gh:#2624) (#2625)
+- feat(ci): package E2E installation and CLI distribution verification workflow gate (`test-package-e2e`) (gh:#2624) (#2625)
+### Fixed
+- fix(install): audit post-install PATH precedence in `install.sh` and alert when user-local binaries are shadowed by unisolated shared paths (gh:#2624) (#2625)
+- fix(upgrade): audit CLI binary precedence post-upgrade in `synlynk/upgrade.py` (gh:#2624) (#2625)
+- fix(testbed): pure-Python PEP 427 wheel packaging fallback in `synlynk/testbed/installer.py` (gh:#2624) (#2625)
+
 ## [v0.26.1] - 2026-10-26
 ### Added
 - feat(charters): Markdown-first canonical schema 2.0 unification with expanded authorities, escalation triggers, and embedded `DEFAULT_ROLE_CHARTERS` fallback (gh:#2305) (#2621)

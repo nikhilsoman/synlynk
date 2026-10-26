@@ -94,6 +94,7 @@ def collect_pytest_test_count(root: str) -> Optional[int]:
     ]
     collection_env = os.environ.copy()
     collection_env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
+    collection_env["SYNLYNK_ALLOW_REGISTRY_RECOVERY"] = "1"
     result = None
     for cmd in candidate_cmds:
         try:
