@@ -327,7 +327,7 @@ Deferred until after the first Developer Preview stable tag. Local harness (oMLX
 - [ ] Offline Zero-Cloud AST Tier-0 Routing (P1)
   Automatic fallback and tier-0 cost routing for self-hosted models
 
-## v0.26.0 — Daemon reliability [shipped] (shipped: 2026-10-26)
+## v0.26.0 — Daemon reliability [shipped] (target: 2026-10-26)
 
 Daily stable gate: daemon restart, cancellation, recovery, scan containment, replay and stop idempotence are evidence-tested. Revalidate #2464 and #1884; #2477 stays closed without a new reproduction. Legacy provider/OpenRouter/Fal.ai/driver phase rows under this arc are not part of the daemon gate and remain non-authoritative pending freshness disposition via #2535 by the Oct 27 ticket lock. Parent #2458; release epic #2468; goals goal-bd5eaa14, goal-06758149, goal-eacab0dc.
 
@@ -405,14 +405,14 @@ Shipped 2026-10-24. Tag v0.25.3 is ce28b3b4f1ef2eda3432b706441d8d6187ac14b5 and 
 Shipped 2026-10-24. Tag v0.25.4 is 57a20a93b80a629367f422cc6355ffe02048db39 and is origin/main. GitHub Release https://github.com/nikhilsoman/synlynk/releases/tag/v0.25.4 was published by Nikhil (`gh release create`, native PM-session). Revalidated and closed #2138, #2139 (PR #2589), and #2309 (PR #2594); #2530 was already closed. Folded in 2026-10-24: #2547 ([Epic] Harness velocity: RSI loops) landed its `cost_entries`/`capability_ratings` attribution-mismatch guard (PR #2598), `job_timing_metrics` extraction hook (PR #2599), and capability-sweep `baseline_seed` sample-gate exclusion (PR #2600) as evidence toward this release's job-status/completion-evidence gate; #2547 itself keeps running independently and was not merged into other in-flight work. Merged via PR #2601, non-authoring cross-harness (Agy) review per the Hardened PR Review Policy; merge performed by PM (Claude) under `release_authority` after explicit human approval. Parent #2458; release epic #2467; goals goal-079e2f37, goal-9ef9a965, goal-eacab0dc.
 
 
-## v0.26.1 — Workspace-agent charter and role operations [shipped] (shipped: 2026-10-26)
+## v0.26.1 — Workspace-agent charter and role operations [shipped] (target: 2026-10-26)
 
 Shipped 2026-10-26. Merged via PR #2621, non-authoring cross-harness (Claude qa) review per the Hardened PR Review Policy. Unifies Markdown-first canonical schema 2.0 with embedded fallback (gh:#2305), binds superpowers skills with mandatory prompt contracts and post-flight test receipt verification gates (gh:#2305), operationalizes autonomous Maintainer role with sentinel alert triage and automated reproduction issue generation (story-2e48a8c5), authorizes multi-harness Mode A Home Conductors with strict non-author review separation (gh:#2488), incorporates Google Research Harness² architecture (arXiv:2610.14224), and hardens dispatch worktrees and claim concurrency (#2511, #2185, #2233). Parent #2458; release epic #2469; goals goal-eacab0dc, goal-a222b393, goal-06758149.
 
 
-## v0.26.2 — Safe autonomous operations [planned] (target: 2026-10-30)
+## v0.26.2 — CLI Binary Integrity, Multi-User Isolation & E2E Endpoint Verification [shipped] (target: 2026-10-26)
 
-Daily stable gate: enforce claims/leases at work-start paths (#2511/#2528); approval, containment, audit and recovery controls pass before broader autonomy. Parent #2458; release epic #2470; goals goal-bd5eaa14 and goal-eacab0dc.
+Shipped 2026-10-26. Hotfix release for SEV-1 Issue #2624 (PR #2625, PR #2626, Tag v0.26.2). Implements doctor health check for CLI entrypoint and PATH shadowing (_hc_cli_entrypoint_health) with automated remediation (synlynk doctor --fix cli), post-install/upgrade PATH precedence auditing, UID-namespaced user state (/tmp/synlynk-{uid}, mode 0700), hermetic wheel packaging and distribution test suite (tests/test_cli_distribution_e2e.py), and package E2E CI gate (test-package-e2e). Reviewed and approved by Claude (qa role).
 
 
 ## v0.27.1 — Quickstart and onboarding first win [planned] (target: 2026-11-02)
@@ -432,10 +432,6 @@ Post-Preview scope; intentionally undated. Bounded swarm, gateway, lease, budget
 - [ ] synlynk.com platform vision: accounts, entitlements, hosted infra (goal-56bfbfa1, design-only) <!-- story:story-6da127b4 -->
   Design approved: docs/superpowers/specs/2026-10-23-synlynk-com-platform-vision-design.md. Account/Org/Workspace/Repo entity model, AWS/Pulumi stack with pay-as-you-go/ephemeral-infra cost philosophy, and 5-phase rollout (site migration, accounts/entitlements, hosted workstation, hosted relay, swarm gateway, community). Phase 4 (swarm gateway) directly extends this epic's bounded-swarm/gateway/budget/containment scope; Phase 3 (hosted relay) extends goal-f4ce526a's personal relay; Phase 5 (community) extends the v1.0.0 community-layer goals (goal-0b891b5f/goal-f424fc4c). Not yet planned per-phase or dispatched.
 
-- [ ] `synlynk work` autonomous story pickup loop (goal-680faab0, held pending decision)
-  Design approved: `docs/superpowers/specs/2026-10-22-synlynk-work-loop-design.md`. Grew out of a rejected new-collaborator-onboarding proposal (GitHub-ticket + Agy free-text execution — rejected for prompt-injection risk). Reuses the `task_leases` claim mechanism (gh:#2511) and `story_governs_linkage` gate for swarm-safe, unattended pickup of GOVERNS-linked stories across humans and harnesses. **Held at Nikhil's request (2026-10-22) — not yet planned or dispatched.**
-
-
 ## v0.28.1 — Capability crawler, index and GTM [planned]
 
 Post-Preview scope; intentionally undated. Reproducible, privacy-safe, sample-floor-gated capability evidence and GTM surface. Parent #2458; release epic #2475; goals goal-aa48c456 and goal-20bb3987.
@@ -446,19 +442,19 @@ Post-Preview scope; intentionally undated. Reproducible, privacy-safe, sample-fl
 Post-Preview scope; intentionally undated. Triage residual candidates, promote/archive/hold with evidence, and record the human Dev Preview follow-up decision. Parent #2458; release epic #2476; goal goal-51c4be3f.
 
 
-## v0.25.5 — CI and release-integrity stabilization [shipped] (shipped: 2026-10-25)
+## v0.25.5 — CI and release-integrity stabilization [shipped] (target: 2026-10-25)
 
 Daily stable gate: resolve or evidence non-blocking dispositions for self-test/CI race #2527/#2526, release-doc count drift #2522, and generated command-doc/sparse-checkout blocker #2320. Parent #2458; release epic #2467.
 
 
-## v0.25.6 — Stability closeout and ticket lock [shipped] (shipped: 2026-10-25)
+## v0.25.6 — v0.25.6 [shipped] (target: 2026-10-25)
 
 Daily stable gate: close GOVERNS/model/cost/job-truth stability review; every selected story has a goal, release epic and current ticket; all 94 ticketless candidates receive a linked or explicit deferred/archive disposition. Use governed phase-update ticket #2535; do not edit canonical DB rows directly. Parent epic #2458; milestone #14; goal goal-9ef9a965.
 
 
-## v0.26.3 — End-to-end autonomous operating day [planned] (target: 2026-10-31)
+## v0.26.3 — Safe autonomous operations [planned] (target: 2026-10-28)
 
-Daily stable gate: workspace-agent roles plan, claim, dispatch, monitor, recover and produce truthful evidence for one bounded roadmap task; revalidate #2262 and adjacent job-orphan issues. Parent #2458; release epic #2470.
+Daily stable gate: enforce claims/leases at work-start paths (#2511/#2528); approval, containment, audit and recovery controls pass before broader autonomy. Parent #2458; release epic #2470; goals goal-bd5eaa14 and goal-eacab0dc.
 
 
 ## v0.27.3 — Cross-harness onboarding verification [planned] (target: 2026-11-04)
@@ -474,5 +470,30 @@ Daily stable gate: GOVERNS, model catalog/capability/cost, job-status truth, wor
 ## v0.27.5 — Developer Preview stable release gate [planned] (target: 2026-11-06)
 
 Daily stable tag is the Developer Preview only when the v0.27.4 acceptance evidence is green and no unresolved release-blocking Sev1/Sev2 defect remains. Human release authority remains required. Parent #2458; release epics #2471-#2473.
+
+
+## v0.26.4 — End-to-end autonomous operating day [planned] (target: 2026-10-28)
+
+Daily stable gate: workspace-agent roles plan, claim, dispatch, monitor, recover and produce truthful evidence for one bounded roadmap task; revalidate #2262 and adjacent job-orphan issues. Parent #2458; release epic #2470.
+
+
+## v0.26.5 — Graphify Dependency, Brownfield Discovery & Multi-Repo Mesh [planned] (target: 2026-10-29)
+
+Validate Graphify as a mandatory bundled package dependency with automatic installation; zero-config first-run AST extraction in brownfield workspaces (`synlynk scan --deep --graphify`); per-repo knowledge graph maps (`.synlynk/graph.json`); federated cross-repo workspace graph mesh (`synlynk mesh`); Maintainer agent post-merge graph refresh protocol (`synlynk maintainer sweep --refresh-graph`); sub-3k token graph traversal context packs for dispatch (`synlynk context pack`); and overall workspace graph policy.
+
+
+## v0.26.6 — Vizor Platform Review, Daemon Heartbeat & Sentinel Monitoring [planned] (target: 2026-10-29)
+
+Comprehensive Vizor UI & architecture review; always-on background monitoring dashboard on port 33333 (with fallback to 44444/55555); live daemon heartbeat tracking via `daemon_heartbeats` table and real-time SSE stream; live sentinel alert monitoring and incident inspection panels; full data population across all Vizor views (Overview, Architecture, Observatory, GOVERNS Board, Efficiency, Models, Settings); and strategic robustness hardening against dead PIDs, port conflicts, and socket crashes.
+
+
+## v0.26.7 — Vizor Jantt Timeline & Interactive GOVERNS Stage Mapping [planned] (target: 2026-10-30)
+
+Interactive timeline canvas powered by Jantt (vendored vanilla JS library with offline-first airgap compliance); bidirectional data adapter mapping GOVERNS goals, epics, stories, and PR dependencies into Jantt task structures; interactive stage and schedule adjustments with an explicit lock/unlock toggle (locked by default) backed by transactional write-back authority to `state.db` via `roadmap update`; and dual dark/light theme token synchronization.
+
+
+## v0.26.8 — Task Boundary Context Protocol, Compaction & Herdr Epic Tabs [planned] (target: 2026-10-30)
+
+Task boundary contextual update surfacing: fenced `synlynk statusline` displaying breadcrumbs, active goal/story, git HEAD, burn rate, sentinel status, and task/cost summaries; automated context compaction for interactive Home Conductors before `/clear` or task handoffs; programmatically launching each new epic in a dedicated Herdr tab (`synlynk herdr tab <epic>`) with isolated 4-pane cockpit; and graceful fallback to spawning a tmux/terminal window when `HERDR_ENV != 1`.
 
 
