@@ -263,6 +263,7 @@ The four existing skills stay. Their tests in `tests/test_graphify_skills.py` an
 - Copying the full graph to both `.synlynk/graph.json` and `graphify-out/graph.json`.
 - Closing ledger stories inside the implementation PR. Story status changes are a separate ledger action after the code is on `main`.
 - Version bump, CHANGELOG, README, and roadmap `[shipped]` flip. Those belong to the release PR after this design is accepted and the implementation PR has merged. Docs-only release notes stay out of the implementation branch.
+- Document nodes in the code graph. Decision `dec-6d438fd0` records a curated deterministic markdown sidecar as the candidate and defers the evaluation to `goal-34c225e1` and `story-bae335b6`. This release does not drop `--code-only`, does not call the semantic LLM extract, and does not add doc nodes. The calibration calls Graphify's local markdown parser directly, on its own goal, after v0.26.5.
 
 ---
 
