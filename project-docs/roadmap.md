@@ -472,9 +472,9 @@ Daily stable gate: GOVERNS, model catalog/capability/cost, job-status truth, wor
 Daily stable tag is the Developer Preview only when the v0.27.4 acceptance evidence is green and no unresolved release-blocking Sev1/Sev2 defect remains. Human release authority remains required. Parent #2458; release epics #2471-#2473.
 
 
-## v0.26.4 — End-to-end autonomous operating day [planned] (target: 2026-10-28)
+## v0.26.4 — End-to-end autonomous operating day [shipped] (target: 2026-10-28)
 
-Daily stable gate: workspace-agent roles plan, claim, dispatch, monitor, recover and produce truthful evidence for one bounded roadmap task; revalidate #2262 and adjacent job-orphan issues. Parent #2458; release epic #2470.
+Shipped 2026-10-27 (PR #2633, tag v0.26.4). Gates SUPERVISED-mode daemon scheduling through `can_auto_advance()` (gh:#2631) so it computes/prints the plan but halts before `execute`; revalidated #2262 (satisfied by PR #2269) and #2553 (satisfied by PR #2564) with no duplicate work. Parent #2458; release epic #2470.
 
 
 ## v0.26.5 — Graphify Dependency, Brownfield Discovery & Multi-Repo Mesh [planned] (target: 2026-10-29)
