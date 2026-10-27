@@ -4046,5 +4046,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2629 \u2014 salvage uncommitted work before worktree hygiene cleanup (PR #2629, v0.26.3)\n\n\u2022 Merged improvements and fixes for PR #2629.\n\n#posts",
     "changelog": "### v0.26.3 (2026-10-27) - PR #2629\n- Merged improvements and fixes for PR #2629."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/500-pr2630-supervised-mode-execute-stage-gate-for-d.md",
+    "title": "PR #2630 \u2014 SUPERVISED mode execute-stage gate for daemon autonomy pass",
+    "author": "nikhilsoman",
+    "date": "2026-10-27",
+    "pr": "#2630",
+    "version": "0.26.3",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2630."
+    ],
+    "tweet": "\ud83d\ude80 PR #2630 \u2014 SUPERVISED mode execute-stage gate for daemon autonomy pass (PR #2630, v0.26.3)\n\n\u2022 Merged improvements and fixes for PR #2630.\n\n#posts",
+    "changelog": "### v0.26.3 (2026-10-27) - PR #2630\n- Merged improvements and fixes for PR #2630."
   }
 ]
