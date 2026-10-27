@@ -4078,5 +4078,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2633 \u2014 gate supervised daemon schedule execution (PR #2633, v0.26.3)\n\n\u2022 Merged improvements and fixes for PR #2633.\n\n#posts",
     "changelog": "### v0.26.3 (2026-10-27) - PR #2633\n- Merged improvements and fixes for PR #2633."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/502-pr2634-fix-v0-26-3-shipped-status-and-flag-stal.md",
+    "title": "PR #2634 \u2014 fix v0.26.3 shipped-status and flag stale strategy schedule",
+    "author": "nikhilsoman",
+    "date": "2026-10-27",
+    "pr": "#2634",
+    "version": "0.26.3",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2634."
+    ],
+    "tweet": "\ud83d\ude80 PR #2634 \u2014 fix v0.26.3 shipped-status and flag stale strategy schedule (PR #2634, v0.26.3)\n\n\u2022 Merged improvements and fixes for PR #2634.\n\n#posts",
+    "changelog": "### v0.26.3 (2026-10-27) - PR #2634\n- Merged improvements and fixes for PR #2634."
   }
 ]
