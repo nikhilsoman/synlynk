@@ -4126,5 +4126,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2637 \u2014 sync website/docs-bundle collateral for v0.26.4 (PR #2637, v0.26.4)\n\n\u2022 Merged improvements and fixes for PR #2637.\n\n#posts",
     "changelog": "### v0.26.4 (2026-10-27) - PR #2637\n- Merged improvements and fixes for PR #2637."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/505-pr2638-v0-26-5-lifecycle-warm-cache-and-maintai.md",
+    "title": "PR #2638 \u2014 v0.26.5 lifecycle, warm cache, and maintainer sweep",
+    "author": "nikhilsoman",
+    "date": "2026-10-27",
+    "pr": "#2638",
+    "version": "0.26.4",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2638."
+    ],
+    "tweet": "\ud83d\ude80 PR #2638 \u2014 v0.26.5 lifecycle, warm cache, and maintainer sweep (PR #2638, v0.26.4)\n\n\u2022 Merged improvements and fixes for PR #2638.\n\n#posts",
+    "changelog": "### v0.26.4 (2026-10-27) - PR #2638\n- Merged improvements and fixes for PR #2638."
   }
 ]
