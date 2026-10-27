@@ -16,6 +16,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
 
+## [v0.26.5] - 2026-10-28
+### Added
+- feat(graphify): install falls through uv, pipx, then `pip install --user` for the `graphifyy` package. `synlynk doctor` checks the binary and installs only with `--fix graphify` (#2638)
+- feat(graphify): greenfield workspaces get an empty graph and pointer; brownfield extract runs when the graph is missing or not stamped at HEAD (#2638)
+- feat(graphify): context packing reads the warm traversal cache before the live walk. `synlynk maintainer sweep --refresh-graph` rebuilds the graph, cache, and mesh (#2638)
+- feat(graphify): contract drift is a non-blocking sentinel, `heal --orphans` reports dead symbols, and a god-neighborhood target floors dispatch at pro unless `--model` is set (#2638)
+### Changed
+- The curated document sidecar stays deferred (dec-6d438fd0, goal-34c225e1, story-bae335b6). v0.26.5 does not implement it.
+
 ## [v0.26.4] - 2026-10-27
 ### Fixed
 - fix(scheduler): gate SUPERVISED-mode daemon auto-dispatch through `can_auto_advance()` so it computes/prints the plan but halts before the `execute` stage, matching the Tri-Modal Autonomy Dial's documented semantics; previously SUPERVISED behaved identically to AUTONOMOUS (gh:#2631) (#2633)

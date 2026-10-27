@@ -477,9 +477,9 @@ Daily stable tag is the Developer Preview only when the v0.27.4 acceptance evide
 Shipped 2026-10-27 (PR #2633, tag v0.26.4). Gates SUPERVISED-mode daemon scheduling through `can_auto_advance()` (gh:#2631) so it computes/prints the plan but halts before `execute`; revalidated #2262 (satisfied by PR #2269) and #2553 (satisfied by PR #2564) with no duplicate work. Parent #2458; release epic #2470.
 
 
-## v0.26.5 — Graphify Dependency, Brownfield Discovery & Multi-Repo Mesh [planned] (target: 2026-10-29)
+## v0.26.5 — Graphify Dependency, Brownfield Discovery & Multi-Repo Mesh [shipped] (target: 2026-10-29)
 
-Validate Graphify as a mandatory bundled package dependency with automatic installation; zero-config first-run AST extraction in brownfield workspaces (`synlynk scan --deep --graphify`); per-repo knowledge graph maps (`.synlynk/graph.json`); federated cross-repo workspace graph mesh (`synlynk mesh`); Maintainer agent post-merge graph refresh protocol (`synlynk maintainer sweep --refresh-graph`); sub-3k token graph traversal context packs for dispatch (`synlynk context pack`); and overall workspace graph policy.
+Shipped 2026-10-28 (PR #2638, tag v0.26.5). Graphify install falls through uv, pipx, then pip --user. Doctor checks the binary and installs only with `--fix graphify`. Greenfield workspaces get an empty graph and pointer; brownfield extract runs when the graph is missing or not stamped at HEAD. Pack reads the warm traversal cache before the live walk. `maintainer sweep --refresh-graph` rebuilds the graph, cache, and mesh. The document sidecar stays deferred (dec-6d438fd0). Parent #2458; release epic #2470.
 
 
 ## v0.26.6 — Vizor Platform Review, Daemon Heartbeat & Sentinel Monitoring [planned] (target: 2026-10-29)
