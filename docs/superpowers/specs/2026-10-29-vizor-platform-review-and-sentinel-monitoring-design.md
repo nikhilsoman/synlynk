@@ -7,7 +7,7 @@ arc: "platform"
 
 # v0.26.6 — Vizor daemon heartbeat, live SSE, and read-only sentinel inspection
 
-**Status:** Proposed. Implementation is blocked until Nikhil signs off on this file.
+**Status:** Accepted 2026-10-28. Implementation follows this file.
 **Authored:** 2026-10-28
 **Author:** Grok, Mode A Home Conductor
 **Base:** `origin/main` `92ec2ef7` (tag `v0.26.5`)

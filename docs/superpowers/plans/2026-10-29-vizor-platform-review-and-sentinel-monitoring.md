@@ -7,7 +7,7 @@ arc: "platform"
 
 # Plan: v0.26.6 Vizor heartbeat, SSE, and read-only sentinel inspection
 
-**Status:** Blocked on sign-off of `docs/superpowers/specs/2026-10-29-vizor-platform-review-and-sentinel-monitoring-design.md`.
+**Status:** Accepted 2026-10-28. Implement the tasks below. Do not cut the v0.26.6 tag in this PR.
 **Goal:** `goal-e3840370`
 **Epic:** [#2641](https://github.com/nikhilsoman/synlynk/issues/2641)
 **Parent:** [#2458](https://github.com/nikhilsoman/synlynk/issues/2458)

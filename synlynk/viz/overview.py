@@ -1,5 +1,6 @@
 """Per-workspace Overview canvas."""
 import html
+import json
 from synlynk.viz.chrome import _live_js
 def generate_overview_html(data: dict, port: int) -> str:
     """Generate the per-workspace Overview canvas (overview.html)."""
@@ -13,21 +14,33 @@ def generate_overview_html(data: dict, port: int) -> str:
         if not a.get("resolved")
     ]
     alerts_html = ""
+    shown_alerts = []
     if sentinel_alerts:
         alert_rows = []
-        for a in sentinel_alerts[:6]:
+        shown_alerts = []
+        for index, a in enumerate(sentinel_alerts[:6]):
             sev = str(a.get("severity") or "WARNING").upper()
             sev_class = "sev-crit" if sev in ("CRITICAL", "CRIT") else "sev-warn"
             pattern = a.get("pattern")
             raw_msg = a.get("message") or "Sentinel alert active"
             msg = f"{pattern}: {raw_msg}" if pattern and not raw_msg.startswith(str(pattern)) else raw_msg
             ts = a.get("ts") or ""
+            shown_alerts.append({
+                "severity": sev,
+                "pattern": pattern or "",
+                "message": raw_msg,
+                "ts": ts,
+                "raw_line": a.get("raw_line") or "",
+                "occurrences": int(a.get("occurrences") or 1),
+                "first_seen": a.get("first_seen") or "",
+                "last_seen": a.get("last_seen") or "",
+            })
             alert_rows.append(
-                f'<div class="alert-item {sev_class}">'
+                f'<button type="button" class="alert-item {sev_class}" data-alert-index="{index}">'
                 f'<span class="alert-pill">{html.escape(sev)}</span>'
                 f'<span class="alert-msg">{html.escape(msg)}</span>'
                 f'<span class="alert-ts">{html.escape(ts)}</span>'
-                f'</div>'
+                f'</button>'
             )
         alerts_html = f"""
         <div class="alerts-banner">
@@ -212,6 +225,15 @@ def generate_overview_html(data: dict, port: int) -> str:
     .alert-pill { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; background: rgba(0,0,0,0.2); }
     .alert-msg { flex: 1; word-break: break-word; }
     .alert-ts { color: var(--text3); font-size: 11px; font-family: var(--font-mono); }
+    button.alert-item { width: 100%; text-align: left; color: inherit; font: inherit; cursor: pointer; border: 0; }
+    .sentinel-panel {
+      margin: 0 0 16px;
+      padding: 12px 16px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .sentinel-panel[hidden] { display: none; }
 
     /* Stat Cards Row */
     .stats-grid {
@@ -377,6 +399,79 @@ def generate_overview_html(data: dict, port: int) -> str:
     }
     """
 
+    snapshot = json.dumps(shown_alerts).replace("<", "\\u003c")
+    inspection_html = """
+        <div id="sentinel-panel" class="sentinel-panel" hidden>
+          <div class="section-title">Sentinel inspection</div>
+          <div id="sentinel-panel-body"></div>
+        </div>
+        <script type="application/json" id="sentinel-snapshot">""" + snapshot + """</script>
+        <script>
+        (function () {
+          const snapshotNode = document.getElementById('sentinel-snapshot');
+          function readAlerts() {
+            try { return JSON.parse(snapshotNode ? snapshotNode.textContent : '[]'); }
+            catch (err) { return []; }
+          }
+          function renderPanel(alert) {
+            const panel = document.getElementById('sentinel-panel');
+            const body = document.getElementById('sentinel-panel-body');
+            if (!panel || !body || !alert) return;
+            body.textContent = '';
+            [
+              ['severity', alert.severity],
+              ['code', alert.pattern],
+              ['message', alert.message],
+              ['first seen', alert.first_seen],
+              ['last seen', alert.last_seen],
+              ['occurrences', String(alert.occurrences == null ? '' : alert.occurrences)],
+              ['raw', alert.raw_line]
+            ].forEach(function (pair) {
+              const row = document.createElement('div');
+              row.textContent = pair[0] + ': ' + (pair[1] || '');
+              body.appendChild(row);
+            });
+            panel.hidden = false;
+          }
+          document.querySelectorAll('[data-alert-index]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              renderPanel(readAlerts()[Number(btn.getAttribute('data-alert-index'))]);
+            });
+          });
+          const parts = location.pathname.split('/').filter(Boolean);
+          const slug = parts[0] === 'w' ? parts[1] : '';
+          const streamUrl = slug ? ('/w/' + slug + '/api/daemon/stream') : '/api/daemon/stream';
+          if (typeof EventSource === 'undefined') return;
+          try {
+            const source = new EventSource(streamUrl);
+            source.addEventListener('heartbeat', function (message) {
+              const chip = document.getElementById('vizor-heartbeat');
+              if (!chip) return;
+              try {
+                const beat = JSON.parse(message.data);
+                chip.textContent = 'Vizor heartbeat: ' + (beat.status || 'unknown');
+              } catch (err) {}
+            });
+            source.addEventListener('sentinel', function (message) {
+              const list = document.querySelector('.alerts-list');
+              if (!list) return;
+              let payload;
+              try { payload = JSON.parse(message.data); } catch (err) { return; }
+              list.textContent = '';
+              (payload.alerts || []).forEach(function (alert) {
+                const row = document.createElement('button');
+                row.type = 'button';
+                row.className = 'alert-item';
+                row.textContent = (alert.severity || '') + ' ' + (alert.pattern || '') + ' ' + (alert.message || '');
+                list.appendChild(row);
+              });
+            });
+            source.onerror = function () {};
+          } catch (err) {}
+        })();
+        </script>
+    """
+
     return f"""<!DOCTYPE html>
 <html lang="en" data-theme="system">
 <head>
@@ -393,11 +488,13 @@ def generate_overview_html(data: dict, port: int) -> str:
       </div>
       <div class="overview-meta">
         <span class="status-pill">● Active</span>
+        <span id="vizor-heartbeat" class="status-pill">Vizor heartbeat: unknown</span>
         <span class="meta-time">Updated {html.escape(updated_at)}</span>
       </div>
     </div>
 
     {alerts_html}
+    {inspection_html}
 
     <div class="stats-grid">
       <div class="stat-card">
