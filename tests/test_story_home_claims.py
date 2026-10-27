@@ -96,3 +96,48 @@ def test_story_update_cli_invocation(db_conn, tmp_path):
     assert lease is not None
     assert lease["harness"] == "agy"
 
+
+def test_story_update_to_ready_releases_lease(db_conn, tmp_path):
+    from synlynk.cli import cmd_story_update
+
+    # First mark in_progress
+    res = cmd_story_update("story-claim-auto-1", status="in_progress", harness="agy")
+    assert res == 0
+    assert get_active_lease("story-claim-auto-1", conn=db_conn) is not None
+    assert "story-claim-auto-1" in _read_active_claims()
+
+    # Revert to ready
+    res2 = cmd_story_update("story-claim-auto-1", status="ready")
+    assert res2 == 0
+
+    # Lease is released
+    assert get_active_lease("story-claim-auto-1", conn=db_conn) is None
+    assert "story-claim-auto-1" not in _read_active_claims()
+
+    # Story status in DB is ready
+    row = db_conn.execute("SELECT status, readiness FROM stories WHERE story_id='story-claim-auto-1'").fetchone()
+    assert row[0] == "ready"
+    assert row[1] == "ready"
+
+
+def test_story_update_metadata_fields(db_conn, tmp_path):
+    from synlynk.cli import cmd_story_update
+
+    res = cmd_story_update(
+        "story-claim-auto-1",
+        title="Updated Claim Story Title",
+        stage="design",
+        role="architect",
+        phase="phase-1",
+    )
+    assert res == 0
+
+    row = db_conn.execute(
+        "SELECT title, stage, role, phase FROM stories WHERE story_id='story-claim-auto-1'"
+    ).fetchone()
+    assert row[0] == "Updated Claim Story Title"
+    assert row[1] == "design"
+    assert row[2] == "architect"
+    assert row[3] == "phase-1"
+
+
