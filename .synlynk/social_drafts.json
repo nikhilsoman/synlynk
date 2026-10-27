@@ -4142,5 +4142,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2638 \u2014 v0.26.5 lifecycle, warm cache, and maintainer sweep (PR #2638, v0.26.4)\n\n\u2022 Merged improvements and fixes for PR #2638.\n\n#posts",
     "changelog": "### v0.26.4 (2026-10-27) - PR #2638\n- Merged improvements and fixes for PR #2638."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/506-pr2639-cut-v0-26-5-graphify-dependency-and-warm.md",
+    "title": "PR #2639 \u2014 cut v0.26.5 \u2014 Graphify dependency and warm traversals",
+    "author": "nikhilsoman",
+    "date": "2026-10-27",
+    "pr": "#2639",
+    "version": "0.26.5",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2639."
+    ],
+    "tweet": "\ud83d\ude80 PR #2639 \u2014 cut v0.26.5 \u2014 Graphify dependency and warm traversals (PR #2639, v0.26.5)\n\n\u2022 Merged improvements and fixes for PR #2639.\n\n#posts",
+    "changelog": "### v0.26.5 (2026-10-27) - PR #2639\n- Merged improvements and fixes for PR #2639."
   }
 ]
