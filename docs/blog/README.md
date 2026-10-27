@@ -579,6 +579,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [498](./498-pr2628-v0-26-3-safe-autonomous-operations-work-.md) | PR #2628 — v0.26.3 — Safe Autonomous Operations & Work-Start Claim Enforcement | [#2628](https://github.com/nikhilsoman/synlynk/pull/2628) | 2026-10-26 |
 | [499](./499-pr2629-salvage-uncommitted-work-before-worktree.md) | PR #2629 — salvage uncommitted work before worktree hygiene cleanup | [#2629](https://github.com/nikhilsoman/synlynk/pull/2629) | 2026-10-27 |
 | [500](./500-pr2630-supervised-mode-execute-stage-gate-for-d.md) | PR #2630 — SUPERVISED mode execute-stage gate for daemon autonomy pass | [#2630](https://github.com/nikhilsoman/synlynk/pull/2630) | 2026-10-27 |
+| [501](./501-pr2633-gate-supervised-daemon-schedule-executio.md) | PR #2633 — gate supervised daemon schedule execution | [#2633](https://github.com/nikhilsoman/synlynk/pull/2633) | 2026-10-27 |
 
 ## Per-PR Post Template
 

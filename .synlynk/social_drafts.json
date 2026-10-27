@@ -4062,5 +4062,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2630 \u2014 SUPERVISED mode execute-stage gate for daemon autonomy pass (PR #2630, v0.26.3)\n\n\u2022 Merged improvements and fixes for PR #2630.\n\n#posts",
     "changelog": "### v0.26.3 (2026-10-27) - PR #2630\n- Merged improvements and fixes for PR #2630."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/501-pr2633-gate-supervised-daemon-schedule-executio.md",
+    "title": "PR #2633 \u2014 gate supervised daemon schedule execution",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-27",
+    "pr": "#2633",
+    "version": "0.26.3",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2633."
+    ],
+    "tweet": "\ud83d\ude80 PR #2633 \u2014 gate supervised daemon schedule execution (PR #2633, v0.26.3)\n\n\u2022 Merged improvements and fixes for PR #2633.\n\n#posts",
+    "changelog": "### v0.26.3 (2026-10-27) - PR #2633\n- Merged improvements and fixes for PR #2633."
   }
 ]
