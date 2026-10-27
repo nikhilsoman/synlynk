@@ -49,6 +49,166 @@ def _detect_harnesses_on_path(names: tuple = None) -> list:
     return harnesses
 
 
+_SOURCE_SUFFIXES = {".py", ".js", ".ts", ".tsx", ".go", ".rs", ".java", ".rb", ".php"}
+_INIT_ROOT_FILES = {
+    "README.md",
+    "LICENSE",
+    "CLAUDE.md",
+    "GEMINI.md",
+    "AGENTS.md",
+    "AI_INSTRUCTIONS.md",
+    ".cursorrules",
+}
+_SKIP_SOURCE_DIRS = {".git", ".synlynk", "project-docs"}
+
+
+def _is_init_template(rel_path: str) -> bool:
+    """True for Synlynk init templates, not product source."""
+    normalized = rel_path.replace("\\", "/").lstrip("./")
+    if normalized in _INIT_ROOT_FILES:
+        return True
+    return normalized.startswith("project-docs/") or normalized.startswith(".synlynk/")
+
+
+def _git_commit_count(repo_root: str) -> int:
+    try:
+        res = subprocess.run(
+            ["git", "-C", repo_root, "rev-list", "--count", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return 0
+    if res.returncode != 0:
+        return 0
+    try:
+        return int((res.stdout or "0").strip() or "0")
+    except ValueError:
+        return 0
+
+
+def _tracked_files(repo_root: str) -> list[str] | None:
+    try:
+        res = subprocess.run(
+            ["git", "-C", repo_root, "ls-files"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return None
+    if res.returncode != 0:
+        return None
+    return [line for line in (res.stdout or "").splitlines() if line.strip()]
+
+
+def _has_source_files(repo_root: str) -> bool:
+    root = os.path.abspath(repo_root)
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [name for name in dirnames if name not in _SKIP_SOURCE_DIRS]
+        for filename in filenames:
+            if os.path.splitext(filename)[1].lower() in _SOURCE_SUFFIXES:
+                return True
+    return False
+
+
+def classify_workspace(repo_root: str) -> str:
+    """Return greenfield or brownfield for the Graphify lifecycle.
+
+    Source files outside ``.synlynk`` and ``project-docs`` are brownfield even
+    when the repo has no commits. Init templates alone stay greenfield.
+    """
+    if _has_source_files(repo_root):
+        return "brownfield"
+    if _git_commit_count(repo_root) == 0:
+        return "greenfield"
+    tracked = _tracked_files(repo_root)
+    if tracked is not None and all(_is_init_template(path) for path in tracked):
+        return "greenfield"
+    return "brownfield"
+
+
+def write_greenfield_skeleton(repo_root: str) -> None:
+    """Write an empty graph, pointer, and manifest. Do not invent symbols."""
+    out_dir = os.path.join(repo_root, ".synlynk", "graphify-out")
+    os.makedirs(out_dir, exist_ok=True)
+    graph = {"nodes": [], "edges": [], "lifecycle": "greenfield"}
+    manifest = {"lifecycle": "greenfield", "built_at_commit": "", "node_count": 0}
+    pointer = {
+        "schema": 1,
+        "graph": ".synlynk/graphify-out/graph.json",
+        "lifecycle": "greenfield",
+    }
+    with open(os.path.join(out_dir, "graph.json"), "w", encoding="utf-8") as handle:
+        json.dump(graph, handle)
+    with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as handle:
+        json.dump(manifest, handle)
+    with open(os.path.join(repo_root, ".synlynk", "graph.json"), "w", encoding="utf-8") as handle:
+        json.dump(pointer, handle)
+    from synlynk.graph_cache import write_traversal_cache
+
+    write_traversal_cache(repo_root)
+
+
+def _read_graph_manifest(repo_root: str) -> dict:
+    path = os.path.join(repo_root, ".synlynk", "graphify-out", "manifest.json")
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def ensure_graph_for_head(repo_root: str) -> bool:
+    """Skeleton for greenfield. Extract for a missing or stale brownfield graph."""
+    if classify_workspace(repo_root) == "greenfield":
+        write_greenfield_skeleton(repo_root)
+        return True
+    graph_path = os.path.join(repo_root, ".synlynk", "graphify-out", "graph.json")
+    manifest = _read_graph_manifest(repo_root)
+    try:
+        from synlynk.discovery import _get_head_commit
+        head = _get_head_commit(repo_root) or ""
+    except Exception:
+        head = ""
+    stamp = str(manifest.get("built_at_commit") or "")
+    if (
+        os.path.isfile(graph_path)
+        and manifest.get("lifecycle") != "greenfield"
+        and stamp == head
+    ):
+        return True
+    return _run_graphify_extract(repo_root)
+
+
+def _emit_graphify_extract_failed(repo_root: str, detail: str) -> None:
+    """Log an extract failure and record GRAPHIFY_EXTRACT_FAILED."""
+    tail = (detail or "graphify extract failed").strip()
+    if len(tail) > 500:
+        tail = tail[-500:]
+    print(f"  ⚠ graphify extract failed: {tail}", file=sys.stderr)
+    sentinel_path = os.path.join(repo_root, ".synlynk", "sentinel.md")
+    try:
+        os.makedirs(os.path.dirname(sentinel_path), exist_ok=True)
+        from synlynk.sentinel import _write_sentinel_alert
+
+        _write_sentinel_alert(
+            "WARN",
+            "GRAPHIFY_EXTRACT_FAILED",
+            tail,
+            sentinel_path=sentinel_path,
+        )
+    except Exception as exc:
+        print(
+            f"  ⚠ graphify extract: could not record sentinel ({type(exc).__name__}: {exc})",
+            file=sys.stderr,
+        )
+
+
 def _run_graphify_extract(repo_root: str) -> bool:
     """Ensure Graphify is installed and execute deterministic AST extraction."""
     if os.environ.get("SYNLYNK_SKIP_GRAPHIFY_EXTRACT") == "1":
@@ -68,8 +228,10 @@ def _run_graphify_extract(repo_root: str) -> bool:
         try:
             installed = install_tool("graphify")
             if not installed:
+                _emit_graphify_extract_failed(repo_root, "graphify install failed")
                 return False
-        except Exception:
+        except Exception as exc:
+            _emit_graphify_extract_failed(repo_root, str(exc))
             return False
 
     out_dir = os.path.join(repo_root, ".synlynk", "graphify-out")
@@ -96,9 +258,18 @@ def _run_graphify_extract(repo_root: str) -> bool:
                                 json.dump(mdata, f, indent=2)
                 except Exception:
                     pass
+            graph_file = os.path.join(out_dir, "graph.json")
+            if os.path.isfile(graph_file):
+                try:
+                    from synlynk.graph_cache import write_traversal_cache
+                    write_traversal_cache(repo_root)
+                except Exception as exc:
+                    print(f"  ⚠ graph cache: {exc}", file=sys.stderr)
             return True
+        _emit_graphify_extract_failed(repo_root, res.stderr or res.stdout or f"exit {res.returncode}")
         return False
-    except Exception:
+    except Exception as exc:
+        _emit_graphify_extract_failed(repo_root, str(exc))
         return False
 
 
@@ -146,7 +317,11 @@ def cmd_scan(deep: bool = False, status: bool = False,
         print(f"  {_GREEN}▶{_RESET} Deep scanning source tree...")
         skeleton, total_files, total_syms = _pkg("_scan_full_repo")()
         sha_short = (_pkg("_git_head_sha")() or "unknown")[:7]
-        _run_graphify_extract(os.getcwd())
+        repo_root = os.getcwd()
+        if classify_workspace(repo_root) == "greenfield":
+            write_greenfield_skeleton(repo_root)
+        else:
+            _run_graphify_extract(repo_root)
         print(f"  {_GREEN}✓{_RESET} Scanned {total_files} files · {total_syms} symbols · HEAD {sha_short}")
         print(f"  {_CYAN}→{_RESET} project-docs/source-map.md updated")
         return
@@ -263,6 +438,7 @@ def cmd_scan(deep: bool = False, status: bool = False,
             updated = _pkg("_write_scan_fences")(scan, root=primary_root)
             for path in updated:
                 print(f"  {_GREEN}✓{_RESET} {os.path.basename(path)} updated")
+            ensure_graph_for_head(primary_root)
         else:
             print("  [dry-run] no files written")
         return

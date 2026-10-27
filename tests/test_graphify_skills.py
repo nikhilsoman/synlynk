@@ -9,6 +9,7 @@ def test_all_four_graphify_skills_exist_and_have_valid_frontmatter():
         "graphify-pr-impact",
         "graphify-symbol-navigator",
         "graphify-domain-sweep",
+        "graphify-maintainer-sweep",
     ]
     for skill in required_skills:
         skill_file = skills_dir / skill / "SKILL.md"
@@ -41,6 +42,16 @@ def test_all_four_graphify_skills_exist_and_have_valid_frontmatter():
             "graphify-domain-sweep",
             "pm",
             ["query_graph", "--mode deep", "graphify extract", "synlynk pm sweep"],
+        ),
+        (
+            "graphify-maintainer-sweep",
+            "maintainer",
+            [
+                "synlynk maintainer sweep --refresh-graph",
+                "synlynk heal --cycles",
+                "synlynk heal --orphans",
+                "synlynk doctor",
+            ],
         ),
     ],
 )

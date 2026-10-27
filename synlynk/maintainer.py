@@ -151,3 +151,85 @@ def probe_reproduction(group: dict, workspace_root: Optional[str] = None) -> dic
             "exit_code": 1,
             "output": f"Probe error: {exc}",
         }
+
+
+def _workspace_repos(repo_root: str) -> list[str]:
+    """Read `.synlynk/workspace.json` repos. Accept path strings or `{path}` objects."""
+    import json
+
+    path = os.path.join(repo_root, ".synlynk", "workspace.json")
+    if not os.path.isfile(path):
+        return []
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return []
+    repos = []
+    for entry in data.get("repos") or []:
+        if isinstance(entry, str) and entry.strip():
+            repos.append(entry)
+        elif isinstance(entry, dict) and entry.get("path"):
+            repos.append(str(entry["path"]))
+    return repos
+
+
+def cmd_maintainer_sweep(repo_root: str = ".", refresh_graph: bool = False) -> int:
+    """Dry-run by default. `--refresh-graph` rebuilds the graph, cache, and mesh."""
+    import json
+
+    repo_root = os.path.abspath(repo_root)
+    repos = _workspace_repos(repo_root)
+    mesh_path = os.path.join(repo_root, ".synlynk", "mesh.json")
+    if not refresh_graph:
+        print(f"would ensure graph for {repo_root}")
+        print("would rewrite traversal cache")
+        if len(repos) >= 2:
+            print(f"would rebuild mesh from {len(repos)} repos at {mesh_path}")
+        else:
+            print("would skip mesh (workspace lists fewer than 2 repos)")
+        return 0
+
+    from synlynk.scan import ensure_graph_for_head
+
+    if not ensure_graph_for_head(repo_root):
+        print("graph refresh failed", file=__import__("sys").stderr)
+        return 1
+
+    from synlynk.graph_cache import write_traversal_cache
+
+    write_traversal_cache(repo_root)
+    if len(repos) < 2:
+        return 0
+
+    previous_edges = []
+    if os.path.isfile(mesh_path):
+        try:
+            with open(mesh_path, encoding="utf-8") as handle:
+                previous = json.load(handle)
+            if isinstance(previous, dict):
+                previous_edges = previous.get("edges") or []
+        except (OSError, json.JSONDecodeError):
+            previous_edges = []
+
+    from synlynk.mesh import build_federated_mesh, contract_drift
+
+    mesh = build_federated_mesh(repos, mesh_path)
+    rows = contract_drift(previous_edges, mesh.get("edges") or [])
+    if not rows:
+        return 0
+    for row in rows:
+        print(f"contract drift: {row['source']} -> {row['target']}")
+    try:
+        from synlynk.sentinel import _write_sentinel_alert
+
+        os.makedirs(os.path.join(repo_root, ".synlynk"), exist_ok=True)
+        _write_sentinel_alert(
+            "WARN",
+            "MESH_CONTRACT_DRIFT",
+            "; ".join(f"{row['source']} -> {row['target']}" for row in rows),
+            sentinel_path=os.path.join(repo_root, ".synlynk", "sentinel.md"),
+        )
+    except Exception as exc:
+        print(f"  ⚠ could not record MESH_CONTRACT_DRIFT: {exc}")
+    return 0
