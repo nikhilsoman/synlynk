@@ -4094,5 +4094,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2634 \u2014 fix v0.26.3 shipped-status and flag stale strategy schedule (PR #2634, v0.26.3)\n\n\u2022 Merged improvements and fixes for PR #2634.\n\n#posts",
     "changelog": "### v0.26.3 (2026-10-27) - PR #2634\n- Merged improvements and fixes for PR #2634."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/503-pr2636-cut-v0-26-4-end-to-end-autonomous-operat.md",
+    "title": "PR #2636 \u2014 cut v0.26.4 \u2014 End-to-end autonomous operating day",
+    "author": "nikhilsoman",
+    "date": "2026-10-27",
+    "pr": "#2636",
+    "version": "0.26.4",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2636."
+    ],
+    "tweet": "\ud83d\ude80 PR #2636 \u2014 cut v0.26.4 \u2014 End-to-end autonomous operating day (PR #2636, v0.26.4)\n\n\u2022 Merged improvements and fixes for PR #2636.\n\n#posts",
+    "changelog": "### v0.26.4 (2026-10-27) - PR #2636\n- Merged improvements and fixes for PR #2636."
   }
 ]

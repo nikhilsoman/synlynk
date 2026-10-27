@@ -581,6 +581,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [500](./500-pr2630-supervised-mode-execute-stage-gate-for-d.md) | PR #2630 — SUPERVISED mode execute-stage gate for daemon autonomy pass | [#2630](https://github.com/nikhilsoman/synlynk/pull/2630) | 2026-10-27 |
 | [501](./501-pr2633-gate-supervised-daemon-schedule-executio.md) | PR #2633 — gate supervised daemon schedule execution | [#2633](https://github.com/nikhilsoman/synlynk/pull/2633) | 2026-10-27 |
 | [502](./502-pr2634-fix-v0-26-3-shipped-status-and-flag-stal.md) | PR #2634 — fix v0.26.3 shipped-status and flag stale strategy schedule | [#2634](https://github.com/nikhilsoman/synlynk/pull/2634) | 2026-10-27 |
+| [503](./503-pr2636-cut-v0-26-4-end-to-end-autonomous-operat.md) | PR #2636 — cut v0.26.4 — End-to-end autonomous operating day | [#2636](https://github.com/nikhilsoman/synlynk/pull/2636) | 2026-10-27 |
 
 ## Per-PR Post Template
 
