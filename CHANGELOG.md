@@ -16,6 +16,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
 
+## [v0.26.4] - 2026-10-27
+### Fixed
+- fix(scheduler): gate SUPERVISED-mode daemon auto-dispatch through `can_auto_advance()` so it computes/prints the plan but halts before the `execute` stage, matching the Tri-Modal Autonomy Dial's documented semantics; previously SUPERVISED behaved identically to AUTONOMOUS (gh:#2631) (#2633)
+### Verified
+- Revalidated #2262 (autonomous backlog pickup pipeline) against current code — already satisfied by PR #2269; no duplicate work
+- Revalidated #2553 (`SynlynkDaemon.status()` crash on missing pidfile) against current code — already satisfied by PR #2564; no duplicate work
+
 ## [v0.26.3] - 2026-10-27
 ### Added
 - feat(claims): automatic rolling task lease acquisition and active checkout tracking wired into `synlynk story update <id> --status in_progress` (gh:#2511, #2528)
