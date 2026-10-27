@@ -4030,5 +4030,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2628 \u2014 v0.26.3 \u2014 Safe Autonomous Operations & Work-Start Claim Enforcement (PR #2628, v0.26.3)\n\n\u2022 Merged improvements and fixes for PR #2628.\n\n#posts",
     "changelog": "### v0.26.3 (2026-10-26) - PR #2628\n- Merged improvements and fixes for PR #2628."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/499-pr2629-salvage-uncommitted-work-before-worktree.md",
+    "title": "PR #2629 \u2014 salvage uncommitted work before worktree hygiene cleanup",
+    "author": "nikhilsoman",
+    "date": "2026-10-27",
+    "pr": "#2629",
+    "version": "0.26.3",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2629."
+    ],
+    "tweet": "\ud83d\ude80 PR #2629 \u2014 salvage uncommitted work before worktree hygiene cleanup (PR #2629, v0.26.3)\n\n\u2022 Merged improvements and fixes for PR #2629.\n\n#posts",
+    "changelog": "### v0.26.3 (2026-10-27) - PR #2629\n- Merged improvements and fixes for PR #2629."
   }
 ]
