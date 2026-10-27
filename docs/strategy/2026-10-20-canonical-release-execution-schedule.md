@@ -2,7 +2,7 @@
 
 **Effective date:** 2026-10-22
 **Authority:** `dec-f8835ba3`, roadmap parent #2458, and user approval on 2026-10-22
-**Status:** Active as of 2026-10-22; PR #2534 is merged and roadmap state, release epics, milestones, and parent #2458 are synchronized
+**Status:** SUPERSEDED as of 2026-10-27 for everything from v0.26.2 onward — PR #2627 (commit `96a261bd`) renumbered the sequence below (a hotfix, #2624, consumed the v0.26.2 slot; `v0.26.2`="Safe autonomous operations" below is now `v0.26.3`, `v0.26.3`="End-to-end autonomous operating day" below is now `v0.26.4`) and added `v0.26.5`-`v0.26.8`. The dated calendar below was never rebaselined against that renumbering; `project-docs/roadmap.md` is the current source of truth for the post-renumbering sequence and ship status. This doc remains useful for the v0.25.x and early v0.26.x gate *content* and rationale, just not the version numbers/dates for v0.26.2 onward.
 
 **Rebaseline:** This amendment supersedes the 2026-10-20 dated schedule. The
 release families and their purpose remain canonical, while the daily stable

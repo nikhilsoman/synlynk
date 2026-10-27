@@ -452,9 +452,9 @@ Daily stable gate: resolve or evidence non-blocking dispositions for self-test/C
 Daily stable gate: close GOVERNS/model/cost/job-truth stability review; every selected story has a goal, release epic and current ticket; all 94 ticketless candidates receive a linked or explicit deferred/archive disposition. Use governed phase-update ticket #2535; do not edit canonical DB rows directly. Parent epic #2458; milestone #14; goal goal-9ef9a965.
 
 
-## v0.26.3 — Safe autonomous operations [planned] (target: 2026-10-28)
+## v0.26.3 — Safe autonomous operations [shipped] (target: 2026-10-28)
 
-Daily stable gate: enforce claims/leases at work-start paths (#2511/#2528); approval, containment, audit and recovery controls pass before broader autonomy. Parent #2458; release epic #2470; goals goal-bd5eaa14 and goal-eacab0dc.
+Shipped 2026-10-27 (PR #2628, tag v0.26.3). Enforces claims/leases at work-start paths (#2511/#2528): automatic rolling task lease acquisition on `synlynk story update <id> --status in_progress`, pre-dispatch lease verification gate, background dispatch worker lease recording, and `synlynk doctor --fix leases` stale-lease recovery. Parent #2458; release epic #2470; goals goal-bd5eaa14 and goal-eacab0dc.
 
 
 ## v0.27.3 — Cross-harness onboarding verification [planned] (target: 2026-11-04)
