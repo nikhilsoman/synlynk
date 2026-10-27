@@ -1,6 +1,7 @@
 # Tasks (generated - source of truth is state.db)
 # Edit via: synlynk story create/update | Do NOT hand-edit this file
 
+- [ ] Harness Inception & Protocol Adherence Empirical Calibration Benchmark [testing] <!-- id:story-7e19365d -->
 - [ ] Reconcile project-docs drift stranded in PR #2571 review worktree (PR #2572) [backend] <!-- id:story-360c0d73 -->
 - [ ] Reconcile project-docs drift stranded in stale fix/claude/2567 worktree [backend] <!-- id:story-dda00e7b -->
 - [ ] Fix capability_calibration_results.quality_verified migration gap (gh:#2569) [backend] <!-- id:story-2349673f -->
@@ -9,7 +10,6 @@
 - [ ] Operationalize autonomous GOVERNS SDLC: governance, agent ownership, and cost provenance [testing] <!-- id:story-issue-2412 -->
 - [ ] Quota/capacity reservation hardening (candidate branches from scratch-worktree audit) <!-- id:story-8e0596fa -->
 - [ ] Cost-entries turn-usage-JSON migration (candidate branch from scratch-worktree audit) <!-- id:story-ae1b3cda -->
-- [x] Roadmap v0.26.1: Workspace-agent operations <!-- id:story-97f99c0d -->
 - [ ] Operationalize autonomous GOVERNS SDLC: governance, agent ownership, and cost provenance [architecture] <!-- id:story-ee4529d9 -->
 - [ ] BS-15: Harness independence — home/away paradigm, OpenRouter direct API, 3rd-party IDE plugins <!-- id:story-ec2802d6 -->
 - [ ] chore(deps-dev): bump markdown-it from 14.2.0 to 14.3.2 in /website [frontend] <!-- id:story-issue-1900 -->
@@ -414,14 +414,60 @@ CRITICAL CONTEXT: your dispatch worktree  [testing] <!-- id:story-issue-2 -->
 - [ ] BS-8: stuck detection + one-shot consult from capability matrix + Expert Consult injection [dispatch] <!-- id:story-bs8-consult -->
 - [ ] BS-8: synlynk probe — ambient harness capability drift detection + publish pipeline [tooling] <!-- id:story-bs8-probe -->
 - [ ] BS-7: brainstorm — skill pack interoperability + benchmarks (Superpowers/GStack/GSD) [platform] <!-- id:story-bs7-interop -->
+- [ ] Claude Interactive Auto-Mode Classifier Regression Remediation (#2635) [backend] <!-- id:story-670b4328 -->
+- [ ] Harness Semantic Dialect Compiler (Claude XML, Codex Schema, Agy Checklist) [backend] <!-- id:story-562be842 -->
+- [ ] Autonomous Inception Trampoline & JIT Protocol Loader (synlynk protocol) [backend] <!-- id:story-419c2947 -->
+- [ ] Inaugural Reference Ceremony release-conductor progressive-disclosure skill [frontend] <!-- id:story-6ff70a5e -->
+- [ ] Workspace Ceremonies Canon & Onboarding Engine integration [backend] <!-- id:story-6ab8cb96 -->
+- [ ] Empirical Ceremony Discovery Benchmark Spike [testing] <!-- id:story-eb9bfa85 -->
+- [ ] Heuristic Ceremony Discovery & Motif Miner [backend] <!-- id:story-ca522d5e -->
+- [ ] Graphify Markdown AST & Docs Graph Sidecar (synlynk scan --docs) [backend] <!-- id:story-f0088dee -->
+- [ ] Calibrate a deterministic markdown sidecar before any document-graph implementation [backend] <!-- id:story-bae335b6 -->
+- [ ] chore(release): sync website/docs-bundle collateral for v0.26.4 [frontend] <!-- id:story-issue-2637 -->
+- [ ] chore(release): cut v0.26.4 — End-to-end autonomous operating day [testing] <!-- id:story-issue-2636 -->
+- [ ] docs(roadmap): fix v0.26.3 shipped-status and flag stale strategy schedule [backend] <!-- id:story-issue-2634 -->
+- [ ] fix: gate supervised daemon schedule execution [testing] <!-- id:story-issue-2633 -->
+- [x] fix(scheduler): gate SUPERVISED-mode execute stage via can_auto_advance() (gh:#2631) [backend] <!-- id:story-545b147b -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1793068207 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  [testing] <!-- id:story-adhoc-1793068180 -->
+- [x] docs(spec+plan): SUPERVISED mode execute-stage gate for daemon autonomy pass [testing] <!-- id:story-issue-2630 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1793068039 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1793067822 -->
+- [ ] [v0.26.1] Multi-harness Interactive Home Conductor PM authorization [frontend] <!-- id:story-issue-2488 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1793067607 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  [testing] <!-- id:story-adhoc-1793067566 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1793067406 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text b [testing] <!-- id:story-adhoc-1793067356 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1793067312 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below. DO NOT inspect your local [testing] <!-- id:story-adhoc-1793067252 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1793067116 -->
+- [ ] docs(costs): backfill job-8bde97ef review cost entry for PR #2148 [testing] <!-- id:story-issue-2149 -->
+- [ ] chore(archive): salvage uncommitted work before worktree hygiene cleanup [testing] <!-- id:story-issue-2629 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1793066937 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text b [testing] <!-- id:story-adhoc-1793066899 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1793066760 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below. DO NOT inspect your local [testing] <!-- id:story-adhoc-1793066715 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1793066631 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  [testing] <!-- id:story-adhoc-1793066597 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1793066455 -->
+- [ ] Review PR for v0.26.3 safe autonomous operations [backend] <!-- id:story-issue-2528 -->
+- [ ] chore(roadmap): expand v0.26.3-v0.26.8 releases and synchronize canonical roadmap [docs] <!-- id:story-issue-2627 -->
+- [ ] [SEV-1] CLI entrypoint failure: Multi-user PATH shadowing & broken shared /opt/homebrew binary [backend] <!-- id:story-issue-2624 -->
+- [ ] fix(cli): CLI binary integrity, multi-user isolation & E2E endpoint verification (#2624) [testing] <!-- id:story-issue-2625 -->
+- [ ] chore(docs): post-v0.26.1 housekeeping sync for todo, costs, and memory [security] <!-- id:story-issue-2623 -->
 - [ ] chore(release): prepare collateral and README for v0.26.1 (#2621) [testing] <!-- id:story-issue-2622 -->
 - [ ] feat(charters): implement workspace-agent operations and role governance (v0.26.1) [testing] <!-- id:story-issue-2621 -->
 - [ ] chore(release): prepare collateral and README for v0.26.0 [testing] <!-- id:story-issue-2620 -->
 - [ ] feat(daemon): v0.26.0 daemon reliability (#2468) [testing] <!-- id:story-issue-2619 -->
 - [ ] docs: session-close housekeeping for v0.25.4 ship + v0.25.5 handoff [testing] <!-- id:story-issue-2610 -->
 - [ ] chore(release): prepare collateral and README for v0.25.5 [testing] <!-- id:story-issue-2613 -->
-- [x] Scope test suite to code changes and optimize PR matrix (#2529) [backend] <!-- id:story-365ec05a -->
-- [x] Fix cleanup_selftest_workspaces PID liveness check (#2527, #2526) [backend] <!-- id:story-44b6094e -->
 - [ ] Review + merge PR #2596: synlynk.com platform vision spec [backend] <!-- id:story-ca8afaf8 -->
 - [ ] Review + merge PR #2597: synlynk work loop design spec (held pending decision) [backend] <!-- id:story-3e509e97 -->
 - [ ] synlynk.com platform vision spec: accounts, entitlements, hosted infra (design-only) [backend] <!-- id:story-6da127b4 -->
@@ -467,7 +513,6 @@ IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  
 - [ ] chore(release): v0.25.3 - Muse readiness and capacity-routing evidence [testing] <!-- id:story-issue-2575 -->
 - [ ] Maintainer role: post-merge housekeeping checklist + Vizor-editable charter instructions [devops] <!-- id:story-09c4a6f9 -->
 - [ ] docs: add Synlynk onboarding guide + enable team mode [testing] <!-- id:story-issue-2565 -->
-- [x] Capability-sweep executor output is contaminated by stale worktree diff when dispatched from a non-main branch [testing] <!-- id:story-issue-2567 -->
 - [ ] Write a 3-bullet status update summarizing a completed feature. [backend] <!-- id:story-adhoc-1792806578 -->
 - [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
 IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  [testing] <!-- id:story-adhoc-1792806082 -->
@@ -477,7 +522,7 @@ IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  
 - [ ] Write a one-line Python function `def add(a, b): return a + b` and nothing else. [backend] <!-- id:story-adhoc-1792786041 -->
 - [ ] synlynk daemon status crashes on missing pidfile — same #2537 fingerprint that #2544 fixed only for watch [testing] <!-- id:story-issue-2553 -->
 - [ ] Write a one-line Python function `def add(a, b): return a + b`. Respond with only the code. [backend] <!-- id:story-adhoc-1792782408 -->
-- [ ] Fix SynlynkDaemon.status() crash on missing pidfile (#2553) [backend] <!-- id:story-f058b9d6 -->
+- [x] Fix SynlynkDaemon.status() crash on missing pidfile (#2553) [backend] <!-- id:story-f058b9d6 -->
 - [ ] fix: align Muse capability readiness (gh:#2554) [testing] <!-- id:story-issue-2562 -->
 - [ ] Muse reports TIER unsupported / 0 capacity in synlynk status and is absent from all task_allocation entries, while probe says ok [frontend] <!-- id:story-issue-2554 -->
 - [ ] [Epic] Exhaustive harness dispatch rejection taxonomy and interactive/headless parity [backend] <!-- id:story-issue-2558 -->
@@ -495,7 +540,6 @@ IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  
 IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  [testing] <!-- id:story-adhoc-1792749470 -->
 - [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1792749319 -->
 - [ ] Roadmap v0.25.3: Muse and model-capacity readiness [security] <!-- id:story-issue-2466 -->
-- [x] Roadmap v0.25.2: Stability baseline and accumulated PR reconciliation [security] <!-- id:story-issue-2465 -->
 - [ ] docs: sync roadmap and cost ledger after stability merges [testing] <!-- id:story-issue-2546 -->
 - [ ] fix(daemon): tolerate missing watch pidfiles [testing] <!-- id:story-issue-2544 -->
 - [ ] fix: Make only the README collected-test count correction (job-2777fd98) [testing] <!-- id:story-issue-2543 -->
@@ -516,7 +560,6 @@ IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  
 - [ ] CI runtime: retarget rc1 <180s bar off closed #1492, demote 3.10 legs, blocked on #2527 (#2529) [testing] <!-- id:story-63df4546 -->
 - [ ] Local Pilot: Docker relay cannot connect to host auth socket [backend] <!-- id:story-issue-2525 -->
 - [ ] feat: story home claims via task_leases extension (gh:#2511) [testing] <!-- id:story-issue-2524 -->
-- [x] release-docs stale test-count check breaks under concurrent PR landings [testing] <!-- id:story-issue-2522 -->
 - [ ] Fill Grok & Muse model-roster gaps in .synlynk/models.json [backend] <!-- id:story-issue-2457 -->
 - [ ] feat(local): add fail-closed operational resume control [backend] <!-- id:story-issue-2512 -->
 - [ ] Home-harness claim mechanism is per-checkout/gitignored — doesn't prevent cross-harness collisions <!-- id:story-975493d1 -->
@@ -586,18 +629,14 @@ IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  
 - [ ] Implement gh:#2447 (LIVE-27 fix, DB cleanse layer). Full RCA at docs/rca/2026-10-19-LIVE-27-harness-models-backfill-corruption.md -- read it first. gh:#2448 and gh:#2449 (the ingestion-hardening and r [testing] <!-- id:story-issue-2447 -->
 - [ ] [LIVE-27] Prioritize authoritative discovery sources and enforce allowlist in resolve_tier_model() [testing] <!-- id:story-issue-2449 -->
 - [ ] [LIVE-27] Harden sync_harness_models_window() candidate ingestion and timestamp handling [backend] <!-- id:story-issue-2448 -->
-- [x] [LIVE-27] Add fleet-wide model resolution and catalog invariant test suite <!-- id:story-54758ff8 -->
-- [x] [LIVE-27] Harden sync_harness_models_window() candidate ingestion and timestamp handling <!-- id:story-60eea2c4 -->
-- [x] [LIVE-27] Prioritize authoritative discovery sources and enforce allowlist in resolve_tier_model() <!-- id:story-a846f2a5 -->
-- [x] [LIVE-27] Cleanse corrupted execution_log rows from harness_models in canonical state.db <!-- id:story-f5d725cc -->
 - [ ] Muse structurally excluded from review/pm/deploy — missing capability_probe profile + gh-write adapter, not a measured failure [backend] <!-- id:story-issue-2445 -->
 - [ ] Global synlynk CLI launcher raises ModuleNotFoundError inside dispatch sandboxes [testing] <!-- id:story-issue-2442 -->
 - [ ] harness_models fallback returns log-scrape garbage as resolved model_id for codex [backend] <!-- id:story-issue-2441 -->
 - [ ] Add terminal outbox migration and reconcile merged PR job evidence <!-- id:story-4419bf5e -->
 - [ ] fix: eliminate daemon starter lock deadlock [testing] <!-- id:story-issue-2439 -->
-- [ ] No autonomous backlog pickup: schedule/triage/promote pipeline is CLI-only, daemon never triggers it [backend] <!-- id:story-issue-2262 -->
+- [x] No autonomous backlog pickup: schedule/triage/promote pipeline is CLI-only, daemon never triggers it [backend] <!-- id:story-issue-2262 -->
 - [ ] [tech-debt] Make PR review checks work safely across Codex and Agy sandboxes <!-- id:story-2544dade -->
-- [ ] No autonomous backlog pickup: schedule/triage/promote pipeline is CLI-only, daemon never triggers it <!-- id:story-f573de2b -->
+- [x] No autonomous backlog pickup: schedule/triage/promote pipeline is CLI-only, daemon never triggers it <!-- id:story-f573de2b -->
 - [ ] fix: preserve Local Pilot prompt contract [testing] <!-- id:story-issue-2408 -->
 - [ ] Cost-inflation recurrence: Codex implement dispatches burn ~65x estimated tokens despite correct, successful output (PR #2215 fix cycle) <!-- id:story-3e1f1e78 -->
 - [ ] Broader: routing-proof artifact — route --report + 5-way benchmark kit (broader #3) <!-- id:story-511e98ca -->
@@ -652,7 +691,6 @@ IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  
 - [ ] synlynk pr check: cross-harness review gate misattributes fix jobs whose task text mentions a prior review <!-- id:story-fa4da945 -->
 - [ ] [Local Harness] P1: qualify Ornith, Qwen 3.6, Bonsai, and Gemma 4 profiles [testing] <!-- id:story-issue-2348 -->
 - [ ] [Local Harness] P1: graduated local-routing pilot and isolated Aider evaluation boundary [testing] <!-- id:story-issue-2349 -->
-- [x] Dispatch worktrees' default sparse-checkout is too narrow, causes false review blockers [backend] <!-- id:story-issue-2320 -->
 - [ ] Parity/probe SOP-fence injection ignores per-harness reload tier (gh:#2243 follow-up) [backend] <!-- id:story-issue-2284 -->
 - [ ] pr check reports green when dispatch branch has no resolvable PR [testing] <!-- id:story-issue-2260 -->
 - [ ] Align architect PR-review instructions with enforced role policy and dry-run checks [security] <!-- id:story-issue-2258 -->
@@ -755,7 +793,6 @@ IMPORTANT: Evaluate the code and diff based SOLELY on the provided text below.  
 - [ ] docs: recover continuous-momentum design spec from stashed WIP [testing] <!-- id:story-issue-2300 -->
 - [ ] docs(spec): pytest verbosity shim design for gh:#2294 [testing] <!-- id:story-issue-2301 -->
 - [ ] chore(costs): log v0.25.1 release-prep PM session cost [testing] <!-- id:story-issue-2299 -->
-- [x] Model catalog validation (gh:#2268/#2278) was wired for Agy only; Grok/Codex still drift silently, and explicit --model bypasses it entirely [backend] <!-- id:story-issue-2291 -->
 - [ ] Model catalog: dispatch-time live resolution + --model validation (sub-task 4, gh:#2291) [backend] <!-- id:story-00c51c3f -->
 - [ ] Model catalog: wire 24h auto-refresh staleness check into daemon/CLI startup (sub-task 3, gh:#2291) [backend] <!-- id:story-5422a738 -->
 - [ ] Model catalog: extend harness_models schema with provider/rate-card/capability columns (sub-task 1, gh:#2291) [backend] <!-- id:story-868c7f0a -->
@@ -1084,7 +1121,5 @@ If reviewer identity allows approval, submit a [testing] <!-- id:story-issue-189
 - [ ] fix: fleet-parity security cluster — fail-closed permissions + env allowlist (#348, #338) [backend] <!-- id:story-issue-641 -->
 - [ ] Agent parity gap: role-based permission/grants system is a no-op for Agy, Grok, and Local dispatches [testing] <!-- id:story-issue-338 -->
 - [ ] docs: blog posts for PRs #584, #588, #589, #591, #592 [testing] <!-- id:story-issue-594 -->
-- [ ] synlynk doctor: TC-1/TC-2/TC-3/TC-5 silently no-op for most agents due to AGENT_CAPABILITY_BASELINES schema inconsistency [testing] <!-- id:story-issue-339 -->
-- [ ] docs: reapply PR #528/#530 devlog + backfill PR #533 cost rows [testing] <!-- id:story-issue-564 -->
 
-> 17 legacy story omitted from the active queue (older than 90 days).
+> 19 legacy story omitted from the active queue (older than 90 days).
