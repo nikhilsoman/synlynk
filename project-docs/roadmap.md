@@ -452,9 +452,9 @@ Daily stable gate: resolve or evidence non-blocking dispositions for self-test/C
 Daily stable gate: close GOVERNS/model/cost/job-truth stability review; every selected story has a goal, release epic and current ticket; all 94 ticketless candidates receive a linked or explicit deferred/archive disposition. Use governed phase-update ticket #2535; do not edit canonical DB rows directly. Parent epic #2458; milestone #14; goal goal-9ef9a965.
 
 
-## v0.26.3 — Safe autonomous operations [planned] (target: 2026-10-28)
+## v0.26.3 — Safe autonomous operations [shipped] (target: 2026-10-28)
 
-Daily stable gate: enforce claims/leases at work-start paths (#2511/#2528); approval, containment, audit and recovery controls pass before broader autonomy. Parent #2458; release epic #2470; goals goal-bd5eaa14 and goal-eacab0dc.
+Shipped 2026-10-27 (PR #2628, tag v0.26.3). Enforces claims/leases at work-start paths (#2511/#2528): automatic rolling task lease acquisition on `synlynk story update <id> --status in_progress`, pre-dispatch lease verification gate, background dispatch worker lease recording, and `synlynk doctor --fix leases` stale-lease recovery. Parent #2458; release epic #2470; goals goal-bd5eaa14 and goal-eacab0dc.
 
 
 ## v0.27.3 — Cross-harness onboarding verification [planned] (target: 2026-11-04)
@@ -495,5 +495,9 @@ Interactive timeline canvas powered by Jantt (vendored vanilla JS library with o
 ## v0.26.8 — Task Boundary Context Protocol, Compaction & Herdr Epic Tabs [planned] (target: 2026-10-30)
 
 Task boundary contextual update surfacing: fenced `synlynk statusline` displaying breadcrumbs, active goal/story, git HEAD, burn rate, sentinel status, and task/cost summaries; automated context compaction for interactive Home Conductors before `/clear` or task handoffs; programmatically launching each new epic in a dedicated Herdr tab (`synlynk herdr tab <epic>`) with isolated 4-pane cockpit; and graceful fallback to spawning a tmux/terminal window when `HERDR_ENV != 1`.
+
+## v0.26.10 — Claude interactive auto-mode classifier regression investigation [planned] (target: TBD)
+
+Investigate and fix the Claude Code interactive harness's auto-mode classifier denying already-authorized PM-role GitHub writes (gh:#2635) — reproduced denying milestone/issue metadata PATCH calls under both `[External System Writes]` and `[Auto-Mode Bypass]` reasons, including when routed through a headless `synlynk dispatch --requires-gh-write` rather than run interactively, contradicting the Hardened PR Review Policy's documented bypass rationale. User-flagged regression (not observed prior to ~Sep/Oct 2026); likely tripped by synlynk's own injected instruction surface. Tracked under goal-005ea87d (Full Fleet Harness Parity); related: gh:#2152, #2150, #2558, #2097 (closed), #1140 (closed).
 
 
