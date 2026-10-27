@@ -499,11 +499,31 @@ Task boundary contextual update surfacing: fenced `synlynk statusline` displayin
 
 ## v0.26.9 — Workspace Ceremonies Canon & Harness² Recursive Skill Synthesis [planned] (target: 2026-10-31)
 
-Formalize skills as reusable, role-bound operational ceremonies born from repeated habits; extract Markdown AST action-sequence graphs via Graphify Docs Graph Sidecar (`synlynk scan --docs`); implement Google Research Harness² Dual-Recursion (Propose-Probe-Compose) loops to detect repeated workflow motifs ($n \ge 3$), empirically benchmark candidate skills in isolated scratch sandboxes, and safely bind proven skills to workspace agent charters; establish the workspace onboarding ceremonies canon (`.synlynk/skills/`); and ship the inaugural reference ceremony `release-conductor` bound to `pm` and `tpm` roles. Parent #2458; milestone epic #2470; RSI epic #2547; governing goal goal-a222b393.
+Formalize skills as reusable, role-bound operational ceremonies born from repeated habits; extract Markdown AST action-sequence graphs via Graphify Docs Graph Sidecar (`synlynk scan --docs`); implement Google Research Harness² Dual-Recursion (Propose-Probe-Compose) loops to detect repeated workflow motifs ($n \ge 3$), empirically benchmark candidate skills in isolated scratch sandboxes, and safely bind proven skills to workspace agent charters; establish the workspace onboarding ceremonies canon (`.synlynk/skills/`); and ship the inaugural reference ceremony `release-conductor` bound to `pm` and `tpm` roles. Parent #2458; milestone epic #2470; RSI epic #2547; governing goal goal-a222b393. Spec: `docs/superpowers/specs/2026-10-28-workspace-ceremonies-canon-and-skill-synthesis-design.md`; Plan: `docs/superpowers/plans/2026-10-28-workspace-ceremonies-canon-and-skill-synthesis.md`; Protocol: `docs/process/release-implementation-protocol.md`.
+
+- [ ] Graphify Markdown AST & Docs Graph Sidecar (synlynk scan --docs) (P0) <!-- story:story-f0088dee -->
+  Extract directed action-sequence graphs from markdown devlogs, specs, and plans into .synlynk/graphify-out/docs-graph.json.
+- [ ] Heuristic Ceremony Discovery & Motif Miner (P0) <!-- story:story-ca522d5e -->
+  Traverse warm paths in docs-graph.json to discover repeated operational chains (n >= 3) and propose candidate skills + role bindings.
+- [ ] Empirical Ceremony Discovery Benchmark Spike (P0) <!-- story:story-eb9bfa85 -->
+  Historical corpus benchmark validating autonomous discovery of release, sentinel triage, and worktree salvage rituals.
+- [ ] Workspace Ceremonies Canon & Onboarding Engine Integration (P1) <!-- story:story-6ab8cb96 -->
+  Seed workspace-tailored ceremonies into .synlynk/skills/ and agent charters during synlynk init / synlynk onboard.
+- [ ] Inaugural Reference Ceremony: release-conductor Skill (P0) <!-- story:story-6ff70a5e -->
+  Codify the canonical 6-phase release lifecycle into .synlynk/skills/release-conductor/SKILL.md bound to pm and tpm roles.
 
 
 ## v0.26.10 — Autonomous Inception, JIT Instructions & Classifier Parity [planned] (target: 2026-11-01)
 
-Resolve the Claude interactive auto-mode classifier regression (gh:#2635) and multi-harness instruction drift through an autonomous inception architecture: replace monolithic 2,000+ token instruction blocks with a sub-150-token Tier-0 Inception Trampoline; implement JIT dynamic protocol loading (`synlynk protocol load <topic>`); compile harness-native semantic dialects (structured XML for Claude, imperative schemas for Codex, step-state checklists for Agy, terminal-native flags for Grok); sanitize policy vocabulary to eliminate false-positive safety classifier denials; and establish the Harness Inception Empirical Calibration Benchmark under Epic #2547 to continuously verify multi-harness adherence and token efficiency. Parent #2458; milestone epic #2635; RSI epic #2547; governing goal goal-005ea87d.
+Resolve the Claude interactive auto-mode classifier regression (gh:#2635) and multi-harness instruction drift through an autonomous inception architecture: replace monolithic 2,000+ token instruction blocks with a sub-150-token Tier-0 Inception Trampoline; implement JIT dynamic protocol loading (`synlynk protocol load <topic>`); compile harness-native semantic dialects (structured XML for Claude, imperative schemas for Codex, step-state checklists for Agy, terminal-native flags for Grok); sanitize policy vocabulary to eliminate false-positive safety classifier denials; and establish the Harness Inception Empirical Calibration Benchmark under Epic #2547 to continuously verify multi-harness adherence and token efficiency. Parent #2458; milestone epic #2635; RSI epic #2547; governing goal goal-005ea87d. Spec: `docs/superpowers/specs/2026-10-28-autonomous-inception-and-jit-instructions-design.md`.
+
+- [ ] Autonomous Inception Trampoline & JIT Protocol Loader (synlynk protocol) (P0) <!-- story:story-419c2947 -->
+  Sub-150-token Tier-0 bootstrap trampoline and dynamic on-demand loading of .synlynk/protocols/<topic>.md.
+- [ ] Harness Semantic Dialect Compiler (Claude XML, Codex Schema, Agy Checklist) (P0) <!-- story:story-562be842 -->
+  Compile harness-native dialect instruction blocks matching each LLM backend's internal prompt parsing biases.
+- [ ] Claude Interactive Auto-Mode Classifier Regression Remediation (gh:#2635) (P0) <!-- story:story-670b4328 -->
+  Sanitize instruction surface vocabulary to eliminate false-positive [External System Writes] and [Auto-Mode Bypass] blocks.
+- [ ] Harness Inception & Protocol Adherence Empirical Calibration Benchmark (P0) <!-- story:story-7e19365d -->
+  Multi-harness empirical test suite under Epic #2547 measuring adherence, token burn, and safety classifier trip rates.
 
 
