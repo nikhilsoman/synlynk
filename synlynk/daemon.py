@@ -625,14 +625,20 @@ class WatchDaemon:
         need_refresh = False
         if not os.path.exists(graph_path):
             need_refresh = True
-        elif os.path.exists(manifest_path):
-            try:
-                with open(manifest_path) as fh:
-                    man = json.load(fh)
-                if man.get("head_commit") != current_head:
-                    need_refresh = True
-            except Exception:
-                pass
+        else:
+            stamp = ""
+            if os.path.exists(manifest_path):
+                try:
+                    with open(manifest_path) as fh:
+                        man = json.load(fh)
+                    if isinstance(man, dict):
+                        stamp = str(man.get("built_at_commit") or man.get("head_commit") or "")
+                except Exception as exc:
+                    from synlynk.dispatch import _warn_context_build_failure
+                    _warn_context_build_failure("graph daemon manifest", str(exc), repo_root)
+                    stamp = ""
+            if stamp != current_head:
+                need_refresh = True
 
         if need_refresh:
             threading.Thread(
@@ -644,10 +650,11 @@ class WatchDaemon:
 
     def _run_background_graph_refresh(self, repo_root: str) -> None:
         try:
-            from synlynk.scan import _run_graphify_extract
-            _run_graphify_extract(repo_root)
-        except Exception:
-            pass
+            from synlynk.scan import ensure_graph_for_head
+            ensure_graph_for_head(repo_root)
+        except Exception as exc:
+            from synlynk.dispatch import _warn_context_build_failure
+            _warn_context_build_failure("graph daemon refresh", str(exc), repo_root)
 
     def _run_loop(self) -> None:
         config = _pkg("load_config")()

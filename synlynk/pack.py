@@ -112,7 +112,9 @@ def synthesize_context_pack(
 
     try:
         data = json.loads(graph_path.read_text(errors="ignore"))
-    except Exception:
+    except Exception as exc:
+        from synlynk.dispatch import _warn_context_build_failure
+        _warn_context_build_failure("graph pack", str(exc), repo_root)
         return ""
 
     nodes = [n for n in (data.get("nodes") or []) if isinstance(n, dict)]
@@ -134,12 +136,19 @@ def synthesize_context_pack(
             if row:
                 query_text += f" {row[0] or ''} {row[1] or ''} {row[2] or ''}"
             conn.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            from synlynk.dispatch import _warn_context_build_failure
+            _warn_context_build_failure("graph pack story lookup", str(exc), repo_root)
 
     keywords = _extract_keywords(query_text)
     if not keywords and not task_text:
         return ""
+
+    from synlynk.graph_cache import lookup_traversal, render_cached_pack
+
+    cached = lookup_traversal(repo_root, keywords)
+    if cached:
+        return render_cached_pack(cached, token_budget=token_budget)
 
     # Score nodes by keyword matches
     scored_nodes = []

@@ -1021,7 +1021,60 @@ def _fix_task_leases() -> int:
         conn.close()
 
 
+def _hc_graphify_dependency() -> HealthCheck:
+    """Report whether the graphify binary answers --version. Never installs."""
+    from synlynk.tool_installer import is_tool_available
+
+    fix = "Run 'synlynk doctor --fix graphify'"
+    if not is_tool_available("graphify"):
+        return HealthCheck(
+            "graphify_dependency",
+            "fail",
+            "graphify is not on PATH",
+            fix=fix,
+        )
+    try:
+        res = subprocess.run(
+            ["graphify", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (subprocess.SubprocessError, OSError) as exc:
+        return HealthCheck(
+            "graphify_dependency",
+            "fail",
+            f"graphify --version failed: {exc}",
+            fix=fix,
+        )
+    if res.returncode != 0:
+        detail = (res.stderr or res.stdout or "").strip() or f"exit {res.returncode}"
+        return HealthCheck(
+            "graphify_dependency",
+            "fail",
+            f"graphify --version exited {res.returncode}: {detail}",
+            fix=fix,
+        )
+    version = (res.stdout or res.stderr or "").strip().splitlines()
+    shown = version[0] if version else "graphify"
+    return HealthCheck("graphify_dependency", "ok", shown)
+
+
+def _fix_graphify() -> int:
+    """Install graphify via the fallback installer, then re-run the check."""
+    from synlynk.tool_installer import install_tool
+
+    installed = install_tool("graphify")
+    check = _hc_graphify_dependency()
+    print(f"  {check.status}  {check.name}: {check.message}")
+    if not installed or check.status == "fail":
+        return 1
+    return 0
+
+
 def cmd_doctor_fix(agent: str, args=None) -> int:
+    if agent == "graphify":
+        return _fix_graphify()
     if agent == "cli":
         return _fix_cli_path(args=args)
     if agent in ("leases", "task_leases"):
@@ -1518,6 +1571,7 @@ HEALTH_CHECKS = [
     _hc_daemon_service,
     _hc_daemon_liveness,
     _hc_task_leases_integrity,
+    _hc_graphify_dependency,
 ]
 
 

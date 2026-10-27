@@ -61,6 +61,34 @@ def merge_fleet_graphs(repo_paths: List[str]) -> Dict[str, Any]:
     }
 
 
+def contract_drift(previous_edges: List[Dict[str, Any]], current_edges: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Return prior cross-repo calls whose route disappeared while the client remains.
+
+    A row is non-blocking. The caller records MESH_CONTRACT_DRIFT and still exits 0.
+    """
+    def endpoints(edges: List[Dict[str, Any]]) -> set:
+        found = set()
+        for edge in edges or []:
+            if not isinstance(edge, dict):
+                continue
+            if edge.get("source"):
+                found.add(str(edge.get("source")))
+            if edge.get("target"):
+                found.add(str(edge.get("target")))
+        return found
+
+    current_ids = endpoints(current_edges)
+    rows = []
+    for edge in previous_edges or []:
+        if not isinstance(edge, dict) or edge.get("kind") != "cross-repo-call":
+            continue
+        client = str(edge.get("source") or "")
+        route = str(edge.get("target") or "")
+        if client and route and client in current_ids and route not in current_ids:
+            rows.append({"source": client, "target": route, "kind": "cross-repo-call"})
+    return rows
+
+
 def infer_cross_repo_edges(merged_graph: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Infer cross-repository dependencies such as HTTP API contracts and client fetches."""
     nodes = merged_graph.get("nodes") or []

@@ -51,35 +51,25 @@ def is_tool_available(tool_name: str) -> bool:
     return False
 
 
-def install_tool(tool_name: str) -> bool:
-    """Install a recommended tool using available package managers."""
-    if tool_name not in RECOMMENDED_TOOLS:
-        raise ValueError(f"Unknown tool: {tool_name}. Registered tools: {list(RECOMMENDED_TOOLS.keys())}")
+def _install_argv(method: str, package: str, *, user_pip: bool) -> list[str] | None:
+    """Return the argv for one present installer, or None when that method is absent."""
+    if method == "uv" and shutil.which("uv"):
+        return ["uv", "tool", "install", package]
+    if method == "pipx" and shutil.which("pipx"):
+        return ["pipx", "install", package]
+    if method == "pip" and shutil.which("pip"):
+        if user_pip:
+            return ["pip", "install", "--user", package]
+        return ["pip", "install", package]
+    if method == "brew" and shutil.which("brew"):
+        return ["brew", "install", package]
+    if method == "apt" and shutil.which("apt-get"):
+        return ["sudo", "apt-get", "install", "-y", package]
+    return None
 
-    config = RECOMMENDED_TOOLS[tool_name]
-    package = config["package"]
-    methods = config.get("install_methods", [])
 
-    cmd = None
-    if "uv" in methods and shutil.which("uv"):
-        cmd = ["uv", "tool", "install", package]
-    elif "pipx" in methods and shutil.which("pipx"):
-        cmd = ["pipx", "install", package]
-    elif "pip" in methods and shutil.which("pip"):
-        cmd = ["pip", "install", package]
-    elif "brew" in methods and shutil.which("brew"):
-        cmd = ["brew", "install", package]
-    elif "apt" in methods and shutil.which("apt-get"):
-        cmd = ["sudo", "apt-get", "install", "-y", package]
-    else:
-        supported = ", ".join(methods) if methods else "none specified"
-        print(
-            f"Error: No supported package manager found to install '{tool_name}'. "
-            f"Supported methods: {supported}.",
-            file=sys.stderr,
-        )
-        return False
-
+def _run_install(cmd: list[str]) -> bool:
+    """Run one installer command. CalledProcessError is logged and returns False."""
     try:
         res = subprocess.run(cmd, capture_output=True, text=True, check=True)
         return res.returncode == 0
@@ -92,7 +82,63 @@ def install_tool(tool_name: str) -> bool:
         return False
     except (subprocess.SubprocessError, OSError) as exc:
         print(f"Error: Failed to execute installer '{' '.join(cmd)}': {exc}", file=sys.stderr)
+        raise
+
+
+def install_tool(tool_name: str) -> bool:
+    """Install a recommended tool using available package managers.
+
+    Graphify walks uv, then pipx, then ``pip install --user`` when a command fails.
+    Other tools keep the first present manager only.
+    """
+    if tool_name not in RECOMMENDED_TOOLS:
+        raise ValueError(f"Unknown tool: {tool_name}. Registered tools: {list(RECOMMENDED_TOOLS.keys())}")
+
+    config = RECOMMENDED_TOOLS[tool_name]
+    package = config["package"]
+    methods = list(config.get("install_methods", []))
+
+    if tool_name == "graphify":
+        attempted = False
+        for method in methods:
+            cmd = _install_argv(method, package, user_pip=True)
+            if cmd is None:
+                continue
+            attempted = True
+            try:
+                if _run_install(cmd):
+                    return True
+            except (subprocess.SubprocessError, OSError):
+                return False
+        if not attempted:
+            _report_missing_manager(tool_name, methods)
         return False
+
+    cmd = _first_present_command(methods, package)
+    if cmd is None:
+        _report_missing_manager(tool_name, methods)
+        return False
+    try:
+        return _run_install(cmd)
+    except (subprocess.SubprocessError, OSError):
+        return False
+
+
+def _first_present_command(methods: list[str], package: str) -> list[str] | None:
+    for method in methods:
+        cmd = _install_argv(method, package, user_pip=False)
+        if cmd is not None:
+            return cmd
+    return None
+
+
+def _report_missing_manager(tool_name: str, methods: list[str]) -> None:
+    supported = ", ".join(methods) if methods else "none specified"
+    print(
+        f"Error: No supported package manager found to install '{tool_name}'. "
+        f"Supported methods: {supported}.",
+        file=sys.stderr,
+    )
 
 from typing import Optional, List
 from synlynk.install_manifest import update_ecosystem_status

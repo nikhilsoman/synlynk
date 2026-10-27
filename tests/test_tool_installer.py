@@ -42,6 +42,60 @@ def test_install_tool_invokes_uv_or_pipx(monkeypatch):
     assert invoked[0] == ["uv", "tool", "install", "graphifyy"]
 
 
+def test_install_graphify_falls_back_from_uv_to_pipx(monkeypatch, capsys):
+    invoked = []
+
+    def mock_run(cmd, capture_output, text, check):
+        invoked.append(list(cmd))
+        if cmd[0] == "uv":
+            raise subprocess.CalledProcessError(
+                returncode=1,
+                cmd=cmd,
+                output="",
+                stderr="uv failed",
+            )
+        class Res:
+            returncode = 0
+            stdout = "Installed graphifyy"
+        return Res()
+
+    def which(name):
+        if name in ("uv", "pipx"):
+            return f"/usr/local/bin/{name}"
+        return None
+
+    monkeypatch.setattr("shutil.which", which)
+    monkeypatch.setattr("subprocess.run", mock_run)
+
+    success = install_tool("graphify")
+    assert success is True
+    assert invoked == [
+        ["uv", "tool", "install", "graphifyy"],
+        ["pipx", "install", "graphifyy"],
+    ]
+    captured = capsys.readouterr()
+    assert "uv failed" in captured.err
+    assert "code 1" in captured.err
+
+
+def test_install_graphify_pip_uses_user_flag(monkeypatch):
+    invoked = []
+
+    def mock_run(cmd, capture_output, text, check):
+        invoked.append(list(cmd))
+        class Res:
+            returncode = 0
+            stdout = "Installed graphifyy"
+        return Res()
+
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/pip" if name == "pip" else None)
+    monkeypatch.setattr("subprocess.run", mock_run)
+
+    success = install_tool("graphify")
+    assert success is True
+    assert invoked == [["pip", "install", "--user", "graphifyy"]]
+
+
 def test_install_tool_captures_failure_diagnostics(monkeypatch, capsys):
     def mock_run(cmd, capture_output, text, check):
         raise subprocess.CalledProcessError(
