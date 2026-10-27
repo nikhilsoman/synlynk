@@ -496,6 +496,12 @@ Interactive timeline canvas powered by Jantt (vendored vanilla JS library with o
 
 Task boundary contextual update surfacing: fenced `synlynk statusline` displaying breadcrumbs, active goal/story, git HEAD, burn rate, sentinel status, and task/cost summaries; automated context compaction for interactive Home Conductors before `/clear` or task handoffs; programmatically launching each new epic in a dedicated Herdr tab (`synlynk herdr tab <epic>`) with isolated 4-pane cockpit; and graceful fallback to spawning a tmux/terminal window when `HERDR_ENV != 1`.
 
+
+## v0.26.9 — Workspace Ceremonies Canon & Harness² Recursive Skill Synthesis [planned] (target: 2026-10-31)
+
+Formalize skills as reusable, role-bound operational ceremonies born from repeated habits; extract Markdown AST action-sequence graphs via Graphify Docs Graph Sidecar (`synlynk scan --docs`); implement Google Research Harness² Dual-Recursion (Propose-Probe-Compose) loops to detect repeated workflow motifs ($n \ge 3$), empirically benchmark candidate skills in isolated scratch sandboxes, and safely bind proven skills to workspace agent charters; establish the workspace onboarding ceremonies canon (`.synlynk/skills/`); and ship the inaugural reference ceremony `release-conductor` bound to `pm` and `tpm` roles. Parent #2458; milestone epic #2470; RSI epic #2547; governing goal goal-a222b393.
+
+
 ## v0.26.10 — Claude interactive auto-mode classifier regression investigation [planned] (target: TBD)
 
 Investigate and fix the Claude Code interactive harness's auto-mode classifier denying already-authorized PM-role GitHub writes (gh:#2635) — reproduced denying milestone/issue metadata PATCH calls under both `[External System Writes]` and `[Auto-Mode Bypass]` reasons, including when routed through a headless `synlynk dispatch --requires-gh-write` rather than run interactively, contradicting the Hardened PR Review Policy's documented bypass rationale. User-flagged regression (not observed prior to ~Sep/Oct 2026); likely tripped by synlynk's own injected instruction surface. Tracked under goal-005ea87d (Full Fleet Harness Parity); related: gh:#2152, #2150, #2558, #2097 (closed), #1140 (closed).
