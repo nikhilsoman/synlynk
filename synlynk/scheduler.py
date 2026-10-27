@@ -284,7 +284,7 @@ def _autonomy_pass(conn=None) -> None:
 
     See docs/superpowers/specs/2026-10-13-autonomous-backlog-scheduling-design.md
     """
-    from synlynk.autonomy import AutonomyMode, get_autonomy_mode
+    from synlynk.autonomy import AutonomyMode, can_auto_advance, get_autonomy_mode
 
     for stage_name, stage_fn in (
         ("ingest_backlog", lambda: ingest_backlog(db_conn=conn)),
@@ -309,7 +309,7 @@ def _autonomy_pass(conn=None) -> None:
         return
 
     try:
-        cmd_schedule(execute=True)
+        cmd_schedule(execute=can_auto_advance("execute", mode))
     except Exception:
         print("  ⚠ _autonomy_pass: cmd_schedule failed:")
         traceback.print_exc()
