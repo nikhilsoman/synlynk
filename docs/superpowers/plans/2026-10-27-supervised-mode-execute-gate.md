@@ -1,7 +1,20 @@
+---
+title: "Plan: Gate _autonomy_pass() execute stage through can_auto_advance()"
+date: 2026-10-27
+status: approved
+author: "Claude (Home Conductor)"
+goal: "goal-bd5eaa14"
+epic: "#2470"
+milestone: "v0.26.4"
+arc: "runtime"
+issue: "#2631"
+---
+
 # Plan: Gate `_autonomy_pass()` execute stage through `can_auto_advance()`
 
 Spec: `docs/superpowers/specs/2026-10-27-supervised-mode-execute-gate-design.md`
 Goal: `goal-bd5eaa14`
+Issue: `#2631`
 
 ## Task 1 — Fix the gate in `synlynk/scheduler.py`
 

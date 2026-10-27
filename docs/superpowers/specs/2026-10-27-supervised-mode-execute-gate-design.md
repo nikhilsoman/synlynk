@@ -1,4 +1,16 @@
-# Design: SUPERVISED mode does not halt daemon auto-dispatch (gh:#TBD)
+---
+title: "SUPERVISED mode execute-stage gate for daemon autonomy pass — Design Specification"
+date: 2026-10-27
+status: approved
+author: "Claude (Home Conductor)"
+goal: "goal-bd5eaa14"
+epic: "#2470"
+milestone: "v0.26.4"
+arc: "runtime"
+issue: "#2631"
+---
+
+# Design: SUPERVISED mode does not halt daemon auto-dispatch (gh:#2631)
 
 **Date:** 2026-10-27
 **Goal:** `goal-bd5eaa14` — Daemon runs reliably and autonomously drives the backlog→schedule→dispatch pipeline per the Tri-Modal Autonomy Dial
