@@ -1,6 +1,7 @@
 # Tasks (generated - source of truth is state.db)
 # Edit via: synlynk story create/update | Do NOT hand-edit this file
 
+- [ ] Harness Inception & Protocol Adherence Empirical Calibration Benchmark [testing] <!-- id:story-7e19365d -->
 - [ ] Reconcile project-docs drift stranded in PR #2571 review worktree (PR #2572) [backend] <!-- id:story-360c0d73 -->
 - [ ] Reconcile project-docs drift stranded in stale fix/claude/2567 worktree [backend] <!-- id:story-dda00e7b -->
 - [ ] Fix capability_calibration_results.quality_verified migration gap (gh:#2569) [backend] <!-- id:story-2349673f -->
@@ -413,6 +414,9 @@ CRITICAL CONTEXT: your dispatch worktree  [testing] <!-- id:story-issue-2 -->
 - [ ] BS-8: stuck detection + one-shot consult from capability matrix + Expert Consult injection [dispatch] <!-- id:story-bs8-consult -->
 - [ ] BS-8: synlynk probe — ambient harness capability drift detection + publish pipeline [tooling] <!-- id:story-bs8-probe -->
 - [ ] BS-7: brainstorm — skill pack interoperability + benchmarks (Superpowers/GStack/GSD) [platform] <!-- id:story-bs7-interop -->
+- [ ] Claude Interactive Auto-Mode Classifier Regression Remediation (#2635) [backend] <!-- id:story-670b4328 -->
+- [ ] Harness Semantic Dialect Compiler (Claude XML, Codex Schema, Agy Checklist) [backend] <!-- id:story-562be842 -->
+- [ ] Autonomous Inception Trampoline & JIT Protocol Loader (synlynk protocol) [backend] <!-- id:story-419c2947 -->
 - [ ] Inaugural Reference Ceremony release-conductor progressive-disclosure skill [frontend] <!-- id:story-6ff70a5e -->
 - [ ] Workspace Ceremonies Canon & Onboarding Engine integration [backend] <!-- id:story-6ab8cb96 -->
 - [ ] Empirical Ceremony Discovery Benchmark Spike [testing] <!-- id:story-eb9bfa85 -->
