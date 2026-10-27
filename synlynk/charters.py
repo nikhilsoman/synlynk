@@ -332,6 +332,7 @@ TOOL_ROLE_SKILLS: dict[str, dict[str, str]] = {
         "dev": "graphify-symbol-navigator",
         "builder": "graphify-symbol-navigator",
         "pm": "graphify-domain-sweep",
+        "maintainer": "graphify-maintainer-sweep",
     },
     "testbed": {
         "qa": "testbed-acceptance-runner",

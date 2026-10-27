@@ -62,6 +62,71 @@ def test_tripartite_resolution_keeps_role_and_harness_separate(tmp_path):
     assert routed["requested_model"] == routed["resolved_model"]
 
 
+def test_god_neighborhood_target_floors_fast_tier_at_pro(tmp_path):
+    cache_dir = tmp_path / ".synlynk" / "graph-cache"
+    cache_dir.mkdir(parents=True)
+    (cache_dir / "traversals.json").write_text(json.dumps({
+        "schema": 1,
+        "paths": [{"kind": "god_neighborhood", "nodes": [{"id": "core.god"}]}],
+    }))
+    assert resolve_model_tier(
+        "rename a local variable",
+        target_ids=["core.god"],
+        repo_root=str(tmp_path),
+    ) == MODEL_TIER_PRO
+    assert resolve_model_tier(
+        "write an architecture spec",
+        target_ids=["core.god"],
+        repo_root=str(tmp_path),
+    ) == MODEL_TIER_REASONING
+
+
+def test_explicit_model_bypasses_god_node_floor(tmp_path, monkeypatch):
+    cache_dir = tmp_path / ".synlynk" / "graph-cache"
+    cache_dir.mkdir(parents=True)
+    (cache_dir / "traversals.json").write_text(json.dumps({
+        "schema": 1,
+        "paths": [{"kind": "god_neighborhood", "nodes": [{"id": "core.god"}]}],
+    }))
+    monkeypatch.setattr(
+        "synlynk.dispatch.calculate_dispatch_impact",
+        lambda *args, **kwargs: {
+            "score": 0,
+            "reports": [{"target_nodes": [{"id": "core.god"}]}],
+        },
+    )
+    routed = resolve_dispatch_model(
+        "codex",
+        "rename a local variable",
+        model="gpt-explicit",
+        repo_root=str(tmp_path),
+    )
+    assert routed["model_tier"] == MODEL_TIER_FAST
+    assert routed["resolved_model"] == "gpt-explicit"
+
+
+def test_dispatch_floors_tier_when_impact_target_is_a_god_node(tmp_path, monkeypatch):
+    cache_dir = tmp_path / ".synlynk" / "graph-cache"
+    cache_dir.mkdir(parents=True)
+    (cache_dir / "traversals.json").write_text(json.dumps({
+        "schema": 1,
+        "paths": [{"kind": "god_neighborhood", "nodes": [{"id": "core.god"}]}],
+    }))
+    monkeypatch.setattr(
+        "synlynk.dispatch.calculate_dispatch_impact",
+        lambda *args, **kwargs: {
+            "score": 0,
+            "reports": [{"target_nodes": [{"id": "core.god"}]}],
+        },
+    )
+    routed = resolve_dispatch_model(
+        "codex",
+        "rename a local variable",
+        repo_root=str(tmp_path),
+    )
+    assert routed["model_tier"] == MODEL_TIER_PRO
+
+
 def test_explicit_model_and_tier_override_automatic_routing(tmp_path):
     routed = resolve_dispatch_model(
         "claude",

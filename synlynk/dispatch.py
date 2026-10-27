@@ -495,6 +495,8 @@ def resolve_model_tier(
     impact_score: int = 0,
     role: Optional[str] = None,
     task_type: Optional[str] = None,
+    target_ids: Optional[Sequence[str]] = None,
+    repo_root: Optional[str] = None,
 ) -> str:
     """Resolve fast/pro/reasoning from intent and AST blast radius.
 
@@ -510,8 +512,23 @@ def resolve_model_tier(
     if impact_score > 12 or len(_impact_targets(task)) > 1 or any(
         term in text for term in ("multi-file", "repo-wide", "refactor")
     ):
+        tier = MODEL_TIER_PRO
+    else:
+        tier = MODEL_TIER_FAST
+    if tier == MODEL_TIER_FAST and _targets_hit_god_neighborhood(target_ids, repo_root):
         return MODEL_TIER_PRO
-    return MODEL_TIER_FAST
+    return tier
+
+
+def _targets_hit_god_neighborhood(target_ids: Optional[Sequence[str]], repo_root: Optional[str]) -> bool:
+    if not target_ids or not repo_root:
+        return False
+    try:
+        from synlynk.graph_cache import god_neighborhood_ids
+        gods = god_neighborhood_ids(repo_root)
+    except Exception:
+        return False
+    return any(str(target) in gods for target in target_ids)
 
 
 def resolve_dispatch_model(
@@ -530,7 +547,20 @@ def resolve_dispatch_model(
     if model_tier is not None and model_tier not in MODEL_TIERS:
         raise ValueError(f"Unknown model tier: {model_tier!r}; expected one of {MODEL_TIERS}")
     impact = calculate_dispatch_impact(task, repo_root=repo_root, scope_paths=scope_paths)
-    tier = model_tier or resolve_model_tier(task, impact["score"], role=role, task_type=task_type)
+    target_ids = []
+    if not model:
+        for report in impact["reports"]:
+            for node in (report or {}).get("target_nodes") or []:
+                if isinstance(node, dict) and node.get("id"):
+                    target_ids.append(str(node.get("id")))
+    tier = model_tier or resolve_model_tier(
+        task,
+        impact["score"],
+        role=role,
+        task_type=task_type,
+        target_ids=target_ids,
+        repo_root=repo_root,
+    )
     from synlynk.models import resolve_tier_model
 
     local_resolution = None

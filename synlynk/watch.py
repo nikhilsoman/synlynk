@@ -46,10 +46,10 @@ def check_and_refresh_ast_on_drift(repo_root: str) -> bool:
     if built_at and built_at == head_sha:
         return False
 
-    # Drift detected or missing manifest -> trigger extraction
+    # Drift detected or missing manifest -> skeleton or extract for this HEAD.
     try:
-        from synlynk.scan import _run_graphify_extract
-        ok = _run_graphify_extract(repo_root)
+        from synlynk.scan import ensure_graph_for_head
+        ok = ensure_graph_for_head(repo_root)
         if ok:
             try:
                 from synlynk.viz import _write_cache
@@ -57,6 +57,7 @@ def check_and_refresh_ast_on_drift(repo_root: str) -> bool:
             except Exception:
                 pass
             return True
-    except Exception:
-        pass
+    except Exception as exc:
+        from synlynk.dispatch import _warn_context_build_failure
+        _warn_context_build_failure("graph watch refresh", str(exc), repo_root)
     return False

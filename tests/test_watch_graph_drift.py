@@ -10,8 +10,9 @@ def test_watch_detects_head_drift_and_triggers_extract(tmp_path, monkeypatch):
     syn.mkdir()
     graph_out = syn / "graphify-out"
     graph_out.mkdir()
+    (repo / "app.py").write_text("x = 1\n")
     manifest = graph_out / "manifest.json"
-    manifest.write_text(json.dumps({"built_at_commit": "old-sha-123"}))
+    manifest.write_text(json.dumps({"built_at_commit": "old-sha-123", "lifecycle": "brownfield"}))
 
     # Mock git rev-parse HEAD
     monkeypatch.setattr("synlynk.watch._get_head_commit", lambda r: "new-sha-456")
@@ -27,6 +28,21 @@ def test_watch_detects_head_drift_and_triggers_extract(tmp_path, monkeypatch):
     assert len(extracted) == 1
     updated_manifest = json.loads(manifest.read_text())
     assert updated_manifest["built_at_commit"] == "new-sha-456"
+
+def test_watch_refresh_failure_records_context_sentinel(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    (repo / ".synlynk" / "graphify-out").mkdir(parents=True)
+    (repo / "app.py").write_text("x = 1\n")
+    monkeypatch.setattr("synlynk.watch._get_head_commit", lambda r: "new-sha")
+    def boom(root):
+        raise RuntimeError("extract down")
+    monkeypatch.setattr("synlynk.scan._run_graphify_extract", boom)
+    refreshed = check_and_refresh_ast_on_drift(str(repo))
+    assert refreshed is False
+    sentinel = (repo / ".synlynk" / "sentinel.md").read_text()
+    assert "CONTEXT_BUILD_DEGRADED" in sentinel
+    assert "extract down" in sentinel
+
 
 def test_watch_no_drift_skips_extract(tmp_path, monkeypatch):
     repo = tmp_path / "repo"

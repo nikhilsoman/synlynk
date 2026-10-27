@@ -580,6 +580,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     heal_parser.add_argument("--dry-run", action="store_true", help="Print parity/magic gaps without writing files")
     heal_parser.add_argument("--branch", type=str, default=None, help="Target feature branch for parity remediation PR")
     heal_parser.add_argument("--cycles", action="store_true", help="Detect circular imports and generate refactoring stories")
+    heal_parser.add_argument("--orphans", action="store_true", help="Report functions and classes with in-degree 0")
+    heal_parser.add_argument("--stories", action="store_true", help="With --orphans, file stories without editing todo.md")
 
     audit_docs_parser = subparsers.add_parser(
         "audit-docs", help="Detect (and optionally fix) devlog author-identity drift"
@@ -1216,6 +1218,12 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     maintainer_triage_parser.add_argument("--max-age-days", type=int, default=7, help="Max age in days to consider")
     maintainer_probe_parser = maintainer_sub.add_parser("probe", help="Probe reproduction for an alert code")
     maintainer_probe_parser.add_argument("--code", required=True, help="Alert code to probe")
+    maintainer_sweep_parser = maintainer_sub.add_parser(
+        "sweep", help="Report or refresh the code graph, warm cache, and federated mesh")
+    maintainer_sweep_parser.add_argument(
+        "--refresh-graph", action="store_true",
+        help="Rebuild the graph for HEAD. Without this flag, sweep only prints the plan.",
+    )
 
     dispatch_parser = subparsers.add_parser(
         "dispatch", help="Dispatch a harness to run a task in the background")
@@ -2717,8 +2725,13 @@ def main(argv=None) -> None:
         else:
             sentinel_list()  # default: list
     elif args.command == "maintainer":
-        from synlynk.maintainer import triage_sentinel_alerts, probe_reproduction
+        from synlynk.maintainer import cmd_maintainer_sweep, triage_sentinel_alerts, probe_reproduction
         action = getattr(args, "maintainer_action", None)
+        if action == "sweep":
+            raise SystemExit(cmd_maintainer_sweep(
+                repo_root=os.getcwd(),
+                refresh_graph=bool(getattr(args, "refresh_graph", False)),
+            ))
         if action == "probe":
             code = getattr(args, "code", "")
             res = probe_reproduction({"code": code})
@@ -3474,6 +3487,9 @@ def main(argv=None) -> None:
         from synlynk.gc_cmd import cmd_gc
         cmd_gc(dry_run=not getattr(args, "yes", False), yes=getattr(args, "yes", False), retention_days=getattr(args, "retention_days", 14), size_budget_mb=getattr(args, "size_budget_mb", 1024))
     elif args.command == "heal":
+        if getattr(args, "orphans", False):
+            from synlynk.heal_orphans import cmd_heal_orphans
+            sys.exit(cmd_heal_orphans(args))
         if getattr(args, "cycles", False):
             from synlynk.heal_cycles import cmd_heal_cycles
             sys.exit(cmd_heal_cycles(args))

@@ -16,6 +16,7 @@ def test_adapt_charters_injects_pm_and_verifier_skills(tmp_path, monkeypatch):
     updated = adapt_charters_for_installed_tools()
     assert "graphify-domain-sweep" in updated["pm"]["skills"]
     assert "graphify-pr-impact" in updated["verifier"]["skills"]
+    assert "graphify-maintainer-sweep" in updated["maintainer"]["skills"]
 
 
 def test_adapt_charters_when_tool_unavailable(tmp_path, monkeypatch):
