@@ -1,6 +1,9 @@
 # Plan: v0.26.5 Graphify lifecycle and warm traversals
 
 **Status:** Blocked on sign-off of `docs/superpowers/specs/2026-10-28-v0265-graphify-mesh-design.md`.
+**Goal:** `goal-e3840370`
+**Epic:** [#2470](https://github.com/nikhilsoman/synlynk/issues/2470)
+**Release:** v0.26.5
 **Authored:** 2026-10-27
 **Branch:** `feat/grok/v0265-graphify-mesh`
 **Worktree:** `.worktrees/feat-grok-v0265-graphify-mesh`

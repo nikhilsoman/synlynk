@@ -5,6 +5,7 @@
 **Author:** Grok, Mode A Home Conductor
 **Base:** `origin/main` `6169b63a` (tag `v0.26.4`)
 **Release:** v0.26.5, daily stable gate under epic [#2470](https://github.com/nikhilsoman/synlynk/issues/2470)
+**Epic:** [#2470](https://github.com/nikhilsoman/synlynk/issues/2470)
 **Parent:** [#2458](https://github.com/nikhilsoman/synlynk/issues/2458)
 **Governing goal:** `goal-e3840370` (active). Ledger outcome is the Vizor control plane. Graphify stories `story-issue-1579`, `story-issue-2133`, and `story-issue-2198` already sit on that goal. This release does not retitle the goal.
 **Plan:** `docs/superpowers/plans/2026-10-28-v0265-graphify-mesh.md`
