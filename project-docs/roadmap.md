@@ -496,4 +496,8 @@ Interactive timeline canvas powered by Jantt (vendored vanilla JS library with o
 
 Task boundary contextual update surfacing: fenced `synlynk statusline` displaying breadcrumbs, active goal/story, git HEAD, burn rate, sentinel status, and task/cost summaries; automated context compaction for interactive Home Conductors before `/clear` or task handoffs; programmatically launching each new epic in a dedicated Herdr tab (`synlynk herdr tab <epic>`) with isolated 4-pane cockpit; and graceful fallback to spawning a tmux/terminal window when `HERDR_ENV != 1`.
 
+## v0.26.10 — Claude interactive auto-mode classifier regression investigation [planned] (target: TBD)
+
+Investigate and fix the Claude Code interactive harness's auto-mode classifier denying already-authorized PM-role GitHub writes (gh:#2635) — reproduced denying milestone/issue metadata PATCH calls under both `[External System Writes]` and `[Auto-Mode Bypass]` reasons, including when routed through a headless `synlynk dispatch --requires-gh-write` rather than run interactively, contradicting the Hardened PR Review Policy's documented bypass rationale. User-flagged regression (not observed prior to ~Sep/Oct 2026); likely tripped by synlynk's own injected instruction surface. Tracked under goal-005ea87d (Full Fleet Harness Parity); related: gh:#2152, #2150, #2558, #2097 (closed), #1140 (closed).
+
 
