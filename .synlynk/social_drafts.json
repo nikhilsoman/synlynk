@@ -4206,5 +4206,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2651 \u2014 keep the Vizor daemon alive outside a git checkout (PR #2651, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2651.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-28) - PR #2651\n- Merged improvements and fixes for PR #2651."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/510-pr2652-push-event-readme-check-noop-log-copy-an.md",
+    "title": "PR #2652 \u2014 push-event README check, noop log copy, and Vizor daemon import",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-28",
+    "pr": "#2652",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2652."
+    ],
+    "tweet": "\ud83d\ude80 PR #2652 \u2014 push-event README check, noop log copy, and Vizor daemon import (PR #2652, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2652.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-28) - PR #2652\n- Merged improvements and fixes for PR #2652."
   }
 ]
