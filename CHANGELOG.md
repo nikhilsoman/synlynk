@@ -16,6 +16,14 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
 
+## [v0.26.6] - 2026-10-29
+### Added
+- feat(vizor): the Vizor daemon records one heartbeat in its daemon home (`harness=vizor`, running/stale/stopped) and does not write workspace `state.db` (#2642)
+- feat(vizor): `GET /api/daemon/stream` and the workspace stream send the heartbeat. The workspace stream also sends active sentinel alerts (#2642)
+- feat(vizor): Overview alert rows open a read-only inspection panel, including rows refreshed by the live stream. The panel does not write `sentinel.md` or run a command (#2642)
+### Changed
+- The daemon returns without binding when a live pid already holds the listener, and otherwise keeps the existing memorable port ladder (#2642)
+
 ## [v0.26.5] - 2026-10-28
 ### Added
 - feat(graphify): install falls through uv, pipx, then `pip install --user` for the `graphifyy` package. `synlynk doctor` checks the binary and installs only with `--fix graphify` (#2638)
