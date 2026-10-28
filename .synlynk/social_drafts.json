@@ -4174,5 +4174,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2642 \u2014 Vizor daemon heartbeat, live SSE, and read-only sentinel inspection (PR #2642, v0.26.5)\n\n\u2022 Merged improvements and fixes for PR #2642.\n\n#posts",
     "changelog": "### v0.26.5 (2026-10-28) - PR #2642\n- Merged improvements and fixes for PR #2642."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/508-pr2643-prepare-v0-26-6-vizor-heartbeat-notes.md",
+    "title": "PR #2643 \u2014 prepare v0.26.6 Vizor heartbeat notes",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-28",
+    "pr": "#2643",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2643."
+    ],
+    "tweet": "\ud83d\ude80 PR #2643 \u2014 prepare v0.26.6 Vizor heartbeat notes (PR #2643, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2643.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-28) - PR #2643\n- Merged improvements and fixes for PR #2643."
   }
 ]
