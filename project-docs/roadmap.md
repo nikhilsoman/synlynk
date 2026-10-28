@@ -432,6 +432,7 @@ Post-Preview scope; intentionally undated. Bounded swarm, gateway, lease, budget
 - [ ] synlynk.com platform vision: accounts, entitlements, hosted infra (goal-56bfbfa1, design-only) <!-- story:story-6da127b4 -->
   Design approved: docs/superpowers/specs/2026-10-23-synlynk-com-platform-vision-design.md. Account/Org/Workspace/Repo entity model, AWS/Pulumi stack with pay-as-you-go/ephemeral-infra cost philosophy, and 5-phase rollout (site migration, accounts/entitlements, hosted workstation, hosted relay, swarm gateway, community). Phase 4 (swarm gateway) directly extends this epic's bounded-swarm/gateway/budget/containment scope; Phase 3 (hosted relay) extends goal-f4ce526a's personal relay; Phase 5 (community) extends the v1.0.0 community-layer goals (goal-0b891b5f/goal-f424fc4c). Not yet planned per-phase or dispatched.
 
+
 ## v0.28.1 — Capability crawler, index and GTM [planned]
 
 Post-Preview scope; intentionally undated. Reproducible, privacy-safe, sample-floor-gated capability evidence and GTM surface. Parent #2458; release epic #2475; goals goal-aa48c456 and goal-20bb3987.
