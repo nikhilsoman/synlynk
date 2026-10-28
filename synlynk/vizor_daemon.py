@@ -22,6 +22,14 @@ PORTFILE = DAEMON_HOME / "port"
 LOGFILE = DAEMON_HOME / "daemon.log"
 CACHE_ROOT = Path(os.environ.get("SYNLYNK_VIZOR_CACHE_ROOT", os.path.expanduser("~/.synlynk/vizor-cache")))
 DEFAULT_POLL_INTERVAL = 15
+LOG_MAX_BYTES = 1_048_576
+STALL_GRACE_S = 120.0
+ENSURE_INTERVAL_S = 60
+ENSURE_BACKOFF_LIMIT = 3
+ENSURE_BACKOFF_WINDOW_S = 600
+_LAUNCHD_ENSURE_LABEL = "com.synlynk.vizor-ensure"
+_SYSTEMD_ENSURE_SERVICE = "synlynk-vizor-ensure.service"
+_SYSTEMD_ENSURE_TIMER = "synlynk-vizor-ensure.timer"
 
 _RENDER_LOCK = threading.Lock()
 
@@ -230,6 +238,7 @@ def _safe_heartbeat(action) -> None:
 def _remember_beat(*, pid: int, status: str, cycle_count: int, active_task: Optional[str]) -> None:
     from datetime import datetime, timezone
 
+    from synlynk._constants import VERSION
     from synlynk.viz.heartbeats import upsert_beat
 
     upsert_beat(
@@ -239,6 +248,7 @@ def _remember_beat(*, pid: int, status: str, cycle_count: int, active_task: Opti
         last_beat_at=datetime.now(timezone.utc),
         cycle_count=cycle_count,
         active_task=active_task,
+        version=VERSION,
     )
 
 
@@ -294,10 +304,35 @@ def poll_once(port: int) -> dict:
     return results
 
 
+def cap_log() -> None:
+    """Keep daemon.log from growing without bound. Retain the newest half."""
+    try:
+        size = LOGFILE.stat().st_size
+    except OSError:
+        return
+    if size <= LOG_MAX_BYTES:
+        return
+    keep = LOG_MAX_BYTES // 2
+    try:
+        with open(LOGFILE, "rb") as handle:
+            handle.seek(max(size - keep, 0))
+            tail = handle.read(keep)
+        newline = tail.find(b"\n")
+        if newline >= 0:
+            tail = tail[newline + 1:]
+        LOGFILE.write_bytes(tail)
+    except OSError as exc:
+        try:
+            LOGFILE.write_text(f"log cap failed: {exc}\n")
+        except OSError:
+            return
+
+
 def _log(message: str) -> None:
     import time
 
     DAEMON_HOME.mkdir(parents=True, exist_ok=True)
+    cap_log()
     with open(LOGFILE, "a") as f:
         f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {message}\n")
 
@@ -898,6 +933,52 @@ def mark_daemon_stopped() -> None:
     ))
 
 
+def stall_grace_s() -> float:
+    """How long a missing beat may last before the process asks launchd to restart it."""
+    raw = os.environ.get("SYNLYNK_VIZOR_STALL_GRACE_S")
+    if not raw:
+        return STALL_GRACE_S
+    try:
+        value = float(raw)
+    except ValueError:
+        return STALL_GRACE_S
+    if value <= 0:
+        return STALL_GRACE_S
+    return value
+
+
+def _heartbeat_is_fresh(grace_s: float) -> bool:
+    from synlynk.viz.heartbeats import read_beat
+
+    try:
+        row = read_beat(DAEMON_HOME, poll_interval_s=max(int(grace_s / 2), 1))
+    except Exception:
+        return False
+    return bool(row) and row.get("status") == "running"
+
+
+def _watch_for_stall(stop_event: threading.Event) -> None:
+    """Exit only when the poll loop is still supposed to be running and the beat is old.
+
+    The first action waits on ``stop_event``. ``run_forever`` sets that event
+    before it returns, so a normal shutdown cannot ``os._exit`` the caller.
+    """
+    grace = stall_grace_s()
+    if stop_event.wait(grace):
+        return
+    while not stop_event.is_set():
+        if _heartbeat_is_fresh(grace):
+            if stop_event.wait(grace):
+                return
+            continue
+        if stop_event.is_set():
+            return
+        _log("stall: heartbeat older than grace; exiting for supervisor restart")
+        if stop_event.is_set():
+            return
+        os._exit(1)
+
+
 def run_forever(port: Optional[int] = None) -> None:
     """Daemon entrypoint: serve forever, refreshing every registered workspace on a timer."""
     import http.server
@@ -934,6 +1015,13 @@ def run_forever(port: Optional[int] = None) -> None:
 
     poll_thread = threading.Thread(target=_poll_loop, daemon=True)
     poll_thread.start()
+    stall_thread = threading.Thread(
+        target=_watch_for_stall,
+        args=(stop_event,),
+        daemon=True,
+        name="vizor-stall-watch",
+    )
+    stall_thread.start()
 
     try:
         server.serve_forever()
@@ -960,12 +1048,35 @@ def _launchd_plist_path() -> Path:
     return Path(os.path.expanduser("~/Library/LaunchAgents/com.synlynk.vizor-daemon.plist"))
 
 
+def _launchd_ensure_plist_path() -> Path:
+    return _launchd_plist_path().with_name(f"{_LAUNCHD_ENSURE_LABEL}.plist")
+
+
 def _systemd_unit_path() -> Path:
     return Path(os.path.expanduser("~/.config/systemd/user/synlynk-vizor-daemon.service"))
 
 
+def _systemd_ensure_service_path() -> Path:
+    return _systemd_unit_path().with_name(_SYSTEMD_ENSURE_SERVICE)
+
+
+def _systemd_ensure_timer_path() -> Path:
+    return _systemd_unit_path().with_name(_SYSTEMD_ENSURE_TIMER)
+
+
 _LAUNCHD_LABEL = "com.synlynk.vizor-daemon"
 _SYSTEMD_UNIT_NAME = "synlynk-vizor-daemon.service"
+
+
+def _service_environment() -> dict:
+    local_bin = os.path.expanduser("~/.local/bin")
+    pyenv_shims = os.path.expanduser("~/.pyenv/shims")
+    default_path = f"/opt/homebrew/bin:/usr/local/bin:{local_bin}:{pyenv_shims}:/usr/bin:/bin:/usr/sbin:/sbin"
+    return {
+        "PATH": default_path,
+        "PYTHONPATH": _synlynk_import_root(),
+        "SYNLYNK_VIZOR_DAEMON": "1",
+    }
 
 
 def _synlynk_import_root() -> str:
@@ -980,11 +1091,17 @@ def _synlynk_import_root() -> str:
     return str(Path(synlynk.__file__).resolve().parent.parent)
 
 
+def _plist_env_xml(env: dict) -> str:
+    lines = ["    <key>EnvironmentVariables</key>", "    <dict>"]
+    for key, value in env.items():
+        lines.append(f"        <key>{key}</key>")
+        lines.append(f"        <string>{value}</string>")
+    lines.append("    </dict>")
+    return "\n".join(lines)
+
+
 def _launchd_plist_contents(python_exe: str) -> str:
-    local_bin = os.path.expanduser("~/.local/bin")
-    pyenv_shims = os.path.expanduser("~/.pyenv/shims")
-    default_path = f"/opt/homebrew/bin:/usr/local/bin:{local_bin}:{pyenv_shims}:/usr/bin:/bin:/usr/sbin:/sbin"
-    pythonpath = _synlynk_import_root()
+    env = _service_environment()
     working = str(DAEMON_HOME)
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -1001,13 +1118,7 @@ def _launchd_plist_contents(python_exe: str) -> str:
     </array>
     <key>WorkingDirectory</key>
     <string>{working}</string>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PATH</key>
-        <string>{default_path}</string>
-        <key>PYTHONPATH</key>
-        <string>{pythonpath}</string>
-    </dict>
+{_plist_env_xml(env)}
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -1023,20 +1134,82 @@ def _launchd_plist_contents(python_exe: str) -> str:
 """
 
 
+def _launchd_ensure_plist_contents(python_exe: str) -> str:
+    env = _service_environment()
+    working = str(DAEMON_HOME)
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{_LAUNCHD_ENSURE_LABEL}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{python_exe}</string>
+        <string>-m</string>
+        <string>synlynk.vizor_ensure</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>{working}</string>
+{_plist_env_xml(env)}
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StartInterval</key>
+    <integer>{ENSURE_INTERVAL_S}</integer>
+    <key>StandardOutPath</key>
+    <string>{LOGFILE}</string>
+    <key>StandardErrorPath</key>
+    <string>{LOGFILE}</string>
+</dict>
+</plist>
+"""
+
+
 def _systemd_unit_contents(python_exe: str) -> str:
-    pythonpath = _synlynk_import_root()
+    env = _service_environment()
     return f"""[Unit]
 Description=synlynk Vizor cross-workspace daemon
 
 [Service]
 WorkingDirectory={DAEMON_HOME}
-Environment=PYTHONPATH={pythonpath}
+Environment=PYTHONPATH={env["PYTHONPATH"]}
+Environment=SYNLYNK_VIZOR_DAEMON=1
 ExecStart={python_exe} -m synlynk.vizor_daemon
 Restart=on-failure
 RestartSec=30
 
 [Install]
 WantedBy=default.target
+"""
+
+
+def _systemd_ensure_service_contents(python_exe: str) -> str:
+    env = _service_environment()
+    return f"""[Unit]
+Description=synlynk Vizor ensure tick
+
+[Service]
+Type=oneshot
+WorkingDirectory={DAEMON_HOME}
+Environment=PYTHONPATH={env["PYTHONPATH"]}
+Environment=SYNLYNK_VIZOR_DAEMON=1
+ExecStart={python_exe} -m synlynk.vizor_ensure
+"""
+
+
+def _systemd_ensure_timer_contents() -> str:
+    return f"""[Unit]
+Description=synlynk Vizor ensure timer
+
+[Timer]
+OnBootSec={ENSURE_INTERVAL_S}
+OnUnitActiveSec={ENSURE_INTERVAL_S}
+AccuracySec=10
+Persistent=true
+
+[Install]
+WantedBy=timers.target
 """
 
 
@@ -1078,67 +1251,122 @@ def probe_health() -> dict:
     return {"ok": True, "code": "ok", "running": running, "registered": registered}
 
 
+def _launchctl(args: list) -> subprocess.CompletedProcess:
+    return subprocess.run(["launchctl", *args], capture_output=True, text=True)
+
+
+def _activate_launchd(plist_path: Path, label: str, *, kickstart: bool) -> Optional[str]:
+    """Reload one plist. ``bootout`` is best effort because the unit may be new.
+
+    Returns an error string, or None when the unit is loaded.
+    """
+    domain = f"gui/{os.getuid()}"
+    _launchctl(["bootout", domain, str(plist_path)])
+    boot = _launchctl(["bootstrap", domain, str(plist_path)])
+    if boot.returncode != 0:
+        loaded = _launchctl(["load", str(plist_path)])
+        if loaded.returncode != 0:
+            reason = (getattr(boot, "stderr", "") or getattr(loaded, "stderr", "") or "").strip()
+            return reason or f"launchctl bootstrap exited with code {boot.returncode}"
+    if kickstart:
+        kicked = _launchctl(["kickstart", "-k", f"{domain}/{label}"])
+        if kicked.returncode != 0:
+            reason = (getattr(kicked, "stderr", "") or "").strip()
+            return reason or f"launchctl kickstart exited with code {kicked.returncode}"
+    return None
+
+
+def _systemctl(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["systemctl", "--user", *args], capture_output=True, text=True)
+
+
 def install() -> dict:
-    """Write and load/enable the OS service unit, starting the daemon immediately."""
+    """Write and load the daemon plus the ensure timer from this interpreter."""
     python_exe = sys.executable
     system = platform_name()
     if system == "Darwin":
         plist_path = _launchd_plist_path()
+        ensure_path = _launchd_ensure_plist_path()
         plist_path.parent.mkdir(parents=True, exist_ok=True)
         plist_path.write_text(_launchd_plist_contents(python_exe))
-        res = subprocess.run(["launchctl", "load", str(plist_path)], capture_output=True, text=True)
-        if res.returncode != 0:
+        ensure_path.write_text(_launchd_ensure_plist_contents(python_exe))
+        reason = _activate_launchd(plist_path, _LAUNCHD_LABEL, kickstart=True)
+        if reason:
             return {
                 "installed": False,
                 "manager": "launchd",
                 "unit_path": str(plist_path),
-                "reason": res.stderr.strip() or f"launchctl load exited with code {res.returncode}",
+                "reason": reason,
+            }
+        timer_reason = _activate_launchd(ensure_path, _LAUNCHD_ENSURE_LABEL, kickstart=False)
+        if timer_reason:
+            return {
+                "installed": False,
+                "manager": "launchd",
+                "unit_path": str(ensure_path),
+                "reason": timer_reason,
             }
         return {"installed": True, "manager": "launchd", "unit_path": str(plist_path)}
     elif system == "Linux":
         unit_path = _systemd_unit_path()
+        service_path = _systemd_ensure_service_path()
+        timer_path = _systemd_ensure_timer_path()
         unit_path.parent.mkdir(parents=True, exist_ok=True)
         unit_path.write_text(_systemd_unit_contents(python_exe))
-        res = subprocess.run(["systemctl", "--user", "enable", "--now", _SYSTEMD_UNIT_NAME],
-                        capture_output=True, text=True)
+        service_path.write_text(_systemd_ensure_service_contents(python_exe))
+        timer_path.write_text(_systemd_ensure_timer_contents())
+        res = _systemctl("enable", "--now", _SYSTEMD_UNIT_NAME)
         if res.returncode != 0:
             return {
                 "installed": False,
                 "manager": "systemd",
                 "unit_path": str(unit_path),
-                "reason": res.stderr.strip() or f"systemctl enable exited with code {res.returncode}",
+                "reason": (getattr(res, "stderr", "") or "").strip() or f"systemctl enable exited with code {res.returncode}",
+            }
+        timer = _systemctl("enable", "--now", _SYSTEMD_ENSURE_TIMER)
+        if timer.returncode != 0:
+            return {
+                "installed": False,
+                "manager": "systemd",
+                "unit_path": str(timer_path),
+                "reason": (getattr(timer, "stderr", "") or "").strip() or f"systemctl enable exited with code {timer.returncode}",
             }
         return {"installed": True, "manager": "systemd", "unit_path": str(unit_path)}
     return {"installed": False, "reason": f"unsupported platform: {system}"}
 
 
 def uninstall() -> dict:
-    """Unload/disable the service unit and remove it."""
+    """Unload/disable the daemon and ensure units and remove them."""
     system = platform_name()
     if system == "Darwin":
         plist_path = _launchd_plist_path()
+        ensure_path = _launchd_ensure_plist_path()
         if plist_path.exists():
             res = subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True, text=True)
             if res.returncode != 0:
                 return {
                     "uninstalled": False,
                     "manager": "launchd",
-                    "reason": res.stderr.strip() or f"launchctl unload exited with code {res.returncode}",
+                    "reason": (getattr(res, "stderr", "") or "").strip() or f"launchctl unload exited with code {res.returncode}",
                 }
             plist_path.unlink()
+        if ensure_path.exists():
+            subprocess.run(["launchctl", "unload", str(ensure_path)], capture_output=True, text=True)
+            ensure_path.unlink()
         return {"uninstalled": True, "manager": "launchd"}
     elif system == "Linux":
         unit_path = _systemd_unit_path()
-        res = subprocess.run(["systemctl", "--user", "disable", "--now", _SYSTEMD_UNIT_NAME],
-                        capture_output=True, text=True)
+        res = _systemctl("disable", "--now", _SYSTEMD_UNIT_NAME)
         if res.returncode != 0:
             return {
                 "uninstalled": False,
                 "manager": "systemd",
-                "reason": res.stderr.strip() or f"systemctl disable exited with code {res.returncode}",
+                "reason": (getattr(res, "stderr", "") or "").strip() or f"systemctl disable exited with code {res.returncode}",
             }
-        if unit_path.exists():
-            unit_path.unlink()
+        _systemctl("disable", "--now", _SYSTEMD_ENSURE_TIMER)
+        for path in (unit_path, _systemd_ensure_service_path(), _systemd_ensure_timer_path()):
+            if path.exists():
+                path.unlink()
         return {"uninstalled": True, "manager": "systemd"}
     return {"uninstalled": False, "reason": f"unsupported platform: {system}"}
 
@@ -1158,6 +1386,189 @@ def status() -> dict:
         "pid": _read_pid(),
         "port": _read_port(),
     }
+
+
+def _unit_matches() -> bool:
+    """True when the on-disk units already match this interpreter and package root."""
+    python_exe = sys.executable
+    system = platform_name()
+    try:
+        if system == "Darwin":
+            return (
+                _launchd_plist_path().read_text() == _launchd_plist_contents(python_exe)
+                and _launchd_ensure_plist_path().read_text() == _launchd_ensure_plist_contents(python_exe)
+            )
+        if system == "Linux":
+            return (
+                _systemd_unit_path().read_text() == _systemd_unit_contents(python_exe)
+                and _systemd_ensure_service_path().read_text() == _systemd_ensure_service_contents(python_exe)
+                and _systemd_ensure_timer_path().read_text() == _systemd_ensure_timer_contents()
+            )
+    except OSError:
+        return False
+    return False
+
+
+def unhealthy_reason() -> Optional[str]:
+    """Why the daemon should be restarted, or None when it is healthy."""
+    if not _unit_matches():
+        return "unit-drift"
+    if not is_running():
+        return "dead-pid"
+    from synlynk._constants import VERSION
+    from synlynk.viz.heartbeats import read_beat
+
+    try:
+        beat = read_beat(DAEMON_HOME, poll_interval_s=poll_interval())
+    except Exception as exc:
+        _log(f"ensure heartbeat read failed: {exc}")
+        return "missing-beat"
+    if not beat:
+        return "missing-beat"
+    if beat.get("status") != "running":
+        return str(beat.get("status") or "stale")
+    if (beat.get("version") or "") != VERSION:
+        return "version-mismatch"
+    return None
+
+
+def _ensure_state_path() -> Path:
+    return DAEMON_HOME / "ensure-state.json"
+
+
+def _load_ensure_state() -> dict:
+    try:
+        return json.loads(_ensure_state_path().read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _ensure_clock() -> float:
+    import time
+
+    return time.time()
+
+
+def _format_attempt(epoch: float) -> str:
+    import time
+
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch))
+
+
+def _parse_attempt(text: str) -> Optional[float]:
+    from datetime import datetime, timezone
+
+    stamp = (text or "").strip()
+    if not stamp:
+        return None
+    if stamp.endswith("Z"):
+        stamp = stamp[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(stamp)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
+def _recent_attempts(reason: str, now: float) -> list:
+    """Attempt times for this reason that are still inside the backoff window."""
+    state = _load_ensure_state()
+    if state.get("reason") != reason:
+        return []
+    kept = []
+    for stamp in state.get("attempts") or []:
+        parsed = _parse_attempt(str(stamp))
+        if parsed is None:
+            continue
+        if now - parsed < ENSURE_BACKOFF_WINDOW_S:
+            kept.append(parsed)
+    return kept
+
+
+def _note_ensure_attempt(reason: str) -> None:
+    now = _ensure_clock()
+    kept = _recent_attempts(reason, now)
+    kept.append(now)
+    DAEMON_HOME.mkdir(parents=True, exist_ok=True)
+    _ensure_state_path().write_text(json.dumps({
+        "reason": reason,
+        "count": len(kept),
+        "attempts": [_format_attempt(item) for item in kept],
+        "last_at": _format_attempt(now),
+    }))
+
+
+def _should_backoff(reason: str) -> bool:
+    return len(_recent_attempts(reason, _ensure_clock())) >= ENSURE_BACKOFF_LIMIT
+
+
+def _clear_ensure_state() -> None:
+    try:
+        _ensure_state_path().unlink()
+    except OSError:
+        return
+
+
+def ensure() -> dict:
+    """Restart when the unit, pid, beat, or version is wrong. No-op when healthy.
+
+    The same reason backs off after three attempts inside ten minutes so a
+    timer cannot kickstart a crash loop forever. This function does not start
+    the ensure timer's own program (that would recurse through install).
+    """
+    cap_log()
+    reason = unhealthy_reason()
+    if reason is None:
+        _clear_ensure_state()
+        return {"ensured": True, "action": "noop"}
+    if _should_backoff(reason):
+        _log(f"ensure backoff: {reason}")
+        return {"ensured": True, "action": "backoff", "reason": reason}
+    _note_ensure_attempt(reason)
+    result = install()
+    result["action"] = "restart"
+    result["reason"] = reason
+    result["ensured"] = bool(result.get("installed"))
+    return result
+
+
+def _slug_for_checkout(cwd: str) -> Optional[str]:
+    repo = Path(cwd)
+    try:
+        probe = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            cwd=str(repo),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    if probe.returncode != 0 or probe.stdout.strip() != "true":
+        return None
+    try:
+        from synlynk.product_store import identity_slug_from_config
+
+        slug = identity_slug_from_config(repo)
+    except Exception:
+        return None
+    return slug or None
+
+
+def fence_hint(cwd: str = ".") -> Optional[str]:
+    """Vizor URL for a task fence. None when the port file is absent.
+
+    Does not call launchctl and does not read a product ledger.
+    """
+    port = _read_port()
+    if not port:
+        return None
+    slug = _slug_for_checkout(cwd)
+    if slug:
+        return f"http://127.0.0.1:{port}/w/{slug}/overview.html"
+    return f"http://127.0.0.1:{port}/"
 
 
 if __name__ == "__main__":

@@ -26,6 +26,23 @@ _FAST_CLI = not _IS_TESTING and (
     ) or any(flag in sys.argv[1:] for flag in ("-h", "--help", "--version"))
 )
 
+
+def _vizor_daemon_process() -> bool:
+    """True only for the machine-scoped Vizor daemon or its ensure tick.
+
+    Those processes start with cwd set to the daemon home, which is not a git
+    checkout. Skipping product-root resolution here must not weaken gh:#1831
+    for any other import.
+    """
+    if os.environ.get("SYNLYNK_VIZOR_DAEMON") == "1":
+        return True
+    # python -m synlynk.vizor_daemon sets argv[0] to the module file, so the
+    # basename covers that invocation. A later argv entry that only names the
+    # module is not this process (gh:#1831).
+    names = {"vizor_daemon.py", "vizor_ensure.py"}
+    argv0 = os.path.basename(sys.argv[0]) if sys.argv else ""
+    return argv0 in names
+
 if not _FAST_CLI:
     import argparse
     from pathlib import Path
@@ -377,7 +394,7 @@ def _is_git_worktree() -> bool:
 # The linked-worktree guard only protects pytest from accidentally touching the
 # shared product ledger.  The CLI fast path has no pytest state to isolate and
 # must not pay for two git subprocesses before a read-only command starts.
-_INITIAL_GIT_WORKTREE = False if _FAST_CLI else _is_git_worktree()
+_INITIAL_GIT_WORKTREE = False if (_FAST_CLI or _vizor_daemon_process()) else _is_git_worktree()
 
 
 def _test_isolation_db_path() -> str:
@@ -402,7 +419,14 @@ def _should_isolate_worktree_db(db_path: str) -> bool:
     return os.path.abspath(db_path).startswith(canonical_root + os.sep)
 
 
-DB_PATH = os.environ.get("SYNLYNK_STATE_DB_PATH") if _FAST_CLI else _resolve_db_path()
+# The Vizor daemon home is not a checkout. Point DB_PATH at devnull so import
+# cannot mint a product ledger there (gh:#1831). Nothing in the daemon opens it.
+if _FAST_CLI:
+    DB_PATH = os.environ.get("SYNLYNK_STATE_DB_PATH")
+elif _vizor_daemon_process():
+    DB_PATH = os.devnull
+else:
+    DB_PATH = _resolve_db_path()
 # The configured path is intentionally distinct from the path selected by the
 # last successful connection.  Away sandboxes may need the local fallback.
 ACTIVE_DB_PATH = None
@@ -3594,5 +3618,5 @@ def init(force: bool = False, agents: list = None,
 # --- module extractions (backwards compat) ---
 # Normal library imports retain the historical package-level exports. CLI
 # startup skips this fan-out until after argparse has parsed the command.
-if not _FAST_CLI:
+if not _FAST_CLI and not _vizor_daemon_process():
     _load_legacy_imports()
