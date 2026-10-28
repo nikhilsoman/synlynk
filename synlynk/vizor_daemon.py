@@ -1443,39 +1443,65 @@ def _load_ensure_state() -> dict:
         return {}
 
 
-def _note_ensure_attempt(reason: str) -> None:
+def _ensure_clock() -> float:
     import time
 
+    return time.time()
+
+
+def _format_attempt(epoch: float) -> str:
+    import time
+
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch))
+
+
+def _parse_attempt(text: str) -> Optional[float]:
+    from datetime import datetime, timezone
+
+    stamp = (text or "").strip()
+    if not stamp:
+        return None
+    if stamp.endswith("Z"):
+        stamp = stamp[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(stamp)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
+def _recent_attempts(reason: str, now: float) -> list:
+    """Attempt times for this reason that are still inside the backoff window."""
     state = _load_ensure_state()
-    count = int(state.get("count") or 0) + 1 if state.get("reason") == reason else 1
+    if state.get("reason") != reason:
+        return []
+    kept = []
+    for stamp in state.get("attempts") or []:
+        parsed = _parse_attempt(str(stamp))
+        if parsed is None:
+            continue
+        if now - parsed < ENSURE_BACKOFF_WINDOW_S:
+            kept.append(parsed)
+    return kept
+
+
+def _note_ensure_attempt(reason: str) -> None:
+    now = _ensure_clock()
+    kept = _recent_attempts(reason, now)
+    kept.append(now)
     DAEMON_HOME.mkdir(parents=True, exist_ok=True)
     _ensure_state_path().write_text(json.dumps({
         "reason": reason,
-        "count": count,
-        "last_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "count": len(kept),
+        "attempts": [_format_attempt(item) for item in kept],
+        "last_at": _format_attempt(now),
     }))
 
 
 def _should_backoff(reason: str) -> bool:
-    import time
-    from datetime import datetime, timezone
-
-    state = _load_ensure_state()
-    if state.get("reason") != reason:
-        return False
-    if int(state.get("count") or 0) < ENSURE_BACKOFF_LIMIT:
-        return False
-    text = str(state.get("last_at") or "")
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
-    try:
-        last = datetime.fromisoformat(text)
-    except ValueError:
-        return False
-    if last.tzinfo is None:
-        last = last.replace(tzinfo=timezone.utc)
-    age = time.time() - last.timestamp()
-    return age < ENSURE_BACKOFF_WINDOW_S
+    return len(_recent_attempts(reason, _ensure_clock())) >= ENSURE_BACKOFF_LIMIT
 
 
 def _clear_ensure_state() -> None:

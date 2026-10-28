@@ -36,12 +36,12 @@ def _vizor_daemon_process() -> bool:
     """
     if os.environ.get("SYNLYNK_VIZOR_DAEMON") == "1":
         return True
+    # python -m synlynk.vizor_daemon sets argv[0] to the module file, so the
+    # basename covers that invocation. A later argv entry that only names the
+    # module is not this process (gh:#1831).
     names = {"vizor_daemon.py", "vizor_ensure.py"}
     argv0 = os.path.basename(sys.argv[0]) if sys.argv else ""
-    if argv0 in names:
-        return True
-    modules = {"synlynk.vizor_daemon", "synlynk.vizor_ensure"}
-    return any(arg in modules for arg in sys.argv[1:])
+    return argv0 in names
 
 if not _FAST_CLI:
     import argparse

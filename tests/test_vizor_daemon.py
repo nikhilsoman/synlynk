@@ -621,6 +621,29 @@ def test_ensure_backs_off_after_repeated_failures(tmp_path, monkeypatch):
     assert len(installs) == vizor_daemon.ENSURE_BACKOFF_LIMIT
 
 
+def test_ensure_backoff_ignores_attempts_outside_the_window(tmp_path, monkeypatch):
+    _isolate_daemon_home(monkeypatch, tmp_path / "home")
+    clock = {"now": 1_700_000_000.0}
+    monkeypatch.setattr(vizor_daemon, "_ensure_clock", lambda: clock["now"])
+    monkeypatch.setattr(vizor_daemon, "unhealthy_reason", lambda: "dead-pid")
+    installs = []
+    monkeypatch.setattr(
+        vizor_daemon,
+        "install",
+        lambda: installs.append(clock["now"]) or {"installed": False, "reason": "boom"},
+    )
+    for _ in range(3):
+        result = vizor_daemon.ensure()
+        assert result["action"] == "restart"
+        clock["now"] += vizor_daemon.ENSURE_BACKOFF_WINDOW_S + 60
+    # One minute after the third attempt. The earlier two are outside the window.
+    clock["now"] -= vizor_daemon.ENSURE_BACKOFF_WINDOW_S
+    result = vizor_daemon.ensure()
+    assert result["action"] == "restart"
+    assert result["reason"] == "dead-pid"
+    assert len(installs) == 4
+
+
 def test_unhealthy_reason_flags_version_mismatch(tmp_path, monkeypatch):
     from datetime import datetime, timezone
 
@@ -709,6 +732,62 @@ def test_daemon_import_skips_product_root_outside_a_checkout(tmp_path):
     assert proc.returncode == 0, proc.stderr
     assert not (home / "state.db").exists()
     assert not (tmp_path / "daemon-home" / "state.db").exists()
+
+
+def _non_git_import_env(tmp_path):
+    import os
+    root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    for key in (
+        "SYNLYNK_ALLOW_CWD_FALLBACK",
+        "SYNLYNK_STATE_DB_PATH",
+        "SYNLYNK_VIZOR_DAEMON",
+    ):
+        env.pop(key, None)
+    env["PYTHONPATH"] = str(root) + os.pathsep + env.get("PYTHONPATH", "")
+    return env
+
+
+def test_module_name_in_later_argv_still_refuses_a_non_git_cwd(tmp_path):
+    import subprocess
+    import sys
+
+    home = tmp_path / "not-a-repo"
+    home.mkdir()
+    script = tmp_path / "unrelated.py"
+    script.write_text("import synlynk\n", encoding="utf-8")
+    proc = subprocess.run(
+        [sys.executable, str(script), "synlynk.vizor_daemon"],
+        cwd=home,
+        env=_non_git_import_env(tmp_path),
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode != 0
+    assert "1831" in proc.stderr
+    assert not (home / "state.db").exists()
+
+
+def test_vizor_daemon_argv0_skips_product_root(tmp_path):
+    import subprocess
+    import sys
+
+    home = tmp_path / "not-a-repo"
+    home.mkdir()
+    script = tmp_path / "vizor_daemon.py"
+    script.write_text(
+        "import os, synlynk\nassert synlynk.DB_PATH == os.devnull\nprint('ok')\n",
+        encoding="utf-8",
+    )
+    proc = subprocess.run(
+        [sys.executable, str(script)],
+        cwd=home,
+        env=_non_git_import_env(tmp_path),
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert not (home / "state.db").exists()
 
 
 def test_non_daemon_import_still_refuses_a_non_git_cwd(tmp_path):
