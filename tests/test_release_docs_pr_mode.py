@@ -51,14 +51,27 @@ pipx install synlynk
     _git(root, "commit", "-m", "feature")
 
 
-def test_pr_mode_ignores_count_drift_when_readme_is_untouched(tmp_path):
+def test_pr_mode_ignores_count_drift_when_readme_is_untouched(tmp_path, monkeypatch):
     _init_pr_repo(tmp_path, readme_touched=False)
+    # Push and tag workflows set this to "" rather than leaving it unset.
+    monkeypatch.setenv("GITHUB_BASE_REF", "")
 
     findings = validate_readme_for_release(
         str(tmp_path), "0.25.5", collected_test_count=5010, pr_mode=True
     )
 
     assert not any(finding.check == "test_count" for finding in findings)
+
+
+def test_pr_mode_still_enforces_count_when_base_ref_is_missing(tmp_path, monkeypatch):
+    _init_pr_repo(tmp_path, readme_touched=False)
+    monkeypatch.setenv("GITHUB_BASE_REF", "does-not-exist")
+
+    findings = validate_readme_for_release(
+        str(tmp_path), "0.25.5", collected_test_count=5010, pr_mode=True
+    )
+
+    assert any(finding.check == "test_count" for finding in findings)
 
 
 def test_pr_mode_rejects_count_drift_when_readme_is_touched(tmp_path):
