@@ -2117,6 +2117,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     viz_parser = subparsers.add_parser("viz", help="Open Vizor dashboard for this workspace")
     viz_parser.add_argument("--install", action="store_true",
                             help="Install the Vizor daemon as an OS-supervised background service")
+    viz_parser.add_argument("--ensure", action="store_true",
+                            help="Install or restart Vizor when it is down, stale, stopped, or on another version")
     viz_parser.add_argument("--uninstall", action="store_true",
                             help="Uninstall the Vizor daemon service")
     viz_parser.add_argument("--daemon-status", action="store_true",

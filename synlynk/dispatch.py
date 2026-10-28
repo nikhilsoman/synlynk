@@ -38,6 +38,20 @@ from synlynk.process_lifecycle import (
     terminate_job_domain,
 )
 
+
+def _fence_hints(existing=None):
+    """Copy caller hints and append a Vizor URL when the port file exists."""
+    hints = list(existing or [])
+    try:
+        from synlynk.vizor_daemon import fence_hint
+
+        hint = fence_hint()
+    except Exception:
+        hint = None
+    if hint and hint not in hints:
+        hints.append(hint)
+    return hints
+
 _ORG_ROLE_TO_BASELINE_ROLE = {
     "dev": "builder",
     "qa": "verifier",
@@ -2418,7 +2432,7 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
             out_tokens=out_tokens,
             cost_usd=cost_usd,
             basis="structured_output",
-            hints=["Run \"synlynk watch\" for a live overview"],
+            hints=_fence_hints(["Run \"synlynk watch\" for a live overview"]),
             label=job_id,
         )
         return (
@@ -5288,6 +5302,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             out_tokens=out_tok,
             cost_usd=cost_usd,
             basis=basis,
+            hints=_fence_hints(),
         )
 
     import shlex as _shlex
@@ -6105,6 +6120,7 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
                         out_tokens=out_tokens,
                         cost_usd=est_cost,
                         basis=basis,
+                        hints=_fence_hints(),
                     )
                     print(render_task_fence(fence))
                 else:
