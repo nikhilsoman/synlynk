@@ -159,6 +159,21 @@ def test_overview_inspection_is_read_only():
     assert 'method="post"' not in html.lower()
     assert "/api/sentinel/clear" not in html
     assert ">Run<" not in html
+    snapshot = html.split('id="sentinel-snapshot">', 1)[1].split("</script>", 1)[0]
+    assert '"resolved": false' in snapshot
+    inline = html.split('id="sentinel-snapshot">', 1)[1]
+    inline = inline.split("<script>", 1)[1].split("</script>", 1)[0]
+    panel = inline.split("function renderPanel", 1)[1].split("querySelectorAll", 1)[0]
+    assert "active/resolved" in panel
+    assert "alert.resolved ? 'resolved' : 'active'" in panel
+    listener = inline.split("addEventListener('sentinel'", 1)[1].split("source.onerror", 1)[0]
+    assert "snapshotNode" in listener
+    assert "data-alert-index" in listener
+    assert "renderPanel" in listener
+    assert "\\u003c" in listener
+    assert "sev-crit" in listener
+    assert "sev-warn" in listener
+    assert "fetch(" not in inline
 
 
 def test_loader_keeps_inspection_fields(tmp_path, monkeypatch):

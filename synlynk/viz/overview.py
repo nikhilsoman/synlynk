@@ -34,6 +34,7 @@ def generate_overview_html(data: dict, port: int) -> str:
                 "occurrences": int(a.get("occurrences") or 1),
                 "first_seen": a.get("first_seen") or "",
                 "last_seen": a.get("last_seen") or "",
+                "resolved": bool(a.get("resolved")),
             })
             alert_rows.append(
                 f'<button type="button" class="alert-item {sev_class}" data-alert-index="{index}">'
@@ -425,6 +426,7 @@ def generate_overview_html(data: dict, port: int) -> str:
               ['first seen', alert.first_seen],
               ['last seen', alert.last_seen],
               ['occurrences', String(alert.occurrences == null ? '' : alert.occurrences)],
+              ['active/resolved', alert.resolved ? 'resolved' : 'active'],
               ['raw', alert.raw_line]
             ].forEach(function (pair) {
               const row = document.createElement('div');
@@ -454,15 +456,36 @@ def generate_overview_html(data: dict, port: int) -> str:
             });
             source.addEventListener('sentinel', function (message) {
               const list = document.querySelector('.alerts-list');
-              if (!list) return;
               let payload;
               try { payload = JSON.parse(message.data); } catch (err) { return; }
+              const next = (payload.alerts || []).map(function (alert) {
+                return {
+                  severity: alert.severity || '',
+                  pattern: alert.pattern || '',
+                  message: alert.message || '',
+                  ts: alert.ts || '',
+                  raw_line: alert.raw_line || '',
+                  occurrences: alert.occurrences == null ? '' : alert.occurrences,
+                  first_seen: alert.first_seen || '',
+                  last_seen: alert.last_seen || '',
+                  resolved: alert.resolved
+                };
+              });
+              if (snapshotNode) {
+                snapshotNode.textContent = JSON.stringify(next).replace(/</g, '\\\\u003c');
+              }
+              if (!list) return;
               list.textContent = '';
-              (payload.alerts || []).forEach(function (alert) {
+              next.forEach(function (alert, index) {
                 const row = document.createElement('button');
+                const sev = String(alert.severity || 'WARNING').toUpperCase();
                 row.type = 'button';
-                row.className = 'alert-item';
+                row.className = 'alert-item ' + ((sev === 'CRITICAL' || sev === 'CRIT') ? 'sev-crit' : 'sev-warn');
+                row.setAttribute('data-alert-index', String(index));
                 row.textContent = (alert.severity || '') + ' ' + (alert.pattern || '') + ' ' + (alert.message || '');
+                row.addEventListener('click', function () {
+                  renderPanel(readAlerts()[Number(row.getAttribute('data-alert-index'))]);
+                });
                 list.appendChild(row);
               });
             });
