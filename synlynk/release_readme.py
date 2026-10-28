@@ -235,7 +235,9 @@ def _is_readme_modified_in_pr(root: str) -> bool:
     A failed diff check is treated conservatively as modified so PR mode never
     weakens validation when the base ref is unavailable.
     """
-    base_branch = os.environ.get("GITHUB_BASE_REF", "main")
+    # Push and tag events set GITHUB_BASE_REF to an empty string. os.environ.get
+    # returns that empty string instead of the default, and `origin/` is not a ref.
+    base_branch = (os.environ.get("GITHUB_BASE_REF") or "main").strip() or "main"
     base_ref = f"origin/{base_branch}"
     try:
         result = subprocess.run(
