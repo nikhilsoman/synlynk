@@ -42,6 +42,38 @@ def test_completed_noop_job_calls_worktree_cleanup(monkeypatch):
     assert calls == [{"id": "job-noop"}]
 
 
+def test_noop_cleanup_copies_log_before_removing_worktree(git_worktree_repo, tmp_path, monkeypatch):
+    import synlynk.daemon as daemon
+    import synlynk.jobs as jobs
+
+    repo = git_worktree_repo
+    path = _job_worktree(repo)
+    log_dir = path / ".synlynk" / "logs"
+    log_dir.mkdir(parents=True)
+    log_path = log_dir / "job-noop.log"
+    log_path.write_text("merge log\n", encoding="utf-8")
+    exit_path = log_dir / "job-noop.log.exit"
+    exit_path.write_text("0\n", encoding="utf-8")
+    central = tmp_path / "central"
+    monkeypatch.setattr(jobs, "_pkg", lambda name: None)
+    monkeypatch.setattr(
+        daemon,
+        "_daemon_state_path",
+        lambda *parts, workspace_root=None: str(central.joinpath(*parts)),
+    )
+    job = {
+        "id": "job-noop",
+        "worktree_path": str(path),
+        "worktree_branch": "dispatch/codex/noop",
+        "log_file": str(log_path),
+    }
+
+    assert jobs._cleanup_noop_worktree(job) is True
+    assert not path.exists()
+    assert (central / "logs" / "job-noop.log").read_text(encoding="utf-8") == "merge log\n"
+    assert (central / "logs" / "job-noop.log.exit").read_text(encoding="utf-8") == "0\n"
+
+
 def test_noop_cleanup_keeps_dirty_worktree(git_worktree_repo):
     import synlynk.jobs as jobs
 

@@ -748,6 +748,25 @@ def _non_git_import_env(tmp_path):
     return env
 
 
+def test_daemon_imports_viz_outside_a_git_checkout(tmp_path):
+    """The daemon skips legacy package exports. Vizor must still import."""
+    import subprocess
+    import sys
+
+    home = tmp_path / "not-a-repo"
+    home.mkdir()
+    env = _non_git_import_env(tmp_path)
+    env["SYNLYNK_VIZOR_DAEMON"] = "1"
+    proc = subprocess.run(
+        [sys.executable, "-c", "import synlynk.viz.constants, synlynk.viz.data"],
+        cwd=home,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+
+
 def test_module_name_in_later_argv_still_refuses_a_non_git_cwd(tmp_path):
     import subprocess
     import sys
