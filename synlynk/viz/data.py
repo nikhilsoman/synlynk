@@ -11,7 +11,7 @@ import time
 from typing import Optional
 from synlynk.observatory import build_job_observatory_snapshot
 from synlynk.viz_views import build_workspace_views_snapshot
-from synlynk import _query_repo_file_tree
+from synlynk.scan import _query_repo_file_tree
 def _pkg():
     """Package namespace tests and the Vizor daemon rebind."""
     import synlynk.viz as viz

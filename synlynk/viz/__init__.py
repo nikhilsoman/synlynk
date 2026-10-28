@@ -7,7 +7,8 @@ existing ``synlynk status --json`` seam inside ``synlynk.viz.data``.
 
 import webbrowser
 
-from synlynk import _get_db, _query_repo_file_tree
+from synlynk import _get_db
+from synlynk.scan import _query_repo_file_tree
 
 _open_state_db = _get_db
 
