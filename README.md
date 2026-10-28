@@ -6,15 +6,15 @@
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
 <p align="center">
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5189%20collected-brightgreen" alt="Tests"</a>
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.26.5-blue" alt="Version"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5207%20collected-brightgreen" alt="Tests"</a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.26.6-blue" alt="Version"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
 </p>
 
 Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. The Python CLI injects scoped project context into every dispatch, uses empirical harness allocation only after a harness has at least five completed, merged jobs for the relevant task type, and follows the documented interim policy until then. See the [empirical capability policy](docs/blog/244-chore-empirical-capability-policy.md) and [routing policy](.synlynk/policy.json). Synlynk also tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
-**v0.26.5:** Graphify dependency, brownfield discovery, and warm traversals. Install falls through uv, pipx, then pip --user for `graphifyy`. Doctor checks the binary and installs only with `--fix graphify`. Greenfield workspaces get an empty graph and pointer; brownfield extract runs when the graph is missing or not stamped at HEAD. Context packing reads the warm traversal cache before the live walk, and `synlynk maintainer sweep --refresh-graph` rebuilds the graph, cache, and mesh (gh:#2470, #2638). The document sidecar stays deferred. 5189 tests collected.
+**v0.26.6:** Vizor daemon heartbeat, live SSE, and a read-only sentinel inspection panel. The Vizor daemon writes one heartbeat in its own home and serves it on localhost. Overview updates the heartbeat chip and active alerts without a reload, and an alert row opens a panel with severity, code, message, first and last seen, occurrences, active/resolved, and the raw line. The memorable port list is unchanged (gh:#2641, #2642). 5207 tests collected.
 
 ## Documentation
 
