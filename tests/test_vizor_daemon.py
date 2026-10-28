@@ -86,6 +86,9 @@ def test_poll_once_writes_cache_per_workspace(tmp_path, monkeypatch):
 
     cache_root = tmp_path / "cache-root"
     monkeypatch.setattr("synlynk.vizor_daemon.CACHE_ROOT", cache_root)
+    home = tmp_path / "daemon-home"
+    monkeypatch.setattr("synlynk.vizor_daemon.DAEMON_HOME", home)
+    monkeypatch.setattr("synlynk.vizor_daemon.LOGFILE", home / "daemon.log")
 
     def fake_generate_viz_data():
         return {
@@ -136,6 +139,9 @@ def test_poll_once_isolates_failures(tmp_path, monkeypatch):
 
     cache_root = tmp_path / "cache-root"
     monkeypatch.setattr("synlynk.vizor_daemon.CACHE_ROOT", cache_root)
+    home = tmp_path / "daemon-home"
+    monkeypatch.setattr("synlynk.vizor_daemon.DAEMON_HOME", home)
+    monkeypatch.setattr("synlynk.vizor_daemon.LOGFILE", home / "daemon.log")
 
     import synlynk.viz as viz_module
 
@@ -462,4 +468,126 @@ def test_workspace_render_context_thread_safety(tmp_path):
     assert results[1][0] == "b"
     assert results[1][1] == str(repo_b.resolve())
     assert results[1][2] == str(tmp_path / "cache_b")
+
+
+def _isolate_daemon_home(monkeypatch, home):
+    home.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(vizor_daemon, "DAEMON_HOME", home)
+    monkeypatch.setattr(vizor_daemon, "PIDFILE", home / "pidfile")
+    monkeypatch.setattr(vizor_daemon, "PORTFILE", home / "port")
+    monkeypatch.setattr(vizor_daemon, "LOGFILE", home / "daemon.log")
+
+
+def test_poll_once_records_slug_then_idle(tmp_path, monkeypatch):
+    from synlynk.viz.heartbeats import read_beat
+
+    _isolate_daemon_home(monkeypatch, tmp_path / "home")
+    monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(tmp_path / "registry.json"))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    db = tmp_path / "state.db"
+    db.write_bytes(b"")
+    _seed_registry(tmp_path / "registry.json", "acme", repo, db)
+    seen = []
+
+    def spy(slug, entry, port):
+        row = read_beat(vizor_daemon.DAEMON_HOME, poll_interval_s=15)
+        seen.append(row["active_task"])
+
+    monkeypatch.setattr(vizor_daemon, "refresh_workspace", spy)
+    results = vizor_daemon.poll_once(port=8721)
+    assert results == {"acme": "ok"}
+    assert seen == ["acme"]
+    done = read_beat(vizor_daemon.DAEMON_HOME, poll_interval_s=15)
+    assert done["active_task"] == "idle"
+    assert done["cycle_count"] == 1
+    assert done["harness"] == "vizor"
+
+
+def test_poll_once_survives_heartbeat_errors(tmp_path, monkeypatch):
+    import sqlite3
+
+    from synlynk.viz import heartbeats
+
+    _isolate_daemon_home(monkeypatch, tmp_path / "home")
+    monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(tmp_path / "registry.json"))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    db = tmp_path / "state.db"
+    db.write_bytes(b"")
+    _seed_registry(tmp_path / "registry.json", "acme", repo, db)
+    monkeypatch.setattr(vizor_daemon, "refresh_workspace", lambda *a, **k: None)
+
+    def boom(*args, **kwargs):
+        raise sqlite3.OperationalError("disk")
+
+    monkeypatch.setattr(heartbeats, "upsert_beat", boom)
+    monkeypatch.setattr(heartbeats, "read_beat", boom)
+    results = vizor_daemon.poll_once(port=8721)
+    assert results == {"acme": "ok"}
+
+
+def test_run_forever_marks_stopped_when_the_server_exits(tmp_path, monkeypatch):
+    import http.server
+
+    from synlynk.viz.heartbeats import read_beat
+
+    _isolate_daemon_home(monkeypatch, tmp_path / "home")
+    monkeypatch.setattr(vizor_daemon, "probe_health", lambda: {"ok": True})
+    monkeypatch.setattr(vizor_daemon, "resolve_listen_port", lambda port=None: 0)
+    monkeypatch.setattr(vizor_daemon, "poll_once", lambda port: {})
+    monkeypatch.setattr(vizor_daemon, "build_workspace_routing_handler", lambda: object)
+
+    class FakeServer:
+        def __init__(self, addr, handler):
+            self.addr = addr
+
+        def serve_forever(self):
+            raise KeyboardInterrupt
+
+        def shutdown(self):
+            return None
+
+        def server_close(self):
+            return None
+
+    monkeypatch.setattr(http.server, "HTTPServer", FakeServer)
+    vizor_daemon.run_forever()
+    row = read_beat(vizor_daemon.DAEMON_HOME, poll_interval_s=15)
+    assert row["status"] == "stopped"
+
+
+def test_resolve_listen_port_skips_a_taken_port(tmp_path, monkeypatch):
+    import socket
+    from synlynk.viz.constants import MEMORABLE_VIZOR_PORTS
+
+    _isolate_daemon_home(monkeypatch, tmp_path / "home")
+    held = socket.socket()
+    held.bind(("127.0.0.1", 0))
+    held.listen(1)
+    preferred = held.getsockname()[1]
+    try:
+        chosen = vizor_daemon.resolve_listen_port(preferred)
+    finally:
+        held.close()
+    assert chosen != preferred
+    assert chosen in MEMORABLE_VIZOR_PORTS or chosen == 8721
+
+
+def test_resolve_listen_port_returns_none_when_already_running(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    _isolate_daemon_home(monkeypatch, home)
+    (home / "pidfile").write_text(str(os.getpid()))
+    (home / "port").write_text("33333")
+    assert vizor_daemon.resolve_listen_port(33333) is None
+
+
+def test_mark_daemon_stopped_records_stopped(tmp_path, monkeypatch):
+    from synlynk.viz.heartbeats import read_beat
+
+    _isolate_daemon_home(monkeypatch, tmp_path / "home")
+    vizor_daemon.mark_daemon_stopped()
+    row = read_beat(vizor_daemon.DAEMON_HOME, poll_interval_s=15)
+    assert row["status"] == "stopped"
+    assert row["harness"] == "vizor"
 

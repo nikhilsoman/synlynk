@@ -219,18 +219,78 @@ def refresh_workspace(slug: str, entry: dict, port: int) -> None:
         viz_module._write_cache(data, port)
 
 
+def _safe_heartbeat(action) -> None:
+    """Keep a heartbeat failure from changing the poll result."""
+    try:
+        action()
+    except Exception as exc:
+        _log(f"heartbeat write failed: {exc}")
+
+
+def _remember_beat(*, pid: int, status: str, cycle_count: int, active_task: Optional[str]) -> None:
+    from datetime import datetime, timezone
+
+    from synlynk.viz.heartbeats import upsert_beat
+
+    upsert_beat(
+        DAEMON_HOME,
+        pid=pid,
+        status=status,
+        last_beat_at=datetime.now(timezone.utc),
+        cycle_count=cycle_count,
+        active_task=active_task,
+    )
+
+
 def poll_once(port: int) -> dict:
     """Refresh every registered workspace once. Never lets one failure stop another."""
+    from synlynk.viz.heartbeats import pid_alive, read_beat
+
+    def mark_dead_pid() -> None:
+        existing = read_beat(DAEMON_HOME, poll_interval_s=poll_interval())
+        if not existing:
+            return
+        if pid_alive(int(existing["pid"])):
+            return
+        _remember_beat(
+            pid=int(existing["pid"]),
+            status="stale",
+            cycle_count=int(existing["cycle_count"]),
+            active_task=existing.get("active_task"),
+        )
+
+    _safe_heartbeat(mark_dead_pid)
+    cycle_count = 0
+    try:
+        existing = read_beat(DAEMON_HOME, poll_interval_s=poll_interval())
+        if existing:
+            cycle_count = int(existing["cycle_count"])
+    except Exception as exc:
+        _log(f"heartbeat read failed: {exc}")
+
     results = {}
+    current_pid = os.getpid()
     for slug, entry in _registered_workspaces().items():
         if not isinstance(entry, dict):
             continue
+        _safe_heartbeat(lambda slug=slug: _remember_beat(
+            pid=current_pid,
+            status="running",
+            cycle_count=cycle_count,
+            active_task=slug,
+        ))
         try:
             refresh_workspace(slug, entry, port)
             results[slug] = "ok"
         except Exception as exc:
             results[slug] = f"error: {exc}"
             _log(f"refresh failed for {slug!r}: {exc}")
+    _safe_heartbeat(lambda: _remember_beat(
+        pid=current_pid,
+        status="running",
+        cycle_count=cycle_count + 1,
+        active_task="idle",
+    ))
     return results
 
 
@@ -704,6 +764,12 @@ def build_workspace_routing_handler():
                             self.wfile.write(body)
                         return False
 
+                    if api_route == "daemon/stream" and self.command == "GET":
+                        from synlynk.viz.server import serve_daemon_stream
+
+                        serve_daemon_stream(self, repo_path=ctx.repo_path)
+                        return False
+
                     if api_route == "goals" and self.command == "GET":
                         from synlynk.viz import collect_data
 
@@ -802,12 +868,40 @@ def is_running() -> bool:
         return False
 
 
+def resolve_listen_port(port: Optional[int] = None) -> Optional[int]:
+    """Return a bindable port, or None when a live Vizor pid already owns the home."""
+    if is_running():
+        _log(f"already running pid={_read_pid()} port={_read_port()}")
+        return None
+    from synlynk.viz.constants import DEFAULT_PORT
+    from synlynk.viz.ports import find_available_vizor_port
+
+    return find_available_vizor_port(port or DEFAULT_PORT)
+
+
+def mark_daemon_stopped() -> None:
+    """Record a clean shutdown without raising into the server finally path."""
+    from synlynk.viz.heartbeats import read_beat
+
+    existing = None
+    try:
+        existing = read_beat(DAEMON_HOME, poll_interval_s=poll_interval())
+    except Exception as exc:
+        _log(f"heartbeat read failed: {exc}")
+    cycle_count = int(existing["cycle_count"]) if existing else 0
+    active_task = existing.get("active_task") if existing else "idle"
+    _safe_heartbeat(lambda: _remember_beat(
+        pid=os.getpid(),
+        status="stopped",
+        cycle_count=cycle_count,
+        active_task=active_task,
+    ))
+
+
 def run_forever(port: Optional[int] = None) -> None:
     """Daemon entrypoint: serve forever, refreshing every registered workspace on a timer."""
     import http.server
     import threading
-
-    from synlynk.viz import DEFAULT_PORT
 
     extra_paths = [
         os.path.expanduser("~/.local/bin"),
@@ -819,9 +913,12 @@ def run_forever(port: Optional[int] = None) -> None:
         if p not in os.environ.get("PATH", ""):
             os.environ["PATH"] = p + ":" + os.environ.get("PATH", "")
 
+    resolved_port = resolve_listen_port(port)
+    if resolved_port is None:
+        return
+
     probe_health()
 
-    resolved_port = port or DEFAULT_PORT
     CACHE_ROOT.mkdir(parents=True, exist_ok=True)
     handler_cls = build_workspace_routing_handler()
     server = http.server.HTTPServer(("127.0.0.1", resolved_port), handler_cls)
@@ -844,6 +941,7 @@ def run_forever(port: Optional[int] = None) -> None:
         pass
     finally:
         stop_event.set()
+        mark_daemon_stopped()
         server.shutdown()
         server.server_close()
         _log("daemon stopped")

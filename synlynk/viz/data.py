@@ -17,6 +17,43 @@ def _pkg():
     import synlynk.viz as viz
     return viz
 
+
+def load_workspace_sentinel_alerts(sentinel_path: str, *, active_only: bool = False) -> list:
+    """Project sentinel.md into the Overview and SSE alert shape.
+
+    The message text is the reproduction record. This function does not write
+    the file and does not execute anything inside it.
+    """
+    from synlynk.sentinel import _iter_sentinel_alerts
+
+    alerts = []
+    try:
+        parsed = _iter_sentinel_alerts(sentinel_path, active_only=active_only)
+    except Exception:
+        return []
+    for alert in parsed:
+        sev = alert.get("original_severity") or alert.get("severity") or "INFO"
+        sev_upper = str(sev).strip().upper()
+        if sev_upper in ("CRITICAL", "CRIT"):
+            severity_out = "CRITICAL"
+        elif sev_upper in ("WARNING", "WARN"):
+            severity_out = "WARNING"
+        else:
+            severity_out = "INFO"
+        raw_line = alert.get("raw_line") or ""
+        alerts.append({
+            "ts": alert.get("timestamp") or "",
+            "pattern": alert.get("code") or "",
+            "severity": severity_out,
+            "resolved": "[RESOLVED]" in raw_line or alert.get("code") == "RESOLVED",
+            "message": alert.get("message") or "",
+            "raw_line": raw_line,
+            "occurrences": int(alert.get("occurrences") or 1),
+            "first_seen": alert.get("first_seen") or alert.get("timestamp") or "",
+            "last_seen": alert.get("last_seen") or alert.get("timestamp") or "",
+        })
+    return alerts
+
 def collect_data(*, db_path: Optional[str] = None) -> dict:
     """Collect workspace-owned goal data from an explicitly scoped ledger.
 
@@ -334,29 +371,7 @@ def generate_viz_data(db_path: Optional[str] = None) -> dict:
         return recent
 
     def _load_sentinel_alerts() -> list:
-        sentinel_path = ".synlynk/sentinel.md"
-        from synlynk.sentinel import _iter_sentinel_alerts
-        alerts = []
-        try:
-            for alert in _iter_sentinel_alerts(sentinel_path, active_only=False):
-                sev = alert.get("original_severity") or alert.get("severity") or "INFO"
-                sev_upper = str(sev).strip().upper()
-                if sev_upper in ("CRITICAL", "CRIT"):
-                    severity_out = "CRITICAL"
-                elif sev_upper in ("WARNING", "WARN"):
-                    severity_out = "WARNING"
-                else:
-                    severity_out = "INFO"
-                alerts.append({
-                    "ts": alert.get("timestamp") or "",
-                    "pattern": alert.get("code") or "",
-                    "severity": severity_out,
-                    "resolved": "[RESOLVED]" in alert.get("raw_line", "") or alert.get("code") == "RESOLVED",
-                    "message": alert.get("message") or "",
-                })
-        except Exception:
-            pass
-        return alerts
+        return load_workspace_sentinel_alerts(".synlynk/sentinel.md")
 
     def _load_spec_verifications(limit: int = 20) -> list:
         try:
