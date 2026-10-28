@@ -4158,5 +4158,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2639 \u2014 cut v0.26.5 \u2014 Graphify dependency and warm traversals (PR #2639, v0.26.5)\n\n\u2022 Merged improvements and fixes for PR #2639.\n\n#posts",
     "changelog": "### v0.26.5 (2026-10-27) - PR #2639\n- Merged improvements and fixes for PR #2639."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/507-pr2642-vizor-daemon-heartbeat-live-sse-and-read.md",
+    "title": "PR #2642 \u2014 Vizor daemon heartbeat, live SSE, and read-only sentinel inspection",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-28",
+    "pr": "#2642",
+    "version": "0.26.5",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2642."
+    ],
+    "tweet": "\ud83d\ude80 PR #2642 \u2014 Vizor daemon heartbeat, live SSE, and read-only sentinel inspection (PR #2642, v0.26.5)\n\n\u2022 Merged improvements and fixes for PR #2642.\n\n#posts",
+    "changelog": "### v0.26.5 (2026-10-28) - PR #2642\n- Merged improvements and fixes for PR #2642."
   }
 ]

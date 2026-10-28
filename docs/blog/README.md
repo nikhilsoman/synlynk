@@ -585,6 +585,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [504](./504-pr2637-sync-website-docs-bundle-collateral-for-.md) | PR #2637 — sync website/docs-bundle collateral for v0.26.4 | [#2637](https://github.com/nikhilsoman/synlynk/pull/2637) | 2026-10-27 |
 | [505](./505-pr2638-v0-26-5-lifecycle-warm-cache-and-maintai.md) | PR #2638 — v0.26.5 lifecycle, warm cache, and maintainer sweep | [#2638](https://github.com/nikhilsoman/synlynk/pull/2638) | 2026-10-27 |
 | [506](./506-pr2639-cut-v0-26-5-graphify-dependency-and-warm.md) | PR #2639 — cut v0.26.5 — Graphify dependency and warm traversals | [#2639](https://github.com/nikhilsoman/synlynk/pull/2639) | 2026-10-27 |
+| [507](./507-pr2642-vizor-daemon-heartbeat-live-sse-and-read.md) | PR #2642 — Vizor daemon heartbeat, live SSE, and read-only sentinel inspection | [#2642](https://github.com/nikhilsoman/synlynk/pull/2642) | 2026-10-28 |
 
 ## Per-PR Post Template
 
