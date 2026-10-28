@@ -589,6 +589,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [508](./508-pr2643-prepare-v0-26-6-vizor-heartbeat-notes.md) | PR #2643 — prepare v0.26.6 Vizor heartbeat notes | [#2643](https://github.com/nikhilsoman/synlynk/pull/2643) | 2026-10-28 |
 | [509](./509-pr2651-keep-the-vizor-daemon-alive-outside-a-gi.md) | PR #2651 — keep the Vizor daemon alive outside a git checkout | [#2651](https://github.com/nikhilsoman/synlynk/pull/2651) | 2026-10-28 |
 | [510](./510-pr2652-push-event-readme-check-noop-log-copy-an.md) | PR #2652 — push-event README check, noop log copy, and Vizor daemon import | [#2652](https://github.com/nikhilsoman/synlynk/pull/2652) | 2026-10-28 |
+| [511](./511-pr2654-rebase-platform-vision-branch-onto-main-.md) | PR #2654 — rebase platform-vision branch onto main, sync roadmap.md | [#2654](https://github.com/nikhilsoman/synlynk/pull/2654) | 2026-10-28 |
 
 ## Per-PR Post Template
 

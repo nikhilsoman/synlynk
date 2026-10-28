@@ -4222,5 +4222,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2652 \u2014 push-event README check, noop log copy, and Vizor daemon import (PR #2652, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2652.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-28) - PR #2652\n- Merged improvements and fixes for PR #2652."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/511-pr2654-rebase-platform-vision-branch-onto-main-.md",
+    "title": "PR #2654 \u2014 rebase platform-vision branch onto main, sync roadmap.md",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-28",
+    "pr": "#2654",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2654."
+    ],
+    "tweet": "\ud83d\ude80 PR #2654 \u2014 rebase platform-vision branch onto main, sync roadmap.md (PR #2654, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2654.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-28) - PR #2654\n- Merged improvements and fixes for PR #2654."
   }
 ]
