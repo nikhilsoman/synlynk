@@ -847,6 +847,7 @@ def serve_daemon_stream(handler, repo_path=None) -> None:
             "last_beat_at": None,
             "cycle_count": 0,
             "active_task": None,
+            "version": None,
         }
         payload = dict(beat)
         payload["port"] = vizor_daemon._read_port()
@@ -894,6 +895,11 @@ def cmd_viz(args) -> None:
         from synlynk.product_store import identity_slug_from_config
         from synlynk.wave6 import hosted_vizor_placeholder
         print(json.dumps(hosted_vizor_placeholder(identity_slug_from_config(".")), indent=2))
+        return
+
+    if getattr(args, "ensure", False):
+        result = vizor_daemon.ensure()
+        print(json.dumps(result))
         return
 
     if getattr(args, "install", False):

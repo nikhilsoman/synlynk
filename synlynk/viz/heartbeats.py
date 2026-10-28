@@ -50,10 +50,14 @@ def open_heartbeats(home: Path) -> sqlite3.Connection:
             status TEXT NOT NULL,
             last_beat_at TEXT NOT NULL,
             cycle_count INTEGER NOT NULL,
-            active_task TEXT
+            active_task TEXT,
+            version TEXT
         )
         """
     )
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(daemon_heartbeats)")}
+    if "version" not in columns:
+        conn.execute("ALTER TABLE daemon_heartbeats ADD COLUMN version TEXT")
     conn.commit()
     return conn
 
@@ -67,12 +71,17 @@ def upsert_beat(
     cycle_count: int,
     active_task: Optional[str],
     harness: str = HARNESS,
+    version: Optional[str] = None,
 ) -> None:
     """Replace the single heartbeat row for this daemon home."""
     if harness != HARNESS:
         raise ValueError(f"harness must be {HARNESS!r}")
     if status not in STATUSES:
         raise ValueError(f"status must be one of {sorted(STATUSES)}")
+    if version is None:
+        from synlynk._constants import VERSION
+
+        version = VERSION
     stamp = _format_time(last_beat_at)
     identity = daemon_id(home)
     conn = open_heartbeats(home)
@@ -80,17 +89,18 @@ def upsert_beat(
         conn.execute(
             """
             INSERT INTO daemon_heartbeats (
-                daemon_id, pid, harness, status, last_beat_at, cycle_count, active_task
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                daemon_id, pid, harness, status, last_beat_at, cycle_count, active_task, version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(daemon_id) DO UPDATE SET
                 pid = excluded.pid,
                 harness = excluded.harness,
                 status = excluded.status,
                 last_beat_at = excluded.last_beat_at,
                 cycle_count = excluded.cycle_count,
-                active_task = excluded.active_task
+                active_task = excluded.active_task,
+                version = excluded.version
             """,
-            (identity, int(pid), harness, status, stamp, int(cycle_count), active_task),
+            (identity, int(pid), harness, status, stamp, int(cycle_count), active_task, version),
         )
         conn.commit()
     finally:
@@ -111,7 +121,7 @@ def read_beat(
     try:
         row = conn.execute(
             """
-            SELECT daemon_id, pid, harness, status, last_beat_at, cycle_count, active_task
+            SELECT daemon_id, pid, harness, status, last_beat_at, cycle_count, active_task, version
             FROM daemon_heartbeats
             LIMIT 1
             """

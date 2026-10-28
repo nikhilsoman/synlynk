@@ -123,6 +123,47 @@ def test_old_beat_is_stale(tmp_path):
     assert row["status"] == "stale"
 
 
+def test_version_column_is_added_to_an_existing_database(tmp_path):
+    import sqlite3
+
+    conn = sqlite3.connect(tmp_path / "heartbeats.db")
+    conn.execute(
+        """
+        CREATE TABLE daemon_heartbeats (
+            daemon_id TEXT PRIMARY KEY,
+            pid INTEGER NOT NULL,
+            harness TEXT NOT NULL,
+            status TEXT NOT NULL,
+            last_beat_at TEXT NOT NULL,
+            cycle_count INTEGER NOT NULL,
+            active_task TEXT
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    reopened = open_heartbeats(tmp_path)
+    try:
+        columns = [row[1] for row in reopened.execute("PRAGMA table_info(daemon_heartbeats)")]
+    finally:
+        reopened.close()
+    assert "version" in columns
+
+    upsert_beat(
+        tmp_path,
+        pid=os.getpid(),
+        status="running",
+        last_beat_at=_now(),
+        cycle_count=1,
+        active_task="idle",
+        version="0.26.6",
+    )
+    row = read_beat(tmp_path, now=_now(), poll_interval_s=15)
+    assert row["version"] == "0.26.6"
+    assert row["status"] == "running"
+
+
 def test_stopped_stays_stopped(tmp_path):
     upsert_beat(
         tmp_path,
