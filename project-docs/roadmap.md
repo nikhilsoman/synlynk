@@ -482,9 +482,9 @@ Shipped 2026-10-27 (PR #2633, tag v0.26.4). Gates SUPERVISED-mode daemon schedul
 Shipped 2026-10-28 (PR #2638, tag v0.26.5). Graphify install falls through uv, pipx, then pip --user. Doctor checks the binary and installs only with `--fix graphify`. Greenfield workspaces get an empty graph and pointer; brownfield extract runs when the graph is missing or not stamped at HEAD. Pack reads the warm traversal cache before the live walk. `maintainer sweep --refresh-graph` rebuilds the graph, cache, and mesh. The document sidecar stays deferred (dec-6d438fd0). Parent #2458; release epic #2470.
 
 
-## v0.26.6 — Vizor Platform Review, Daemon Heartbeat & Sentinel Monitoring [planned] (target: 2026-10-29)
+## v0.26.6 — Vizor Platform Review, Daemon Heartbeat & Sentinel Monitoring [shipped] (target: 2026-10-29)
 
-Comprehensive Vizor UI & architecture review; always-on background monitoring dashboard on port 33333 (with fallback to 44444/55555); live daemon heartbeat tracking via `daemon_heartbeats` table and real-time SSE stream; live sentinel alert monitoring and incident inspection panels; full data population across all Vizor views (Overview, Architecture, Observatory, GOVERNS Board, Efficiency, Models, Settings); and strategic robustness hardening against dead PIDs, port conflicts, and socket crashes.
+Shipped 2026-10-29 (PR #2642, tag v0.26.6). The Vizor daemon writes heartbeats in its daemon home and serves them over localhost SSE. Overview shows the heartbeat and a read-only sentinel inspection panel, including alerts refreshed by the stream. Architecture, Observatory, Board, Efficiency, and Gantt were not redesigned. The memorable port list is unchanged. Parent #2458; issue #2641; goal goal-e3840370.
 
 
 ## v0.26.7 — Vizor Jantt Timeline & Interactive GOVERNS Stage Mapping [planned] (target: 2026-10-30)
