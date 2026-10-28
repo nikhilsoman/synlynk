@@ -4190,5 +4190,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2643 \u2014 prepare v0.26.6 Vizor heartbeat notes (PR #2643, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2643.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-28) - PR #2643\n- Merged improvements and fixes for PR #2643."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/509-pr2651-keep-the-vizor-daemon-alive-outside-a-gi.md",
+    "title": "PR #2651 \u2014 keep the Vizor daemon alive outside a git checkout",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-28",
+    "pr": "#2651",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2651."
+    ],
+    "tweet": "\ud83d\ude80 PR #2651 \u2014 keep the Vizor daemon alive outside a git checkout (PR #2651, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2651.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-28) - PR #2651\n- Merged improvements and fixes for PR #2651."
   }
 ]
