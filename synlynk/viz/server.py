@@ -58,6 +58,10 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
+        if path == "/api/daemon/stream":
+            serve_daemon_stream(self, repo_path=None)
+            return
+
         if path in ("/api/source", "/api/v1/source") or path.endswith("/api/source"):
             params = parse_qs(parsed.query)
             file_param = params.get("file", [""])[0]
@@ -802,6 +806,84 @@ def _current_workspace_slug() -> str:
     from synlynk.product_store import identity_slug_from_config
 
     return identity_slug_from_config(".")
+
+
+def serve_daemon_stream(handler, repo_path=None) -> None:
+    """Write one heartbeat snapshot, an optional sentinel snapshot, then hold the socket.
+
+    ``repo_path`` comes from the workspace registry. Query strings, including
+    ``path``, are ignored so a client cannot choose a file.
+    """
+    import json
+    import socket
+
+    from synlynk.viz.data import load_workspace_sentinel_alerts
+    from synlynk.viz.heartbeats import read_beat
+    from synlynk import vizor_daemon
+
+    handler.send_response(200)
+    handler.send_header("Content-Type", "text/event-stream")
+    handler.send_header("Cache-Control", "no-cache")
+    handler.send_header("X-Accel-Buffering", "no")
+    handler.send_header("Connection", "keep-alive")
+    handler.end_headers()
+    handler.close_connection = True
+
+    def send_frame(text: str) -> None:
+        handler.wfile.write(text.encode("utf-8"))
+        handler.wfile.flush()
+
+    def emit(event: str, payload: dict) -> None:
+        body = json.dumps(payload, separators=(",", ":"))
+        send_frame(f"event: {event}\ndata: {body}\n\n")
+
+    try:
+        interval = vizor_daemon.poll_interval()
+        beat = read_beat(vizor_daemon.DAEMON_HOME, poll_interval_s=interval) or {
+            "daemon_id": None,
+            "pid": None,
+            "harness": "vizor",
+            "status": "stopped",
+            "last_beat_at": None,
+            "cycle_count": 0,
+            "active_task": None,
+        }
+        payload = dict(beat)
+        payload["port"] = vizor_daemon._read_port()
+        emit("heartbeat", payload)
+        if repo_path is not None:
+            sentinel_path = os.path.join(str(repo_path), ".synlynk", "sentinel.md")
+            emit("sentinel", {
+                "alerts": load_workspace_sentinel_alerts(sentinel_path, active_only=True),
+            })
+        send_frame(": ping\n\n")
+        while True:
+            if _stream_client_closed(handler, interval):
+                return
+            send_frame(": ping\n\n")
+    except (BrokenPipeError, ConnectionResetError, socket.timeout, OSError):
+        return
+
+
+def _stream_client_closed(handler, seconds: int) -> bool:
+    """Return True when the client has gone away. A timeout means it is still there."""
+    import socket
+
+    sock = handler.connection
+    previous = sock.gettimeout()
+    sock.settimeout(max(int(seconds), 1))
+    try:
+        peeked = sock.recv(1, socket.MSG_PEEK)
+    except socket.timeout:
+        return False
+    except OSError:
+        return True
+    finally:
+        try:
+            sock.settimeout(previous)
+        except OSError:
+            pass
+    return peeked == b""
 
 
 def cmd_viz(args) -> None:
