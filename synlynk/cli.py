@@ -2517,7 +2517,28 @@ def main(argv=None) -> None:
             else:
                 print(f"Installed gh shim in {gh_shim.install_shim()}")
             sys.exit(0)
-        sys.exit(cmd_gh(args.role, getattr(args, "gh_args", []) or []))
+        gh_args = getattr(args, "gh_args", []) or []
+        if gh_args and gh_args[0] == "sync-roadmap":
+            from synlynk.gh_sync_cli import cmd_sync_roadmap
+            import subprocess
+
+            remote = subprocess.run(
+                ["gh", "repo", "view", "--json", "owner,name"],
+                capture_output=True,
+                text=True,
+            )
+            import json as _json
+
+            repo_info = _json.loads(remote.stdout)
+            cmd_sync_roadmap(
+                dry_run="--dry-run" in gh_args,
+                backfill="--backfill" in gh_args,
+                owner=repo_info["owner"]["login"],
+                repo=repo_info["name"],
+                role=args.role or "pm",
+            )
+            sys.exit(0)
+        sys.exit(cmd_gh(args.role, gh_args))
     elif args.command == "upgrade":
         if getattr(args, "all_workspaces", False):
             from synlynk.upgrade import upgrade_all
