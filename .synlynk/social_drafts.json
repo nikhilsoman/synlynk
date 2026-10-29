@@ -4238,5 +4238,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2654 \u2014 rebase platform-vision branch onto main, sync roadmap.md (PR #2654, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2654.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-28) - PR #2654\n- Merged improvements and fixes for PR #2654."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/512-pr2656-phase-1-roadmap-cost-state-db-schema-gh-.md",
+    "title": "PR #2656 \u2014 Phase 1 \u2014 roadmap/cost state.db schema (gh:#2653)",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-29",
+    "pr": "#2656",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2656."
+    ],
+    "tweet": "\ud83d\ude80 PR #2656 \u2014 Phase 1 \u2014 roadmap/cost state.db schema (gh:#2653) (PR #2656, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2656.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-29) - PR #2656\n- Merged improvements and fixes for PR #2656."
   }
 ]
