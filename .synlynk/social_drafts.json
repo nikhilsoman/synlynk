@@ -4254,5 +4254,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2656 \u2014 Phase 1 \u2014 roadmap/cost state.db schema (gh:#2653) (PR #2656, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2656.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-29) - PR #2656\n- Merged improvements and fixes for PR #2656."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/513-pr2658-gh-sync-module-skeleton-content-hashing-.md",
+    "title": "PR #2658 \u2014 gh_sync module skeleton \u2014 content hashing + gh api wrapper",
+    "author": "nikhilsoman",
+    "date": "2026-10-29",
+    "pr": "#2658",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2658."
+    ],
+    "tweet": "\ud83d\ude80 PR #2658 \u2014 gh_sync module skeleton \u2014 content hashing + gh api wrapper (PR #2658, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2658.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-29) - PR #2658\n- Merged improvements and fixes for PR #2658."
   }
 ]
