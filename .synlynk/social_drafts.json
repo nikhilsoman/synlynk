@@ -4270,5 +4270,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2658 \u2014 gh_sync module skeleton \u2014 content hashing + gh api wrapper (PR #2658, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2658.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-29) - PR #2658\n- Merged improvements and fixes for PR #2658."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/514-pr2659-sync-roadmap-arcs-to-github-milestones-i.md",
+    "title": "PR #2659 \u2014 sync roadmap_arcs to GitHub Milestones (idempotent)",
+    "author": "nikhilsoman",
+    "date": "2026-10-29",
+    "pr": "#2659",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2659."
+    ],
+    "tweet": "\ud83d\ude80 PR #2659 \u2014 sync roadmap_arcs to GitHub Milestones (idempotent) (PR #2659, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2659.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-29) - PR #2659\n- Merged improvements and fixes for PR #2659."
   }
 ]
