@@ -3158,8 +3158,11 @@ merged: YYYY-MM-DD (or status: open)
     print(f"    - [{'x' if ceremony_res.docs_updated else ' '}] Synlynk Docs bundles synchronized: Quick Start, Official Reference, Command Ref (HTML & PDF)")
     print(f"[ ] git tag v{next_version} && git push --tags")
     print(f"[ ] gh release create v{next_version}")
-    _mark_roadmap_arc_shipped(next_version)
-    print(f"  [x] Roadmap row marked shipped and Milestone closed — {next_version}")
+    if dry_run:
+        print(f"  [ ] Roadmap row would be marked shipped and Milestone closed — {next_version}")
+    else:
+        _mark_roadmap_arc_shipped(next_version)
+        print(f"  [x] Roadmap row marked shipped and Milestone closed — {next_version}")
 
 
 def cmd_marketing_ceremony(
