@@ -117,6 +117,67 @@ def test_m0029_is_idempotent(tmp_path):
     conn.close()
 
 
+def test_m0030_creates_github_sync_map_table(tmp_path):
+    import sqlite3
+    from synlynk.migrations.m0030_github_sync_map import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    MIGRATION.up(conn)
+    conn.commit()
+
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(github_sync_map)")}
+    assert cols == {
+        "entity_type", "entity_id", "github_number", "github_node_id",
+        "content_hash", "last_synced_at",
+    }
+
+    conn.execute(
+        "INSERT INTO github_sync_map (entity_type, entity_id, github_number, content_hash) "
+        "VALUES ('roadmap_arc', '7', 42, 'abc123')"
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT github_number, content_hash FROM github_sync_map "
+        "WHERE entity_type='roadmap_arc' AND entity_id='7'"
+    ).fetchone()
+    assert row == (42, "abc123")
+    conn.close()
+
+
+def test_m0030_entity_type_and_id_are_primary_key(tmp_path):
+    import sqlite3
+    from synlynk.migrations.m0030_github_sync_map import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    MIGRATION.up(conn)
+    conn.execute(
+        "INSERT INTO github_sync_map (entity_type, entity_id, github_number) "
+        "VALUES ('story', 'story-abc', 10)"
+    )
+    conn.commit()
+    with __import__("pytest").raises(sqlite3.IntegrityError):
+        conn.execute(
+            "INSERT INTO github_sync_map (entity_type, entity_id, github_number) "
+            "VALUES ('story', 'story-abc', 99)"
+        )
+    conn.close()
+
+
+def test_m0030_is_idempotent(tmp_path):
+    import sqlite3
+    from synlynk.migrations.m0030_github_sync_map import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    MIGRATION.up(conn)
+    MIGRATION.up(conn)
+    conn.commit()
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='github_sync_map'"
+    ).fetchone()
+    assert row is not None
+    conn.close()
+
+
 def test_run_pending_migrations_creates_history_table_when_registry_empty(tmp_path, monkeypatch):
     import sqlite3
     from synlynk.migrations import runner
