@@ -4302,5 +4302,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2660 \u2014 sync stories and decisions to GitHub Issues (idempotent) (PR #2660, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2660.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-29) - PR #2660\n- Merged improvements and fixes for PR #2660."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/516-pr2661-synlynk-gh-sync-roadmap-dry-run-backfill.md",
+    "title": "PR #2661 \u2014 synlynk gh sync-roadmap [--dry-run] [--backfill] command",
+    "author": "nikhilsoman",
+    "date": "2026-10-29",
+    "pr": "#2661",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2661."
+    ],
+    "tweet": "\ud83d\ude80 PR #2661 \u2014 synlynk gh sync-roadmap [--dry-run] [--backfill] command (PR #2661, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2661.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-29) - PR #2661\n- Merged improvements and fixes for PR #2661."
   }
 ]
