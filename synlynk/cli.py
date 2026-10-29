@@ -2520,21 +2520,13 @@ def main(argv=None) -> None:
         gh_args = getattr(args, "gh_args", []) or []
         if gh_args and gh_args[0] == "sync-roadmap":
             from synlynk.gh_sync_cli import cmd_sync_roadmap
-            import subprocess
-
-            remote = subprocess.run(
-                ["gh", "repo", "view", "--json", "owner,name"],
-                capture_output=True,
-                text=True,
-            )
-            import json as _json
-
-            repo_info = _json.loads(remote.stdout)
+            from synlynk.github_repo import resolve_owner_repo
+            owner, repo = resolve_owner_repo()
             cmd_sync_roadmap(
                 dry_run="--dry-run" in gh_args,
                 backfill="--backfill" in gh_args,
-                owner=repo_info["owner"]["login"],
-                repo=repo_info["name"],
+                owner=owner,
+                repo=repo,
                 role=args.role or "pm",
             )
             sys.exit(0)
