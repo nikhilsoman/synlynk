@@ -148,3 +148,141 @@ def _cost_rollup_for_arc(conn, arc_id: int) -> dict:
         "entry_count": row[1] or 0,
         "unresolved_count": row[2] or 0,
     }
+
+
+def _story_sync_fields(conn, story_id: str) -> dict:
+    row = conn.execute(
+        "SELECT title, status FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()
+    title, status = row
+    body = f"{title or story_id}\n\n<!-- synlynk:story_id={story_id} -->"
+    return {
+        "title": title or story_id,
+        "state": "closed" if status == "done" else "open",
+        "body": body,
+    }
+
+
+def sync_story(
+    conn,
+    story_id: str,
+    owner: str,
+    repo: str,
+    milestone_number: int | None,
+    role: str = "pm",
+) -> None:
+    fields = _story_sync_fields(conn, story_id)
+    new_hash = _content_hash(fields)
+
+    mapped = conn.execute(
+        "SELECT github_number, content_hash FROM github_sync_map "
+        "WHERE entity_type='story' AND entity_id=?",
+        (story_id,),
+    ).fetchone()
+    if mapped and mapped[1] == new_hash:
+        return
+
+    payload = {
+        "title": fields["title"],
+        "state": fields["state"],
+        "body": fields["body"],
+    }
+    if milestone_number is not None:
+        payload["milestone"] = milestone_number
+
+    if mapped:
+        github_number = mapped[0]
+        result = _gh_api_json(
+            [f"repos/{owner}/{repo}/issues/{github_number}", "--method", "PATCH"]
+            + [f"-f{k}={v}" for k, v in payload.items()],
+            role=role,
+        )
+        node_id = result.get("node_id") if result else None
+    else:
+        result = _gh_api_json(
+            [f"repos/{owner}/{repo}/issues", "--method", "POST"]
+            + [f"-f{k}={v}" for k, v in payload.items()],
+            role=role,
+        )
+        github_number = result["number"]
+        node_id = result.get("node_id")
+        conn.execute(
+            "UPDATE stories SET gh_issue=? WHERE story_id=?",
+            (str(github_number), story_id),
+        )
+
+    conn.execute(
+        "INSERT INTO github_sync_map (entity_type, entity_id, github_number, github_node_id, content_hash, last_synced_at) "
+        "VALUES ('story', ?, ?, ?, ?, datetime('now')) "
+        "ON CONFLICT(entity_type, entity_id) DO UPDATE SET "
+        "github_number=excluded.github_number, github_node_id=excluded.github_node_id, "
+        "content_hash=excluded.content_hash, last_synced_at=excluded.last_synced_at",
+        (story_id, github_number, node_id, new_hash),
+    )
+    conn.commit()
+
+
+def _decision_sync_fields(conn, decision_id: str) -> dict:
+    row = conn.execute(
+        "SELECT topic, status, synthesis, decision_text FROM decisions WHERE decision_id=?",
+        (decision_id,),
+    ).fetchone()
+    topic, status, synthesis, decision_text = row
+    body = (
+        f"**Synthesis:** {synthesis}\n\n**Decision:** {decision_text}\n\n"
+        f"<!-- synlynk:decision_id={decision_id} -->"
+    )
+    return {
+        "title": topic,
+        "state": "closed" if status == "decided" else "open",
+        "body": body,
+    }
+
+
+def sync_decision(
+    conn, decision_id: str, owner: str, repo: str, role: str = "pm"
+) -> None:
+    fields = _decision_sync_fields(conn, decision_id)
+    new_hash = _content_hash(fields)
+
+    mapped = conn.execute(
+        "SELECT github_number, content_hash FROM github_sync_map "
+        "WHERE entity_type='decision' AND entity_id=?",
+        (decision_id,),
+    ).fetchone()
+    if mapped and mapped[1] == new_hash:
+        return
+
+    payload = {
+        "title": fields["title"],
+        "state": fields["state"],
+        "body": fields["body"],
+        "labels[]": "decision",
+    }
+
+    if mapped:
+        github_number = mapped[0]
+        result = _gh_api_json(
+            [f"repos/{owner}/{repo}/issues/{github_number}", "--method", "PATCH"]
+            + [f"-f{k}={v}" for k, v in payload.items()],
+            role=role,
+        )
+        node_id = result.get("node_id") if result else None
+    else:
+        result = _gh_api_json(
+            [f"repos/{owner}/{repo}/issues", "--method", "POST"]
+            + [f"-f{k}={v}" for k, v in payload.items()],
+            role=role,
+        )
+        github_number = result["number"]
+        node_id = result.get("node_id")
+
+    conn.execute(
+        "INSERT INTO github_sync_map (entity_type, entity_id, github_number, github_node_id, content_hash, last_synced_at) "
+        "VALUES ('decision', ?, ?, ?, ?, datetime('now')) "
+        "ON CONFLICT(entity_type, entity_id) DO UPDATE SET "
+        "github_number=excluded.github_number, github_node_id=excluded.github_node_id, "
+        "content_hash=excluded.content_hash, last_synced_at=excluded.last_synced_at",
+        (decision_id, github_number, node_id, new_hash),
+    )
+    conn.commit()
