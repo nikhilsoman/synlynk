@@ -2400,6 +2400,16 @@ _VALID_COST_SOURCES = {
 }
 
 
+def repoint_cost_entries_epic_id(
+    conn: sqlite3.Connection, old_epic_id: int, new_epic_id: int
+) -> None:
+    """Repoint cost rows from a duplicate roadmap arc to its canonical arc."""
+    conn.execute(
+        "UPDATE cost_entries SET epic_id = ? WHERE epic_id = ?",
+        (new_epic_id, old_epic_id),
+    )
+
+
 def _insert_cost_row(
     session_date: str,
     agent: str = None,
@@ -2466,6 +2476,25 @@ def _insert_cost_row(
                 if r_row and r_row[0]:
                     role_val = r_row[0]
             except Exception:
+                pass
+
+        if epic_id is None and phase_id is None and story_id:
+            try:
+                p_row = conn.execute(
+                    "SELECT id, arc_version FROM roadmap_phases WHERE story_id=?",
+                    (story_id,),
+                ).fetchone()
+                if p_row:
+                    phase_id = p_row[0]
+                    arc_row = conn.execute(
+                        "SELECT id FROM roadmap_arcs WHERE version=?",
+                        (p_row[1],),
+                    ).fetchone()
+                    if arc_row:
+                        epic_id = arc_row[0]
+                elif estimate_basis is None:
+                    estimate_basis = "epic_unresolved"
+            except sqlite3.Error:
                 pass
 
         # Inherit context_mode from the job row when the caller did not pass one
