@@ -4286,5 +4286,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2659 \u2014 sync roadmap_arcs to GitHub Milestones (idempotent) (PR #2659, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2659.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-29) - PR #2659\n- Merged improvements and fixes for PR #2659."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/515-pr2660-sync-stories-and-decisions-to-github-iss.md",
+    "title": "PR #2660 \u2014 sync stories and decisions to GitHub Issues (idempotent)",
+    "author": "nikhilsoman",
+    "date": "2026-10-29",
+    "pr": "#2660",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2660."
+    ],
+    "tweet": "\ud83d\ude80 PR #2660 \u2014 sync stories and decisions to GitHub Issues (idempotent) (PR #2660, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2660.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-29) - PR #2660\n- Merged improvements and fixes for PR #2660."
   }
 ]

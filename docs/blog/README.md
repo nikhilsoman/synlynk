@@ -593,6 +593,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [512](./512-pr2656-phase-1-roadmap-cost-state-db-schema-gh-.md) | PR #2656 — Phase 1 — roadmap/cost state.db schema (gh:#2653) | [#2656](https://github.com/nikhilsoman/synlynk/pull/2656) | 2026-10-29 |
 | [513](./513-pr2658-gh-sync-module-skeleton-content-hashing-.md) | PR #2658 — gh_sync module skeleton — content hashing + gh api wrapper | [#2658](https://github.com/nikhilsoman/synlynk/pull/2658) | 2026-10-29 |
 | [514](./514-pr2659-sync-roadmap-arcs-to-github-milestones-i.md) | PR #2659 — sync roadmap_arcs to GitHub Milestones (idempotent) | [#2659](https://github.com/nikhilsoman/synlynk/pull/2659) | 2026-10-29 |
+| [515](./515-pr2660-sync-stories-and-decisions-to-github-iss.md) | PR #2660 — sync stories and decisions to GitHub Issues (idempotent) | [#2660](https://github.com/nikhilsoman/synlynk/pull/2660) | 2026-10-29 |
 
 ## Per-PR Post Template
 
