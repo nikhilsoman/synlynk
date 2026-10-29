@@ -175,3 +175,83 @@ def test_sync_arc_noop_when_not_milestone_eligible(tmp_path, monkeypatch):
 
     assert calls == []
     conn.close()
+
+
+def test_sync_story_creates_issue_with_footer(tmp_path, monkeypatch):
+    import sqlite3
+
+    from synlynk import gh_sync
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        "CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, status TEXT, gh_issue TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE github_sync_map (entity_type TEXT, entity_id TEXT, github_number INTEGER, "
+        "github_node_id TEXT, content_hash TEXT, last_synced_at TEXT, "
+        "PRIMARY KEY (entity_type, entity_id))"
+    )
+    conn.execute("INSERT INTO stories VALUES ('story-abc', 'Core cluster', 'open', NULL)")
+    conn.commit()
+
+    created = {}
+
+    def fake_gh_api_json(args, **kwargs):
+        if "--method" in args and "POST" in args:
+            created["args"] = args
+            return {"number": 7, "node_id": "I_xyz"}
+        return []
+
+    monkeypatch.setattr(gh_sync, "_gh_api_json", fake_gh_api_json)
+
+    gh_sync.sync_story(conn, story_id="story-abc", owner="o", repo="r", milestone_number=None)
+
+    body_arg = next(a for a in created["args"] if a.startswith("-fbody="))
+    assert "<!-- synlynk:story_id=story-abc -->" in body_arg
+    mapped = conn.execute(
+        "SELECT github_number FROM github_sync_map "
+        "WHERE entity_type='story' AND entity_id='story-abc'"
+    ).fetchone()
+    assert mapped == (7,)
+    conn.close()
+
+
+def test_sync_decision_creates_issue_with_decision_label(tmp_path, monkeypatch):
+    import sqlite3
+
+    from synlynk import gh_sync
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        "CREATE TABLE decisions (decision_id TEXT PRIMARY KEY, topic TEXT, status TEXT, "
+        "synthesis TEXT, decision_text TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE github_sync_map (entity_type TEXT, entity_id TEXT, github_number INTEGER, "
+        "github_node_id TEXT, content_hash TEXT, last_synced_at TEXT, "
+        "PRIMARY KEY (entity_type, entity_id))"
+    )
+    conn.execute(
+        "INSERT INTO decisions VALUES ('dec-1', 'Should we X?', 'decided', 'yes because', 'Do X')"
+    )
+    conn.commit()
+
+    created = {}
+
+    def fake_gh_api_json(args, **kwargs):
+        if "--method" in args and "POST" in args:
+            created["args"] = args
+            return {"number": 12, "node_id": "I_dec"}
+        return []
+
+    monkeypatch.setattr(gh_sync, "_gh_api_json", fake_gh_api_json)
+
+    gh_sync.sync_decision(conn, decision_id="dec-1", owner="o", repo="r")
+
+    assert "-flabels[]=decision" in created["args"]
+    mapped = conn.execute(
+        "SELECT github_number FROM github_sync_map "
+        "WHERE entity_type='decision' AND entity_id='dec-1'"
+    ).fetchone()
+    assert mapped == (12,)
+    conn.close()
