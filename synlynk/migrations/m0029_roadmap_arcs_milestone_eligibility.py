@@ -20,6 +20,16 @@ _CANONICAL_VERSION = "v1.0.0"
 
 
 def _up(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS roadmap_arcs (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            version     TEXT NOT NULL UNIQUE,
+            title       TEXT,
+            status      TEXT DEFAULT 'planned',
+            target_date TEXT,
+            notes       TEXT
+        )"""
+    )
     cols = {row[1] for row in conn.execute("PRAGMA table_info(roadmap_arcs)")}
     if "is_milestone_eligible" not in cols:
         conn.execute(
@@ -41,15 +51,14 @@ def _up(conn: sqlite3.Connection) -> None:
         "SELECT id FROM roadmap_arcs WHERE version = ?", (_CANONICAL_VERSION,)
     ).fetchone()
     if duplicate and canonical:
+        from synlynk.db import repoint_cost_entries_epic_id
+
         duplicate_id = duplicate[0]
         conn.execute(
             "UPDATE roadmap_phases SET arc_version = ? WHERE arc_version = ?",
             (_CANONICAL_VERSION, _DUPLICATE_VERSION),
         )
-        conn.execute(
-            "UPDATE cost_entries SET epic_id = ? WHERE epic_id = ?",
-            (canonical[0], duplicate_id),
-        )
+        repoint_cost_entries_epic_id(conn, duplicate_id, canonical[0])
         conn.execute("DELETE FROM roadmap_arcs WHERE id = ?", (duplicate_id,))
 
 

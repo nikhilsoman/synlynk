@@ -2400,6 +2400,16 @@ _VALID_COST_SOURCES = {
 }
 
 
+def repoint_cost_entries_epic_id(
+    conn: sqlite3.Connection, old_epic_id: int, new_epic_id: int
+) -> None:
+    """Repoint cost rows from a duplicate roadmap arc to its canonical arc."""
+    conn.execute(
+        "UPDATE cost_entries SET epic_id = ? WHERE epic_id = ?",
+        (new_epic_id, old_epic_id),
+    )
+
+
 def _insert_cost_row(
     session_date: str,
     agent: str = None,
