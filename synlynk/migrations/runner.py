@@ -20,13 +20,15 @@ from synlynk.migrations.m0025_local_pilot_review_selection import MIGRATION as M
 from synlynk.migrations.m0026_local_pilot_resume_authorization import MIGRATION as M0026
 from synlynk.migrations.m0027_local_pilot_resume_lifecycle_serialization import MIGRATION as M0027
 from synlynk.migrations.m0028_deprecate_execution_log_models import MIGRATION as M0028
+from synlynk.migrations.m0029_roadmap_arcs_milestone_eligibility import MIGRATION as M0029
+from synlynk.migrations.m0030_github_sync_map import MIGRATION as M0030
 from synlynk.wal_ledger import write_transaction
 
 # Static, explicitly-imported registry. Append future Migration entries here
 # in ascending version order — no dynamic directory scanning.
 MIGRATIONS: list[Migration] = [
     M0016, M0017, M0018, M0019, M0020, M0021, M0022, M0023,
-    M0024, M0025, M0026, M0027, M0028,
+    M0024, M0025, M0026, M0027, M0028, M0029, M0030,
 ]
 
 
