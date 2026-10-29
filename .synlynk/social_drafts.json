@@ -4318,5 +4318,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2661 \u2014 synlynk gh sync-roadmap [--dry-run] [--backfill] command (PR #2661, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2661.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-29) - PR #2661\n- Merged improvements and fixes for PR #2661."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/517-pr2663-wire-inline-github-sync-into-roadmap-add.md",
+    "title": "PR #2663 \u2014 wire inline GitHub sync into roadmap add/update and story done",
+    "author": "nikhilsoman",
+    "date": "2026-10-29",
+    "pr": "#2663",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2663."
+    ],
+    "tweet": "\ud83d\ude80 PR #2663 \u2014 wire inline GitHub sync into roadmap add/update and story done (PR #2663, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2663.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-29) - PR #2663\n- Merged improvements and fixes for PR #2663."
   }
 ]
