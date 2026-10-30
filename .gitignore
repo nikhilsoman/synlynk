@@ -31,3 +31,9 @@ state.db*
 /dist/
 graphify-out/
 tests/soak/reports/
+
+# Generated from state.db — rendered on demand via `synlynk roadmap`/`synlynk cost log`
+# commands or `synlynk gh sync-roadmap`; state.db is sole authority (gh:#2653)
+project-docs/roadmap.md
+project-docs/todo.md
+project-docs/costs.md
