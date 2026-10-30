@@ -126,7 +126,13 @@ Commit the blog post in the same branch as the PR. Do not wait until after merge
 
 Always `git pull` before modifying project-docs files to avoid conflicts in team mode.
 
-**Merge strategy for high-churn project-docs (issue #379):** root `.gitattributes` sets `merge=union` on `project-docs/todo.md`, `project-docs/costs.md`, and `project-docs/devlogs/*.md`. Git's built-in union merge takes lines from both sides instead of leaving conflict markers — **no** one-time `git config merge.union.driver` setup is required (union is a built-in attribute value, not a custom driver name). Pull still recommended; union may reorder concurrent append lines.
+**roadmap/todo/costs authority (gh:#2653, 2026-10-29):** `project-docs/roadmap.md`,
+`todo.md`, and `costs.md` are no longer git-tracked. `state.db` is sole authority;
+GitHub Milestones/Issues are the shareable projection (synced via `synlynk gh
+sync-roadmap`). Render a local copy on demand with the existing `synlynk roadmap`/
+`synlynk cost log` commands — do not hand-edit or commit the output. Decisions and
+devlogs remain git-tracked; root `.gitattributes` keeps `merge=union` on
+`project-docs/devlogs/*.md` for concurrent-append safety.
 
 ## Workspace Map Update Protocol
 
