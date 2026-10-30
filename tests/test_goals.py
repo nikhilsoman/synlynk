@@ -195,13 +195,16 @@ def test_isolated_story_create_does_not_touch_repo_todo():
     from synlynk.db import cmd_story_create
 
     repo_todo = Path(__file__).resolve().parents[1] / "project-docs" / "todo.md"
-    original_content = repo_todo.read_text()
-    original_mtime_ns = repo_todo.stat().st_mtime_ns
+    existed_before = repo_todo.exists()
+    original_content = repo_todo.read_text() if existed_before else None
+    original_mtime_ns = repo_todo.stat().st_mtime_ns if existed_before else None
 
     cmd_story_create(title="Isolated generated story")
 
-    assert repo_todo.read_text() == original_content
-    assert repo_todo.stat().st_mtime_ns == original_mtime_ns
+    assert repo_todo.exists() == existed_before
+    if existed_before:
+        assert repo_todo.read_text() == original_content
+        assert repo_todo.stat().st_mtime_ns == original_mtime_ns
 
 
 def test_goal_update_rejects_invalid_values():
