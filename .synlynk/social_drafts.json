@@ -4350,5 +4350,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2665 \u2014 synlynk release automatically marks roadmap arc shipped + closes Milestone (PR #2665, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2665.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-30) - PR #2665\n- Merged improvements and fixes for PR #2665."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/519-pr2667-run-backfill-full-unconditional-historic.md",
+    "title": "PR #2667 \u2014 run_backfill \u2014 full unconditional historical sync to GitHub",
+    "author": "nikhilsoman",
+    "date": "2026-10-30",
+    "pr": "#2667",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2667."
+    ],
+    "tweet": "\ud83d\ude80 PR #2667 \u2014 run_backfill \u2014 full unconditional historical sync to GitHub (PR #2667, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2667.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-30) - PR #2667\n- Merged improvements and fixes for PR #2667."
   }
 ]
