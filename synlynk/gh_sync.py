@@ -64,6 +64,11 @@ _TITLE_MAX_LEN = 240  # Headroom under GitHub's practical 256-character limit.
 
 
 def _render_arc_description(conn, arc_id: int) -> str:
+    notes_row = conn.execute(
+        "SELECT notes FROM roadmap_arcs WHERE id=?",
+        (arc_id,),
+    ).fetchone()
+    notes = (notes_row[0] or "").strip() if notes_row else ""
     phases = conn.execute(
         "SELECT phase_title, status FROM roadmap_phases "
         "WHERE arc_version = (SELECT version FROM roadmap_arcs WHERE id=?) "
@@ -71,7 +76,13 @@ def _render_arc_description(conn, arc_id: int) -> str:
         (arc_id,),
     ).fetchall()
     rollup = _cost_rollup_for_arc(conn, arc_id)
-    lines = [f"- [{'x' if status == 'done' else ' '}] {title}" for title, status in phases]
+    lines = []
+    if notes:
+        lines.append(notes)
+        lines.append("")
+    lines.extend(
+        f"- [{'x' if status == 'done' else ' '}] {title}" for title, status in phases
+    )
     lines.append("")
     lines.append(
         f"**Cost rollup:** ${rollup['actual_usd']:.2f} actual "
