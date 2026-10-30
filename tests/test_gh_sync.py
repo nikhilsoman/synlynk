@@ -43,6 +43,79 @@ def test_gh_api_json_raises_on_nonzero_exit(monkeypatch):
         gh_sync._gh_api_json(["repos/o/r/milestones"])
 
 
+def test_gh_api_json_retries_on_secondary_rate_limit_then_succeeds(monkeypatch):
+    import subprocess
+
+    from synlynk import gh_sync
+
+    calls = 0
+
+    def fake_run_gh(args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return subprocess.CompletedProcess(
+                args, 1, "", "You have exceeded a SECONDARY RATE LIMIT"
+            )
+        return subprocess.CompletedProcess(args, 0, '{"number": 1}', "")
+
+    monkeypatch.setattr(gh_sync, "run_gh", fake_run_gh)
+    monkeypatch.setattr(gh_sync.time, "sleep", lambda seconds: None)
+
+    result = gh_sync._gh_api_json(["repos/o/r/issues", "--method", "POST"])
+
+    assert result == {"number": 1}
+    assert calls == 2
+
+
+def test_gh_api_json_raises_after_exhausting_rate_limit_retries(monkeypatch):
+    import subprocess
+
+    import pytest
+
+    from synlynk import gh_sync
+
+    calls = 0
+
+    def fake_run_gh(args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return subprocess.CompletedProcess(args, 1, "", "secondary rate limit")
+
+    monkeypatch.setattr(gh_sync, "run_gh", fake_run_gh)
+    monkeypatch.setattr(gh_sync.time, "sleep", lambda seconds: None)
+
+    with pytest.raises(RuntimeError, match="secondary rate limit"):
+        gh_sync._gh_api_json(["repos/o/r/issues", "--method", "POST"])
+
+    assert calls == 1 + len(gh_sync._RATE_LIMIT_BACKOFF_SECONDS)
+
+
+def test_gh_api_json_does_not_retry_on_other_failures(monkeypatch):
+    import subprocess
+
+    import pytest
+
+    from synlynk import gh_sync
+
+    calls = 0
+    sleeps = []
+
+    def fake_run_gh(args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return subprocess.CompletedProcess(args, 1, "", "HTTP 404: Not Found")
+
+    monkeypatch.setattr(gh_sync, "run_gh", fake_run_gh)
+    monkeypatch.setattr(gh_sync.time, "sleep", sleeps.append)
+
+    with pytest.raises(RuntimeError, match="HTTP 404"):
+        gh_sync._gh_api_json(["repos/o/r/issues/404"])
+
+    assert calls == 1
+    assert sleeps == []
+
+
 def test_gh_api_json_passes_role_through_environment(monkeypatch):
     import subprocess
 
