@@ -528,8 +528,6 @@ def test_poll_once_survives_heartbeat_errors(tmp_path, monkeypatch):
 
 
 def test_run_forever_marks_stopped_when_the_server_exits(tmp_path, monkeypatch):
-    import http.server
-
     from synlynk.viz.heartbeats import read_beat
 
     _isolate_daemon_home(monkeypatch, tmp_path / "home")
@@ -551,7 +549,7 @@ def test_run_forever_marks_stopped_when_the_server_exits(tmp_path, monkeypatch):
         def server_close(self):
             return None
 
-    monkeypatch.setattr(http.server, "HTTPServer", FakeServer)
+    monkeypatch.setattr(vizor_daemon, "make_httpd", lambda handler, port: FakeServer(("127.0.0.1", port), handler))
     vizor_daemon.run_forever()
     row = read_beat(vizor_daemon.DAEMON_HOME, poll_interval_s=15)
     assert row["status"] == "stopped"
@@ -670,6 +668,81 @@ def test_stall_watch_returns_when_stop_is_already_set():
     stop = threading.Event()
     stop.set()
     vizor_daemon._watch_for_stall(stop)
+
+
+def test_stall_watch_exits_when_the_beat_is_stale(tmp_path, monkeypatch):
+    import threading
+    from datetime import datetime, timezone
+
+    import pytest
+    from synlynk.viz.heartbeats import upsert_beat
+
+    _isolate_daemon_home(monkeypatch, tmp_path / "home")
+    upsert_beat(
+        vizor_daemon.DAEMON_HOME,
+        pid=os.getpid(),
+        status="running",
+        last_beat_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+        cycle_count=1,
+        active_task="idle",
+    )
+    monkeypatch.setattr(vizor_daemon, "stall_grace_s", lambda: 0.01)
+
+    def _exit(code):
+        raise SystemExit(code)
+
+    monkeypatch.setattr(vizor_daemon.os, "_exit", _exit)
+    with pytest.raises(SystemExit):
+        vizor_daemon._watch_for_stall(threading.Event())
+
+
+def test_blocked_refresh_keeps_the_heartbeat_moving(tmp_path, monkeypatch):
+    import time
+
+    from synlynk.viz.heartbeats import upsert_beat
+
+    _isolate_daemon_home(monkeypatch, tmp_path / "home")
+    writes = []
+    real_upsert = upsert_beat
+
+    def _record(*args, **kwargs):
+        writes.append(kwargs.get("active_task"))
+        return real_upsert(*args, **kwargs)
+
+    monkeypatch.setattr("synlynk.viz.heartbeats.upsert_beat", _record)
+    monkeypatch.setattr(vizor_daemon, "beat_while_render_s", lambda: 0.05)
+    monkeypatch.setattr(vizor_daemon, "_registered_workspaces", lambda: {
+        "acme": {"repo_path": "/tmp/acme", "canonical_path": "/tmp/acme.db"},
+    })
+
+    def _refresh(slug, entry, port):
+        time.sleep(0.2)
+
+    monkeypatch.setattr(vizor_daemon, "refresh_workspace", _refresh)
+    vizor_daemon.poll_once(8721)
+    assert writes.count("acme") >= 3
+
+
+def test_render_beat_stops_after_the_limit(tmp_path, monkeypatch):
+    import time
+
+    from synlynk.viz.heartbeats import upsert_beat
+
+    _isolate_daemon_home(monkeypatch, tmp_path / "home")
+    stamps = []
+    real_upsert = upsert_beat
+
+    def _record(*args, **kwargs):
+        stamps.append(time.monotonic())
+        return real_upsert(*args, **kwargs)
+
+    monkeypatch.setattr("synlynk.viz.heartbeats.upsert_beat", _record)
+    monkeypatch.setattr(vizor_daemon, "beat_while_render_s", lambda: 0.02)
+    monkeypatch.setattr(vizor_daemon, "render_limit_s", lambda: 0.05)
+    with vizor_daemon.keep_render_beat("acme", 1):
+        time.sleep(0.25)
+    assert stamps
+    assert time.monotonic() - stamps[-1] > 0.1
 
 
 def test_fence_hint_uses_port_and_slug(tmp_path, monkeypatch):
