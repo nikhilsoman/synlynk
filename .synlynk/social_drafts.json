@@ -4430,5 +4430,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2676 \u2014 adopt existing GitHub milestone by title during sync_arc (PR #2676, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2676.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-30) - PR #2676\n- Merged improvements and fixes for PR #2676."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/524-pr4678-retry-gh-sync-on-github-secondary-rate-l.md",
+    "title": "PR #4678 \u2014 retry gh_sync on GitHub secondary rate limits (gh:#2653)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-30",
+    "pr": "#4678",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #4678."
+    ],
+    "tweet": "\ud83d\ude80 PR #4678 \u2014 retry gh_sync on GitHub secondary rate limits (gh:#2653) (PR #4678, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #4678.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-30) - PR #4678\n- Merged improvements and fixes for PR #4678."
   }
 ]
