@@ -3,6 +3,7 @@ import html
 import json
 from typing import Tuple
 from synlynk.viz.chrome import _live_js
+from synlynk.viz.format import EFFICIENCY_EMBED_KEYS, view_embed
 def generate_efficiency_html(data: dict, port: int) -> str:
     import html
     import json
@@ -80,7 +81,7 @@ def generate_efficiency_html(data: dict, port: int) -> str:
     telemetry = data.get("telemetry") or {}
     sentinel_alerts = telemetry.get("sentinel_alerts") or []
     recent_runs = telemetry.get("recent") or []
-    json_data = json.dumps(data, ensure_ascii=False)
+    json_data = json.dumps(view_embed(data, EFFICIENCY_EMBED_KEYS), ensure_ascii=False)
 
     try:
         from synlynk.status import TIER1_CAPACITY

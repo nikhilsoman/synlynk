@@ -4,6 +4,19 @@ import json
 from typing import Dict
 from synlynk.viz.chrome import _live_js
 from synlynk.viz.architect import _ARCHITECT_MAP_STYLE
+LOGICAL_LLD_LIMIT = 16
+
+
+def _logical_first_paint_nodes(nodes: list) -> list:
+    """Slim records for the LLD tab. HLD cards are already server HTML."""
+    out = []
+    for node in (nodes or [])[:LOGICAL_LLD_LIMIT]:
+        item = {}
+        for key in ("id", "label", "kind"):
+            if node.get(key) is not None:
+                item[key] = node[key]
+        out.append(item)
+    return out
 _BS6_VIEW_JS = """
 function bs6LayoutGraph(nodes, edges) {
   const W = 900, H = 620, ITER = 200;
@@ -1739,8 +1752,8 @@ __LIVE_JS_HTML__
         .replace("__WORKSPACE_NAME__", html.escape(workspace_name))
         .replace("__STALENESS_BANNER__", staleness_banner_html)
         .replace("__HLD_CONTENT__", hld_html)
-        .replace("__NODES_JSON__", json.dumps(nodes))
-        .replace("__EDGES_JSON__", json.dumps(edges))
+        .replace("__NODES_JSON__", json.dumps(_logical_first_paint_nodes(nodes)))
+        .replace("__EDGES_JSON__", json.dumps([]))
         .replace("__LIVE_JS_HTML__", live_js_html)
     )
 
