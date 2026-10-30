@@ -2,6 +2,7 @@
 import html
 import json
 from synlynk.viz.chrome import _live_js
+from synlynk.viz.format import GANTT_EMBED_KEYS, view_embed
 _GANTT_STYLE = """
 /* ══════════════════════════════════════════════
    THEME TOKENS
@@ -393,7 +394,7 @@ body { font-family:'SF Mono','JetBrains Mono',monospace; background:var(--bg); c
 """
 
 def generate_gantt_html(data: dict, port: int) -> str:
-    data_json = json.dumps(data)
+    data_json = json.dumps(view_embed(data, GANTT_EMBED_KEYS))
 
     script_content = """
 const PORT = __PORT__;

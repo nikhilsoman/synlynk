@@ -228,6 +228,40 @@ def test_sync_arc_omits_due_on_when_target_date_is_none(tmp_path, monkeypatch):
     assert not any(arg.startswith("-fdue_on=") for arg in args)
 
 
+def test_render_arc_description_includes_notes_then_agenda(tmp_path):
+    import sqlite3
+
+    from synlynk import gh_sync
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        "CREATE TABLE roadmap_arcs (id INTEGER PRIMARY KEY, version TEXT, title TEXT, "
+        "status TEXT, target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN)"
+    )
+    conn.execute(
+        "CREATE TABLE roadmap_phases ("
+        "id INTEGER PRIMARY KEY, arc_version TEXT, phase_title TEXT, status TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE cost_entries (actual_usd REAL, estimate_basis TEXT, epic_id INTEGER)"
+    )
+    conn.execute(
+        "INSERT INTO roadmap_arcs VALUES (1, 'v0.26.7', 'Jantt', 'planned', NULL, "
+        "'Pitch paragraph.\\n\\n## Investigation\\nSkinny payloads first.', 1)"
+    )
+    conn.execute(
+        "INSERT INTO roadmap_phases (arc_version, phase_title, status) "
+        "VALUES ('v0.26.7', 'Skinny view-scoped payloads (#2671)', 'planned')"
+    )
+    conn.commit()
+    text = gh_sync._render_arc_description(conn, 1)
+    conn.close()
+    assert text.startswith("Pitch paragraph.")
+    assert "## Investigation" in text
+    assert "- [ ] Skinny view-scoped payloads (#2671)" in text
+    assert "**Cost rollup:**" in text
+
+
 def test_sync_arc_creates_milestone_when_absent(tmp_path, monkeypatch):
     import sqlite3
 

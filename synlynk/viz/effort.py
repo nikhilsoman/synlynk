@@ -1,6 +1,6 @@
 """Effort and cost canvas."""
 from synlynk.viz.chrome import _live_js
-from synlynk.viz.format import _fmt_pct, _fmt_usd, _stage_color, _svg_text, _viz_json
+from synlynk.viz.format import EFFORT_EMBED_KEYS, _fmt_pct, _fmt_usd, _stage_color, _svg_text, _viz_json, view_embed
 def generate_effort_html(data: dict, port: int) -> str:
     costs = data.get("costs") or {}
     dreams = list(data.get("dreams") or [])
@@ -19,7 +19,7 @@ def generate_effort_html(data: dict, port: int) -> str:
             return float(bucket.get("estimated", 0.0))
         return 0.0
 
-    data_json = _viz_json(data)
+    data_json = _viz_json(view_embed(data, EFFORT_EMBED_KEYS))
 
     if total_usd == 0:
         return f"""<!doctype html>
