@@ -4398,5 +4398,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2670 \u2014 serve Vizor views while the heartbeat stream is open (PR #2670, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2670.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-30) - PR #2670\n- Merged improvements and fixes for PR #2670."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/522-pr2674-gh-sync-dropped-role-due-on-date-guard-g.md",
+    "title": "PR #2674 \u2014 gh_sync dropped role + due_on date guard (gh:#2653)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-30",
+    "pr": "#2674",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2674."
+    ],
+    "tweet": "\ud83d\ude80 PR #2674 \u2014 gh_sync dropped role + due_on date guard (gh:#2653) (PR #2674, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2674.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-30) - PR #2674\n- Merged improvements and fixes for PR #2674."
   }
 ]
