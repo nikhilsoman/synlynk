@@ -4366,5 +4366,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2667 \u2014 run_backfill \u2014 full unconditional historical sync to GitHub (PR #2667, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2667.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-30) - PR #2667\n- Merged improvements and fixes for PR #2667."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/520-pr2669-story-sync-issue-title-truncation-gh-265.md",
+    "title": "PR #2669 \u2014 story sync Issue title truncation (gh:#2653)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-30",
+    "pr": "#2669",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2669."
+    ],
+    "tweet": "\ud83d\ude80 PR #2669 \u2014 story sync Issue title truncation (gh:#2653) (PR #2669, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2669.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-30) - PR #2669\n- Merged improvements and fixes for PR #2669."
   }
 ]

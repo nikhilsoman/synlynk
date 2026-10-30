@@ -598,6 +598,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [517](./517-pr2663-wire-inline-github-sync-into-roadmap-add.md) | PR #2663 — wire inline GitHub sync into roadmap add/update and story done | [#2663](https://github.com/nikhilsoman/synlynk/pull/2663) | 2026-10-29 |
 | [518](./518-pr2665-synlynk-release-automatically-marks-road.md) | PR #2665 — synlynk release automatically marks roadmap arc shipped + closes Milestone | [#2665](https://github.com/nikhilsoman/synlynk/pull/2665) | 2026-10-30 |
 | [519](./519-pr2667-run-backfill-full-unconditional-historic.md) | PR #2667 — run_backfill — full unconditional historical sync to GitHub | [#2667](https://github.com/nikhilsoman/synlynk/pull/2667) | 2026-10-30 |
+| [520](./520-pr2669-story-sync-issue-title-truncation-gh-265.md) | PR #2669 — story sync Issue title truncation (gh:#2653) | [#2669](https://github.com/nikhilsoman/synlynk/pull/2669) | 2026-10-30 |
 
 ## Per-PR Post Template
 
