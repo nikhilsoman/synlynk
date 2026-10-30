@@ -43,6 +43,90 @@ def test_gh_api_json_raises_on_nonzero_exit(monkeypatch):
         gh_sync._gh_api_json(["repos/o/r/milestones"])
 
 
+def test_gh_api_json_passes_role_through_environment(monkeypatch):
+    import subprocess
+
+    from synlynk import gh_sync
+
+    received = {}
+
+    def fake_run_gh(args, **kwargs):
+        received.update(kwargs)
+        return subprocess.CompletedProcess(args, 0, "{}", "")
+
+    monkeypatch.setattr(gh_sync, "run_gh", fake_run_gh)
+
+    gh_sync._gh_api_json(
+        ["repos/o/r/milestones"],
+        role="qa",
+        env={"SYNLYNK_GH_ROLE": "pm", "KEEP_ME": "yes"},
+    )
+
+    assert received["env"]["SYNLYNK_GH_ROLE"] == "qa"
+    assert received["env"]["KEEP_ME"] == "yes"
+
+
+def _sync_arc_create_args(tmp_path, monkeypatch, target_date):
+    import sqlite3
+
+    from synlynk import gh_sync
+
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        "CREATE TABLE roadmap_arcs (id INTEGER PRIMARY KEY, version TEXT, title TEXT, "
+        "status TEXT, target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN)"
+    )
+    conn.execute(
+        "CREATE TABLE github_sync_map (entity_type TEXT, entity_id TEXT, github_number INTEGER, "
+        "github_node_id TEXT, content_hash TEXT, last_synced_at TEXT, "
+        "PRIMARY KEY (entity_type, entity_id))"
+    )
+    conn.execute(
+        "CREATE TABLE roadmap_phases ("
+        "id INTEGER PRIMARY KEY, arc_version TEXT, phase_title TEXT, status TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE cost_entries (actual_usd REAL, estimate_basis TEXT, epic_id INTEGER)"
+    )
+    conn.execute(
+        "INSERT INTO roadmap_arcs VALUES (1, 'v1.0.0', 'First release', "
+        "'planned', ?, NULL, 1)",
+        (target_date,),
+    )
+    conn.commit()
+
+    created = {}
+
+    def fake_gh_api_json(args, **kwargs):
+        created["args"] = args
+        return {"number": 99, "node_id": "MI_abc"}
+
+    monkeypatch.setattr(gh_sync, "_gh_api_json", fake_gh_api_json)
+    gh_sync.sync_arc(conn, arc_id=1, owner="o", repo="r")
+    conn.close()
+    return created["args"]
+
+
+def test_sync_arc_includes_due_on_for_full_iso_date(tmp_path, monkeypatch):
+    args = _sync_arc_create_args(tmp_path, monkeypatch, "2026-08-23")
+
+    assert "-fdue_on=2026-08-23T00:00:00Z" in args
+
+
+def test_sync_arc_omits_due_on_for_non_iso_date(tmp_path, monkeypatch):
+    for index, target_date in enumerate(("June 2026", "Q4 2026", "2026-08")):
+        args = _sync_arc_create_args(tmp_path / str(index), monkeypatch, target_date)
+
+        assert not any(arg.startswith("-fdue_on=") for arg in args)
+
+
+def test_sync_arc_omits_due_on_when_target_date_is_none(tmp_path, monkeypatch):
+    args = _sync_arc_create_args(tmp_path, monkeypatch, None)
+
+    assert not any(arg.startswith("-fdue_on=") for arg in args)
+
+
 def test_sync_arc_creates_milestone_when_absent(tmp_path, monkeypatch):
     import sqlite3
 
