@@ -1,6 +1,26 @@
 """Small render helpers shared by the effort canvas."""
 import html
 import json
+
+GANTT_EMBED_KEYS = (
+    "workspace",
+    "releases",
+    "dreams",
+    "goals",
+    "spec_verifications",
+    "product_id",
+    "notes",
+)
+EFFORT_EMBED_KEYS = ("costs", "dreams")
+EFFICIENCY_EMBED_KEYS = ("agents", "telemetry", "ecosystem")
+TUBE_EMBED_KEYS = ("workspace",)
+
+
+def view_embed(data: dict, keys: tuple[str, ...]) -> dict:
+    """Copy only the keys a view reads. Missing keys stay missing."""
+    return {key: data[key] for key in keys if key in data}
+
+
 def _viz_json(data: dict) -> str:
     return json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
 
