@@ -8,6 +8,8 @@ a cache of GitHub-side facts, never a second source of truth.
 
 import hashlib
 import json
+import os
+import re
 
 from synlynk.gh_shim import run_gh
 
@@ -20,7 +22,10 @@ def _content_hash(fields: dict) -> str:
 
 def _gh_api_json(args: list, role: str = "pm", **kwargs):
     """Run ``gh api <args>`` and parse JSON stdout. Raises RuntimeError on failure."""
-    result = run_gh(["api"] + args, capture_output=True, text=True, **kwargs)
+    env = kwargs.pop("env", None)
+    env = dict(env) if env is not None else dict(os.environ)
+    env["SYNLYNK_GH_ROLE"] = role
+    result = run_gh(["api"] + args, capture_output=True, text=True, env=env, **kwargs)
     if result.returncode != 0:
         raise RuntimeError(f"gh api {args} failed: {result.stderr.strip()}")
     if not result.stdout.strip():
@@ -30,6 +35,7 @@ def _gh_api_json(args: list, role: str = "pm", **kwargs):
 
 _STATUS_LABELS = {"deferred": "status:deferred", "superseded": "status:superseded"}
 _CLOSED_STATUSES = {"shipped", "superseded"}
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _render_arc_description(conn, arc_id: int) -> str:
@@ -90,7 +96,7 @@ def sync_arc(conn, arc_id: int, owner: str, repo: str, role: str = "pm") -> None
         "state": fields["state"],
         "description": fields["description"],
     }
-    if fields["due_on"]:
+    if fields["due_on"] and _ISO_DATE_RE.match(fields["due_on"]):
         payload["due_on"] = f"{fields['due_on']}T00:00:00Z"
 
     if mapped:
