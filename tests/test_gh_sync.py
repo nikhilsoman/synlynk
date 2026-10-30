@@ -561,6 +561,59 @@ def test_story_sync_fields_truncates_long_issue_title_but_not_body(tmp_path):
     conn.close()
 
 
+def _decision_sync_fields_for_topic(tmp_path, topic):
+    import sqlite3
+
+    from synlynk.gh_sync import _decision_sync_fields
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        "CREATE TABLE decisions (decision_id TEXT PRIMARY KEY, topic TEXT, status TEXT, "
+        "synthesis TEXT, decision_text TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO decisions VALUES ('dec-title', ?, 'decided', 'Because', 'Do it')",
+        (topic,),
+    )
+    fields = _decision_sync_fields(conn, "dec-title")
+    conn.close()
+    return fields
+
+
+def test_decision_issue_title_short_single_line_topic_unchanged(tmp_path):
+    fields = _decision_sync_fields_for_topic(tmp_path, "Should we do it?")
+
+    assert fields["title"] == "Should we do it?"
+    assert "**Topic:**" not in fields["body"]
+
+
+def test_decision_issue_title_multiline_topic_uses_first_line(tmp_path):
+    topic = "  Should we do it?  \nThe second paragraph explains why."
+
+    fields = _decision_sync_fields_for_topic(tmp_path, topic)
+
+    assert fields["title"] == "Should we do it?"
+    assert f"**Topic:** {topic}" in fields["body"]
+
+
+def test_decision_issue_title_long_single_line_topic_truncated(tmp_path):
+    from synlynk.gh_sync import _TITLE_MAX_LEN
+
+    topic = "x" * (_TITLE_MAX_LEN + 20)
+
+    fields = _decision_sync_fields_for_topic(tmp_path, topic)
+
+    assert fields["title"].endswith("…")
+    assert len(fields["title"]) <= _TITLE_MAX_LEN
+    assert f"**Topic:** {topic}" in fields["body"]
+
+
+def test_decision_issue_title_empty_topic_falls_back(tmp_path):
+    fields = _decision_sync_fields_for_topic(tmp_path, "   \n  ")
+
+    assert fields["title"] == "(untitled decision)"
+
+
 def test_sync_decision_creates_issue_with_decision_label(tmp_path, monkeypatch):
     import sqlite3
 
