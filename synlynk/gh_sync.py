@@ -60,6 +60,7 @@ def _gh_api_json(args: list, role: str = "pm", **kwargs):
 _STATUS_LABELS = {"deferred": "status:deferred", "superseded": "status:superseded"}
 _CLOSED_STATUSES = {"shipped", "superseded"}
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_TITLE_MAX_LEN = 240  # Headroom under GitHub's practical 256-character limit.
 
 
 def _render_arc_description(conn, arc_id: int) -> str:
@@ -291,18 +292,38 @@ def sync_story(
     conn.commit()
 
 
+def _decision_issue_title(topic: str) -> str:
+    """Derive a single-line, length-bounded title from a decision topic.
+
+    Decision topics may contain free-form, multi-paragraph prompts. The caller
+    preserves the full topic in the issue body whenever this derived title
+    differs from the original topic.
+    """
+    first_line = topic.splitlines()[0].strip() if topic.strip() else ""
+    if not first_line:
+        first_line = "(untitled decision)"
+    if len(first_line) > _TITLE_MAX_LEN:
+        first_line = first_line[: _TITLE_MAX_LEN - 1].rstrip() + "…"
+    return first_line
+
+
 def _decision_sync_fields(conn, decision_id: str) -> dict:
     row = conn.execute(
         "SELECT topic, status, synthesis, decision_text FROM decisions WHERE decision_id=?",
         (decision_id,),
     ).fetchone()
     topic, status, synthesis, decision_text = row
-    body = (
-        f"**Synthesis:** {synthesis}\n\n**Decision:** {decision_text}\n\n"
-        f"<!-- synlynk:decision_id={decision_id} -->"
-    )
+    title = _decision_issue_title(topic)
+
+    body_parts = []
+    if title != topic:
+        body_parts.append(f"**Topic:** {topic}")
+    body_parts.append(f"**Synthesis:** {synthesis}\n\n**Decision:** {decision_text}")
+    body_parts.append(f"<!-- synlynk:decision_id={decision_id} -->")
+    body = "\n\n".join(body_parts)
+
     return {
-        "title": topic,
+        "title": title,
         "state": "closed" if status == "decided" else "open",
         "body": body,
     }
