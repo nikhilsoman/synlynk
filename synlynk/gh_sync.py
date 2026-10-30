@@ -10,8 +10,13 @@ import hashlib
 import json
 import os
 import re
+import time
 
 from synlynk.gh_shim import run_gh
+
+
+_SECONDARY_RATE_LIMIT_MARKER = "secondary rate limit"
+_RATE_LIMIT_BACKOFF_SECONDS = (60, 120, 240)
 
 
 def _content_hash(fields: dict) -> str:
@@ -21,13 +26,32 @@ def _content_hash(fields: dict) -> str:
 
 
 def _gh_api_json(args: list, role: str = "pm", **kwargs):
-    """Run ``gh api <args>`` and parse JSON stdout. Raises RuntimeError on failure."""
+    """Run ``gh api <args>`` and parse JSON stdout.
+
+    Raises RuntimeError on failure. Retries with increasing backoff when
+    GitHub's secondary (abuse-detection) rate limit is hit; any other failure
+    raises immediately.
+    """
     env = kwargs.pop("env", None)
     env = dict(env) if env is not None else dict(os.environ)
     env["SYNLYNK_GH_ROLE"] = role
-    result = run_gh(["api"] + args, capture_output=True, text=True, env=env, **kwargs)
-    if result.returncode != 0:
+
+    attempt = 0
+    while True:
+        result = run_gh(
+            ["api"] + args, capture_output=True, text=True, env=env, **kwargs
+        )
+        if result.returncode == 0:
+            break
+        if (
+            _SECONDARY_RATE_LIMIT_MARKER in result.stderr.lower()
+            and attempt < len(_RATE_LIMIT_BACKOFF_SECONDS)
+        ):
+            time.sleep(_RATE_LIMIT_BACKOFF_SECONDS[attempt])
+            attempt += 1
+            continue
         raise RuntimeError(f"gh api {args} failed: {result.stderr.strip()}")
+
     if not result.stdout.strip():
         return None
     return json.loads(result.stdout)
