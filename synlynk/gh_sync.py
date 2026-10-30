@@ -70,6 +70,28 @@ def _arc_sync_fields(conn, arc_id: int) -> dict:
     }
 
 
+def _find_milestone_by_title(
+    owner: str, repo: str, title: str, role: str = "pm"
+) -> dict | None:
+    """Look up an existing GitHub milestone by exact title match, or None."""
+    milestones = _gh_api_json(
+        [
+            f"repos/{owner}/{repo}/milestones",
+            "--method",
+            "GET",
+            "-fstate=all",
+            "-fper_page=100",
+        ],
+        role=role,
+    )
+    if not milestones:
+        return None
+    for milestone in milestones:
+        if milestone.get("title") == title:
+            return milestone
+    return None
+
+
 def sync_arc(conn, arc_id: int, owner: str, repo: str, role: str = "pm") -> None:
     row = conn.execute(
         "SELECT version, status, is_milestone_eligible FROM roadmap_arcs WHERE id=?",
@@ -108,13 +130,27 @@ def sync_arc(conn, arc_id: int, owner: str, repo: str, role: str = "pm") -> None
         )
         node_id = result.get("node_id") if result else None
     else:
-        result = _gh_api_json(
-            [f"repos/{owner}/{repo}/milestones", "--method", "POST"]
-            + [f"-f{k}={v}" for k, v in payload.items()],
-            role=role,
-        )
-        github_number = result["number"]
-        node_id = result.get("node_id")
+        existing = _find_milestone_by_title(owner, repo, fields["title"], role=role)
+        if existing is not None:
+            github_number = existing["number"]
+            result = _gh_api_json(
+                [
+                    f"repos/{owner}/{repo}/milestones/{github_number}",
+                    "--method",
+                    "PATCH",
+                ]
+                + [f"-f{k}={v}" for k, v in payload.items()],
+                role=role,
+            )
+            node_id = result.get("node_id") if result else existing.get("node_id")
+        else:
+            result = _gh_api_json(
+                [f"repos/{owner}/{repo}/milestones", "--method", "POST"]
+                + [f"-f{k}={v}" for k, v in payload.items()],
+                role=role,
+            )
+            github_number = result["number"]
+            node_id = result.get("node_id")
 
     conn.execute(
         "INSERT INTO github_sync_map (entity_type, entity_id, github_number, github_node_id, content_hash, last_synced_at) "
