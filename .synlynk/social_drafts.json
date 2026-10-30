@@ -4382,5 +4382,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2669 \u2014 story sync Issue title truncation (gh:#2653) (PR #2669, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2669.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-30) - PR #2669\n- Merged improvements and fixes for PR #2669."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/521-pr2670-serve-vizor-views-while-the-heartbeat-st.md",
+    "title": "PR #2670 \u2014 serve Vizor views while the heartbeat stream is open",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-30",
+    "pr": "#2670",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2670."
+    ],
+    "tweet": "\ud83d\ude80 PR #2670 \u2014 serve Vizor views while the heartbeat stream is open (PR #2670, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2670.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-30) - PR #2670\n- Merged improvements and fixes for PR #2670."
   }
 ]
