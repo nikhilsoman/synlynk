@@ -156,8 +156,11 @@ def _story_sync_fields(conn, story_id: str) -> dict:
     ).fetchone()
     title, status = row
     body = f"{title or story_id}\n\n<!-- synlynk:story_id={story_id} -->"
+    short_title = (title or story_id).splitlines()[0].strip()
+    if len(short_title) > 120:
+        short_title = short_title[:117] + "..."
     return {
-        "title": title or story_id,
+        "title": short_title,
         "state": "closed" if status == "done" else "open",
         "body": body,
     }
