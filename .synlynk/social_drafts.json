@@ -4478,5 +4478,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #4963 \u2014 stop embedding the logical graph in Vizor view HTML (PR #4963, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #4963.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-30) - PR #4963\n- Merged improvements and fixes for PR #4963."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/527-pr4964-stop-tracking-generated-roadmap-docs-gh-.md",
+    "title": "PR #4964 \u2014 stop tracking generated roadmap docs (gh:#2653)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-30",
+    "pr": "#4964",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #4964."
+    ],
+    "tweet": "\ud83d\ude80 PR #4964 \u2014 stop tracking generated roadmap docs (gh:#2653) (PR #4964, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #4964.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-30) - PR #4964\n- Merged improvements and fixes for PR #4964."
   }
 ]

@@ -605,6 +605,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [524](./524-pr4678-retry-gh-sync-on-github-secondary-rate-l.md) | PR #4678 — retry gh_sync on GitHub secondary rate limits (gh:#2653) | [#4678](https://github.com/nikhilsoman/synlynk/pull/4678) | 2026-10-30 |
 | [525](./525-pr4919-derive-a-valid-single-line-github-issue-.md) | PR #4919 — derive a valid single-line GitHub issue title for decision sync (gh:#2653) | [#4919](https://github.com/nikhilsoman/synlynk/pull/4919) | 2026-10-30 |
 | [526](./526-pr4963-stop-embedding-the-logical-graph-in-vizo.md) | PR #4963 — stop embedding the logical graph in Vizor view HTML | [#4963](https://github.com/nikhilsoman/synlynk/pull/4963) | 2026-10-30 |
+| [527](./527-pr4964-stop-tracking-generated-roadmap-docs-gh-.md) | PR #4964 — stop tracking generated roadmap docs (gh:#2653) | [#4964](https://github.com/nikhilsoman/synlynk/pull/4964) | 2026-10-30 |
 
 ## Per-PR Post Template
 
