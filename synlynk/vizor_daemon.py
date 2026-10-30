@@ -24,6 +24,9 @@ CACHE_ROOT = Path(os.environ.get("SYNLYNK_VIZOR_CACHE_ROOT", os.path.expanduser(
 DEFAULT_POLL_INTERVAL = 15
 LOG_MAX_BYTES = 1_048_576
 STALL_GRACE_S = 120.0
+# One workspace render may run this long before its heartbeat pump stops.
+# The stall watch can then exit. A render inside this limit is still working.
+RENDER_LIMIT_S = 30 * 60
 ENSURE_INTERVAL_S = 60
 ENSURE_BACKOFF_LIMIT = 3
 ENSURE_BACKOFF_WINDOW_S = 600
@@ -252,6 +255,71 @@ def _remember_beat(*, pid: int, status: str, cycle_count: int, active_task: Opti
     )
 
 
+def render_limit_s() -> float:
+    """How long one workspace render may keep its own heartbeat fresh."""
+    raw = os.environ.get("SYNLYNK_VIZOR_RENDER_LIMIT_S")
+    if not raw:
+        return RENDER_LIMIT_S
+    try:
+        value = float(raw)
+    except ValueError:
+        return RENDER_LIMIT_S
+    if value <= 0:
+        return RENDER_LIMIT_S
+    return value
+
+
+def beat_while_render_s() -> float:
+    """Pump interval while a render is in progress. Stays inside the stall grace."""
+    return max(min(stall_grace_s() / 4.0, 30.0), 0.05)
+
+
+def _pump_render_beat(slug: str, cycle_count: int, stop_event: threading.Event, started: float) -> None:
+    """Refresh the beat until the render finishes or passes the render limit."""
+    import time
+
+    pid = os.getpid()
+    limit = render_limit_s()
+    interval = beat_while_render_s()
+    while not stop_event.is_set():
+        if time.monotonic() - started >= limit:
+            _log(f"render beat stopped for {slug!r}: still running after {limit:.0f}s")
+            return
+        _safe_heartbeat(lambda: _remember_beat(
+            pid=pid,
+            status="running",
+            cycle_count=cycle_count,
+            active_task=slug,
+        ))
+        if stop_event.wait(interval):
+            return
+
+
+@contextlib.contextmanager
+def keep_render_beat(slug: str, cycle_count: int):
+    """Keep the heartbeat fresh while one workspace render is still working.
+
+    The stall watch reads beat age. A render that outlasts the grace is not a
+    wedged poll loop, so the beat moves until ``render_limit_s`` elapses.
+    """
+    import time
+
+    stop_event = threading.Event()
+    started = time.monotonic()
+    thread = threading.Thread(
+        target=_pump_render_beat,
+        args=(slug, cycle_count, stop_event, started),
+        daemon=True,
+        name="vizor-render-beat",
+    )
+    thread.start()
+    try:
+        yield
+    finally:
+        stop_event.set()
+        thread.join(timeout=2)
+
+
 def poll_once(port: int) -> dict:
     """Refresh every registered workspace once. Never lets one failure stop another."""
     from synlynk.viz.heartbeats import pid_alive, read_beat
@@ -290,7 +358,8 @@ def poll_once(port: int) -> dict:
             active_task=slug,
         ))
         try:
-            refresh_workspace(slug, entry, port)
+            with keep_render_beat(slug, cycle_count):
+                refresh_workspace(slug, entry, port)
             results[slug] = "ok"
         except Exception as exc:
             results[slug] = f"error: {exc}"
@@ -979,9 +1048,21 @@ def _watch_for_stall(stop_event: threading.Event) -> None:
         os._exit(1)
 
 
+def make_httpd(handler_cls, port: int):
+    """One thread per request.
+
+    Overview holds ``/api/daemon/stream`` open for the life of that page.
+    ``HTTPServer`` serves a single request at a time, so Board and every other
+    view wait behind that socket. ``ThreadingHTTPServer`` accepts the next
+    request while the stream is still open.
+    """
+    import http.server
+
+    return http.server.ThreadingHTTPServer(("127.0.0.1", port), handler_cls)
+
+
 def run_forever(port: Optional[int] = None) -> None:
     """Daemon entrypoint: serve forever, refreshing every registered workspace on a timer."""
-    import http.server
     import threading
 
     extra_paths = [
@@ -1002,7 +1083,7 @@ def run_forever(port: Optional[int] = None) -> None:
 
     CACHE_ROOT.mkdir(parents=True, exist_ok=True)
     handler_cls = build_workspace_routing_handler()
-    server = http.server.HTTPServer(("127.0.0.1", resolved_port), handler_cls)
+    server = make_httpd(handler_cls, resolved_port)
     _write_state(pid=os.getpid(), port=resolved_port)
     _log(f"daemon starting on port {resolved_port}")
 
