@@ -4414,5 +4414,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2674 \u2014 gh_sync dropped role + due_on date guard (gh:#2653) (PR #2674, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2674.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-30) - PR #2674\n- Merged improvements and fixes for PR #2674."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/523-pr2676-adopt-existing-github-milestone-by-title.md",
+    "title": "PR #2676 \u2014 adopt existing GitHub milestone by title during sync_arc",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-30",
+    "pr": "#2676",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2676."
+    ],
+    "tweet": "\ud83d\ude80 PR #2676 \u2014 adopt existing GitHub milestone by title during sync_arc (PR #2676, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2676.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-30) - PR #2676\n- Merged improvements and fixes for PR #2676."
   }
 ]
