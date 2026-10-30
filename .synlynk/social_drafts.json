@@ -4462,5 +4462,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #4919 \u2014 derive a valid single-line GitHub issue title for decision sync (gh:#2653) (PR #4919, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #4919.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-30) - PR #4919\n- Merged improvements and fixes for PR #4919."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/526-pr4963-stop-embedding-the-logical-graph-in-vizo.md",
+    "title": "PR #4963 \u2014 stop embedding the logical graph in Vizor view HTML",
+    "author": "nikhilsoman",
+    "date": "2026-10-30",
+    "pr": "#4963",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #4963."
+    ],
+    "tweet": "\ud83d\ude80 PR #4963 \u2014 stop embedding the logical graph in Vizor view HTML (PR #4963, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #4963.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-30) - PR #4963\n- Merged improvements and fixes for PR #4963."
   }
 ]
