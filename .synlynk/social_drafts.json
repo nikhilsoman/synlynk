@@ -4334,5 +4334,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2663 \u2014 wire inline GitHub sync into roadmap add/update and story done (PR #2663, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2663.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-29) - PR #2663\n- Merged improvements and fixes for PR #2663."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/518-pr2665-synlynk-release-automatically-marks-road.md",
+    "title": "PR #2665 \u2014 synlynk release automatically marks roadmap arc shipped + closes Milestone",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-30",
+    "pr": "#2665",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2665."
+    ],
+    "tweet": "\ud83d\ude80 PR #2665 \u2014 synlynk release automatically marks roadmap arc shipped + closes Milestone (PR #2665, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2665.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-30) - PR #2665\n- Merged improvements and fixes for PR #2665."
   }
 ]
