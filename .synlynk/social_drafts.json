@@ -4446,5 +4446,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #4678 \u2014 retry gh_sync on GitHub secondary rate limits (gh:#2653) (PR #4678, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #4678.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-30) - PR #4678\n- Merged improvements and fixes for PR #4678."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/525-pr4919-derive-a-valid-single-line-github-issue-.md",
+    "title": "PR #4919 \u2014 derive a valid single-line GitHub issue title for decision sync (gh:#2653)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-30",
+    "pr": "#4919",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #4919."
+    ],
+    "tweet": "\ud83d\ude80 PR #4919 \u2014 derive a valid single-line GitHub issue title for decision sync (gh:#2653) (PR #4919, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #4919.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-30) - PR #4919\n- Merged improvements and fixes for PR #4919."
   }
 ]

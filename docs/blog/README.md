@@ -603,6 +603,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [522](./522-pr2674-gh-sync-dropped-role-due-on-date-guard-g.md) | PR #2674 — gh_sync dropped role + due_on date guard (gh:#2653) | [#2674](https://github.com/nikhilsoman/synlynk/pull/2674) | 2026-10-30 |
 | [523](./523-pr2676-adopt-existing-github-milestone-by-title.md) | PR #2676 — adopt existing GitHub milestone by title during sync_arc | [#2676](https://github.com/nikhilsoman/synlynk/pull/2676) | 2026-10-30 |
 | [524](./524-pr4678-retry-gh-sync-on-github-secondary-rate-l.md) | PR #4678 — retry gh_sync on GitHub secondary rate limits (gh:#2653) | [#4678](https://github.com/nikhilsoman/synlynk/pull/4678) | 2026-10-30 |
+| [525](./525-pr4919-derive-a-valid-single-line-github-issue-.md) | PR #4919 — derive a valid single-line GitHub issue title for decision sync (gh:#2653) | [#4919](https://github.com/nikhilsoman/synlynk/pull/4919) | 2026-10-30 |
 
 ## Per-PR Post Template
 
