@@ -216,6 +216,60 @@ def test_sync_story_creates_issue_with_footer(tmp_path, monkeypatch):
     conn.close()
 
 
+def test_story_sync_fields_preserves_short_title_and_full_body(tmp_path):
+    import sqlite3
+
+    from synlynk.gh_sync import _story_sync_fields
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, status TEXT)")
+    conn.execute("INSERT INTO stories VALUES ('story-short', 'Short title', 'open')")
+
+    fields = _story_sync_fields(conn, "story-short")
+
+    assert fields["title"] == "Short title"
+    assert fields["body"] == "Short title\n\n<!-- synlynk:story_id=story-short -->"
+    conn.close()
+
+
+def test_story_sync_fields_uses_only_stripped_first_line_for_issue_title(tmp_path):
+    import sqlite3
+
+    from synlynk.gh_sync import _story_sync_fields
+
+    raw_title = "  First line  \nSecond line\n\nFourth line"
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, status TEXT)")
+    conn.execute("INSERT INTO stories VALUES ('story-multiline', ?, 'open')", (raw_title,))
+
+    fields = _story_sync_fields(conn, "story-multiline")
+
+    assert fields["title"] == "First line"
+    assert fields["body"] == (
+        f"{raw_title}\n\n<!-- synlynk:story_id=story-multiline -->"
+    )
+    conn.close()
+
+
+def test_story_sync_fields_truncates_long_issue_title_but_not_body(tmp_path):
+    import sqlite3
+
+    from synlynk.gh_sync import _story_sync_fields
+
+    raw_title = "x" * 121
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, status TEXT)")
+    conn.execute("INSERT INTO stories VALUES ('story-long', ?, 'done')", (raw_title,))
+
+    fields = _story_sync_fields(conn, "story-long")
+
+    assert fields["title"] == "x" * 117 + "..."
+    assert len(fields["title"]) == 120
+    assert fields["state"] == "closed"
+    assert fields["body"] == f"{raw_title}\n\n<!-- synlynk:story_id=story-long -->"
+    conn.close()
+
+
 def test_sync_decision_creates_issue_with_decision_label(tmp_path, monkeypatch):
     import sqlite3
 
