@@ -44,11 +44,6 @@ h1{{font-size:34px;margin:8px 0}}.subtitle{{color:var(--muted);margin:0 0 24px}}
 <p class="subtitle">Living Charters for <strong>{workspace_name}</strong> — durable identities with visible ownership.</p>
 <section class="summary"><div><strong>Workspace Persona &amp; Goals</strong><span>{len(agents)} active role(s) · governed by living charters</span></div><div class="goals"><strong>Active goals</strong><span>{goal_summary}</span></div></section>
 <section><div class="section-head"><h2>Living Charters</h2><span>{len(agents)} active</span></div><div class="grid">{cards_html}</div></section>
-<section class="drawer" id="provision"><h2>Onboard Workspace Role</h2><p>Choose an archetype to provision a governed identity in one click.</p>
-<div class="options">{''.join(f'<button type="button" class="option{" selected" if value == "fullstack-builder" else ""}" data-archetype="{value}">{label}</button>' for value, label in (("fullstack-builder", "Fullstack Builder"), ("qa-reviewer", "QA Reviewer"), ("architect", "Architect"), ("marketing", "Marketing"), ("custom", "Custom")))}</div>
-<form id="role-form"><label>Role slug<input id="role" name="role" value="fullstack-builder" required></label><label>Durability<select id="durability" name="durability"><option value="durable">Durable</option><option value="dispatch-only">Dispatch-only</option><option value="session-only">Session-only</option></select></label><button class="primary" type="submit">Provision role</button></form><div id="role-result" aria-live="polite"></div></section>
-</main>{live}<script>
-const options=document.querySelectorAll('.option');options.forEach(b=>b.addEventListener('click',()=>{{options.forEach(x=>x.classList.remove('selected'));b.classList.add('selected');document.querySelector('#role').value=b.dataset.archetype;}}));
-document.querySelector('#role-form').addEventListener('submit',async e=>{{e.preventDefault();const result=document.querySelector('#role-result');const payload={{role:document.querySelector('#role').value.trim(),durability:document.querySelector('#durability').value}};try{{const r=await fetch('/roles/create',{{method:'POST',headers:Object.assign({{'Content-Type':'application/json'}},window.vizorAuthHeaders?window.vizorAuthHeaders():{{}}),body:JSON.stringify(payload)}});const out=await r.json();result.textContent=out.ok?'Provisioned '+out.agent_id:(out.error||'Provisioning failed');if(out.ok)setTimeout(()=>location.reload(),500);}}catch(err){{result.textContent='Provisioning failed: '+err.message;}}}});
-</script></body></html>"""
+<section class="drawer" id="provision"><h2>Onboard Workspace Role</h2><p>Role provisioning stays on the CLI (<code>synlynk identity</code>).</p></section>
+</main>{live}</body></html>"""
 

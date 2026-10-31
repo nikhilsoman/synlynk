@@ -126,6 +126,7 @@ select:focus{border-color:var(--accent)}
 .st-btn{border:1px solid var(--line);background:var(--panel);border-radius:4px;padding:3px 6px;font-size:10px;cursor:pointer;font-family:inherit;font-weight:600;transition:all .15s}
 .st-btn:hover{filter:brightness(.92);border-color:currentColor}
 .stage-select{width:100%;font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid var(--line);background:var(--bg)}
+.unlock-stage{border:1px solid var(--line);background:var(--panel);border-radius:4px;padding:3px 6px;font-size:10px;cursor:pointer;font-family:inherit;font-weight:600;color:var(--muted)}
 .pulse-dot{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;animation:pdot 1.5s infinite}
 @keyframes pdot{0%,100%{opacity:1}50%{opacity:.3}}
 .empty{color:var(--muted);padding:24px 8px;font-size:11px;text-align:center;font-style:italic}
@@ -182,7 +183,8 @@ function draw(){
                 return `<button class="st-btn" data-id="${esc(c.story_id)}" data-status="${s}" style="color:${btnSc.color};">${esc(btnSc.label)}</button>`;
               }).join(' ')}
             </div>
-            <select class="stage-select" data-id="${esc(c.story_id)}" onchange="updateStage('${esc(c.story_id)}',this.value)">
+            <button class="unlock-stage" data-id="${esc(c.story_id)}" onclick="unlockStage('${esc(c.story_id)}')">Unlock stage change</button>
+            <select class="stage-select" data-id="${esc(c.story_id)}" disabled onchange="updateStage('${esc(c.story_id)}',this.value,true)">
               ${stages.map(s=>`<option value="${s}" ${(c.governs_stage===s||(!c.governs_stage&&s==='open'))?'selected':''}>Move: ${stageIcons[s]}</option>`).join('')}
             </select>
           </div>
@@ -206,8 +208,13 @@ async function updateStatus(id,status){
   if(!r.ok){alert('Status update failed');return}
   await load();
 }
-async function updateStage(id,stage){
-  const r=await fetch('api/board/stage',{method:'POST',headers:window.vizorAuthHeaders({'Content-Type':'application/json'}),body:JSON.stringify({story_id:id,stage})});
+function unlockStage(id){
+  const card=document.getElementById('card-'+id);
+  const select=card&&card.querySelector('.stage-select');
+  if(select)select.disabled=false;
+}
+async function updateStage(id,stage,unlocked){
+  const r=await fetch('api/board/stage',{method:'POST',headers:window.vizorAuthHeaders({'Content-Type':'application/json'}),body:JSON.stringify({story_id:id,stage,unlocked:unlocked===true})});
   if(!r.ok){alert('Stage update failed');return}
   await load();
 }

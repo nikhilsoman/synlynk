@@ -145,11 +145,6 @@ function setArchitectView(view) {
     renderTree();
     window._treeRendered = true;
   }
-  fetch('/architect-map/view-pref', {
-    method: 'POST',
-    headers: window.vizorAuthHeaders ? window.vizorAuthHeaders({ 'Content-Type': 'application/json' }) : { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ view: view }),
-  }).catch(() => {});
 }
 
 let currentDrawerNode = null;
@@ -179,18 +174,6 @@ function closeDrawer() {
   document.getElementById('am-drawer').classList.remove('open');
   document.getElementById('am-ov').classList.remove('open');
   currentDrawerNode = null;
-}
-
-async function drawerDispatch() {
-  if (!currentDrawerNode) return;
-  const task = prompt('Task to dispatch in ' + currentDrawerNode.label + ':');
-  if (!task) return;
-  await fetch('/dispatch', {
-    method: 'POST',
-    headers: window.vizorAuthHeaders ? window.vizorAuthHeaders({ 'Content-Type': 'application/json' }) : { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ repo_path: currentDrawerNode.path, task: task }),
-  });
-  closeDrawer();
 }
 
 function drawerJumpGantt() {
@@ -813,7 +796,6 @@ __VIEWS_HTML__
   </div>
   <div class="am-drawer-body" id="am-drawer-body"></div>
   <div class="am-drawer-actions">
-    <button class="btn" onclick="drawerDispatch()">Dispatch to this repo</button>
     <button class="btn" onclick="drawerJumpGantt()">Jump to Gantt view</button>
     <a class="btn" id="am-drawer-github" href="#" target="_blank" rel="noopener">Open on GitHub</a>
   </div>

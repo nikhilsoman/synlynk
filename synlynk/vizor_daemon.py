@@ -217,6 +217,17 @@ def is_durable_hub_entry(slug: str, entry: dict) -> bool:
     return workspace_kind(entry, slug) != "ephemeral"
 
 
+def stamp_workspace_kind(slug: str, entry: dict) -> dict:
+    """Persist the derived workspace classification during a refresh write path."""
+    kind = workspace_kind(entry, slug)
+    path_root = str(entry.get("path_root") or entry.get("repo_path") or "")
+    if entry.get("kind") == kind and entry.get("path_root") == path_root:
+        return entry
+    from synlynk.state_registry import update_registered_product
+
+    return update_registered_product(slug, kind=kind, path_root=path_root)
+
+
 def _registered_workspaces() -> dict:
     """Return {slug: entry} for every registered product, or {} if no registry yet."""
     from synlynk.state_registry import _read_unlocked, registry_path
@@ -257,6 +268,7 @@ def refresh_workspace(slug: str, entry: dict, port: int) -> None:
     """Render one workspace's views into CACHE_ROOT/<slug>/. Raises on failure."""
     import synlynk.viz as viz_module
 
+    entry = stamp_workspace_kind(slug, entry)
     repo_path = entry.get("repo_path")
     db_path = entry.get("canonical_path")
     if not repo_path or not db_path:
@@ -954,7 +966,10 @@ def build_workspace_routing_handler():
 
                         length = int(self.headers.get("Content-Length", 0))
                         payload = json.loads(self.rfile.read(length))
-                        ok = update_stage_for_context(ctx, payload["story_id"], payload["stage"])
+                        ok = update_stage_for_context(
+                            ctx, payload["story_id"], payload["stage"],
+                            unlocked=bool(payload.get("unlocked")),
+                        )
                         res = json.dumps({"ok": ok}).encode("utf-8")
                         self.send_response(200 if ok else 400)
                         self.send_header("Content-Type", "application/json")
