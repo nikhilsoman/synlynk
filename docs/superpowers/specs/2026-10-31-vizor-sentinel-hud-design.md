@@ -1,7 +1,7 @@
 ---
 title: "Vizor Overview sentinel HUD (Wave D / #2672)"
 date: 2026-10-31
-status: Proposed
+status: Accepted
 author: "Grok (Home Conductor)"
 goal: "goal-e3840370"
 epic: "#2458"
@@ -15,7 +15,7 @@ parent_spec: "docs/superpowers/specs/2026-10-31-v0.26.7-vizor-interactive-write-
 
 ## Status
 
-Proposed 2026-10-31. Product code waits for Nikhil sign-off on this file. This spec does not bump VERSION, does not edit CHANGELOG or README, and does not cut or retag a release.
+Accepted 2026-10-31 (Nikhil: "go ahead"). Product code follows the plan in `docs/superpowers/plans/2026-10-31-vizor-sentinel-hud.md`. This spec does not bump VERSION, does not edit CHANGELOG or README, and does not cut or retag a release.
 
 v0.26.6 is **done** (tag `v0.26.6`, #2641 closed 2026-10-28). Waves A–C of the write-path edition are **on `main`** and tagged `v0.26.7` (`ec809e84`). This ticket is Wave D of that edition. Implementation PRs stay on GitHub milestone **v0.26.7** (#63) and leave VERSION at `0.26.7`. A later named cut is a separate ceremony.
 
