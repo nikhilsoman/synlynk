@@ -1,6 +1,7 @@
 """Per-workspace Overview canvas."""
 import html
 import json
+from synlynk.viz import nav
 from synlynk.viz.chrome import _live_js
 def generate_overview_html(data: dict, port: int) -> str:
     """Generate the per-workspace Overview canvas (overview.html)."""
@@ -546,7 +547,7 @@ def generate_overview_html(data: dict, port: int) -> str:
       <div class="section-card">
         <div class="section-header">
           <div class="section-title">Goal Progress Rollup</div>
-          <a href="gantt.html" class="section-link">View in Gantt →</a>
+          <a href="gantt.html" class="section-link" data-viz-view="gantt" data-viz-cat="STATUS" data-viz-label="Gantt">View in Gantt →</a>
         </div>
         <div class="goals-list">
           {goals_html}
@@ -556,7 +557,7 @@ def generate_overview_html(data: dict, port: int) -> str:
       <div class="section-card">
         <div class="section-header">
           <div class="section-title">Recent / Active Dispatches</div>
-          <a href="observatory.html" class="section-link">Observatory →</a>
+          <a href="observatory.html" class="section-link" data-viz-view="observatory" data-viz-cat="TELEMETRY" data-viz-label="Observatory">Observatory →</a>
         </div>
         <div class="jobs-list">
           {jobs_html}
@@ -570,38 +571,39 @@ def generate_overview_html(data: dict, port: int) -> str:
         <div class="cat-card">
           <div class="cat-card-header">STATUS</div>
           <div class="cat-card-links">
-            <a href="board.html" class="cat-link"><span class="link-icon">▦</span> Board</a>
-            <a href="gantt.html" class="cat-link"><span class="link-icon">📅</span> Gantt</a>
+            <a href="board.html" class="cat-link" data-viz-view="board" data-viz-cat="STATUS" data-viz-label="Board"><span class="link-icon">▦</span> Board</a>
+            <a href="gantt.html" class="cat-link" data-viz-view="gantt" data-viz-cat="STATUS" data-viz-label="Gantt"><span class="link-icon">📅</span> Gantt</a>
           </div>
         </div>
         <div class="cat-card">
           <div class="cat-card-header">TOPOLOGIES</div>
           <div class="cat-card-links">
-            <a href="tube.html" class="cat-link"><span class="link-icon">🚇</span> Architect Map</a>
-            <a href="infra.html" class="cat-link"><span class="link-icon">⚙️</span> Infra View</a>
+            <a href="tube.html" class="cat-link" data-viz-view="tube" data-viz-cat="TOPOLOGIES" data-viz-label="Architect Map"><span class="link-icon">🚇</span> Architect Map</a>
+            <a href="infra.html" class="cat-link" data-viz-view="infra" data-viz-cat="TOPOLOGIES" data-viz-label="Infra View"><span class="link-icon">⚙️</span> Infra View</a>
           </div>
         </div>
         <div class="cat-card">
           <div class="cat-card-header">PROJECTIONS</div>
           <div class="cat-card-links">
-            <a href="product.html" class="cat-link"><span class="link-icon">🗺</span> Product View</a>
-            <a href="logical.html" class="cat-link"><span class="link-icon">🧩</span> Logical View</a>
-            <a href="world.html" class="cat-link"><span class="link-icon">🌐</span> World View</a>
+            <a href="product.html" class="cat-link" data-viz-view="product" data-viz-cat="PROJECTIONS" data-viz-label="Product View"><span class="link-icon">🗺</span> Product View</a>
+            <a href="logical.html" class="cat-link" data-viz-view="logical" data-viz-cat="PROJECTIONS" data-viz-label="Logical View"><span class="link-icon">🧩</span> Logical View</a>
+            <a href="world.html" class="cat-link" data-viz-view="world" data-viz-cat="PROJECTIONS" data-viz-label="World View"><span class="link-icon">🌐</span> World View</a>
           </div>
         </div>
         <div class="cat-card">
           <div class="cat-card-header">TELEMETRY</div>
           <div class="cat-card-links">
-            <a href="effort.html" class="cat-link"><span class="link-icon">💰</span> Effort & Cost</a>
-            <a href="efficiency.html" class="cat-link"><span class="link-icon">📊</span> Efficiency</a>
-            <a href="observatory.html" class="cat-link"><span class="link-icon">◉</span> Observatory</a>
-            <a href="roles.html" class="cat-link"><span class="link-icon">🤖</span> Agent Roles</a>
+            <a href="effort.html" class="cat-link" data-viz-view="effort" data-viz-cat="TELEMETRY" data-viz-label="Effort & Cost"><span class="link-icon">💰</span> Effort & Cost</a>
+            <a href="efficiency.html" class="cat-link" data-viz-view="efficiency" data-viz-cat="TELEMETRY" data-viz-label="Efficiency"><span class="link-icon">📊</span> Efficiency</a>
+            <a href="observatory.html" class="cat-link" data-viz-view="observatory" data-viz-cat="TELEMETRY" data-viz-label="Observatory"><span class="link-icon">◉</span> Observatory</a>
+            <a href="roles.html" class="cat-link" data-viz-view="roles" data-viz-cat="TELEMETRY" data-viz-label="Agent Roles"><span class="link-icon">🤖</span> Agent Roles</a>
           </div>
         </div>
       </div>
     </div>
   </div>
   {_live_js(port)}
+  {nav.iframe_nav_script()}
 </body>
 </html>"""
 
