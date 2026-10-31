@@ -449,6 +449,47 @@ def resolve_harness_track(harness: str, model: Optional[str] = None) -> str:
     return "default"
 
 
+_BURN_RATE_MIN_SAMPLES = 5
+
+
+def resolve_burn_rate_multiplier(harness: str, model: str, conn=None) -> float:
+    """Predicts how much faster/slower `model` burns `harness`'s pooled quota
+    window compared to that harness's own average across all models.
+
+    1.0 is neutral: returned whenever the (harness, model) pair has fewer
+    than _BURN_RATE_MIN_SAMPLES completed cost_entries rows, so an unseen
+    model/harness pair never gets an untrusted weighting applied to it.
+    Reuses the same >=5-sample threshold as the Empirical Capability
+    Assessment Policy rather than introducing a second magic number.
+    """
+    own_conn = conn is None
+    if own_conn:
+        conn = _pkg("_get_db")()
+    try:
+        pair_row = conn.execute(
+            "SELECT COUNT(*), AVG(COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0)) "
+            "FROM cost_entries WHERE lower(harness) = lower(?) AND model = ?",
+            (harness, model),
+        ).fetchone()
+        pair_count = pair_row[0] if pair_row else 0
+        if pair_count < _BURN_RATE_MIN_SAMPLES:
+            return 1.0
+        pair_avg = float(pair_row[1] or 0.0)
+
+        harness_row = conn.execute(
+            "SELECT AVG(COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0)) "
+            "FROM cost_entries WHERE lower(harness) = lower(?)",
+            (harness,),
+        ).fetchone()
+        harness_avg = float(harness_row[0] or 0.0) if harness_row else 0.0
+        if harness_avg <= 0.0:
+            return 1.0
+        return pair_avg / harness_avg
+    finally:
+        if own_conn:
+            conn.close()
+
+
 def _upsert_agent_quota(
     agent: str,
     quota_type: str,
