@@ -34,3 +34,11 @@ def drill_grid(release: dict, stage_key: str | None = None) -> dict:
         "target_date": release.get("target_date") or "",
         "target_date_is_chip": True,
     }
+
+
+def visible_row_window(scroll_top: int, row_height: int, viewport: int, total: int, buffer: int = 5) -> tuple[int, int]:
+    if row_height <= 0:
+        return 0, total
+    start = max(0, (scroll_top // row_height) - buffer)
+    end = min(total, ((scroll_top + viewport + row_height - 1) // row_height) + buffer)
+    return start, end

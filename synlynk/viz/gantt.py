@@ -481,7 +481,7 @@ function applyGovernanceRelayEvent(event) {
 
 if (typeof EventSource !== 'undefined') {
   try {
-    const relay = new EventSource('/events');
+    const relay = new EventSource('api/daemon/stream');
     relay.onmessage = (message) => {
       try { applyGovernanceRelayEvent(JSON.parse(message.data)); } catch (err) {}
     };
@@ -627,6 +627,23 @@ function renderTask(task, columns, occupyingKey) {
     </div>`;
 }
 
+function renderVisibleRows(releaseId) {
+  const pack = (window._ganttDrillRows || {})[releaseId];
+  const body = document.getElementById('drill-body-' + releaseId);
+  if (!pack || !body) return;
+  const rowHeight = 28;
+  if (pack.rows.length <= 200) {
+    body.innerHTML = pack.rows.map(({ task, occupying }) => renderTask(task, pack.columns, occupying)).join('');
+    return;
+  }
+  const start = Math.max(0, Math.floor(body.scrollTop / rowHeight) - 5);
+  const end = Math.min(pack.rows.length, Math.ceil((body.scrollTop + body.clientHeight) / rowHeight) + 5);
+  const topPad = start * rowHeight;
+  const botPad = (pack.rows.length - end) * rowHeight;
+  const slice = pack.rows.slice(start, end).map(({ task, occupying }) => renderTask(task, pack.columns, occupying)).join('');
+  body.innerHTML = `<div style="height:${topPad}px"></div>${slice}<div style="height:${botPad}px"></div>`;
+}
+
 function renderDrill(releaseId, stageKey) {
   const rel = releases.find(d => d.id === releaseId);
   const dr = document.getElementById('drill-' + releaseId);
@@ -652,7 +669,8 @@ function renderDrill(releaseId, stageKey) {
   const dateChip = rel && rel.target_date ? `<span class="date-chip">${escapeHtml(rel.target_date)}</span>` : '';
   window._ganttDrillRows = window._ganttDrillRows || {};
   window._ganttDrillRows[releaseId] = { rows, columns };
-  const taskRows = rows.map(({ task, occupying }) => renderTask(task, columns, occupying)).join('');
+  const virtualize = rows.length > 200;
+  const taskRows = virtualize ? '' : rows.map(({ task, occupying }) => renderTask(task, columns, occupying)).join('');
   dr.innerHTML = `
     <div class="drill-header">
       <div class="drill-ttl">${escapeHtml(String(releaseId).toUpperCase())} — ${rows.length} task${rows.length !== 1 ? 's' : ''} ${dateChip}</div>
@@ -663,6 +681,11 @@ function renderDrill(releaseId, stageKey) {
       ${headerCols}
     </div>
     <div class="drill-body" id="drill-body-${escapeHtml(releaseId)}" style="max-height:420px;overflow:auto">${taskRows}</div>`;
+  if (virtualize) {
+    const body = document.getElementById('drill-body-' + releaseId);
+    if (body) body.addEventListener('scroll', () => renderVisibleRows(releaseId));
+    renderVisibleRows(releaseId);
+  }
 }
 
 function zoomStage(releaseId, stageKey, barEl) {

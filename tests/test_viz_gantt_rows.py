@@ -1,5 +1,5 @@
 from synlynk.viz.gantt import generate_gantt_html
-from synlynk.viz.gantt_model import drill_grid
+from synlynk.viz.gantt_model import drill_grid, visible_row_window
 
 
 def _release():
@@ -60,3 +60,20 @@ def test_gantt_html_has_no_hardcoded_spend_or_jul24():
     assert 'id="spend-value"' in html
     assert 'id="next-ship-value"' in html
     assert 'id="agent-count"' in html
+
+
+def test_visible_row_window():
+    start, end = visible_row_window(scroll_top=400, row_height=28, viewport=280, total=500, buffer=5)
+    assert start >= 0
+    assert end <= 500
+    assert (end - start) < 500
+    assert end - start <= (280 // 28) + 10 + 2
+
+
+def test_gantt_js_virtualizes_and_uses_relative_sse():
+    html = generate_gantt_html(_mini_gantt(), 33333)
+    assert "renderVisibleRows" in html
+    assert "EventSource('/events')" not in html
+    assert "EventSource('api/daemon/stream')" in html
+    assert "workspace_views" not in html
+    assert len(html.encode("utf-8")) < 750_000
