@@ -59,3 +59,45 @@ def test_resolved_alerts_are_dropped():
     alerts = [_alert("X"), {**_alert("Y"), "resolved": True}]
     hud = group_workspace_sentinel_alerts(alerts, {"acks": []})
     assert [g["code"] for g in hud["groups"]] == ["X"]
+
+
+def test_overview_renders_groups_not_six_flat_rows():
+    from synlynk.viz.overview import generate_overview_html
+
+    alerts = []
+    for i in range(20):
+        alerts.append({
+            "severity": "WARNING",
+            "pattern": "STALL_NO_OUTPUT",
+            "message": f"stall {i}",
+            "ts": "2026-10-31",
+            "resolved": False,
+            "raw_line": f"stall {i}",
+            "occurrences": 1,
+            "first_seen": "2026-10-01",
+            "last_seen": "2026-10-31",
+        })
+    alerts.append({
+        "severity": "CRITICAL",
+        "pattern": "VIZOR_DAEMON_DOWN",
+        "message": "bind failed",
+        "ts": "2026-10-31",
+        "resolved": False,
+        "raw_line": "raw sentinel line",
+        "occurrences": 4,
+        "first_seen": "2026-10-27 01:00:00 UTC",
+        "last_seen": "2026-10-28 02:00:00 UTC",
+    })
+    html = generate_overview_html({
+        "workspace": {"name": "acme", "updated_at": "2026-10-31"},
+        "telemetry": {"sentinel_alerts": alerts},
+        "goals": [], "dreams": [], "jobs": [],
+    }, 33333)
+    assert "Active Sentinel Alerts (24)" in html
+    assert 'data-sentinel-group="STALL_NO_OUTPUT"' in html
+    assert 'data-sentinel-group="VIZOR_DAEMON_DOWN"' in html
+    assert "Acked (" in html
+    snapshot = html.split('id="sentinel-snapshot">', 1)[1].split("</script>", 1)[0]
+    assert '"groups"' in snapshot
+    listener = html.split("addEventListener('sentinel'", 1)[1].split("source.onerror", 1)[0]
+    assert "payload.alerts" not in listener or "payload.groups" in html
