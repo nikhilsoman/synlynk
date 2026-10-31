@@ -1,10 +1,15 @@
 """Grouped Vizor sentinel HUD and workspace-scoped write paths."""
 import json
+import http.client
+import subprocess
+import threading
+from http.server import HTTPServer
 
 from synlynk.viz.constants import SENTINEL_ACKS_PATH
 from synlynk.viz.data import (
     group_workspace_sentinel_alerts,
     load_sentinel_acks,
+    raise_sentinel_issue,
     save_sentinel_ack,
 )
 
@@ -147,6 +152,157 @@ def test_acks_are_isolated_per_sidecar_file(tmp_path):
     assert load_sentinel_acks(str(b_path))["acks"] == []
     assert load_sentinel_acks(str(a_path))["slug"] == "one"
     assert json.loads(a_path.read_text())["slug"] == "one"
+
+
+def _workspace_server(tmp_path, monkeypatch):
+    from synlynk import vizor_daemon
+
+    repo = tmp_path / "repo"
+    (repo / ".synlynk").mkdir(parents=True)
+    (repo / ".synlynk" / "sentinel.md").write_text(
+        "- [CRITICAL] [2026-10-28 00:00:00 UTC] VIZOR_DAEMON_DOWN: "
+        "vizor bind failed [occurrences: 2; first seen: 2026-10-27 00:00:00 UTC; "
+        "last seen: 2026-10-28 00:00:00 UTC]\n",
+        encoding="utf-8",
+    )
+    db = tmp_path / "state.db"
+    db.write_bytes(b"")
+    registry = tmp_path / "registry.json"
+    registry.write_text(json.dumps({
+        "version": 1,
+        "products": {"acme": {
+            "product_id": "pid-acme",
+            "slug": "acme",
+            "canonical_path": str(db),
+            "repo_path": str(repo),
+            "mode": "canonical",
+            "lineage_generation": 1,
+            "state": "active",
+        }},
+    }))
+    monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(registry))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    httpd = HTTPServer(
+        ("127.0.0.1", 0), vizor_daemon.build_workspace_routing_handler()
+    )
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    return httpd, repo
+
+
+def _request(httpd, method, route, *, token=None, payload=None):
+    body = json.dumps(payload).encode() if payload is not None else None
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["X-Synlynk-Token"] = token
+    conn = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1], timeout=2)
+    try:
+        conn.request(method, route, body=body, headers=headers)
+        response = conn.getresponse()
+        raw = response.read()
+        return response.status, json.loads(raw) if raw.startswith(b"{") else raw
+    finally:
+        conn.close()
+
+
+def test_post_ack_requires_auth_then_writes_workspace_sidecar(tmp_path, monkeypatch):
+    from synlynk.local_http_auth import ensure_local_token
+
+    httpd, repo = _workspace_server(tmp_path, monkeypatch)
+    sidecar = repo / ".synlynk" / "sentinel-acks.json"
+    try:
+        denied, _ = _request(
+            httpd, "POST", "/w/acme/api/sentinel/ack",
+            payload={"scope": "pattern", "code": "VIZOR_DAEMON_DOWN"},
+        )
+        token = ensure_local_token()
+        accepted, result = _request(
+            httpd, "POST", "/w/acme/api/sentinel/ack", token=token,
+            payload={"scope": "pattern", "code": "VIZOR_DAEMON_DOWN"},
+        )
+        fetched, hud = _request(httpd, "GET", "/w/acme/api/sentinel")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+    assert denied in (401, 403)
+    assert accepted == 200
+    assert result == {"ok": True}
+    assert fetched == 200
+    assert hud["groups"] == []
+    assert hud["acked"][0]["code"] == "VIZOR_DAEMON_DOWN"
+    assert json.loads(sidecar.read_text())["slug"] == "acme"
+
+
+def test_raise_sentinel_issue_uses_support_role_without_host_auth(monkeypatch):
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append((argv, kwargs))
+        return subprocess.CompletedProcess(
+            argv, 0, stdout="https://github.com/nikhilsoman/synlynk/issues/1\n", stderr=""
+        )
+
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    group = group_workspace_sentinel_alerts([_alert("TOKEN_BLOAT", n=3)], {})["groups"][0]
+
+    issue_url = raise_sentinel_issue("acme", group)
+
+    argv, kwargs = calls[0]
+    assert argv[:5] == ["synlynk", "gh", "--role", "support", "--"]
+    assert argv[5] == "issue"
+    assert argv[6] == "create"
+    assert "[support] sentinel: TOKEN_BLOAT (3)" in argv
+    assert "SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH" not in kwargs["env"]
+    assert issue_url.endswith("/issues/1")
+
+
+def test_post_issue_returns_502_without_ack_on_gh_failure(tmp_path, monkeypatch):
+    from synlynk.local_http_auth import ensure_local_token
+    import synlynk.viz.data as viz_data
+
+    def fail_raise(slug, group):
+        raise RuntimeError("gh failed")
+
+    monkeypatch.setattr(viz_data, "raise_sentinel_issue", fail_raise)
+    httpd, repo = _workspace_server(tmp_path, monkeypatch)
+    try:
+        status, result = _request(
+            httpd, "POST", "/w/acme/api/sentinel/issue",
+            token=ensure_local_token(),
+            payload={"scope": "pattern", "code": "VIZOR_DAEMON_DOWN"},
+        )
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+    assert status == 502
+    assert result == {"ok": False, "error": "gh_failed"}
+    assert not (repo / ".synlynk" / "sentinel-acks.json").exists()
+
+
+def test_post_issue_success_records_url_on_pattern_ack(tmp_path, monkeypatch):
+    from synlynk.local_http_auth import ensure_local_token
+    import synlynk.viz.data as viz_data
+
+    issue_url = "https://github.com/nikhilsoman/synlynk/issues/1"
+    monkeypatch.setattr(viz_data, "raise_sentinel_issue", lambda slug, group: issue_url)
+    httpd, repo = _workspace_server(tmp_path, monkeypatch)
+    try:
+        status, result = _request(
+            httpd, "POST", "/w/acme/api/sentinel/issue",
+            token=ensure_local_token(),
+            payload={"scope": "pattern", "code": "VIZOR_DAEMON_DOWN"},
+        )
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+    saved = json.loads((repo / ".synlynk" / "sentinel-acks.json").read_text())
+    assert status == 200
+    assert result == {"ok": True, "issue_url": issue_url}
+    assert saved["acks"][0]["issue_url"] == issue_url
 
 
 def test_overview_renders_groups_not_six_flat_rows():

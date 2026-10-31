@@ -107,6 +107,46 @@ def save_sentinel_ack(path: str, row: dict, *, slug: str) -> dict:
     return output
 
 
+def raise_sentinel_issue(slug: str, group: dict) -> str:
+    """Create one bounded support issue for a sentinel group."""
+    code = str(group.get("code") or "UNPARSED").upper()
+    count = int(group.get("count") or 1)
+    raw_lines = [
+        str(member.get("raw_line") or "")
+        for member in (group.get("members") or [])[:20]
+        if member.get("raw_line")
+    ]
+    body_lines = [
+        f"Workspace: {slug}",
+        f"Code: {code}",
+        f"Severity: {group.get('severity') or 'WARNING'}",
+        f"First seen: {group.get('first_seen') or ''}",
+        f"Last seen: {group.get('last_seen') or ''}",
+        f"Count: {count}",
+        "",
+        "Sample alerts:",
+        *[f"- {line}" for line in raw_lines],
+    ]
+    env = os.environ.copy()
+    env.pop("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", None)
+    argv = [
+        "synlynk", "gh", "--role", "support", "--",
+        "issue", "create",
+        "--title", f"[support] sentinel: {code} ({count})",
+        "--body", "\n".join(body_lines),
+    ]
+    result = subprocess.run(
+        argv, capture_output=True, text=True, check=False, env=env
+    )
+    if result.returncode != 0:
+        raise RuntimeError("gh failed")
+    for line in reversed((result.stdout or "").splitlines()):
+        candidate = line.strip()
+        if candidate.startswith("https://"):
+            return candidate
+    raise RuntimeError("gh returned no issue URL")
+
+
 _SEV_RANK = {"CRITICAL": 3, "CRIT": 3, "WARNING": 2, "WARN": 2, "INFO": 1}
 
 

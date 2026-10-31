@@ -8,12 +8,15 @@ def test_every_spec_row_has_an_action():
         "board/stage", "board/status", "note", "roles/create",
         "dispatch", "approve", "kill", "worktrees/clean",
         "architect-map/view-pref", "graph/refresh", "tools/install",
+        "sentinel/ack", "sentinel/issue",
     }
     assert required <= set(WRITE_ROUTES)
     assert WRITE_ROUTES["note"] == "proxy"
     assert WRITE_ROUTES["tools/install"] == "hide"
     assert WRITE_ROUTES["board/stage"] == "keep"
     assert WRITE_ROUTES["dispatch"] == "hide"
+    assert WRITE_ROUTES["sentinel/ack"] == "keep"
+    assert WRITE_ROUTES["sentinel/issue"] == "keep"
 
 
 def test_generators_have_no_site_root_write_fetches():
