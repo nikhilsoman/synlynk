@@ -663,7 +663,21 @@ def generate_index_html(data: dict, port: int) -> str:
     }});
   }});
 
-  setView('overview', 'overview.html', '', 'Overview');
+  function applyNamedView(viewId) {{
+    var link = document.querySelector('.nav-link[data-view="' + viewId + '"]');
+    if (link) {{
+      setView(viewId, link.getAttribute('href'), link.dataset.cat || '', link.dataset.label || '');
+      return;
+    }}
+    setView('overview', 'overview.html', '', 'Overview');
+  }}
+  window.addEventListener('message', function (event) {{
+    var data = event.data || {{}};
+    if (data.type !== 'vizor-navigate') return;
+    applyNamedView(data.view || 'overview');
+  }});
+  var params = new URLSearchParams(window.location.search);
+  applyNamedView(params.get('view') || 'overview');
 }})();
 </script>
 {_live_js(port)}
