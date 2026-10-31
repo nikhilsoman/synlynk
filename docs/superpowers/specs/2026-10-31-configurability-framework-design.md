@@ -51,15 +51,24 @@ rather than each reinventing it.
 
 ## 3. Three layers
 
-### Layer 1 — Build footprint (pip extras)
+### Layer 1 — Dependency presence (pip extras)
+
+**Precision correction (DECIDE panel, 2026-10-31):** Layer 1 answers "is this
+feature's non-stdlib dependency installed," not "was this feature stripped
+from the build." `pip`'s `packages.find` ships all of synlynk's code
+regardless of which extras a given install selected — extras gate importable
+*dependencies*, not *presence of code*. A maintainer-controlled build-time
+code-stripping/allowlist layer remains explicitly out of scope (see Non-goals);
+Layer 1 is "dependency presence via extras," full stop.
 
 Each optional feature ships as its own extra, following the precedent already
 set by the unreleased NATS relay feature (`hub` extra; core CLI stays
 stdlib-only). `pyproject.toml` gains one `[project.optional-dependencies]`
 group per feature that has non-stdlib dependencies; a feature with no extra
 dependencies (e.g. Companion's static-template mode) still registers in the
-manifest below with no corresponding extra, and Layer 1 for it is always
-"present."
+manifest below with no corresponding extra, and `import_probe()` for it always
+returns `True` ("present" by definition, since there's no dependency to be
+missing).
 
 `synlynk/features/registry.py` (new):
 
@@ -86,6 +95,21 @@ def register_feature(spec: FeatureSpec) -> None:
 Each feature module calls `register_feature(...)` at import time — the
 registry itself never hardcodes feature names.
 
+**Bootstrap hook (DECIDE panel, 2026-10-31 — required before any consumer
+registers):** `FEATURE_MANIFEST` is only populated if the owning module has
+actually been imported, so a single, named load point is required or a
+hardcoded import list creeps back in by necessity. `synlynk/features/__init__.py`
+exposes `load_all_features() -> None`, which imports every module listed in
+a plain Python tuple, `_FEATURE_MODULES`, inside that same file (e.g.
+`("synlynk.companion", "synlynk.context_compaction", "synlynk.herdr_cockpit")`)
+— each import's top-level `register_feature(...)` call does the rest.
+`load_all_features()` is called once, at CLI startup (`synlynk/cli.py`'s
+`main()`, before argument dispatch), and is idempotent (importing an
+already-imported module is a no-op). Each of the three consuming specs adds
+its own module's dotted path to `_FEATURE_MODULES` as part of landing its
+`FeatureSpec` — the registry file itself still never hardcodes a feature
+*name*, only the list of modules to import.
+
 ### Layer 2 — User enable/disable
 
 New `.synlynk/features.json` (sibling to `workspace.json`/`billing.json`/
@@ -109,9 +133,15 @@ def is_feature_enabled(name: str) -> bool:
     return entry.get("enabled", spec.default_enabled)
 ```
 
-Fail-closed, consistent with `FeatureFlags.is_enabled()`'s existing convention:
-a missing file, missing key, or an extra that isn't installed all resolve to
-`False`, never an error.
+**Missing-config semantics, stated once (DECIDE panel, 2026-10-31):** there is
+exactly one rule, and it is fail-closed: a missing `features.json`, a missing
+entry for a given feature name, and an uninstalled extra (`import_probe()`
+returns `False`) all fall through to `spec.default_enabled` — which is
+`False` unless a feature spec explicitly opts into `True`. There is no
+separate "missing → always False, ignore default_enabled" case; the code
+above (`entry.get("enabled", spec.default_enabled)`) and the Compatibility
+section below both follow this single rule. Never an error, never a silent
+`True` for an unrecognized or uninstalled feature.
 
 ### Layer 3 — Depth settings
 
@@ -129,10 +159,16 @@ A feature with `supports_packs=True` gets:
 ```python
 def discover_packs(feature_name: str) -> list[Path]:
     """Scans .synlynk/packs/<feature_name>/*.json plus any paths registered
-    via `synlynk config feature <name> pack add <path>` (stored in that
-    feature's own settings under a conventional `pack_paths` key). Returns
-    paths only — never opens or validates them. That is the feature's own
-    `pack_loader`'s job."""
+    under that feature's own settings at the reserved key `pack_paths`
+    (a list of strings, populated via `synlynk config feature <name> pack
+    add <path>` — this command appends to that key, it does not define a
+    new storage location). Order: `.synlynk/packs/<feature_name>/*.json`
+    first (sorted by filename), then `pack_paths` in list order; duplicate
+    resolved paths are de-duplicated keeping the first occurrence. Returns
+    paths only — never opens, parses, or validates them. That is the
+    feature's own `pack_loader`'s job, including any pack-content security
+    checks (e.g. refusing a pack path outside the workspace root) — the
+    framework performs no such checks itself."""
 ```
 
 The framework's responsibility stops at *finding* candidate pack files.
@@ -141,10 +177,14 @@ feature-owned — this is what lets Companion's theme packs and some future
 Compaction or Herdr pack concept have completely different internal shapes
 without the framework needing to know about either.
 
-This is also the mechanism that makes a composed fence message
-(`cost + companion + opt1..optN`) possible: each contributor registers itself
-as a pack-like unit under the `fencing` composition point, independently
-enabled and configured through the same three layers.
+**Scoping correction (DECIDE panel, 2026-10-31):** composing a fence message
+out of multiple contributors (`cost + companion + opt1..optN`) is **not**
+part of `discover_packs()` or this framework. It is Companion v2's own
+composition pipeline, built using this framework's Layers 2–3 (each
+contributor is independently enabled/configured) plus, if Companion chooses,
+its own call to `discover_packs("companion")` for pack-sourced contributors.
+This framework provides the building blocks; it does not itself define a
+`fencing` composition point.
 
 ## 4. CLI surface
 
@@ -178,8 +218,11 @@ my install" across every registered feature at once.
     `features.json`; extra present + no `features.json` entry → `default_enabled`;
     extra present + explicit `enabled: true/false` → that value.
   - `discover_packs()` finds files under `.synlynk/packs/<feature>/` and
-    registered extra paths; returns `[]` for a feature with no packs and
-    no error for a missing directory.
+    registered `pack_paths` extra paths, in that order; returns `[]` for a
+    feature with no packs and no error for a missing directory; a path
+    appearing in both sources is returned once.
+  - `load_all_features()` populates `FEATURE_MANIFEST` from `_FEATURE_MODULES`
+    and is idempotent on a second call (no duplicate registration, no error).
   - Settings schema validation rejects an invalid value with the same error
     type `config_schema.py` raises today for an invalid `workspace.json`.
 - `tests/test_cli_config_feature.py`: `list`/`enable`/`disable`/`set`/`show`
@@ -189,7 +232,7 @@ my install" across every registered feature at once.
 
 | Spec | Feature name | Needs from this framework |
 | --- | --- | --- |
-| Companion v2 | `companion` | Layers 2–3 for theme/voice-density/remix settings; pack discovery for theme packs; fence-message composition point |
+| Companion v2 | `companion` | Layers 2–3 for theme/voice-density/remix settings; pack discovery (`discover_packs("companion")`) for theme packs. Fence-message composition itself is Companion's own pipeline, not provided by this framework. |
 | Harness Context Compaction Protocol | `context_compaction` | Layers 2–3 for threshold/aggressiveness settings; no packs needed unless that spec decides otherwise |
 | Herdr Customizations | `herdr_cockpit` | Layers 2–3 for pane-layout/auto-launch settings; possibly packs for alternate layout templates |
 
