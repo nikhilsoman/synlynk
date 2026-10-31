@@ -256,6 +256,53 @@ def test_cli_goal_update_status(capsys, monkeypatch):
     assert "Goal updated: " + goal_id in capsys.readouterr().out
 
 
+def test_cli_goal_update_deadline(capsys, monkeypatch):
+    import sys
+    from synlynk.cli import main
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["synlynk", "goal", "create", "--outcome", "CLI deadline goal", "--criterion", "works", "--role", "pm"],
+    )
+    main()
+    created = capsys.readouterr().out
+    goal_id = created.split("Goal created: ", 1)[1].split()[0]
+    monkeypatch.setattr(sys, "argv", ["synlynk", "goal", "update", goal_id, "--deadline", "2026-12-31"])
+    main()
+    out = capsys.readouterr().out
+    assert "Goal updated: " + goal_id in out
+    assert "deadline=2026-12-31" in out
+
+
+def test_cli_goal_update_supersede(capsys, monkeypatch):
+    import sys
+    from synlynk.cli import main
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["synlynk", "goal", "create", "--outcome", "CLI old goal", "--criterion", "works", "--role", "pm"],
+    )
+    main()
+    old_id = capsys.readouterr().out.split("Goal created: ", 1)[1].split()[0]
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["synlynk", "goal", "create", "--outcome", "CLI new goal", "--criterion", "works", "--role", "pm"],
+    )
+    main()
+    new_id = capsys.readouterr().out.split("Goal created: ", 1)[1].split()[0]
+
+    monkeypatch.setattr(sys, "argv", ["synlynk", "goal", "update", old_id, "--supersede-with", new_id])
+    main()
+    out = capsys.readouterr().out
+    assert "Goal updated: " + old_id in out
+    assert "status=superseded" in out
+
+
+
 def test_context_from_db_includes_active_goal(tmp_path, monkeypatch):
     from synlynk.db import cmd_goal_create
     from synlynk import _generate_context_from_db
