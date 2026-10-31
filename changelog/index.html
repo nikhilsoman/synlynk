@@ -54,6 +54,15 @@ entitlement checks, and reconnect/status hardening remain follow-up work.</li>
 <li>Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.</li>
 <li>Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.</li>
 </ul>
+<div class="changelog-version-header"><span class="changelog-version">vv0.26.7</span><span class="changelog-date">2026-10-31</span></div>
+<h3 class="tag-added">Added</h3>
+- Vizor skinny, view-scoped payloads (PR #4963).
+- Workspace-relative navigation and durable-only Hub cards (PR #4975).
+- GOVERNS row Gantt (PR #4976).
+- Daemon-proxied `/w/<slug>/api/*` notes and authorized POST write path (PR #4983).
+<h3 class="tag-changed">Changed</h3>
+- Vizor Interactive write-path defaults GOVERNS stages to locked; Jantt remains a benchmark only.
+<hr>
 <div class="changelog-version-header"><span class="changelog-version">vv0.26.6</span><span class="changelog-date">2026-10-29</span></div>
 <h3 class="tag-added">Added</h3>
 - feat(vizor): the Vizor daemon records one heartbeat in its daemon home (`harness=vizor`, running/stale/stopped) and does not write workspace `state.db` (#2642)
