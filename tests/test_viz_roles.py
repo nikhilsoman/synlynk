@@ -23,12 +23,11 @@ def test_generate_roles_html_renders_active_agents():
     assert "@pm" in rendered
 
 
-def test_generate_roles_html_has_provision_drawer():
+def test_generate_roles_html_has_synlynk_identity_note_without_create_form():
     rendered = generate_roles_html(_roles_data(), 8721)
-    assert "Onboard Workspace Role" in rendered
-    assert "archetype" in rendered.lower()
-    assert "/roles/create" in rendered
-    assert "Fullstack Builder" in rendered
+    assert "synlynk identity" in rendered.lower()
+    assert "<form" not in rendered
+    assert "/roles/create" not in rendered
 
 
 def test_handler_handle_role_create(monkeypatch):

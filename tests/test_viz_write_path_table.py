@@ -26,11 +26,13 @@ def test_generators_have_no_site_root_write_fetches():
         "fetch('/roles/create'",
         "fetch('/worktrees/clean'",
         "fetch('/architect-map/view-pref'",
-        "fetch('/tools/install'",
-        "fetch('/graph/refresh'",
+        "/tools/install",
+        "/graph/refresh",
     )
     hits = []
     for path in root.rglob("*.py"):
+        if path.name in {"server.py", "write_routes.py"}:
+            continue
         text = path.read_text()
         for needle in forbidden:
             if needle in text:

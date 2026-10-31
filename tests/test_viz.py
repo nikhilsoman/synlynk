@@ -564,7 +564,7 @@ def test_generate_architect_map_html_includes_layout_and_drawer_js():
     assert "function setArchitectView" in html_out
     assert "function openDrawer" in html_out
     assert "function closeDrawer" in html_out
-    assert "function drawerDispatch" in html_out
+    assert "function drawerDispatch" not in html_out
     assert "function drawerJumpGantt" in html_out
     assert "function renderTree" in html_out
     assert "if (view === 'tree' && !window._treeRendered)" in html_out
