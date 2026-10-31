@@ -5,6 +5,7 @@ The ecosystem block is the existing ``synlynk status --json`` seam
 a second status API."""
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -111,6 +112,7 @@ def raise_sentinel_issue(slug: str, group: dict) -> str:
     """Create one bounded support issue for a sentinel group."""
     code = str(group.get("code") or "UNPARSED").upper()
     count = int(group.get("count") or 1)
+    brief = investigate_brief(slug, group)
     raw_lines = [
         str(member.get("raw_line") or "")
         for member in (group.get("members") or [])[:20]
@@ -126,6 +128,11 @@ def raise_sentinel_issue(slug: str, group: dict) -> str:
         "",
         "Sample alerts:",
         *[f"- {line}" for line in raw_lines],
+        "",
+        "Investigation brief:",
+        "```json",
+        json.dumps(brief, indent=2),
+        "```",
     ]
     env = os.environ.copy()
     env.pop("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", None)
@@ -145,6 +152,45 @@ def raise_sentinel_issue(slug: str, group: dict) -> str:
         if candidate.startswith("https://"):
             return candidate
     raise RuntimeError("gh returned no issue URL")
+
+
+def investigate_brief(slug: str, group: dict) -> dict:
+    """Build the bounded, command-free clipboard payload for one group."""
+    from synlynk.sentinel import _alert_identity, _extract_sentinel_agent
+
+    code = str(group.get("code") or "UNPARSED").upper()
+    members = list(group.get("members") or [])[:20]
+    messages = [str(member.get("message") or "") for member in members]
+    identities = [list(_alert_identity({
+        "severity": member.get("severity"),
+        "code": code if code != "UNPARSED" else "",
+        "message": member.get("message") or "",
+    })) for member in members]
+    job_ids = []
+    agents = []
+    for member in members:
+        source = " ".join((
+            str(member.get("message") or ""),
+            str(member.get("raw_line") or ""),
+        ))
+        for job_id in re.findall(r"\bjob-[0-9a-f]+\b", source, flags=re.IGNORECASE):
+            if job_id not in job_ids and len(job_ids) < 20:
+                job_ids.append(job_id)
+        agent = _extract_sentinel_agent(str(member.get("raw_line") or ""))
+        if agent and agent not in agents and len(agents) < 20:
+            agents.append(agent)
+    return {
+        "slug": str(slug),
+        "code": code,
+        "severity": str(group.get("severity") or "WARNING").upper(),
+        "count": int(group.get("count") or 0),
+        "first_seen": str(group.get("first_seen") or ""),
+        "last_seen": str(group.get("last_seen") or ""),
+        "sample_messages": messages,
+        "identities": identities,
+        "job_ids": job_ids,
+        "agents": agents,
+    }
 
 
 _SEV_RANK = {"CRITICAL": 3, "CRIT": 3, "WARNING": 2, "WARN": 2, "INFO": 1}

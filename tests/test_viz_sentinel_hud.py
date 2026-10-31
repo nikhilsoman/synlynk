@@ -8,6 +8,7 @@ from http.server import HTTPServer
 from synlynk.viz.constants import SENTINEL_ACKS_PATH
 from synlynk.viz.data import (
     group_workspace_sentinel_alerts,
+    investigate_brief,
     load_sentinel_acks,
     raise_sentinel_issue,
     save_sentinel_ack,
@@ -303,6 +304,54 @@ def test_post_issue_success_records_url_on_pattern_ack(tmp_path, monkeypatch):
     assert status == 200
     assert result == {"ok": True, "issue_url": issue_url}
     assert saved["acks"][0]["issue_url"] == issue_url
+
+
+def test_investigate_brief_is_bounded_and_command_free():
+    alerts = [
+        _alert(
+            "STALL_NO_OUTPUT",
+            message=f"job-{index:08x} stalled",
+        )
+        for index in range(25)
+    ]
+    group = group_workspace_sentinel_alerts(alerts, {})["groups"][0]
+
+    brief = investigate_brief("acme", group)
+
+    assert brief["slug"] == "acme"
+    assert brief["code"] == "STALL_NO_OUTPUT"
+    assert len(brief["sample_messages"]) == 20
+    assert len(brief["identities"]) == 20
+    assert len(brief["job_ids"]) == 20
+    assert set(brief) == {
+        "slug", "code", "severity", "count", "first_seen", "last_seen",
+        "sample_messages", "identities", "job_ids", "agents",
+    }
+    serialized = json.dumps(brief).lower()
+    assert "shell" not in serialized
+    assert "reproduce" not in serialized
+    assert "$ " not in serialized
+
+
+def test_overview_has_group_and_member_sentinel_actions_with_relative_fetches():
+    from synlynk.viz.overview import generate_overview_html
+
+    html = generate_overview_html({
+        "workspace": {"name": "acme", "updated_at": "2026-10-31"},
+        "telemetry": {"sentinel_alerts": [_alert("STALL_NO_OUTPUT", message="job a")]},
+        "goals": [], "dreams": [], "jobs": [],
+    }, 33333)
+
+    for label in ("Inspect", "Ignore", "Raise issue", "Investigate"):
+        assert html.count(f">{label}<") >= 2
+    assert "fetch('api/sentinel/ack'" in html
+    assert "fetch('api/sentinel/issue'" in html
+    inline = html.split('id="sentinel-snapshot">', 1)[1]
+    inline = inline.split("<script>", 1)[1].split("</script>", 1)[0]
+    assert "fetch('/" not in inline
+    assert "navigator.clipboard.writeText" in html
+    assert "reproduce" not in html.lower()
+    assert "shell" not in inline.lower()
 
 
 def test_overview_renders_groups_not_six_flat_rows():

@@ -24,18 +24,33 @@ def generate_overview_html(data: dict, port: int) -> str:
     def _sev_class(sev: str) -> str:
         return "sev-crit" if sev in ("CRITICAL", "CRIT") else "sev-warn"
 
-    def _member_button(member: dict, index: int) -> str:
+    def _action_buttons(scope: str, code: str, index=None) -> str:
+        index_attr = f' data-alert-index="{index}"' if index is not None else ""
+        attrs = (
+            f'data-sentinel-scope="{html.escape(scope)}" '
+            f'data-sentinel-code="{html.escape(code)}"{index_attr}'
+        )
+        return (
+            '<div class="sentinel-actions">'
+            f'<button type="button" data-sentinel-action="inspect" {attrs}>Inspect</button>'
+            f'<button type="button" data-sentinel-action="ignore" {attrs}>Ignore</button>'
+            f'<button type="button" data-sentinel-action="issue" {attrs}>Raise issue</button>'
+            f'<button type="button" data-sentinel-action="investigate" {attrs}>Investigate</button>'
+            '</div>'
+        )
+
+    def _member_button(member: dict, index: int, code: str) -> str:
         sev = str(member.get("severity") or "WARNING").upper()
         pattern = member.get("pattern") or ""
         raw_msg = member.get("message") or "Sentinel alert active"
         msg = f"{pattern}: {raw_msg}" if pattern and not str(raw_msg).startswith(str(pattern)) else raw_msg
         ts = str(member.get("ts") or "")
         return (
-            f'<button type="button" class="alert-item {_sev_class(sev)}" data-alert-index="{index}">'
+            f'<div class="sentinel-member"><div class="alert-item {_sev_class(sev)}">'
             f'<span class="alert-pill">{html.escape(sev)}</span>'
             f'<span class="alert-msg">{html.escape(str(msg))}</span>'
             f'<span class="alert-ts">{html.escape(ts)}</span>'
-            f'</button>'
+            f'</div>{_action_buttons("occurrence", code, index)}</div>'
         )
 
     def _group_details(group: dict, start_index: int) -> tuple:
@@ -45,7 +60,7 @@ def generate_overview_html(data: dict, port: int) -> str:
         buttons = []
         index = start_index
         for member in group.get("members") or []:
-            buttons.append(_member_button(member, index))
+            buttons.append(_member_button(member, index, code))
             index += 1
         hidden = int(group.get("hidden_member_count") or 0)
         more = f'<div class="sentinel-more">{hidden} more</div>' if hidden else ""
@@ -58,6 +73,7 @@ def generate_overview_html(data: dict, port: int) -> str:
             f'<span class="alert-ts">first seen {html.escape(str(group.get("first_seen") or ""))}</span>'
             f'<span class="alert-ts">last seen {html.escape(str(group.get("last_seen") or ""))}</span>'
             f'</summary>'
+            f'{_action_buttons("pattern", code)}'
             f'<div class="sentinel-members">{"".join(buttons)}{more}</div>'
             f'</details>'
         )
@@ -261,6 +277,9 @@ def generate_overview_html(data: dict, port: int) -> str:
     .alert-msg { flex: 1; word-break: break-word; }
     .alert-ts { color: var(--text3); font-size: 11px; font-family: var(--font-mono); }
     button.alert-item { width: 100%; text-align: left; color: inherit; font: inherit; cursor: pointer; border: 0; }
+    .sentinel-member { background: var(--bg2); border-radius: 4px; }
+    .sentinel-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 8px 8px; }
+    .sentinel-actions button { cursor: pointer; color: var(--text2); background: var(--bg3); border: 1px solid var(--border2); border-radius: 4px; padding: 3px 7px; font-size: 11px; }
     .sentinel-group, .sentinel-acked { margin-top: 6px; }
     .sentinel-group > summary, .sentinel-acked > summary { cursor: pointer; list-style: none; }
     .sentinel-members { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 0 12px; }
@@ -484,13 +503,79 @@ def generate_overview_html(data: dict, port: int) -> str:
             });
             panel.hidden = false;
           }
-          document.querySelectorAll('[data-alert-index]').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-              renderPanel(memberAt(Number(btn.getAttribute('data-alert-index'))));
+          function groupFor(code) {
+            const current = readHud();
+            return (current.groups || []).concat(current.acked || []).find(function (group) {
+              return String(group.code || '') === String(code || '');
             });
-          });
+          }
+          function identityFor(member, code) {
+            const severity = String(member && member.severity || 'INFO').trim().toUpperCase();
+            return [severity === 'WARNING' ? 'WARN' : severity, String(code || '').trim().toUpperCase(), String(member && member.message || '').trim().replace(/\\s+/g, ' ')];
+          }
+          function briefFor(group, member) {
+            const members = member ? [member] : (group.members || []).slice(0, 20);
+            const jobIds = [];
+            const agents = [];
+            members.forEach(function (item) {
+              const text = String(item.message || '') + ' ' + String(item.raw_line || '');
+              (text.match(/\bjob-[0-9a-f]+\b/gi) || []).forEach(function (jobId) {
+                if (!jobIds.includes(jobId) && jobIds.length < 20) jobIds.push(jobId);
+              });
+              const agentMatch = String(item.raw_line || '').match(/Agent ['"]([^'"]+)['"] version changed:/);
+              if (agentMatch && !agents.includes(agentMatch[1]) && agents.length < 20) agents.push(agentMatch[1]);
+            });
+            return {
+              slug: slug,
+              code: group.code || '',
+              severity: member ? (member.severity || group.severity || '') : (group.severity || ''),
+              count: member ? 1 : (group.count || 0),
+              first_seen: member ? (member.first_seen || member.ts || '') : (group.first_seen || ''),
+              last_seen: member ? (member.last_seen || member.ts || '') : (group.last_seen || ''),
+              sample_messages: members.map(function (item) { return item.message || ''; }).slice(0, 20),
+              identities: members.map(function (item) { return identityFor(item, group.code); }).slice(0, 20),
+              job_ids: jobIds,
+              agents: agents
+            };
+          }
           const parts = location.pathname.split('/').filter(Boolean);
           const slug = parts[0] === 'w' ? parts[1] : '';
+          async function postSentinel(route, payload) {
+            const options = {
+              method: 'POST',
+              headers: window.vizorAuthHeaders({'Content-Type': 'application/json'}),
+              body: JSON.stringify(payload)
+            };
+            const response = route === 'issue'
+              ? await fetch('api/sentinel/issue', options)
+              : await fetch('api/sentinel/ack', options);
+            if (!response.ok) throw new Error('sentinel write failed');
+            location.reload();
+          }
+          document.addEventListener('click', function (event) {
+            const button = event.target.closest('[data-sentinel-action]');
+            if (!button) return;
+            event.preventDefault();
+            const action = button.getAttribute('data-sentinel-action');
+            const scope = button.getAttribute('data-sentinel-scope');
+            const code = button.getAttribute('data-sentinel-code');
+            const group = groupFor(code);
+            const indexValue = button.getAttribute('data-alert-index');
+            const member = indexValue === null ? null : memberAt(Number(indexValue));
+            if (!group) return;
+            if (action === 'inspect') {
+              if (member) renderPanel(member);
+              else renderPanel({severity: group.severity, pattern: group.code, message: (group.members || []).slice(0, 5).map(function (item) { return item.message || ''; }).join('; '), first_seen: group.first_seen, last_seen: group.last_seen, occurrences: group.count, resolved: false, raw_line: ''});
+              return;
+            }
+            if (action === 'investigate') {
+              navigator.clipboard.writeText(JSON.stringify(briefFor(group, member), null, 2));
+              return;
+            }
+            const payload = {scope: scope, code: code};
+            if (scope === 'occurrence' && member) payload.identity = identityFor(member, code);
+            postSentinel(action === 'issue' ? 'issue' : 'ack', payload).catch(function () {});
+          });
           const streamUrl = slug ? ('/w/' + slug + '/api/daemon/stream') : '/api/daemon/stream';
           if (typeof EventSource === 'undefined') return;
           try {
@@ -518,18 +603,33 @@ def generate_overview_html(data: dict, port: int) -> str:
               let alertIndex = 0;
               function appendMembers(parent, group) {
                 (group.members || []).forEach(function (alert) {
-                  const row = document.createElement('button');
+                  const wrap = document.createElement('div');
+                  wrap.className = 'sentinel-member';
+                  const row = document.createElement('div');
                   const sev = String(alert.severity || 'WARNING').toUpperCase();
-                  row.type = 'button';
                   row.className = 'alert-item ' + ((sev === 'CRITICAL' || sev === 'CRIT') ? 'sev-crit' : 'sev-warn');
-                  row.setAttribute('data-alert-index', String(alertIndex));
+                  const currentIndex = alertIndex;
                   alertIndex += 1;
                   row.textContent = (alert.severity || '') + ' ' + (alert.pattern || '') + ' ' + (alert.message || '');
-                  row.addEventListener('click', function () {
-                    renderPanel(memberAt(Number(row.getAttribute('data-alert-index'))));
-                  });
-                  parent.appendChild(row);
+                  wrap.appendChild(row);
+                  appendActions(wrap, 'occurrence', group.code || '', currentIndex);
+                  parent.appendChild(wrap);
                 });
+              }
+              function appendActions(parent, scope, code, index) {
+                const actions = document.createElement('div');
+                actions.className = 'sentinel-actions';
+                [['inspect', 'Inspect'], ['ignore', 'Ignore'], ['issue', 'Raise issue'], ['investigate', 'Investigate']].forEach(function (pair) {
+                  const button = document.createElement('button');
+                  button.type = 'button';
+                  button.textContent = pair[1];
+                  button.setAttribute('data-sentinel-action', pair[0]);
+                  button.setAttribute('data-sentinel-scope', scope);
+                  button.setAttribute('data-sentinel-code', code);
+                  if (index !== null && index !== undefined) button.setAttribute('data-alert-index', String(index));
+                  actions.appendChild(button);
+                  });
+                parent.appendChild(actions);
               }
               (hud.groups || []).forEach(function (group) {
                 const details = document.createElement('details');
@@ -539,6 +639,7 @@ def generate_overview_html(data: dict, port: int) -> str:
                 const summary = document.createElement('summary');
                 summary.textContent = (group.severity || '') + ' ' + (group.code || '') + ' ' + String(group.count || 0);
                 details.appendChild(summary);
+                appendActions(details, 'pattern', group.code || '', null);
                 appendMembers(details, group);
                 list.appendChild(details);
               });
@@ -555,6 +656,7 @@ def generate_overview_html(data: dict, port: int) -> str:
                 const summary = document.createElement('summary');
                 summary.textContent = (group.severity || '') + ' ' + (group.code || '');
                 details.appendChild(summary);
+                appendActions(details, 'pattern', group.code || '', null);
                 appendMembers(details, group);
                 acked.appendChild(details);
               });
