@@ -129,18 +129,49 @@ existing `validate()`/`validate_fields()` helpers):
 4. Appends it to `project-docs/devlogs/<agent>.md` under that marker, and
    upserts a row in `state.db:session_checkpoints`.
 
-**Idempotency:** keyed on `(story_id, head_sha)`. Checkpointing twice at the
-same repo state for the same story overwrites the existing marker block for
-that key rather than appending a duplicate — `--dry-run` never writes
-regardless.
+**Idempotency and marker identity (DECIDE panel, 2026-10-31 — required
+revision):** keyed on `(story_id, head_sha)`, but the marker comment itself
+must encode that key, not just sit as a bare generic tag — otherwise two
+different checkpoints in the same devlog are indistinguishable and the
+overwrite-vs-append rule has nothing to match against:
 
-**Trigger (both, per design decision):**
-- **Manual:** run directly by the user/conductor before `/clear` or a
-  handoff.
-- **Automatic:** fired as a side effect of every `synlynk context pack` call
-  (Section 6), unless `auto_checkpoint_on_pack` is set to `false`. Same
-  underlying function, two call sites — no divergent logic between the two
-  trigger paths.
+```markdown
+<!-- SYNLYNK_CONTEXT_COMPACTION_RESUME story_id=<story_id> head_sha=<head_sha> -->
+```
+
+Checkpointing finds the exact `story_id`+`head_sha`-tagged block and replaces
+it in place; a different `story_id` or `head_sha` always appends a new block,
+never overwrites one. `--dry-run` never writes regardless.
+
+**Dirty working tree:** `head_sha` alone is not a stable identity when the
+tree has uncommitted changes — two checkpoints at the same commit with
+different uncommitted edits must not collapse into one overwritten block.
+When `git status --porcelain` is non-empty, the key becomes
+`(story_id, head_sha, dirty_hash)` where `dirty_hash` is a short hash of the
+porcelain output; a clean tree omits `dirty_hash` entirely (key stays
+`(story_id, head_sha)` as above). The marker comment grows the same extra
+field: `dirty_hash=<hash>` appended when present.
+
+**Trigger — explicit enablement × command × `auto_checkpoint_on_pack` truth
+table (DECIDE panel, 2026-10-31 — required revision):** manual CLI
+invocation of either command is **always available regardless of
+`context_compaction`'s enabled state** (Section 9 already establishes this
+for the feature generally; stated here precisely for the trigger matrix):
+
+| `context_compaction` enabled? | Command | `auto_checkpoint_on_pack` | Ledger write? | Pack output? |
+| --- | --- | --- | --- | --- |
+| any | `context checkpoint` (manual) | n/a | Yes | n/a |
+| any | `context pack`/`inject` (manual) | `true` | Yes (side effect) | Yes |
+| any | `context pack`/`inject` (manual) | `false` | No | Yes |
+| disabled | *(no automatic firing exists — this feature has no background trigger; "automatic" above means "as a side effect of an explicitly-invoked pack call," never a process running unprompted)* | — | — | — |
+
+There is no scenario in which `context_compaction` being disabled changes
+whether checkpoint/pack *commands* work when run — disabling only ever
+affects whether anything invokes them for you implicitly, and this feature
+defines no such implicit invocation point (no hook fires `context pack` on
+its own; that integration, if any, belongs to whatever future caller adopts
+it, out of scope here). "Automatic" in this spec means solely "pack firing
+checkpoint as its own side effect," never "firing without being called."
 
 No `.synlynk/sentinel.md` alert type is introduced by this mechanism (that
 alert type belonged to the now-dropped reactive monitor).
@@ -220,42 +251,71 @@ unshed, accumulated context across task boundaries drives a disproportionate
 share of spend, but not proof, since large sessions can also simply reflect
 large genuine tasks.
 
-To let this question be answered rigorously once this feature ships, both
-mechanisms **must** log a `cost_entries` row (or a lightweight sibling event
-table, implementer's choice) each time they fire:
+**Schema (DECIDE panel, 2026-10-31 — required revision):** the original
+"log a `cost_entries` row on every fire" plan has two defects the panel
+identified: (a) `context_mode` is an existing column already carrying
+dispatch-scope semantics (e.g. `"task"` for `synlynk dispatch`), so reusing
+it for compaction events conflates two unrelated taxonomies; (b) if only
+compaction *events* get rows, a disabled session logs nothing, and "absence
+of a row" cannot serve as the control cohort for a before/after comparison —
+there is nothing to compare against.
 
-- `synlynk context checkpoint`: logs `context_mode="checkpoint"`, the
-  snapshot's token count at the moment of checkpointing (estimated via the
-  same token-counting utility `synlynk dispatch` already uses for its own
-  cost logging), `story_id`, and whether the call was manual or
-  auto-fired-via-pack.
-- `synlynk context pack`/`inject`: logs `context_mode="pack"`, the generated
-  pack's actual token count (post-truncation if truncation occurred),
-  `story_id`, and the originating `--task`/`--story` id.
+Fix, in two parts:
+
+1. **New dedicated column, not an overload of `context_mode`:**
+   `compaction_event_type` (`"checkpoint" | "pack" | NULL`), populated only
+   on rows logged by this feature's own two commands. Carries: the event's
+   token count at the moment of firing (checkpoint: `_gather_snapshot()`'s
+   estimated size; pack: the generated pack's actual post-truncation token
+   count), `story_id`, and whether the call was manual or
+   auto-fired-via-pack (reuses the trigger-matrix vocabulary from Section 5).
+2. **Control-cohort mechanism — tag the session, not just the event:** every
+   `cost_entries` row logged during an interactive session (not only
+   checkpoint/pack rows — the session's ordinary cost-log entries too) gains
+   a `feature_enabled` boolean, stamped from `is_feature_enabled(
+   "context_compaction")` at the moment each row is logged. This is what
+   actually answers the before/after question: group all of a session's
+   `cost_entries` rows by `feature_enabled` and compare total token volume
+   per session/story between the two cohorts, rather than trying to infer
+   anything from the presence or absence of a compaction-specific row alone.
+   Manual invocation while the feature is disabled (Section 5's trigger
+   table — always available) still logs `feature_enabled=false`, so a
+   "disabled but manually checkpointed" session remains distinguishable from
+   a fully-untouched one.
 
 This is the first dataset of its kind — nothing currently records
-per-compaction-event token counts — so after one release cycle, a genuine
-before/after comparison (sessions with the feature enabled vs. disabled,
-or pre- vs. post-adoption token volume per story) becomes possible instead of
-remaining a hypothesis.
+per-compaction-event token counts or per-session enablement state — so after
+one release cycle, a genuine before/after comparison becomes possible
+instead of remaining a hypothesis.
 
 ## 11. Testing
 
 - `tests/test_context_compaction.py`:
   - `_gather_snapshot()` shape (branch, test counts, story ID, modified
     files, recent commits all present).
-  - Checkpoint idempotency: two calls at the same `(story_id, head_sha)`
-    overwrite rather than duplicate the devlog marker block.
-  - Dual-trigger equivalence: calling `checkpoint()` directly vs. as a side
-    effect of `pack()` produces identical ledger output for the same repo
-    state.
-  - `auto_checkpoint_on_pack=false` suppresses the side-effect call; `pack()`
-    still succeeds and returns its own payload.
+  - Checkpoint idempotency: two calls at the same `(story_id, head_sha)` on a
+    clean tree overwrite rather than duplicate the devlog marker block; two
+    calls at the same `(story_id, head_sha)` with *different* dirty-tree
+    diffs produce two distinct `dirty_hash`-keyed blocks, neither
+    overwriting the other.
+  - Marker identity: the appended block's HTML comment contains the exact
+    `story_id`/`head_sha`(/`dirty_hash`) it was keyed on; a second checkpoint
+    call locates and replaces only the matching block, leaving other
+    stories'/commits' blocks in the same devlog untouched.
+  - Trigger matrix (Section 5): manual `checkpoint`/`pack` both succeed
+    regardless of `context_compaction`'s enabled state; `auto_checkpoint_on_
+    pack=false` suppresses only the pack-triggered side-effect checkpoint
+    call, never the manual command.
   - `pack()` stays under `pack_token_budget` on a fixture with a deliberately
     oversized Fresh Memory Deltas section (truncation, not error).
-  - Both `checkpoint()` and `pack()` write a `cost_entries` row (or sibling
-    event) with the expected `context_mode`/token-count/`story_id` fields
-    (Section 10) — asserted via a temp `state.db` fixture.
+  - Both `checkpoint()` and `pack()` write a `cost_entries` row with
+    `compaction_event_type` set correctly (never written into the existing
+    `context_mode` column), the expected token count, `story_id`, and
+    manual-vs-auto-fired flag.
+  - `feature_enabled` cohort tagging: a session's ordinary (non-compaction)
+    `cost_entries` rows carry the enablement state in effect at log time; a
+    manual checkpoint while disabled logs `feature_enabled=false`, remaining
+    distinguishable from a session that never invoked either command.
 - `tests/test_cli_config_feature_context_compaction.py`: enable/disable/set
   round-trip against a temp `features.json`.
 
