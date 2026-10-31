@@ -34,7 +34,7 @@ Board already fetches `api/board`. Leave that pattern in place. Do not ship one 
 
 ## Jantt constraint (v0.26.7)
 
-Jantt is the named-release canvas for this milestone. It is a calendar JSON engine. It must consume a GOVERNS-only document, never `workspace_views.logical`. This payload cut is the substrate. Vendoring Jantt, lock/unlock write-back, and date mapping stay in the Jantt spec.
+Superseded by `dec-144d1e68` / the v0.26.7 edition spec: **Jantt is a benchmark only**. Synlynk Gantt (GOVERNS stage grid) is the canvas of record. Do not vendor `@jantt/*` in v0.26.7. This payload cut remains the substrate: any future calendar projection, if it ever exists, consumes a GOVERNS-only document and never `workspace_views.logical`.
 
 ## Out of scope
 
