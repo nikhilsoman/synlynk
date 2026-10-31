@@ -615,6 +615,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [534](./534-pr4983-proxy-vizor-notes-through-w-slug-api-not.md) | PR #4983 — proxy Vizor notes through /w/<slug>/api/note | [#4983](https://github.com/nikhilsoman/synlynk/pull/4983) | 2026-10-31 |
 | [535](./535-pr4984-prepare-v0-26-7-vizor-interactive-write-.md) | PR #4984 — prepare v0.26.7 Vizor Interactive write-path | [#4984](https://github.com/nikhilsoman/synlynk/pull/4984) | 2026-10-31 |
 | [536](./536-pr4987-fix-npm-audit-alerts.md) | PR #4987 — fix npm audit alerts | [#4987](https://github.com/nikhilsoman/synlynk/pull/4987) | 2026-10-31 |
+| [537](./537-pr4985-wave-d-vizor-sentinel-hud-2672.md) | PR #4985 — Wave D Vizor sentinel HUD (#2672) | [#4985](https://github.com/nikhilsoman/synlynk/pull/4985) | 2026-10-31 |
 
 ## Per-PR Post Template
 

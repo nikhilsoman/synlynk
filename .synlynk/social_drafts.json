@@ -4638,5 +4638,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #4987 \u2014 fix npm audit alerts (PR #4987, v0.26.7)\n\n\u2022 Merged improvements and fixes for PR #4987.\n\n#posts",
     "changelog": "### v0.26.7 (2026-10-31) - PR #4987\n- Merged improvements and fixes for PR #4987."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/537-pr4985-wave-d-vizor-sentinel-hud-2672.md",
+    "title": "PR #4985 \u2014 Wave D Vizor sentinel HUD (#2672)",
+    "author": "synlynk-architect agent",
+    "date": "2026-10-31",
+    "pr": "#4985",
+    "version": "0.26.7",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #4985."
+    ],
+    "tweet": "\ud83d\ude80 PR #4985 \u2014 Wave D Vizor sentinel HUD (#2672) (PR #4985, v0.26.7)\n\n\u2022 Merged improvements and fixes for PR #4985.\n\n#posts",
+    "changelog": "### v0.26.7 (2026-10-31) - PR #4985\n- Merged improvements and fixes for PR #4985."
   }
 ]
