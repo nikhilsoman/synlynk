@@ -110,6 +110,11 @@ class TestSchedulerLocalConcurrency(unittest.TestCase):
             "dispatch_context TEXT, "
             "worktree_path TEXT, worktree_branch TEXT)"
         )
+        setup.execute(
+            "CREATE TABLE quota_burn_rate_weights (harness TEXT NOT NULL, model TEXT NOT NULL, "
+            "multiplier REAL NOT NULL DEFAULT 1.0, sample_count INTEGER NOT NULL DEFAULT 0, "
+            "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (harness, model))"
+        )
         setup.commit()
         setup.close()
 

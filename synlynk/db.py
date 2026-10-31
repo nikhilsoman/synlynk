@@ -1752,6 +1752,8 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE capability_watch ADD COLUMN last_sweep_at TEXT")
         if "sweep_job_count" not in capability_watch_cols:
             conn.execute("ALTER TABLE capability_watch ADD COLUMN sweep_job_count INTEGER NOT NULL DEFAULT 0")
+        if "last_quota_calibration_at" not in capability_watch_cols:
+            conn.execute("ALTER TABLE capability_watch ADD COLUMN last_quota_calibration_at TEXT")
         conn.execute(
             "INSERT OR IGNORE INTO capability_watch (id, last_probe_at, last_green_probe_at, "
             "last_smoke_test_at, last_green_smoke_at, last_sweep_at, sweep_job_count) "
@@ -2330,6 +2332,13 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE cost_entries ADD COLUMN turn_usage_json TEXT")
         conn.commit()
 
+    # Pre-dispatch estimate persistence for estimate-vs-actual drift tracking
+    # (v0.26.9). NULL (not 0) on existing rows: a bare 0 would read as a
+    # "perfect estimate" false positive in the drift comparison below.
+    _add_column_if_missing(conn, table="cost_entries", column="estimated_input_tokens", definition="INTEGER")
+    _add_column_if_missing(conn, table="cost_entries", column="estimated_output_tokens", definition="INTEGER")
+    _add_column_if_missing(conn, table="cost_entries", column="estimated_cost_usd", definition="REAL")
+
     # Keep this repair outside the schema-version gate.  A database can have
     # already reached the current version while a prior migration stopped
     # before adding this column (or while the schema was bootstrapped by an
@@ -2410,6 +2419,29 @@ def repoint_cost_entries_epic_id(
     )
 
 
+_COST_ESTIMATE_DRIFT_THRESHOLD = 0.5  # 50% overage triggers the alert
+
+
+def _maybe_alert_cost_estimate_drift(conn, *, job_id, harness, actual_usd, estimated_cost_usd) -> None:
+    """Writes a COST_ESTIMATE_DRIFT sentinel alert when actual cost exceeds
+    the pre-dispatch estimate by more than _COST_ESTIMATE_DRIFT_THRESHOLD.
+    No-op when there was no reservation estimate to compare against.
+    """
+    if estimated_cost_usd is None or estimated_cost_usd <= 0.0 or actual_usd is None:
+        return
+    overage = (actual_usd - estimated_cost_usd) / estimated_cost_usd
+    if overage <= _COST_ESTIMATE_DRIFT_THRESHOLD:
+        return
+    from synlynk.sentinel import _write_sentinel_alert
+    _write_sentinel_alert(
+        "WARNING",
+        "COST_ESTIMATE_DRIFT",
+        f"Job {job_id} ({harness}): actual cost ${actual_usd:.4f} exceeded "
+        f"pre-dispatch estimate ${estimated_cost_usd:.4f} by {overage * 100:.0f}% "
+        f"(threshold {_COST_ESTIMATE_DRIFT_THRESHOLD * 100:.0f}%).",
+    )
+
+
 def _insert_cost_row(
     session_date: str,
     agent: str = None,
@@ -2453,6 +2485,38 @@ def _insert_cost_row(
     try:
         harness_val = harness or agent
         agent_val = agent or harness
+
+        # Estimate-vs-actual drift tracking (v0.26.9): pull the pre-dispatch
+        # token estimate from the harness_reservations row this job opened
+        # (closing a reservation sets status='released' but keeps the row,
+        # so this lookup works whether or not the reservation was released).
+        estimated_input_tokens = None
+        estimated_output_tokens = None
+        estimated_cost_usd = None
+        if job_id:
+            try:
+                res_row = conn.execute(
+                    "SELECT tokens FROM harness_reservations WHERE job_id=? ORDER BY id DESC LIMIT 1",
+                    (job_id,),
+                ).fetchone()
+            except sqlite3.Error:
+                res_row = None
+            if res_row and res_row[0] is not None:
+                _reserved_tokens = int(res_row[0])
+                # Assume ~70% input / 30% output, matching the same ranking-time
+                # assumption used in quota.py::_estimate_story_cost_usd — a pre-dispatch
+                # reservation is a single blended token count with no input/output split.
+                estimated_input_tokens = int(_reserved_tokens * 0.7)
+                estimated_output_tokens = _reserved_tokens - estimated_input_tokens
+                _param_api_equivalent_usd = api_equivalent_usd
+                from synlynk.costs import api_equivalent_usd
+                estimated_cost_usd = api_equivalent_usd(
+                    harness_val or "claude",
+                    estimated_input_tokens,
+                    estimated_output_tokens,
+                    model=model,
+                )
+                api_equivalent_usd = _param_api_equivalent_usd
         if decision_revision is None and job_id:
             try:
                 row = conn.execute(
@@ -2551,6 +2615,9 @@ def _insert_cost_row(
                         pr_number=COALESCE(?, pr_number)
                         ,decision_revision=COALESCE(?, decision_revision)
                         ,turn_usage_json=COALESCE(?, turn_usage_json)
+                        ,estimated_input_tokens=COALESCE(estimated_input_tokens, ?)
+                        ,estimated_output_tokens=COALESCE(estimated_output_tokens, ?)
+                        ,estimated_cost_usd=COALESCE(estimated_cost_usd, ?)
                     WHERE job_id=?""",
                     (
                         session_date,
@@ -2577,16 +2644,25 @@ def _insert_cost_row(
                         pr_number,
                         decision_revision,
                         json.dumps(turn_breakdown, separators=(",", ":")) if turn_breakdown else None,
+                        estimated_input_tokens,
+                        estimated_output_tokens,
+                        estimated_cost_usd,
                         job_id,
                     ),
                 )
                 conn.commit()
+                _maybe_alert_cost_estimate_drift(
+                    conn, job_id=job_id, harness=harness_val,
+                    actual_usd=actual_usd if actual_usd is not None else total_cost_usd,
+                    estimated_cost_usd=estimated_cost_usd,
+                )
                 return
         conn.execute(
             """INSERT INTO cost_entries
                 (session_date, agent, harness, agent_role, model, input_tokens, output_tokens, cache_read_tokens,
-                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, pr_number, decision_revision, turn_usage_json)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, pr_number, decision_revision, turn_usage_json,
+                 estimated_input_tokens, estimated_output_tokens, estimated_cost_usd)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session_date,
                 agent_val,
@@ -2613,9 +2689,17 @@ def _insert_cost_row(
                 pr_number,
                 decision_revision,
                 json.dumps(turn_breakdown, separators=(",", ":")) if turn_breakdown else None,
+                estimated_input_tokens,
+                estimated_output_tokens,
+                estimated_cost_usd,
             ),
         )
         conn.commit()
+        _maybe_alert_cost_estimate_drift(
+            conn, job_id=job_id, harness=harness_val,
+            actual_usd=actual_usd if actual_usd is not None else total_cost_usd,
+            estimated_cost_usd=estimated_cost_usd,
+        )
     finally:
         conn.close()
 

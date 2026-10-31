@@ -449,6 +449,95 @@ def resolve_harness_track(harness: str, model: Optional[str] = None) -> str:
     return "default"
 
 
+_BURN_RATE_MIN_SAMPLES = 5
+
+
+def resolve_burn_rate_multiplier(harness: str, model: str, conn=None) -> float:
+    """Predicts how much faster/slower `model` burns `harness`'s pooled quota
+    window compared to that harness's own average across all models.
+
+    1.0 is neutral: returned whenever the (harness, model) pair has fewer
+    than _BURN_RATE_MIN_SAMPLES completed cost_entries rows, so an unseen
+    model/harness pair never gets an untrusted weighting applied to it.
+    Reuses the same >=5-sample threshold as the Empirical Capability
+    Assessment Policy rather than introducing a second magic number.
+    """
+    own_conn = conn is None
+    if own_conn:
+        conn = _pkg("_get_db")()
+    try:
+        pair_row = conn.execute(
+            "SELECT COUNT(*), AVG(COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0)) "
+            "FROM cost_entries WHERE lower(harness) = lower(?) AND model = ?",
+            (harness, model),
+        ).fetchone()
+        pair_count = pair_row[0] if pair_row else 0
+        if pair_count < _BURN_RATE_MIN_SAMPLES:
+            return 1.0
+        pair_avg = float(pair_row[1] or 0.0)
+
+        harness_row = conn.execute(
+            "SELECT AVG(COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0)) "
+            "FROM cost_entries WHERE lower(harness) = lower(?)",
+            (harness,),
+        ).fetchone()
+        harness_avg = float(harness_row[0] or 0.0) if harness_row else 0.0
+        if harness_avg <= 0.0:
+            return 1.0
+        return pair_avg / harness_avg
+    finally:
+        if own_conn:
+            conn.close()
+
+
+def refresh_burn_rate_weights(conn=None) -> int:
+    """Recomputes and caches resolve_burn_rate_multiplier() for every
+    (harness, model) pair with enough samples. Returns the number of rows
+    written. Called from the daemon's quota calibration tick (Task 7).
+    """
+    own_conn = conn is None
+    if own_conn:
+        conn = _pkg("_get_db")()
+    try:
+        pairs = conn.execute(
+            "SELECT harness, model, COUNT(*) FROM cost_entries "
+            "WHERE harness IS NOT NULL AND model IS NOT NULL "
+            "GROUP BY lower(harness), model "
+            "HAVING COUNT(*) >= ?",
+            (_BURN_RATE_MIN_SAMPLES,),
+        ).fetchall()
+        written = 0
+        for harness, model, sample_count in pairs:
+            multiplier = resolve_burn_rate_multiplier(harness, model, conn=conn)
+            conn.execute(
+                "INSERT INTO quota_burn_rate_weights (harness, model, multiplier, sample_count, updated_at) "
+                "VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) "
+                "ON CONFLICT(harness, model) DO UPDATE SET "
+                "multiplier=excluded.multiplier, sample_count=excluded.sample_count, "
+                "updated_at=excluded.updated_at",
+                (harness, model, multiplier, sample_count),
+            )
+            written += 1
+        conn.commit()
+        return written
+    finally:
+        if own_conn:
+            conn.close()
+
+
+def cached_burn_rate_multiplier(harness: str, model: Optional[str], conn) -> float:
+    """Reads the cached multiplier for dispatch-time use (no live recompute,
+    since dispatch is latency-sensitive). 1.0 if no cached row exists yet.
+    """
+    if not model:
+        return 1.0
+    row = conn.execute(
+        "SELECT multiplier FROM quota_burn_rate_weights WHERE lower(harness) = lower(?) AND model = ?",
+        (harness, model),
+    ).fetchone()
+    return float(row[0]) if row else 1.0
+
+
 def _upsert_agent_quota(
     agent: str,
     quota_type: str,
@@ -1011,3 +1100,83 @@ def calibrate_and_update_quota(
         if own_conn and conn is not None:
             conn.close()
     return cal
+
+
+def is_quota_calibration_stale(conn, threshold_hours: int = 24) -> bool:
+    """Mirrors capability_watch.is_probe_stale's pattern for the new column."""
+    row = conn.execute(
+        "SELECT last_quota_calibration_at FROM capability_watch WHERE id = 1"
+    ).fetchone()
+    last_raw = row[0] if row else None
+    if not last_raw:
+        return True
+    try:
+        last = datetime.fromisoformat(last_raw.replace("Z", "+00:00"))
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=UTC)
+    except ValueError:
+        return True
+    return (datetime.now(UTC) - last).total_seconds() > threshold_hours * 3600
+
+
+def maybe_calibrate_quota(conn=None) -> list[dict[str, Any]]:
+    """Automatically re-calibrates quota ceilings for every harness/window
+    that has at least two quota_snapshots rows, deriving delta_tokens from
+    cost_entries actual usage between those two snapshot timestamps instead
+    of requiring a human to supply p1_pct/p2_pct/delta_tokens by hand.
+
+    Also refreshes the quota_burn_rate_weights cache (Task 3) in the same
+    pass, and stamps capability_watch.last_quota_calibration_at so
+    is_quota_calibration_stale() reflects this run. Returns one result dict
+    per harness/window pair attempted.
+    """
+    own_conn = conn is None
+    if own_conn:
+        conn = _pkg("_get_db")()
+    try:
+        pairs = conn.execute(
+            "SELECT DISTINCT harness, window FROM quota_snapshots"
+        ).fetchall()
+        results: list[dict[str, Any]] = []
+        for harness, window in pairs:
+            snaps = conn.execute(
+                "SELECT used_percent, captured_at FROM quota_snapshots "
+                "WHERE harness = ? AND window = ? ORDER BY captured_at DESC, id DESC LIMIT 2",
+                (harness, window),
+            ).fetchall()
+            if len(snaps) < 2:
+                continue
+            p2_pct, p2_at = snaps[0]
+            p1_pct, p1_at = snaps[1]
+            delta_row = conn.execute(
+                "SELECT COALESCE(SUM(COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0)), 0) "
+                "FROM cost_entries WHERE lower(harness) = lower(?) "
+                "AND recorded_at > ? AND recorded_at <= ?",
+                (harness, p1_at, p2_at),
+            ).fetchone()
+            delta_tokens = int(delta_row[0] or 0)
+            if delta_tokens <= 0:
+                continue
+            cal = calibrate_and_update_quota(
+                harness, window, p1_pct=p1_pct, p2_pct=p2_pct,
+                delta_tokens=delta_tokens, conn=conn,
+            )
+            results.append({"harness": harness, "window": window, **cal})
+
+        refresh_burn_rate_weights(conn=conn)
+
+        conn.execute(
+            "UPDATE capability_watch SET last_quota_calibration_at = ? WHERE id = 1",
+            (datetime.now(UTC).isoformat(),)
+        )
+        if conn.execute("SELECT changes()").fetchone()[0] == 0:
+            conn.execute(
+                "INSERT INTO capability_watch (id, last_quota_calibration_at) VALUES (1, ?)",
+                (datetime.now(UTC).isoformat(),)
+            )
+        conn.commit()
+        return results
+    finally:
+        if own_conn:
+            conn.close()
+

@@ -1,13 +1,15 @@
-"""Unit tests for Rolling /usage CLI Calibration Engine (MC-3)."""
+"""Unit tests for Rolling /usage CLI Calibration Engine (MC-3) and automatic snapshot diffing (v0.26.9)."""
 
 import pytest
-
+import synlynk as sl
 from synlynk.quota import (
-    parse_cli_usage_output,
-    calibrate_quota_window,
+    _read_agent_quota_rows,
     calculate_burn_runway,
     calibrate_and_update_quota,
-    _read_agent_quota_rows,
+    calibrate_quota_window,
+    is_quota_calibration_stale,
+    maybe_calibrate_quota,
+    parse_cli_usage_output,
 )
 
 
@@ -95,7 +97,6 @@ def test_calculate_burn_runway():
 
 
 def test_calibrate_and_update_quota_writes_to_db(tmp_path):
-    import synlynk as sl
     db_file = tmp_path / "state.db"
     conn = sl._get_db(str(db_file))
     try:
@@ -118,5 +119,55 @@ def test_calibrate_and_update_quota_writes_to_db(tmp_path):
         assert r["limit_tokens"] == 200_000
         assert r["used_tokens"] == 60_000
         assert r["headroom"] == 140_000
+    finally:
+        conn.close()
+
+
+def test_capability_watch_has_quota_calibration_column(tmp_path):
+    db_file = tmp_path / "state.db"
+    conn = sl._get_db(str(db_file))
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_watch)")}
+        assert "last_quota_calibration_at" in cols
+    finally:
+        conn.close()
+
+
+def test_is_quota_calibration_stale_true_when_never_run(tmp_path):
+    db_file = tmp_path / "state.db"
+    conn = sl._get_db(str(db_file))
+    try:
+        assert is_quota_calibration_stale(conn, threshold_hours=24) is True
+    finally:
+        conn.close()
+
+
+def test_maybe_calibrate_quota_derives_delta_from_snapshots_and_cost_entries(tmp_path):
+    db_file = tmp_path / "state.db"
+    conn = sl._get_db(str(db_file))
+    try:
+        conn.execute(
+            "INSERT INTO quota_snapshots (harness, window, used_percent, resets_at, captured_at, source) "
+            "VALUES ('claude', '5h', 10.0, '2026-10-31T18:00:00Z', '2026-10-31T10:00:00Z', 'poll')"
+        )
+        conn.execute(
+            "INSERT INTO quota_snapshots (harness, window, used_percent, resets_at, captured_at, source) "
+            "VALUES ('claude', '5h', 30.0, '2026-10-31T18:00:00Z', '2026-10-31T12:00:00Z', 'poll')"
+        )
+        for i in range(2):
+            conn.execute(
+                "INSERT INTO cost_entries (session_date, agent, harness, model, input_tokens, "
+                "output_tokens, cache_read_tokens, cost_source, job_id, recorded_at) "
+                "VALUES ('2026-10-31', 'claude', 'claude', 'claude-opus-4-7', 15000, 5000, 0, "
+                "'actual', ?, '2026-10-31T11:00:00')",
+                (f"job-cal-{i}",),
+            )
+        conn.commit()
+
+        results = maybe_calibrate_quota(conn=conn)
+        assert any(r["harness"] == "claude" and r["window"] == "5h" and r["valid"] for r in results)
+
+        row = conn.execute("SELECT last_quota_calibration_at FROM capability_watch WHERE id=1").fetchone()
+        assert row is not None and row[0] is not None
     finally:
         conn.close()

@@ -192,3 +192,19 @@ def test_status_surfaces_recent_regression_incidents(tmp_path, capsys):
     assert "codex" in output.lower()
     assert "regression" in printed.lower()
     assert "codex" in printed.lower()
+
+
+def test_status_warns_when_quota_calibration_overdue(tmp_path, monkeypatch, capsys):
+    import synlynk as sl
+    from synlynk.status import cmd_status
+
+    db_file = tmp_path / "state.db"
+    conn = sl._get_db(str(db_file))
+    conn.close()
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_file))
+    monkeypatch.chdir(tmp_path)
+
+    cmd_status(json_output=False)
+    captured = capsys.readouterr()
+    assert "quota calibration overdue" in captured.out
+
