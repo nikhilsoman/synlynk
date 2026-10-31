@@ -5,8 +5,11 @@ The ecosystem block is the existing ``synlynk status --json`` seam
 a second status API."""
 import json
 import os
+import re
 import subprocess
 import sys
+import tempfile
+import threading
 import time
 from typing import Optional
 from synlynk.observatory import build_job_observatory_snapshot
@@ -74,7 +77,140 @@ def load_sentinel_acks(path: str) -> dict:
         import logging
         logging.getLogger(__name__).info("sentinel acks unreadable: %s", path)
         return {"version": 1, "acks": []}
-    return {"version": 1, "acks": data["acks"]}
+    result = {"version": 1, "acks": data["acks"]}
+    if data.get("slug") is not None:
+        result["slug"] = str(data["slug"])
+    return result
+
+
+_ACK_LOCKS = {}
+_ACK_LOCKS_GUARD = threading.Lock()
+
+
+def _ack_lock(path: str):
+    key = os.path.abspath(path)
+    with _ACK_LOCKS_GUARD:
+        return _ACK_LOCKS.setdefault(key, threading.Lock())
+
+
+def save_sentinel_ack(path: str, row: dict, *, slug: str) -> dict:
+    """Upsert one ack in a workspace-owned sidecar using atomic replace."""
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with _ack_lock(path):
+        data = load_sentinel_acks(path)
+        rows = list(data.get("acks") or [])
+        kind = str(row.get("kind") or "")
+
+        def _matches(existing: dict) -> bool:
+            if str(existing.get("kind") or "") != kind:
+                return False
+            if kind == "occurrence":
+                return list(existing.get("identity") or []) == list(row.get("identity") or [])
+            return str(existing.get("code") or "").upper() == str(row.get("code") or "").upper()
+
+        rows = [existing for existing in rows if not _matches(existing)]
+        rows.append(dict(row))
+        output = {"version": 1, "slug": str(slug), "acks": rows}
+        fd, temporary = tempfile.mkstemp(
+            prefix="sentinel-acks-", suffix=".tmp", dir=parent or "."
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(output, handle, indent=2)
+                handle.write("\n")
+            os.replace(temporary, path)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+        return output
+
+
+def raise_sentinel_issue(slug: str, repo_path: str, group: dict) -> str:
+    """Create one bounded support issue for a sentinel group."""
+    code = str(group.get("code") or "UNPARSED").upper()
+    count = int(group.get("count") or 1)
+    brief = investigate_brief(slug, group)
+    raw_lines = [
+        str(member.get("raw_line") or "")
+        for member in (group.get("members") or [])[:20]
+        if member.get("raw_line")
+    ]
+    body_lines = [
+        f"Workspace: {slug}",
+        f"Code: {code}",
+        f"Severity: {group.get('severity') or 'WARNING'}",
+        f"First seen: {group.get('first_seen') or ''}",
+        f"Last seen: {group.get('last_seen') or ''}",
+        f"Count: {count}",
+        "",
+        "Sample alerts:",
+        *[f"- {line}" for line in raw_lines],
+        "",
+        "Investigation brief:",
+        "```json",
+        json.dumps(brief, indent=2),
+        "```",
+    ]
+    env = os.environ.copy()
+    env.pop("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", None)
+    argv = [
+        "synlynk", "gh", "--role", "support", "--",
+        "issue", "create",
+        "--title", f"[support] sentinel: {code} ({count})",
+        "--body", "\n".join(body_lines),
+    ]
+    result = subprocess.run(
+        argv, capture_output=True, text=True, check=False, env=env,
+        cwd=str(repo_path),
+    )
+    if result.returncode != 0:
+        raise RuntimeError("gh failed")
+    for line in reversed((result.stdout or "").splitlines()):
+        candidate = line.strip()
+        if candidate.startswith("https://"):
+            return candidate
+    raise RuntimeError("gh returned no issue URL")
+
+
+def investigate_brief(slug: str, group: dict) -> dict:
+    """Build the bounded, command-free clipboard payload for one group."""
+    from synlynk.sentinel import _alert_identity, _extract_sentinel_agent
+
+    code = str(group.get("code") or "UNPARSED").upper()
+    members = list(group.get("members") or [])[:20]
+    messages = [str(member.get("message") or "") for member in members]
+    identities = [list(_alert_identity({
+        "severity": member.get("severity"),
+        "code": code if code != "UNPARSED" else "",
+        "message": member.get("message") or "",
+    })) for member in members]
+    job_ids = []
+    agents = []
+    for member in members:
+        source = " ".join((
+            str(member.get("message") or ""),
+            str(member.get("raw_line") or ""),
+        ))
+        for job_id in re.findall(r"\bjob-[0-9a-f]+\b", source, flags=re.IGNORECASE):
+            if job_id not in job_ids and len(job_ids) < 20:
+                job_ids.append(job_id)
+        agent = _extract_sentinel_agent(str(member.get("raw_line") or ""))
+        if agent and agent not in agents and len(agents) < 20:
+            agents.append(agent)
+    return {
+        "slug": str(slug),
+        "code": code,
+        "severity": str(group.get("severity") or "WARNING").upper(),
+        "count": int(group.get("count") or 0),
+        "first_seen": str(group.get("first_seen") or ""),
+        "last_seen": str(group.get("last_seen") or ""),
+        "sample_messages": messages,
+        "identities": identities,
+        "job_ids": job_ids,
+        "agents": agents,
+    }
 
 
 _SEV_RANK = {"CRITICAL": 3, "CRIT": 3, "WARNING": 2, "WARN": 2, "INFO": 1}
@@ -106,7 +242,7 @@ def group_workspace_sentinel_alerts(alerts, acks=None, *, member_cap: int = 50) 
         bucket = buckets.setdefault(key, [])
         bucket.append(alert)
 
-    def _hidden(alert, code):
+    def _hidden(alert, code, pattern_rows):
         identity = list(_alert_identity({
             "severity": alert.get("severity"),
             "code": code if code != "UNPARSED" else "",
@@ -119,7 +255,7 @@ def group_workspace_sentinel_alerts(alerts, acks=None, *, member_cap: int = 50) 
                 watermark = str(row.get("last_seen_at_ack") or "")
                 if not last or last <= watermark:
                     return True
-            if kind in ("pattern", "group") and str(row.get("code") or "").upper() == code:
+            if row in pattern_rows:
                 watermark = str(row.get("last_seen_at_ack") or "")
                 if not last or last <= watermark:
                     return True
@@ -145,13 +281,22 @@ def group_workspace_sentinel_alerts(alerts, acks=None, *, member_cap: int = 50) 
     groups = []
     acked = []
     for code, members in buckets.items():
-        visible = [m for m in members if not _hidden(m, code)]
-        hidden = [m for m in members if _hidden(m, code)]
+        pattern_rows = []
+        for row in ack_rows:
+            if row.get("kind") not in ("pattern", "group"):
+                continue
+            if str(row.get("code") or "").upper() != code:
+                continue
+            watermark = str(row.get("last_seen_at_ack") or "")
+            if not any(_last_seen(member) and _last_seen(member) > watermark for member in members):
+                pattern_rows.append(row)
+        visible = [m for m in members if not _hidden(m, code, pattern_rows)]
+        hidden = [m for m in members if _hidden(m, code, pattern_rows)]
         if visible:
             packed = _pack(code, visible, None)
             packed["collapsed"] = packed["count"] > 3
             groups.append(packed)
-        if hidden and not visible:
+        if hidden:
             packed = _pack(code, hidden, True)
             packed["collapsed"] = True
             acked.append(packed)
