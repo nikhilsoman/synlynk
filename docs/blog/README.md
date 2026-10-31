@@ -611,6 +611,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [530](./530-pr4975-add-vizor-workspace-relative-nav-helper.md) | PR #4975 — add Vizor workspace-relative nav helper | [#4975](https://github.com/nikhilsoman/synlynk/pull/4975) | 2026-10-31 |
 | [531](./531-pr2655-roadmap-cost-decision-authority-design-s.md) | PR #2655 — roadmap/cost/decision authority design spec + implementation plan (gh:#2653) | [#2655](https://github.com/nikhilsoman/synlynk/pull/2655) | 2026-10-31 |
 | [532](./532-pr4981-memory-devlog-entry-for-gh-2653-pr-2655-.md) | PR #4981 — memory + devlog entry for gh:#2653 PR #2655 close-out session | [#4981](https://github.com/nikhilsoman/synlynk/pull/4981) | 2026-10-31 |
+| [533](./533-pr4976-vizor-gantt-uses-governs-columns-and-tas.md) | PR #4976 — Vizor Gantt uses GOVERNS columns and task rows | [#4976](https://github.com/nikhilsoman/synlynk/pull/4976) | 2026-10-31 |
 
 ## Per-PR Post Template
 

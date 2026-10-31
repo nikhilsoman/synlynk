@@ -4574,5 +4574,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #4981 \u2014 memory + devlog entry for gh:#2653 PR #2655 close-out session (PR #4981, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #4981.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-31) - PR #4981\n- Merged improvements and fixes for PR #4981."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/533-pr4976-vizor-gantt-uses-governs-columns-and-tas.md",
+    "title": "PR #4976 \u2014 Vizor Gantt uses GOVERNS columns and task rows",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-31",
+    "pr": "#4976",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #4976."
+    ],
+    "tweet": "\ud83d\ude80 PR #4976 \u2014 Vizor Gantt uses GOVERNS columns and task rows (PR #4976, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #4976.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-31) - PR #4976\n- Merged improvements and fixes for PR #4976."
   }
 ]
