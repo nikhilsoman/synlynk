@@ -7,6 +7,7 @@ rebinds go through ``_pkg()`` rather than this module.
 
 VIZ_CACHE_DIR = ".synlynk/viz-cache"
 VIZ_NOTES_PATH = ".synlynk/viz-notes.json"
+SENTINEL_ACKS_PATH = ".synlynk/sentinel-acks.json"
 VIZ_META_PATH = ".synlynk/viz-meta.json"
 VIZ_WORKSPACE_MAP_PATH = ".synlynk/vizor-workspace-map.json"
 MEMORABLE_VIZOR_PORTS = [33333, 44444, 55555, 22222, 11111]
