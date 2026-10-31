@@ -4654,5 +4654,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #4985 \u2014 Wave D Vizor sentinel HUD (#2672) (PR #4985, v0.26.7)\n\n\u2022 Merged improvements and fixes for PR #4985.\n\n#posts",
     "changelog": "### v0.26.7 (2026-10-31) - PR #4985\n- Merged improvements and fixes for PR #4985."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/538-pr4989-group-vizor-sentinel-alerts-on-overview-.md",
+    "title": "PR #4989 \u2014 group Vizor sentinel alerts on Overview and SSE",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-31",
+    "pr": "#4989",
+    "version": "0.26.7",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #4989."
+    ],
+    "tweet": "\ud83d\ude80 PR #4989 \u2014 group Vizor sentinel alerts on Overview and SSE (PR #4989, v0.26.7)\n\n\u2022 Merged improvements and fixes for PR #4989.\n\n#posts",
+    "changelog": "### v0.26.7 (2026-10-31) - PR #4989\n- Merged improvements and fixes for PR #4989."
   }
 ]
