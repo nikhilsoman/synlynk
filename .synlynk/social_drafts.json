@@ -4494,5 +4494,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #4964 \u2014 stop tracking generated roadmap docs (gh:#2653) (PR #4964, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #4964.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-30) - PR #4964\n- Merged improvements and fixes for PR #4964."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/528-pr4969-v0-26-7-vizor-interactive-write-path-edi.md",
+    "title": "PR #4969 \u2014 v0.26.7 Vizor Interactive (write-path) edition spec",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-31",
+    "pr": "#4969",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #4969."
+    ],
+    "tweet": "\ud83d\ude80 PR #4969 \u2014 v0.26.7 Vizor Interactive (write-path) edition spec (PR #4969, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #4969.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-31) - PR #4969\n- Merged improvements and fixes for PR #4969."
   }
 ]
