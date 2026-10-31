@@ -129,6 +129,59 @@ def test_workspace_stream_emits_sentinel_from_repo(tmp_path, monkeypatch):
     assert "/tmp/nope" not in text
     assert b"404" in missing or b"Unknown workspace" in missing
     assert read_beat(home) is None or True
+    sentinel_blob = text.split("event: sentinel\n", 1)[1].split("\n\n", 1)[0]
+    assert sentinel_blob.startswith("data: ")
+    sentinel_payload = json.loads(sentinel_blob[len("data: "):])
+    assert "groups" in sentinel_payload
+    assert any(group.get("code") == "VIZOR_DAEMON_DOWN" for group in sentinel_payload["groups"])
+
+
+def test_workspace_get_sentinel_returns_groups(tmp_path, monkeypatch):
+    home = tmp_path / "daemon-home"
+    _isolate_home(monkeypatch, home)
+    repo = tmp_path / "repo"
+    (repo / ".synlynk").mkdir(parents=True)
+    (repo / ".synlynk" / "sentinel.md").write_text(
+        "- [CRITICAL] [2026-10-28 00:00:00 UTC] VIZOR_DAEMON_DOWN: "
+        "vizor bind failed [occurrences: 2; first seen: 2026-10-27 00:00:00 UTC; "
+        "last seen: 2026-10-28 00:00:00 UTC]\n",
+        encoding="utf-8",
+    )
+    db = tmp_path / "state.db"
+    db.write_bytes(b"")
+    registry = tmp_path / "registry.json"
+    registry.write_text(json.dumps({
+        "version": 1,
+        "products": {
+            "acme": {
+                "product_id": "pid-acme",
+                "slug": "acme",
+                "canonical_path": str(db),
+                "repo_path": str(repo),
+                "mode": "canonical",
+                "lineage_generation": 1,
+                "state": "active",
+            }
+        },
+    }))
+    monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(registry))
+
+    handler = vizor_daemon.build_workspace_routing_handler()
+    httpd = _serve(handler)
+    try:
+        port = httpd.server_address[1]
+        raw = _read_until(port, "/w/acme/api/sentinel", b'"groups"')
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+    text = raw.decode("utf-8", errors="replace")
+    assert " 200 " in text
+    body = text.split("\r\n\r\n", 1)[1]
+    payload = json.loads(body)
+    assert "groups" in payload
+    assert any(group.get("code") == "VIZOR_DAEMON_DOWN" for group in payload["groups"])
+    assert payload["active_count"] >= 1
 
 
 def test_open_stream_does_not_block_the_next_request(tmp_path, monkeypatch):

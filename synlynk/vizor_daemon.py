@@ -922,6 +922,28 @@ def build_workspace_routing_handler():
                             self.wfile.write(body)
                         return False
 
+                    if api_route == "sentinel" and self.command == "GET":
+                        from synlynk.viz.constants import SENTINEL_ACKS_PATH
+                        from synlynk.viz.data import (
+                            group_workspace_sentinel_alerts,
+                            load_sentinel_acks,
+                            load_workspace_sentinel_alerts,
+                        )
+
+                        sentinel_path = os.path.join(str(ctx.repo_path), ".synlynk", "sentinel.md")
+                        acks_path = os.path.join(str(ctx.repo_path), SENTINEL_ACKS_PATH)
+                        hud = group_workspace_sentinel_alerts(
+                            load_workspace_sentinel_alerts(sentinel_path, active_only=True),
+                            load_sentinel_acks(acks_path),
+                        )
+                        body = json.dumps(hud).encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.send_header("Content-Length", str(len(body)))
+                        self.end_headers()
+                        self.wfile.write(body)
+                        return False
+
                     if api_route == "note" and self.command == "POST":
                         from synlynk.viz.server import save_viz_note, _pkg
 

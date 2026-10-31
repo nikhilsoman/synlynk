@@ -55,6 +55,28 @@ def load_workspace_sentinel_alerts(sentinel_path: str, *, active_only: bool = Fa
     return alerts
 
 
+def load_sentinel_acks(path: str) -> dict:
+    """Read the ack sidecar. A missing or corrupt file is an empty ack set.
+
+    Writes land in a later change. This reader must not create the file.
+    """
+    empty = {"version": 1, "acks": []}
+    if not path or not os.path.isfile(path):
+        return empty
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        import logging
+        logging.getLogger(__name__).info("sentinel acks unreadable: %s", path)
+        return {"version": 1, "acks": []}
+    if not isinstance(data, dict) or not isinstance(data.get("acks"), list):
+        import logging
+        logging.getLogger(__name__).info("sentinel acks unreadable: %s", path)
+        return {"version": 1, "acks": []}
+    return {"version": 1, "acks": data["acks"]}
+
+
 _SEV_RANK = {"CRITICAL": 3, "CRIT": 3, "WARNING": 2, "WARN": 2, "INFO": 1}
 
 
