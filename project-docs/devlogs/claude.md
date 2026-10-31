@@ -341,3 +341,38 @@ containerized execution — is the next queued item per the blog post's stated g
   backfill against a PR per the Cost Capture Protocol — native-session cost for this segment is
   PM/research time with no dispatched job attached.
 [@claude]
+
+## 2026-10-31 — PR #2655 CI fix + two-pass cross-harness review, gh:#2653 closed
+
+- Fixed `tests/test_four_point_attribution.py` failures on PR #2655 (the gh:#2653 design
+  spec + implementation plan docs): added YAML frontmatter with goal/epic/milestone/arc keys
+  to the spec, and an inline `**Epic:** / **Release target:**` line to the plan (its header
+  format is fixed by the writing-plans skill, so no frontmatter there). Caught the plan's
+  failure locally via `pytest` before pushing, rather than waiting on a second CI round-trip.
+  Commit `5dd79a0b`. Also caught and unstaged two unrelated stray modifications
+  (`project-docs/archive/.costs-archive.cursor`, `project-docs/archive/costs-2026-H10.md`,
+  unrelated 2026-10-20 cost-archive entries) that had ended up staged alongside the intended
+  fix — kept them out of this PR's commits.
+- Dispatched a non-authoring Codex review (job-b266d1fe) per the Hardened PR Review Policy's
+  cross-harness+model requirement. It correctly returned CHANGES_REQUESTED: the spec's
+  `status: draft` / "pending user review" fields were stale — the PR's own description and
+  the already-merged implementation PR (#4964) established the plan was approved and fully
+  executed. A real paper-trail defect, not a rubber-stamp or a false positive. Fixed
+  (`status: approved`, body status line rewritten to "Approved and implemented — plan
+  executed and merged via PR #4964"), commit `a10b5a17`, verified via grep that no stale
+  "draft"/"pending review" markers remained.
+- Dispatched a second Codex pass (job-a677ca06) with the task text pointing at the specific
+  fix and asking it to verify via grep before approving. It approved and merged the PR
+  itself (squash commit `313a74bc0b997e4bb9083ce12ed028b2ba1959aa`) as the final step of its
+  own dispatch — per policy, the reviewer's dispatched job performs the merge, not this
+  interactive session, to avoid the auto-mode classifier risk class RCA'd in PR #2149.
+  Independently confirmed via `gh pr view --json state,mergedAt,mergeCommit,reviewDecision`
+  rather than trusting either job's self-reported status.
+- Cleaned up both review-dispatch worktrees/branches (job-b266d1fe, job-a677ca06)
+  same-turn after confirming each was clean and zero-diff, per Worktree Hygiene Protocol.
+- Posted a closing status comment on gh:#2653 covering both review passes, the specific
+  defect and fix, and the merge commit SHA:
+  https://github.com/nikhilsoman/synlynk/issues/2653#issuecomment-6541632079. Checked
+  existing comments first to avoid duplicating prior phase-rollup content already posted
+  by `synlynk-synlynk-dev`/`synlynk-synlynk-qa`/`nikhilsoman`.
+[@claude]
