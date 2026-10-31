@@ -122,40 +122,76 @@ Resulting `.synlynk/features.json` entry example:
 
 ## 4. Fence composition
 
-`render_task_fence()` (`synlynk/fencing.py`) gains one internal call at the
-top, before it builds `lines`:
+**Hook-seam correction (DECIDE panel, 2026-10-31):** a named `from synlynk
+import companion` inside `fencing.py` — even function-local, even though it
+avoids a module-load-time circular import — gives the generic fencing
+primitive a hardcoded dependency on one specific feature, and risks
+re-entrancy if a future contributor's composition logic itself triggers a
+fence render. Instead, `fencing.py` exposes a generic, feature-agnostic
+registration seam:
 
 ```python
+# synlynk/fencing.py
+_HINT_CONTRIBUTORS: list[Callable[[FenceData], None]] = []
+
+def register_hint_contributor(fn: Callable[[FenceData], None]) -> None:
+    """Any enabled feature can register a callback that may append to
+    FenceData.hints. fencing.py never imports or names a contributor."""
+    _HINT_CONTRIBUTORS.append(fn)
+
 def render_task_fence(data: FenceData) -> str:
-    from synlynk import companion
-    companion.maybe_add_hint(data)
-    ...  # unchanged rendering below, now sees any hint companion appended
+    for contributor in _HINT_CONTRIBUTORS:
+        contributor(data)
+    ...  # unchanged rendering below, now sees any hints contributors appended
 ```
 
-`companion.maybe_add_hint(data: FenceData) -> None`:
+`synlynk/companion.py` calls `register_hint_contributor(maybe_add_hint)` at
+import time (inside the same module-load block that calls
+`register_feature(...)`, Section 3) — so wiring happens through the same
+bootstrap path (`load_all_features()`) the Configurability Framework already
+defines, and `fencing.py` stays zero-call-site-changed for every existing
+caller while never naming "companion" anywhere in its own source.
+
+`maybe_add_hint(data: FenceData) -> None` (Companion's own contributor
+callback):
 1. Returns immediately (no-op) if `is_feature_enabled("companion")` is
-   `False` — this is the fast path for every caller that hasn't opted in,
-   and the three existing call sites (`dispatch.py` x2, `cli.py` x1) need
-   no changes.
+   `False` — the fast path for every caller that hasn't opted in.
 2. Computes significance tier from `data.kind`/`data.cost_usd`/`data.label`
    heuristics (e.g. a job-complete fence with `cost_usd` above a rolling
    median is `notable`; a fence tagged with specific milestone markers —
    release cut, epic close — is `milestone`; everything else is `routine`).
 3. Resolves `stage`/`segment`/`theme`/`voice_density`/`remix` from settings
-   (explicit override, else auto-inferred).
+   (explicit override, else auto-inferred — see Section 4a on inference
+   timing).
 4. If `voice_density == "off"`, or tier is `routine` and `voice_density ==
    "low"`, returns without appending anything.
 5. Composes one line: template lookup by `(theme, stage, tier)`, or — only
    when `remix == "milestone_only"` and tier is `milestone` — a harness-exec
-   remix call using the template line as a seed/constraint.
-6. Applies the `domain_vocab` substitution pass (Section 5) to the composed
-   line.
+   remix call using the template line as a seed/constraint (see Section 6
+   for how `domain_vocab` interacts with remix specifically).
+6. Applies the `domain_vocab` substitution pass (Section 6) to
+   template-sourced lines only.
 7. Appends the result to `data.hints`, so it renders as an existing `tip:`
    line inside the existing bordered block — no new rendering code path.
 
 This is Companion's own composition pipeline, as scoped by the
 Configurability Framework's DECIDE-panel correction: `discover_packs()`
 only locates pack files; it has no opinion on fence composition.
+
+### 4a. Stage/segment inference timing
+
+**Consistency fix (DECIDE panel, 2026-10-31):** inferring stage/segment
+fresh on every individual fence call creates a real bug, not just a
+performance question — an estimate fence and a completion fence within the
+*same command* can read telemetry at different moments and infer different
+values, producing two different voices for one command's output. Fix:
+stage/segment inference is **pinned once per command invocation** (cached
+for the lifetime of that one `synlynk <command>` process/call), computed
+fresh on every new command — never persisted across commands, never cached
+longer than one invocation. This keeps the "never stale, never advances on
+elapsed time" property while eliminating within-command inconsistency.
+Implementation: a process-local (not disk-persisted) memo keyed by
+`os.getpid()`-scoped module state, cleared implicitly on process exit.
 
 ## 5. Theme packs
 
@@ -169,19 +205,39 @@ Community/BYO themes are JSON files discovered via
 any `pack_paths` entries in Companion's own settings) and parsed by
 `load_theme_pack(path) -> dict`, validating against the same
 `{stage: {tier: [line, ...]}}` shape using `config_schema.py`'s hand-rolled
-helpers. A pack's top-level `name` field is what a user sets `theme` to;
-setting `theme` to a name that resolves to neither a built-in archetype nor
-a discovered pack falls back to `"standard"` with a one-time warning on the
-next CLI invocation (not a hard error — fail-open to the safe default here
-is about availability, not security, unlike Layer 2's fail-closed on/off
-gate).
+helpers. A pack's top-level `name` field is what a user sets `theme` to.
+
+**Named Layer-3 exception (DECIDE panel, 2026-10-31):** setting `theme` to a
+name that resolves to neither a built-in archetype nor a discovered pack
+falls back to `"standard"`. This is an explicit, documented departure from
+the Configurability Framework's Layer-2 fail-closed convention (missing/bad
+config → disabled) — here, fail-*open* to the safe default is correct
+because an unresolvable theme is a content-availability gap, not a
+security or enablement concern; disabling Companion entirely over a typo'd
+theme name would be a worse outcome than silently using `standard`. The
+warning is **not** one-time: it repeats on every affected invocation (not
+suppressed after the first), so a persistently misconfigured theme name
+doesn't quietly keep producing the wrong voice indefinitely without the
+user noticing.
 
 ## 6. Domain vocabulary
 
-`domain_vocab` is a flat `{term: replacement}` dict. Applied as the last
-step of composition (Section 4, step 6), over the fully composed line
-(template or remix output — vocabulary substitution doesn't care which
-produced the text):
+`domain_vocab` is a flat `{term: replacement}` dict.
+
+**Scope correction (DECIDE panel, 2026-10-31):** a blind post-substitution
+pass over *remix* output is unsafe — remix text is free-form harness-exec
+prose, not text under this design's control, so a vocab key can collide
+with an ordinary word the LLM happened to use in an unrelated sense and
+silently rewrite it. The post-substitution pass therefore applies **only to
+template-sourced lines** (step 6 of Section 4's composition, for the
+non-remix path). For remix-generated lines, `domain_vocab` is instead
+passed as a generation constraint inside the remix prompt itself (e.g. "use
+these workspace terms where natural: {domain_vocab}") — the harness
+produces text that already reflects the vocabulary, rather than having its
+output edited afterward.
+
+For the template path, the substitution pass is applied over the fully
+composed template line:
 
 - Match whole words only (word-boundary regex), case-insensitive matching,
   case-preserving replacement is not attempted — the replacement string is
@@ -215,14 +271,25 @@ synlynk config feature companion vocab list
 ## 8. Compatibility
 
 - `render_task_fence()`'s signature and output shape are unchanged for every
-  existing caller when Companion is disabled (the default) — `maybe_add_hint`
-  is a no-op and `data.hints` is whatever the caller already set.
+  existing caller. With no contributors registered (Companion disabled or
+  `synlynk.companion` never imported), `_HINT_CONTRIBUTORS` is empty and the
+  loop is a no-op — identical output to today.
+- `fencing.py` gains the generic `register_hint_contributor()` seam but adds
+  no new import of, or reference to, any specific feature.
 - `NudgeData`/`render_nudge_fence()` (workspace-agent nudges) are untouched;
   Companion only hooks into the cost-fence path.
 - No existing `FenceData` call site changes.
 
 ## 9. Testing
 
+- `tests/test_fencing_hint_contributors.py`:
+  - `register_hint_contributor()` / `render_task_fence()` round-trip: a
+    registered callback is invoked and can append to `data.hints`; an
+    unregistered feature (empty contributor list) renders identically to
+    today's output.
+  - `fencing.py` imports no feature module by name (a static grep-style
+    assertion that `companion`/`context_compaction`/`herdr_cockpit` don't
+    appear as import targets in `fencing.py`'s source).
 - `tests/test_companion.py`:
   - `maybe_add_hint()` no-ops when `companion` is disabled — `data.hints`
     unchanged.
@@ -230,14 +297,23 @@ synlynk config feature companion vocab list
     expected tier` cases.
   - Stage/segment resolution: explicit override wins; absent override, a
     fixed telemetry fixture produces the expected inferred value.
+  - Stage/segment pinning: two fence calls within the same simulated
+    command invocation (same pinned-inference scope) resolve to the same
+    value even when the underlying telemetry fixture changes between the
+    two calls; a new invocation re-infers.
   - `voice_density` gating: `off` never appends; `low` only appends at
     `notable`/`milestone`; `full` always appends (down to `routine`).
   - Template composition: `(theme, stage, tier)` resolves to a line from
     the expected archetype table; an unknown `theme` falls back to
-    `"standard"` with the one-time-warning behavior.
-  - Domain vocabulary: longest-key-first ordering, word-boundary-only
-    matching, no recursive substitution, applied identically to a
-    template-sourced and a (mocked) remix-sourced line.
+    `"standard"` with the warning firing on every affected call (not
+    suppressed after the first).
+  - Domain vocabulary (template path only): longest-key-first ordering,
+    word-boundary-only matching, no recursive substitution.
+  - Domain vocabulary (remix path): the remix prompt sent to harness-exec
+    includes the configured `domain_vocab` as a constraint; the
+    post-substitution pass is never applied to remix output (asserted by
+    mocking harness-exec to return text containing a vocab key and
+    confirming it is left unmodified).
   - `remix == "milestone_only"` only triggers a harness-exec call at
     `milestone` tier, never at `routine`/`notable`.
 - `tests/test_companion_packs.py`: `load_theme_pack()` round-trips a valid
