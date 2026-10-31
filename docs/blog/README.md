@@ -608,6 +608,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [527](./527-pr4964-stop-tracking-generated-roadmap-docs-gh-.md) | PR #4964 — stop tracking generated roadmap docs (gh:#2653) | [#4964](https://github.com/nikhilsoman/synlynk/pull/4964) | 2026-10-30 |
 | [528](./528-pr4969-v0-26-7-vizor-interactive-write-path-edi.md) | PR #4969 — v0.26.7 Vizor Interactive (write-path) edition spec | [#4969](https://github.com/nikhilsoman/synlynk/pull/4969) | 2026-10-31 |
 | [529](./529-pr4974-v0-26-7-vizor-interactive-implementation.md) | PR #4974 — v0.26.7 Vizor Interactive implementation plan | [#4974](https://github.com/nikhilsoman/synlynk/pull/4974) | 2026-10-31 |
+| [530](./530-pr4975-add-vizor-workspace-relative-nav-helper.md) | PR #4975 — add Vizor workspace-relative nav helper | [#4975](https://github.com/nikhilsoman/synlynk/pull/4975) | 2026-10-31 |
 
 ## Per-PR Post Template
 

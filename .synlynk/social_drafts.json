@@ -4526,5 +4526,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #4974 \u2014 v0.26.7 Vizor Interactive implementation plan (PR #4974, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #4974.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-31) - PR #4974\n- Merged improvements and fixes for PR #4974."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/530-pr4975-add-vizor-workspace-relative-nav-helper.md",
+    "title": "PR #4975 \u2014 add Vizor workspace-relative nav helper",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-31",
+    "pr": "#4975",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #4975."
+    ],
+    "tweet": "\ud83d\ude80 PR #4975 \u2014 add Vizor workspace-relative nav helper (PR #4975, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #4975.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-31) - PR #4975\n- Merged improvements and fixes for PR #4975."
   }
 ]
