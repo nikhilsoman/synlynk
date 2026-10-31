@@ -513,6 +513,14 @@ def cmd_status(
                 "⚠ smoke test overdue - run `synlynk selftest --live` or enable `auto_smoke_test` in config"
             )
 
+        from synlynk.quota import is_quota_calibration_stale
+
+        if is_quota_calibration_stale(db_conn, threshold_hours=24):
+            extra_lines.append(
+                "⚠ quota calibration overdue - run `synlynk quota calibrate` "
+                "or ensure the daemon is running (`synlynk daemon start`)"
+            )
+
         recent_incidents = db_conn.execute(
             "SELECT harness, failing_path, classification, detected_at FROM capability_incidents "
             "WHERE classification = 'regression' ORDER BY detected_at DESC LIMIT 5"
