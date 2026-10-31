@@ -922,6 +922,34 @@ def build_workspace_routing_handler():
                             self.wfile.write(body)
                         return False
 
+                    if api_route == "logical" and self.command == "GET":
+                        from synlynk.viz.logical_expand import (
+                            load_logical_graph,
+                            logical_community_payload,
+                        )
+
+                        filters = parse_qs(parsed.query)
+                        raw_community = (filters.get("community") or [None])[0]
+                        if raw_community is None or str(raw_community).strip() == "":
+                            body = json.dumps({"error": "community required"}).encode("utf-8")
+                            self.send_response(400)
+                            self.send_header("Content-Type", "application/json; charset=utf-8")
+                            self.send_header("Content-Length", str(len(body)))
+                            self.end_headers()
+                            self.wfile.write(body)
+                            return False
+                        nodes, edges = load_logical_graph(ctx.repo_path, ctx.db_path)
+                        payload = logical_community_payload(
+                            nodes, edges, str(raw_community).strip()
+                        )
+                        body = json.dumps(payload).encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.send_header("Content-Length", str(len(body)))
+                        self.end_headers()
+                        self.wfile.write(body)
+                        return False
+
                     if api_route == "sentinel" and self.command == "GET":
                         from synlynk.viz.constants import SENTINEL_ACKS_PATH
                         from synlynk.viz.data import (
