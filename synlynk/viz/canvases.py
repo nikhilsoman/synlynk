@@ -5,6 +5,7 @@ from typing import Dict
 from synlynk.viz import nav
 from synlynk.viz.chrome import _live_js
 from synlynk.viz.architect import _ARCHITECT_MAP_STYLE
+from synlynk.viz.logical_expand import node_community
 
 
 def _workspace_view_anchor(route: str, class_name: str, inner_html: str) -> str:
@@ -1224,6 +1225,38 @@ __IFRAME_NAV_SCRIPT__
     )
 
 
+def _logical_community_checkboxes(nodes: list) -> str:
+    """Server-rendered community ids only. Node attrs stay off the page."""
+    counts = {}
+    for node in nodes or []:
+        comm = node_community(node)
+        if comm is None:
+            continue
+        key = str(comm)
+        counts[key] = counts.get(key, 0) + 1
+    if not counts:
+        return ""
+
+    def _sort_key(item):
+        key = item[0]
+        try:
+            return (0, int(key), key)
+        except ValueError:
+            return (1, 0, key)
+
+    parts = []
+    for cid, count in sorted(counts.items(), key=_sort_key):
+        safe = html.escape(cid, quote=True)
+        label = html.escape(f"Community {cid} ({count})")
+        parts.append(
+            '<label class="am-community-item">'
+            f'<input type="checkbox" class="am-community-checkbox" data-comm="{safe}" '
+            'onchange="if (this.checked) expandLogicalCommunity(this.dataset.comm)">'
+            f"<span>{label}</span></label>"
+        )
+    return "".join(parts)
+
+
 def generate_logical_html(data: dict, port: int) -> str:
     """Generate rich, differentiated Logical View with Layered HLD Architecture, LLD Component Model, and Interactive Sequence Player."""
     workspace = data.get("workspace", {})
@@ -1270,8 +1303,22 @@ def generate_logical_html(data: dict, port: int) -> str:
         for it in items[:12]:
             lbl = html.escape(str(it.get("label") or it.get("id") or ""))
             k = html.escape(str(it.get("kind") or "module").title())
-            out.append(f'<div class="hld-comp-card"><span class="hld-comp-name">{lbl}</span><span class="hld-comp-kind">{k}</span></div>')
+            comm = node_community(it)
+            click = ""
+            if comm is not None:
+                safe_comm = html.escape(str(comm), quote=True)
+                click = (
+                    f' data-community="{safe_comm}"'
+                    f' onclick="expandLogicalCommunity(this.dataset.community)"'
+                )
+            out.append(
+                f'<div class="hld-comp-card"{click}>'
+                f'<span class="hld-comp-name">{lbl}</span>'
+                f'<span class="hld-comp-kind">{k}</span></div>'
+            )
         return "".join(out)
+
+    community_filters_html = _logical_community_checkboxes(nodes)
 
     hld_html = f"""
 <div class="hld-container">
@@ -1431,6 +1478,7 @@ __STALENESS_BANNER__
 </div>
 
 <div id="logical-lld-view" class="log-view-panel">
+  <div class="seq-toolbar" id="logical-community-bar">__COMMUNITY_FILTERS__</div>
   <div class="seq-canvas" style="display:flex; flex-direction:column; align-items:center; justify-content:center;">
     <svg id="lld-svg" width="100%" height="600" style="background:transparent;"></svg>
   </div>
@@ -1469,6 +1517,17 @@ __STALENESS_BANNER__
 <script>
 window.LOGICAL_NODES = __NODES_JSON__;
 window.LOGICAL_EDGES = __EDGES_JSON__;
+
+function expandLogicalCommunity(communityId) {
+  if (communityId === undefined || communityId === null || String(communityId) === '') return;
+  fetch('api/logical?community=' + encodeURIComponent(communityId))
+    .then(function (res) { return res.json(); })
+    .then(function (payload) {
+      window.LOGICAL_EXPAND = payload;
+      setLogicalTab('lld');
+    })
+    .catch(function () {});
+}
 
 function setLogicalTab(tabKey) {
   document.querySelectorAll('.am-switcher .am-tab').forEach(b => {
@@ -1651,7 +1710,10 @@ function toggleAutoPlay() {
 function renderLldModel() {
   const svg = document.getElementById('lld-svg');
   if (!svg) return;
-  const nodes = window.LOGICAL_NODES || [];
+  const expanded = window.LOGICAL_EXPAND;
+  const nodes = (expanded && expanded.nodes && expanded.nodes.length)
+    ? expanded.nodes
+    : (window.LOGICAL_NODES || []);
   const W = svg.clientWidth || 900, H = 560;
   let markup = '';
   const displayNodes = nodes.length ? nodes.slice(0, 16) : [
@@ -1696,6 +1758,7 @@ __LIVE_JS_HTML__
         .replace("__HLD_CONTENT__", hld_html)
         .replace("__NODES_JSON__", json.dumps(_logical_first_paint_nodes(nodes)))
         .replace("__EDGES_JSON__", json.dumps([]))
+        .replace("__COMMUNITY_FILTERS__", community_filters_html)
         .replace("__LIVE_JS_HTML__", live_js_html)
     )
 
