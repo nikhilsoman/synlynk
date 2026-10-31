@@ -617,6 +617,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [536](./536-pr4987-fix-npm-audit-alerts.md) | PR #4987 — fix npm audit alerts | [#4987](https://github.com/nikhilsoman/synlynk/pull/4987) | 2026-10-31 |
 | [537](./537-pr4985-wave-d-vizor-sentinel-hud-2672.md) | PR #4985 — Wave D Vizor sentinel HUD (#2672) | [#4985](https://github.com/nikhilsoman/synlynk/pull/4985) | 2026-10-31 |
 | [538](./538-pr4989-group-vizor-sentinel-alerts-on-overview-.md) | PR #4989 — group Vizor sentinel alerts on Overview and SSE | [#4989](https://github.com/nikhilsoman/synlynk/pull/4989) | 2026-10-31 |
+| [539](./539-pr4991-add-vizor-sentinel-write-actions.md) | PR #4991 — add Vizor sentinel write actions | [#4991](https://github.com/nikhilsoman/synlynk/pull/4991) | 2026-10-31 |
 
 ## Per-PR Post Template
 

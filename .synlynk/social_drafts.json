@@ -4670,5 +4670,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #4989 \u2014 group Vizor sentinel alerts on Overview and SSE (PR #4989, v0.26.7)\n\n\u2022 Merged improvements and fixes for PR #4989.\n\n#posts",
     "changelog": "### v0.26.7 (2026-10-31) - PR #4989\n- Merged improvements and fixes for PR #4989."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/539-pr4991-add-vizor-sentinel-write-actions.md",
+    "title": "PR #4991 \u2014 add Vizor sentinel write actions",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-31",
+    "pr": "#4991",
+    "version": "0.26.7",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #4991."
+    ],
+    "tweet": "\ud83d\ude80 PR #4991 \u2014 add Vizor sentinel write actions (PR #4991, v0.26.7)\n\n\u2022 Merged improvements and fixes for PR #4991.\n\n#posts",
+    "changelog": "### v0.26.7 (2026-10-31) - PR #4991\n- Merged improvements and fixes for PR #4991."
   }
 ]
