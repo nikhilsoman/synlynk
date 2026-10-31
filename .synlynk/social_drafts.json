@@ -4542,5 +4542,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #4975 \u2014 add Vizor workspace-relative nav helper (PR #4975, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #4975.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-31) - PR #4975\n- Merged improvements and fixes for PR #4975."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/531-pr2655-roadmap-cost-decision-authority-design-s.md",
+    "title": "PR #2655 \u2014 roadmap/cost/decision authority design spec + implementation plan (gh:#2653)",
+    "author": "nikhilsoman",
+    "date": "2026-10-31",
+    "pr": "#2655",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2655."
+    ],
+    "tweet": "\ud83d\ude80 PR #2655 \u2014 roadmap/cost/decision authority design spec + implementation plan (gh:#2653) (PR #2655, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2655.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-31) - PR #2655\n- Merged improvements and fixes for PR #2655."
   }
 ]

@@ -609,6 +609,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [528](./528-pr4969-v0-26-7-vizor-interactive-write-path-edi.md) | PR #4969 — v0.26.7 Vizor Interactive (write-path) edition spec | [#4969](https://github.com/nikhilsoman/synlynk/pull/4969) | 2026-10-31 |
 | [529](./529-pr4974-v0-26-7-vizor-interactive-implementation.md) | PR #4974 — v0.26.7 Vizor Interactive implementation plan | [#4974](https://github.com/nikhilsoman/synlynk/pull/4974) | 2026-10-31 |
 | [530](./530-pr4975-add-vizor-workspace-relative-nav-helper.md) | PR #4975 — add Vizor workspace-relative nav helper | [#4975](https://github.com/nikhilsoman/synlynk/pull/4975) | 2026-10-31 |
+| [531](./531-pr2655-roadmap-cost-decision-authority-design-s.md) | PR #2655 — roadmap/cost/decision authority design spec + implementation plan (gh:#2653) | [#2655](https://github.com/nikhilsoman/synlynk/pull/2655) | 2026-10-31 |
 
 ## Per-PR Post Template
 
