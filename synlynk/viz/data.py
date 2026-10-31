@@ -74,7 +74,37 @@ def load_sentinel_acks(path: str) -> dict:
         import logging
         logging.getLogger(__name__).info("sentinel acks unreadable: %s", path)
         return {"version": 1, "acks": []}
-    return {"version": 1, "acks": data["acks"]}
+    result = {"version": 1, "acks": data["acks"]}
+    if data.get("slug") is not None:
+        result["slug"] = str(data["slug"])
+    return result
+
+
+def save_sentinel_ack(path: str, row: dict, *, slug: str) -> dict:
+    """Upsert one ack in a workspace-owned sidecar using atomic replace."""
+    data = load_sentinel_acks(path)
+    rows = list(data.get("acks") or [])
+    kind = str(row.get("kind") or "")
+
+    def _matches(existing: dict) -> bool:
+        if str(existing.get("kind") or "") != kind:
+            return False
+        if kind == "occurrence":
+            return list(existing.get("identity") or []) == list(row.get("identity") or [])
+        return str(existing.get("code") or "").upper() == str(row.get("code") or "").upper()
+
+    rows = [existing for existing in rows if not _matches(existing)]
+    rows.append(dict(row))
+    output = {"version": 1, "slug": str(slug), "acks": rows}
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    temporary = f"{path}.tmp"
+    with open(temporary, "w", encoding="utf-8") as handle:
+        json.dump(output, handle, indent=2)
+        handle.write("\n")
+    os.replace(temporary, path)
+    return output
 
 
 _SEV_RANK = {"CRITICAL": 3, "CRIT": 3, "WARNING": 2, "WARN": 2, "INFO": 1}
