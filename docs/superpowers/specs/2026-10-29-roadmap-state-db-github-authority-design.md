@@ -1,3 +1,15 @@
+---
+title: "Roadmap/Cost/Decision Authority: state.db + GitHub, No Git-Tracked Markdown Mirrors"
+date: 2026-10-29
+status: draft
+author: "Claude (Home Conductor)"
+goal: "goal-6733bbf1"
+epic: "#2653"
+milestone: "unscheduled (gh:#2653 has no milestone set)"
+arc: "governance"
+issue: "#2653"
+---
+
 # Roadmap/Cost/Decision Authority: state.db + GitHub, No Git-Tracked Markdown Mirrors
 
 - **Status:** Draft — pending user review

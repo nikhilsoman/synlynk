@@ -8,6 +8,8 @@
 
 **Tech Stack:** Python 3 stdlib (`sqlite3`, `hashlib`, `json`), the project's versioned migration framework (`synlynk/migrations/`), `pytest`, and the existing `synlynk.gh_shim.run_gh()` helper for role-scoped `gh` CLI calls (no new HTTP client).
 
+**Epic:** gh:#2653 · **Release target:** unscheduled (gh:#2653 has no milestone set)
+
 **Spec:** `docs/superpowers/specs/2026-10-29-roadmap-state-db-github-authority-design.md`
 
 ---
