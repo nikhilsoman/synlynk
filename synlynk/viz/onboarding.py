@@ -174,10 +174,6 @@ def generate_onboarding_html(data: dict = None, port: int = 27472) -> str:
           <div style="font-size: 13px; color: #8b949e; margin-top: 2px;">{desc}</div>
         </div>
       </div>
-      <form method="POST" action="/tools/install" style="margin: 0;">
-        <input type="hidden" name="tool" value="{name}" />
-        <button type="submit" class="btn-install" style="background: #238636; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">1-Click Install</button>
-      </form>
     </div>""")
 
     tools_html = "".join(recs_cards) if recs_cards else "<p style='color: #8b949e;'>All recommended ecosystem tools are installed.</p>"

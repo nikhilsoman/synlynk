@@ -588,7 +588,7 @@ async function saveNote() {
   const tags = noteTagsFromButtons();
   const existing = noteData(currentNoteTarget);
   const derivedState = existing && existing.state ? existing.state : ((text || tags.length) ? 'info' : null);
-  const response = await fetch('/note', {
+  const response = await fetch('api/note', {
     method: 'POST',
     headers: window.vizorAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ id: currentNoteTarget, text, tags, state: derivedState }),

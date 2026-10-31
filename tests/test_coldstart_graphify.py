@@ -30,8 +30,8 @@ def test_generate_onboarding_html_renders_graphify_checkbox(monkeypatch):
     html = generate_onboarding_html()
     assert "Graphify AST Knowledge Graph" in html
     assert "Recommended: ~20x token savings" in html
-    assert "1-Click Install" in html
-    assert "/tools/install" in html
+    assert "1-Click Install" not in html
+    assert "/tools/install" not in html
 
 
 def test_generate_onboarding_html_when_graphify_installed(monkeypatch):
