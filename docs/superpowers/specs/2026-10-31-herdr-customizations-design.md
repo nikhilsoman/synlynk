@@ -19,6 +19,8 @@ Research into Herdr's actual extension surface (its `herdr-plugin.toml` manifest
 
 This split is what makes the opt-in requirement structural rather than a policy promise: three independent gates must all be true before any Herdr-specific behavior runs — (a) the `herdr` binary is installed by the user, (b) the `herdr_cockpit` feature is explicitly enabled in synlynk's own settings, (c) for the richer version, the plugin has been separately `herdr plugin install`'d. No terminal/multiplexer opinion is baked into a bare `pip install synlynk`.
 
+**Precision on what these gates actually cover (DECIDE panel, 2026-10-31):** the tmux/terminal fallback in Section 3 *is* gated behind `herdr_cockpit` being enabled — a user who never enables the feature never gets a spawned terminal window either, so this is consented-to multiplexer behavior, not a leak. The one real gap is on the plugin side: once `herdr-synlynk` is linked, its `worktree.created` event hook (Section 4) *executes* unconditionally the moment a worktree is created — only its *effect* (suggesting a cockpit tab) is gated by `herdr_auto_tab_on_epic`. The hook always runs, reads `.synlynk/config.json`, and must fail closed (no suggestion, no error surfaced to the user) on missing or malformed config, rather than assuming the setting is present.
+
 ## 3. Core side — Configurability Framework registration, CLI, fallback
 
 ```python
@@ -40,7 +42,9 @@ Settings: `herdr_pane_layout` (string, default `"4pane"` — room for future pre
 2. **Feature enabled, but `HERDR_ENV != 1` or `herdr` missing** → **tmux/terminal fallback**: spawn a plain `tmux new-session` (or OS terminal window) running the same conductor command, with no pane orchestration. This is the roadmap's explicit requirement. It is a degraded path, not a parallel backend — it never attempts multi-pane layout.
 3. **Feature enabled, Herdr live** → check `herdr plugin list` for `synlynk.cockpit` linked.
    - If linked: delegate via `herdr plugin action invoke synlynk.cockpit.tab-epic --arg epic=<epic>`.
-   - If not linked: fall back to the raw `herdr pane split`/`herdr pane run` sequence from the Sept-14 doc, directly from `cockpit.py`. This keeps the feature fully usable without requiring the plugin — the plugin is an enhancement layer, not a hard dependency of `herdr_cockpit` itself.
+   - If not linked: fall back to the raw `herdr pane split`/`herdr pane run` sequence from the Sept-14 doc, directly from `cockpit.py`. **This is intentional duplication, not deferred scope** (DECIDE panel, 2026-10-31): `cockpit.py`'s raw pane-sequence path reimplements the same `apply-4pane`/`tab-epic` logic the plugin's actions provide, so that `herdr_cockpit` is fully usable without ever installing the plugin. The plugin is an enhancement layer (events, link handlers, notifier), not core's only path to a working cockpit.
+
+**Plugin contract hardening (DECIDE panel, 2026-10-31):** `herdr plugin action invoke` is an unversioned, string-keyed contract against an independently-versioned external repo — core must not assume `synlynk.cockpit.tab-epic` exists or behaves as expected just because `herdr plugin list` shows it linked. Before delegating, core checks a minimal compatibility marker (an `interface_version` the plugin's manifest or a dedicated `synlynk.cockpit.version` action reports) against a version core knows how to speak to. On a missing/mismatched version, or on the invoke call itself failing, core falls through to its own raw pane-sequence path and logs a one-line notice naming the mismatch — this fallback is a named, documented behavior, not a silent catch-all.
 
 ## 4. Plugin side — `herdr-synlynk` repository
 
@@ -60,16 +64,16 @@ synlynk now has two independent marketplace-style distribution surfaces for thin
 
 Rather than build shared tooling for two data points, this establishes a lightweight **convention**, not code, that both surfaces follow:
 
-- **Branding:** consistent icon derived from the same source asset as `clients/vscode/media/synlynk-icon.svg`; consistent naming pattern (`synlynk-<surface>`, e.g. `synlynk-vscode`, `herdr-synlynk`); consistent publisher/owner identity (`synlynk` where the registry allows a reserved publisher name, `synlynk-dev` as the GitHub org otherwise).
+- **Branding:** consistent icon derived from the same source asset as `clients/vscode/media/synlynk-icon.svg`; consistent naming pattern per registry convention (e.g. `synlynk-vscode` on the VS Code/Open VSX side, where `synlynk-<surface>` is the house style; `herdr-synlynk` on the Herdr marketplace side, where Herdr's own `herdr-<provider>` convention takes precedence — both still read unambiguously as synlynk's) (fixed per DECIDE panel, 2026-10-31: the prior wording implied a single `synlynk-<surface>` pattern inconsistent with `herdr-synlynk` itself); consistent publisher/owner identity (`synlynk` where the registry allows a reserved publisher name, `synlynk-dev` as the GitHub org otherwise).
 - **Framing:** every listing's description states the same "thin client, zero required production dependencies, shells out to the local `synlynk` CLI" framing — this is true of both the VS Code extension and the Herdr plugin, and should read the same way in both.
 - **Version alignment:** each surface's published version tracks the synlynk Named Release it ships alongside, noted in that surface's own changelog, not synced as a hard version-number match (the two will drift — a plugin bugfix doesn't need a synlynk core bump and vice versa).
 - **Extraction trigger:** when a third client surface is specced, extract this section into its own `docs/superpowers/specs/<date>-client-surface-conventions.md` and have all three surfaces' specs reference it instead of repeating it inline.
 
 ## 6. Testing
 
-Core: mock `shutil.which`, `HERDR_ENV`, and feature-enabled state; cover the 2×2×2 matrix (feature enabled/disabled × herdr present/absent × plugin linked/unlinked) and assert the correct one of {hint, tmux fallback, plugin delegate, raw pane sequence} fires. `herdr_auto_tab_on_epic` defaulting to `false` even when `herdr_cockpit` is enabled is its own explicit test case.
+Core: mock `shutil.which`, `HERDR_ENV`, and feature-enabled state; cover the 2×2×2 matrix (feature enabled/disabled × herdr present/absent × plugin linked/unlinked) and assert the correct one of {hint, tmux fallback, plugin delegate, raw pane sequence} fires. `herdr_auto_tab_on_epic` defaulting to `false` even when `herdr_cockpit` is enabled is its own explicit test case. Additional cases per the DECIDE panel (2026-10-31): plugin-linked-but-version-mismatched falls through to the raw pane sequence with a logged notice, not a silent no-op; and plugin-linked-but-invoke-raises behaves identically.
 
-Plugin repo: own test suite (manifest validation, action scripts), out of scope for this document beyond noting it exists.
+Plugin repo: own test suite (manifest validation, action scripts), out of scope for this document beyond noting it exists, with one exception the panel flagged as core-relevant: the `worktree.created` hook's fail-closed behavior on missing/malformed `.synlynk/config.json` (hook executes, reads config, finds nothing usable, suggests nothing — no error surfaced) must be tested, since the hook always runs once linked regardless of `herdr_auto_tab_on_epic`.
 
 ## 7. Out of scope
 
