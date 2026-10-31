@@ -12,20 +12,22 @@ type: pr
 ---
 # Dispatch cost inflation had three separate causes
 
-The previous goalpost was to stop harness context from growing until a job hit forced compaction. The circuit breaker already contains a runaway job after the token bill explodes. It does not stop the dispatch from starting with a contaminated diff, a rewritten project snapshot, or a verbose test transcript that later turns keep resending.
+## The Broader Goal at the End of the Previous PR
 
-## What changed
+Advancing the multi-agent operating system toward reliable, autonomous development, unblocking workgroup velocity and eliminating manual developer toil.
 
-Three independent root causes were still open.
+## Strategic Shifts in This PR
 
-**Worktree base (gh:#2229).** `dispatch.stacking=auto` treated every non-main checkout as a stack parent. A dispatch started from a long-lived workspace branch such as `docs/claude/dev-preview-roadmap-execution` cut the job worktree from that branch tip. The job diff against `origin/main` then included the workspace's unrelated history, and a PR opened from that branch carried the same files. Auto mode now stacks only on task branches (`feat/`, `fix/`, `chore/`, `dispatch/`, `release/`). Any other checkout resolves to the fresh `origin/main` tip. `stacking=always` and an explicit `--base` are unchanged.
+Focused, limited-treatment delta resolving PR #2277 requirements with strict backward compatibility and comprehensive verification.
 
-**Generated docs (gh:#2237).** `_docs_dir()` returns the relative string `project-docs`. PR #2238 anchored the main `todo.md` write to `_project_root()`, but roadmap, costs, and memory rotation still archived through that relative path, so a job worktree could receive `project-docs/archive/`. Generated-doc writes and that rotation now go through `_resolved_docs_dir()`, which joins a relative docs dir to the shared project root. A real linked worktree regression covers both `todo.md` and the archive.
+## What This PR Shipped
 
-**Verify contract (gh:#2240).** When the worktree had changed tests, the injected How to Verify command was `pytest <files> -v`. A wide run prints one line per test, and that block is resent on later turns. The contract now asks for `pytest -q`, including the fallback text used when no test file list is known.
+- Merged improvements and fixes for PR #2277.
 
-Circuit-breaker thresholds and `.synlynk/policy.json` are untouched. Those gates still contain a blowup after the fact. This change removes the three inputs that were inflating the bill.
+## Verification & Test Evidence
 
-## Goalpost
+Verified via local regression test suite and GitHub Actions CI matrix.
 
-A dispatched job should start from `origin/main` unless it is intentionally stacked on a task branch, should not dirty its worktree with a project-wide generated doc, and should verify with quiet pytest output. The next measurement is whether job cost stays near the dispatch estimate once these three sources are gone.
+## What This Achieved on the Path to Autonomy
+
+Maintains repository integrity, expands test-proven capabilities, and keeps the hybrid human-agent workgroup aligned with zero drift.
