@@ -177,6 +177,46 @@ def _is_transient_test_path(path_str: str) -> bool:
     return any(marker in path_str for marker in test_markers)
 
 
+def _without_pytest_basetemp(norm: str) -> str:
+    """Drop pytest's runner directories before the transient-path check.
+
+    ``tmp_path`` is ``.../pytest-of-<user>/pytest-<n>/...``. That prefix
+    contains ``/pytest-``, which would mark a durable dev clone such as
+    ``dev/coldtest`` ephemeral. ``/pytest-`` segments outside that prefix
+    still count.
+    """
+    parts = [part for part in norm.split("/") if part]
+    cleaned: list[str] = []
+    index = 0
+    while index < len(parts):
+        part = parts[index]
+        nxt = parts[index + 1] if index + 1 < len(parts) else ""
+        if part.startswith("pytest-of-") and nxt.startswith("pytest-"):
+            index += 2
+            continue
+        cleaned.append(part)
+        index += 1
+    return "/" + "/".join(cleaned)
+
+
+def workspace_kind(entry: dict, slug: str) -> str:
+    raw = str((entry or {}).get("kind") or "").strip().lower()
+    if raw in {"local", "hosted", "ephemeral"}:
+        return raw
+    path = str((entry or {}).get("path_root") or (entry or {}).get("repo_path") or slug)
+    norm = path.replace("\\", "/")
+    if "/.worktrees/" in f"/{norm}/" or "/worktrees/job-" in norm or "/worktrees/djob-" in norm:
+        return "ephemeral"
+    classified = _without_pytest_basetemp(norm)
+    if _is_transient_test_path(classified) or _is_transient_test_path(slug):
+        return "ephemeral"
+    return "local"
+
+
+def is_durable_hub_entry(slug: str, entry: dict) -> bool:
+    return workspace_kind(entry, slug) != "ephemeral"
+
+
 def _registered_workspaces() -> dict:
     """Return {slug: entry} for every registered product, or {} if no registry yet."""
     from synlynk.state_registry import _read_unlocked, registry_path
@@ -206,6 +246,8 @@ def _registered_workspaces() -> dict:
         if not repo_p.is_dir() or not db_p.is_file():
             continue
         if not is_custom_registry and (_is_transient_test_path(str(repo_path)) or _is_transient_test_path(str(slug))):
+            continue
+        if not is_durable_hub_entry(slug, entry):
             continue
         valid_workspaces[slug] = entry
     return valid_workspaces

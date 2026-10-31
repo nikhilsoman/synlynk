@@ -1,6 +1,7 @@
 """Release timeline (Gantt) canvas."""
 import html
 import json
+from synlynk.viz import nav
 from synlynk.viz.chrome import _live_js
 from synlynk.viz.format import GANTT_EMBED_KEYS, view_embed
 _GANTT_STYLE = """
@@ -1143,6 +1144,7 @@ renderTimeline();
 {script_content}
 </script>
 {_live_js(port)}
+{nav.iframe_nav_script()}
 </body>
 </html>"""
 
