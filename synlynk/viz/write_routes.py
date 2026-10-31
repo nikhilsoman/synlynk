@@ -4,6 +4,8 @@ WRITE_ROUTES = {
     "board/stage": "keep",
     "board/status": "keep",
     "note": "proxy",
+    "sentinel/ack": "keep",
+    "sentinel/issue": "keep",
     "roles/create": "hide",
     "dispatch": "hide",
     "approve": "hide",

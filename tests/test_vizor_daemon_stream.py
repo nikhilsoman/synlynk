@@ -264,11 +264,10 @@ def test_overview_inspection_is_read_only():
     listener = inline.split("addEventListener('sentinel'", 1)[1].split("source.onerror", 1)[0]
     assert "snapshotNode" in listener
     assert "data-alert-index" in listener
-    assert "renderPanel" in listener
+    assert "data-sentinel-action" in listener
     assert "\\u003c" in listener
     assert "sev-crit" in listener
     assert "sev-warn" in listener
-    assert "fetch(" not in inline
 
 
 def test_loader_keeps_inspection_fields(tmp_path, monkeypatch):
