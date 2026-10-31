@@ -4686,5 +4686,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #4991 \u2014 add Vizor sentinel write actions (PR #4991, v0.26.7)\n\n\u2022 Merged improvements and fixes for PR #4991.\n\n#posts",
     "changelog": "### v0.26.7 (2026-10-31) - PR #4991\n- Merged improvements and fixes for PR #4991."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/540-pr4993-slim-logical-community-json-on-expand.md",
+    "title": "PR #4993 \u2014 slim logical community JSON on expand",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-31",
+    "pr": "#4993",
+    "version": "0.26.7",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #4993."
+    ],
+    "tweet": "\ud83d\ude80 PR #4993 \u2014 slim logical community JSON on expand (PR #4993, v0.26.7)\n\n\u2022 Merged improvements and fixes for PR #4993.\n\n#posts",
+    "changelog": "### v0.26.7 (2026-10-31) - PR #4993\n- Merged improvements and fixes for PR #4993."
   }
 ]
