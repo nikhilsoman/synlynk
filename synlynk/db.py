@@ -2330,6 +2330,13 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE cost_entries ADD COLUMN turn_usage_json TEXT")
         conn.commit()
 
+    # Pre-dispatch estimate persistence for estimate-vs-actual drift tracking
+    # (v0.26.9). NULL (not 0) on existing rows: a bare 0 would read as a
+    # "perfect estimate" false positive in the drift comparison below.
+    _add_column_if_missing(conn, table="cost_entries", column="estimated_input_tokens", definition="INTEGER")
+    _add_column_if_missing(conn, table="cost_entries", column="estimated_output_tokens", definition="INTEGER")
+    _add_column_if_missing(conn, table="cost_entries", column="estimated_cost_usd", definition="REAL")
+
     # Keep this repair outside the schema-version gate.  A database can have
     # already reached the current version while a prior migration stopped
     # before adding this column (or while the schema was bootstrapped by an
