@@ -20,58 +20,41 @@ and what's still pending with an explicit blocker.
    `gh2139-still-open-correction`). Issue is confirmed still OPEN; tracking moved to `#2137`/
    `story-25872226`/`goal-bde24050`.
 
-## Blocked — found a data-integrity gap, not safe to push through blind
+## Blocked, then resolved — not a data-integrity bug, a landed architecture change this branch predated
 
 The remaining panel revisions were meant to land as `roadmap.md` phase updates (new publish-pipeline
 fix task ahead of v0.27.0, #2087/#2088 disposition note, v0.26.7/Companion-v2/Muse-in-v0.27.3
 deferral, v0.26.9/v0.26.10 marked non-gating, the statusline/Companion-v2 scope resolution for
-v0.26.8, a pre-v0.27.4 `synlynk selftest --live` task). Per CLAUDE.md, `roadmap.md` is generated
-from `state.db` and must not be hand-edited — the correct path is `synlynk roadmap add`/`update`.
+v0.26.8, a pre-v0.27.4 `synlynk selftest --live` task). This session initially found the canonical
+workspace db (`~/.synlynk/workspaces/synlynk/state.db`) had no `roadmap_phases` rows for
+v0.26.7–v0.27.5, even though this worktree's committed `project-docs/roadmap.md` has full detailed
+content for all of them, and treated that as a possible data-integrity gap worth stopping for.
 
-**Found before attempting any write:** the canonical workspace db
-(`~/.synlynk/workspaces/synlynk/state.db`, confirmed via `synlynk.get_state_db_path()` from this
-worktree) has **no `roadmap_phases` rows for v0.26.7, v0.26.8, v0.26.9, v0.26.10, or any v0.27.x**
-— the exact phases that are already committed, in full detail, in this worktree's `project-docs/
-roadmap.md`. The db's `roadmap_phases` table tops out at `v0.26.0`/`v0.27.0`(generic, no sub-phase
-detail)/`v0.28.0`, with a separate `v0.26.7` entry cluster whose actual titles (Gantt row
-virtualization, live summary cards, agentic cell semantics, Sentinel HUD grouping — all tagged
-`#497x`/`#267x`) don't match the "Jantt Timeline & Interactive GOVERNS Stage Mapping" content
-`roadmap.md` shows for v0.26.7 today. Since `_generate_roadmap_md()` (confirmed in `synlynk/db.py`)
-is the sole writer of `roadmap.md`, this means the committed file's v0.26.7–v0.27.5 content was
-**not generated from this db** — it diverged from a different workspace/db snapshot at some point
-before being committed, or this workspace's db has since been reset/partially migrated.
+**Root-caused 2026-10-31 (same session, user said "chase that down now"):** it is not a bug. gh:#2653
+landed on `main` today (spec/plan `313a74bc`, implementation `934e4922`/PR #2655, cutover commit
+`00520644`/PR #4964, merged 01:18) and **retires `roadmap.md`/`todo.md`/`costs.md` as git-tracked
+files entirely** — `state.db` is now the sole authority, with GitHub Milestones/Issues (via
+`synlynk gh sync-roadmap`) as the shareable projection; these files are local, generated-on-demand
+output only, added to `.gitignore`. This worktree's branch
+(`docs/claude/synlynk-com-platform-vision`) was cut before that merged and is now 11 commits behind
+`origin/main` on this exact file — the v0.26.7–v0.27.5 content in this worktree's `roadmap.md` is
+just a stale pre-cutover snapshot, not evidence of a corrupted or wrong db. The canonical db I
+queried was the right one all along; it was never supposed to contain those phases once GitHub
+Milestones/Issues became the real target.
 
-**Why I stopped rather than proceeding:** issuing `synlynk roadmap add --version v0.27.0 ...` etc.
-against this db would not correct or match the existing committed text — it would create new,
-disconnected phase rows that the next `_generate_roadmap_md()` regeneration could then silently
-overwrite or duplicate against the current file content. That's a worse outcome than leaving the
-file as-is for one more session. This looks like a fresh instance of the already-tracked
-`stray-local-state-db` pattern (11,000+ scattered per-job shards, [[stray-local-state-db]] memory,
-gh:#1831) rather than a one-off mistake — worth its own investigation, not a blind fix attempted
-mid-task.
+## Corrected next step
 
-## Recommended next step (not yet actioned, needs a decision)
-
-Before any further roadmap CLI writes in this repo:
-1. Confirm which db actually backed the most recent `roadmap.md` commit (`d01afabb`, 2026-10-24,
-   "attach platform-vision spec to v0.28.0 as phase") — check that commit's authoring
-   worktree/session if recoverable, or diff `roadmap_arcs`/`roadmap_phases` across the handful of
-   candidate workspace dbs under `~/.synlynk/workspaces/*/state.db`.
-2. Once the right db is confirmed (or this workspace's db is reconciled to match the committed
-   file), re-run the panel's roadmap revisions as real `synlynk roadmap add/update` calls:
-   - Insert a publish-pipeline fix-and-verify phase ahead of v0.27.0 (PyPI + VS Code/OpenVSX dry-run
-     tag, both green).
-   - Mark v0.26.7 (Jantt), Companion v2, and Muse-in-v0.27.3 `[deferred]` past the Developer
-     Preview; narrow v0.27.3's gate text to the four GA harnesses.
-   - Tag v0.26.9/v0.26.10 as non-gating parallel tracks.
-   - Resolve v0.26.8's `synlynk statusline` gap (fifth plan vs. shipped-elsewhere) and Companion v2
-     scope ambiguity directly in its phase notes.
-   - Add a `synlynk selftest --live` task ahead of v0.27.4.
-3. Until then, treat this addendum (plus the panel's own decision record) as the documented
-   intent — don't re-derive it from `roadmap.md`, which has not yet been updated to reflect it.
+1. Apply the panel's remaining roadmap revisions as GitHub Milestone/Issue updates via
+   `synlynk gh sync-roadmap`-compatible writes, not `synlynk roadmap add/update` CLI calls against
+   a local `roadmap.md` — that file is no longer the live artifact.
+2. Before any further `project-docs/` work in this worktree, merge/rebase `origin/main` to pick up
+   gh:#2653 so this branch isn't operating against files that no longer exist upstream.
+3. The stale `#2139`-closed text in this worktree's `roadmap.md` (flagged in `gh2139-still-open-
+   correction` memory) is moot now that the file is untracked — the memory correction already made
+   is the source of truth; no CLI fix against `roadmap.md` is needed or possible anymore.
 
 ---
 
-*Filed as a direct follow-up to "Yes, do all three" — item 3 partially complete (one story
-unblocked, revisions fully specified and committed to this addendum) with the remainder blocked on
-a newly-found db/roadmap.md divergence rather than silently pushed through.*
+*Filed as a direct follow-up to "Yes, do all three" — item 3's roadmap-phase revisions remain
+not-yet-applied, now correctly scoped to GitHub Milestones/Issues post-gh:#2653 rather than blocked
+on a (non-existent) db divergence.*
