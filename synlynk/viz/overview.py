@@ -24,11 +24,12 @@ def generate_overview_html(data: dict, port: int) -> str:
     def _sev_class(sev: str) -> str:
         return "sev-crit" if sev in ("CRITICAL", "CRIT") else "sev-warn"
 
-    def _action_buttons(scope: str, code: str, index=None) -> str:
+    def _action_buttons(scope: str, code: str, index=None, section="active") -> str:
         index_attr = f' data-alert-index="{index}"' if index is not None else ""
         attrs = (
             f'data-sentinel-scope="{html.escape(scope)}" '
-            f'data-sentinel-code="{html.escape(code)}"{index_attr}'
+            f'data-sentinel-code="{html.escape(code)}" '
+            f'data-sentinel-section="{html.escape(section)}"{index_attr}'
         )
         return (
             '<div class="sentinel-actions">'
@@ -39,7 +40,7 @@ def generate_overview_html(data: dict, port: int) -> str:
             '</div>'
         )
 
-    def _member_button(member: dict, index: int, code: str) -> str:
+    def _member_button(member: dict, index: int, code: str, section: str) -> str:
         sev = str(member.get("severity") or "WARNING").upper()
         pattern = member.get("pattern") or ""
         raw_msg = member.get("message") or "Sentinel alert active"
@@ -50,17 +51,17 @@ def generate_overview_html(data: dict, port: int) -> str:
             f'<span class="alert-pill">{html.escape(sev)}</span>'
             f'<span class="alert-msg">{html.escape(str(msg))}</span>'
             f'<span class="alert-ts">{html.escape(ts)}</span>'
-            f'</div>{_action_buttons("occurrence", code, index)}</div>'
+            f'</div>{_action_buttons("occurrence", code, index, section)}</div>'
         )
 
-    def _group_details(group: dict, start_index: int) -> tuple:
+    def _group_details(group: dict, start_index: int, section: str) -> tuple:
         code = str(group.get("code") or "")
         sev = str(group.get("severity") or "WARNING").upper()
         open_attr = "" if group.get("collapsed") else " open"
         buttons = []
         index = start_index
         for member in group.get("members") or []:
-            buttons.append(_member_button(member, index, code))
+            buttons.append(_member_button(member, index, code, section))
             index += 1
         hidden = int(group.get("hidden_member_count") or 0)
         more = f'<div class="sentinel-more">{hidden} more</div>' if hidden else ""
@@ -72,8 +73,8 @@ def generate_overview_html(data: dict, port: int) -> str:
             f'<span class="sentinel-count">{int(group.get("count") or 0)}</span>'
             f'<span class="alert-ts">first seen {html.escape(str(group.get("first_seen") or ""))}</span>'
             f'<span class="alert-ts">last seen {html.escape(str(group.get("last_seen") or ""))}</span>'
+            f'{_action_buttons("pattern", code, section=section)}'
             f'</summary>'
-            f'{_action_buttons("pattern", code)}'
             f'<div class="sentinel-members">{"".join(buttons)}{more}</div>'
             f'</details>'
         )
@@ -83,11 +84,11 @@ def generate_overview_html(data: dict, port: int) -> str:
         index = 0
         active_parts = []
         for group in hud["groups"]:
-            block, index = _group_details(group, index)
+            block, index = _group_details(group, index, "active")
             active_parts.append(block)
         acked_parts = []
         for group in hud["acked"]:
-            block, index = _group_details(group, index)
+            block, index = _group_details(group, index, "acked")
             acked_parts.append(block)
         alerts_html = f"""
         <div class="alerts-banner">
@@ -503,15 +504,17 @@ def generate_overview_html(data: dict, port: int) -> str:
             });
             panel.hidden = false;
           }
-          function groupFor(code) {
+          function groupFor(code, section) {
             const current = readHud();
-            return (current.groups || []).concat(current.acked || []).find(function (group) {
+            const groups = section === 'acked' ? (current.acked || []) : (current.groups || []);
+            return groups.find(function (group) {
               return String(group.code || '') === String(code || '');
             });
           }
           function identityFor(member, code) {
             const severity = String(member && member.severity || 'INFO').trim().toUpperCase();
-            return [severity === 'WARNING' ? 'WARN' : severity, String(code || '').trim().toUpperCase(), String(member && member.message || '').trim().replace(/\\s+/g, ' ')];
+            const identityCode = String(code || '').trim().toUpperCase() === 'UNPARSED' ? '' : String(code || '').trim().toUpperCase();
+            return [severity === 'WARNING' ? 'WARN' : severity, identityCode, String(member && member.message || '').trim().replace(/\\s+/g, ' ')];
           }
           function briefFor(group, member) {
             const members = member ? [member] : (group.members || []).slice(0, 20);
@@ -519,7 +522,7 @@ def generate_overview_html(data: dict, port: int) -> str:
             const agents = [];
             members.forEach(function (item) {
               const text = String(item.message || '') + ' ' + String(item.raw_line || '');
-              (text.match(/\bjob-[0-9a-f]+\b/gi) || []).forEach(function (jobId) {
+              (text.match(/\\bjob-[0-9a-f]+\\b/gi) || []).forEach(function (jobId) {
                 if (!jobIds.includes(jobId) && jobIds.length < 20) jobIds.push(jobId);
               });
               const agentMatch = String(item.raw_line || '').match(/Agent ['"]([^'"]+)['"] version changed:/);
@@ -559,7 +562,8 @@ def generate_overview_html(data: dict, port: int) -> str:
             const action = button.getAttribute('data-sentinel-action');
             const scope = button.getAttribute('data-sentinel-scope');
             const code = button.getAttribute('data-sentinel-code');
-            const group = groupFor(code);
+            const section = button.getAttribute('data-sentinel-section');
+            const group = groupFor(code, section);
             const indexValue = button.getAttribute('data-alert-index');
             const member = indexValue === null ? null : memberAt(Number(indexValue));
             if (!group) return;
@@ -601,7 +605,7 @@ def generate_overview_html(data: dict, port: int) -> str:
               if (!list) return;
               list.textContent = '';
               let alertIndex = 0;
-              function appendMembers(parent, group) {
+              function appendMembers(parent, group, section) {
                 (group.members || []).forEach(function (alert) {
                   const wrap = document.createElement('div');
                   wrap.className = 'sentinel-member';
@@ -612,11 +616,11 @@ def generate_overview_html(data: dict, port: int) -> str:
                   alertIndex += 1;
                   row.textContent = (alert.severity || '') + ' ' + (alert.pattern || '') + ' ' + (alert.message || '');
                   wrap.appendChild(row);
-                  appendActions(wrap, 'occurrence', group.code || '', currentIndex);
+                  appendActions(wrap, 'occurrence', group.code || '', currentIndex, section);
                   parent.appendChild(wrap);
                 });
               }
-              function appendActions(parent, scope, code, index) {
+              function appendActions(parent, scope, code, index, section) {
                 const actions = document.createElement('div');
                 actions.className = 'sentinel-actions';
                 [['inspect', 'Inspect'], ['ignore', 'Ignore'], ['issue', 'Raise issue'], ['investigate', 'Investigate']].forEach(function (pair) {
@@ -626,6 +630,7 @@ def generate_overview_html(data: dict, port: int) -> str:
                   button.setAttribute('data-sentinel-action', pair[0]);
                   button.setAttribute('data-sentinel-scope', scope);
                   button.setAttribute('data-sentinel-code', code);
+                  button.setAttribute('data-sentinel-section', section);
                   if (index !== null && index !== undefined) button.setAttribute('data-alert-index', String(index));
                   actions.appendChild(button);
                   });
@@ -638,9 +643,9 @@ def generate_overview_html(data: dict, port: int) -> str:
                 if (!group.collapsed) details.open = true;
                 const summary = document.createElement('summary');
                 summary.textContent = (group.severity || '') + ' ' + (group.code || '') + ' ' + String(group.count || 0);
+                appendActions(summary, 'pattern', group.code || '', null, 'active');
                 details.appendChild(summary);
-                appendActions(details, 'pattern', group.code || '', null);
-                appendMembers(details, group);
+                appendMembers(details, group, 'active');
                 list.appendChild(details);
               });
               const acked = document.createElement('details');
@@ -655,9 +660,9 @@ def generate_overview_html(data: dict, port: int) -> str:
                 if (!group.collapsed) details.open = true;
                 const summary = document.createElement('summary');
                 summary.textContent = (group.severity || '') + ' ' + (group.code || '');
+                appendActions(summary, 'pattern', group.code || '', null, 'acked');
                 details.appendChild(summary);
-                appendActions(details, 'pattern', group.code || '', null);
-                appendMembers(details, group);
+                appendMembers(details, group, 'acked');
                 acked.appendChild(details);
               });
               list.appendChild(acked);

@@ -8,6 +8,8 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
+import threading
 import time
 from typing import Optional
 from synlynk.observatory import build_job_observatory_snapshot
@@ -81,34 +83,51 @@ def load_sentinel_acks(path: str) -> dict:
     return result
 
 
+_ACK_LOCKS = {}
+_ACK_LOCKS_GUARD = threading.Lock()
+
+
+def _ack_lock(path: str):
+    key = os.path.abspath(path)
+    with _ACK_LOCKS_GUARD:
+        return _ACK_LOCKS.setdefault(key, threading.Lock())
+
+
 def save_sentinel_ack(path: str, row: dict, *, slug: str) -> dict:
     """Upsert one ack in a workspace-owned sidecar using atomic replace."""
-    data = load_sentinel_acks(path)
-    rows = list(data.get("acks") or [])
-    kind = str(row.get("kind") or "")
-
-    def _matches(existing: dict) -> bool:
-        if str(existing.get("kind") or "") != kind:
-            return False
-        if kind == "occurrence":
-            return list(existing.get("identity") or []) == list(row.get("identity") or [])
-        return str(existing.get("code") or "").upper() == str(row.get("code") or "").upper()
-
-    rows = [existing for existing in rows if not _matches(existing)]
-    rows.append(dict(row))
-    output = {"version": 1, "slug": str(slug), "acks": rows}
     parent = os.path.dirname(path)
     if parent:
         os.makedirs(parent, exist_ok=True)
-    temporary = f"{path}.tmp"
-    with open(temporary, "w", encoding="utf-8") as handle:
-        json.dump(output, handle, indent=2)
-        handle.write("\n")
-    os.replace(temporary, path)
-    return output
+    with _ack_lock(path):
+        data = load_sentinel_acks(path)
+        rows = list(data.get("acks") or [])
+        kind = str(row.get("kind") or "")
+
+        def _matches(existing: dict) -> bool:
+            if str(existing.get("kind") or "") != kind:
+                return False
+            if kind == "occurrence":
+                return list(existing.get("identity") or []) == list(row.get("identity") or [])
+            return str(existing.get("code") or "").upper() == str(row.get("code") or "").upper()
+
+        rows = [existing for existing in rows if not _matches(existing)]
+        rows.append(dict(row))
+        output = {"version": 1, "slug": str(slug), "acks": rows}
+        fd, temporary = tempfile.mkstemp(
+            prefix="sentinel-acks-", suffix=".tmp", dir=parent or "."
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(output, handle, indent=2)
+                handle.write("\n")
+            os.replace(temporary, path)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+        return output
 
 
-def raise_sentinel_issue(slug: str, group: dict) -> str:
+def raise_sentinel_issue(slug: str, repo_path: str, group: dict) -> str:
     """Create one bounded support issue for a sentinel group."""
     code = str(group.get("code") or "UNPARSED").upper()
     count = int(group.get("count") or 1)
@@ -143,7 +162,8 @@ def raise_sentinel_issue(slug: str, group: dict) -> str:
         "--body", "\n".join(body_lines),
     ]
     result = subprocess.run(
-        argv, capture_output=True, text=True, check=False, env=env
+        argv, capture_output=True, text=True, check=False, env=env,
+        cwd=str(repo_path),
     )
     if result.returncode != 0:
         raise RuntimeError("gh failed")
@@ -222,7 +242,7 @@ def group_workspace_sentinel_alerts(alerts, acks=None, *, member_cap: int = 50) 
         bucket = buckets.setdefault(key, [])
         bucket.append(alert)
 
-    def _hidden(alert, code):
+    def _hidden(alert, code, pattern_rows):
         identity = list(_alert_identity({
             "severity": alert.get("severity"),
             "code": code if code != "UNPARSED" else "",
@@ -235,7 +255,7 @@ def group_workspace_sentinel_alerts(alerts, acks=None, *, member_cap: int = 50) 
                 watermark = str(row.get("last_seen_at_ack") or "")
                 if not last or last <= watermark:
                     return True
-            if kind in ("pattern", "group") and str(row.get("code") or "").upper() == code:
+            if row in pattern_rows:
                 watermark = str(row.get("last_seen_at_ack") or "")
                 if not last or last <= watermark:
                     return True
@@ -261,13 +281,22 @@ def group_workspace_sentinel_alerts(alerts, acks=None, *, member_cap: int = 50) 
     groups = []
     acked = []
     for code, members in buckets.items():
-        visible = [m for m in members if not _hidden(m, code)]
-        hidden = [m for m in members if _hidden(m, code)]
+        pattern_rows = []
+        for row in ack_rows:
+            if row.get("kind") not in ("pattern", "group"):
+                continue
+            if str(row.get("code") or "").upper() != code:
+                continue
+            watermark = str(row.get("last_seen_at_ack") or "")
+            if not any(_last_seen(member) and _last_seen(member) > watermark for member in members):
+                pattern_rows.append(row)
+        visible = [m for m in members if not _hidden(m, code, pattern_rows)]
+        hidden = [m for m in members if _hidden(m, code, pattern_rows)]
         if visible:
             packed = _pack(code, visible, None)
             packed["collapsed"] = packed["count"] > 3
             groups.append(packed)
-        if hidden and not visible:
+        if hidden:
             packed = _pack(code, hidden, True)
             packed["collapsed"] = True
             acked.append(packed)

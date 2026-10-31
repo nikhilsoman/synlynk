@@ -138,6 +138,58 @@ def test_pattern_ack_moves_group_until_refire():
     assert refired["acked"] == []
 
 
+def test_pattern_refire_reactivates_every_member_in_group():
+    alerts = [
+        _alert("TOKEN_BLOAT", message="old", last="2026-10-31 12:00:00 UTC"),
+        _alert("TOKEN_BLOAT", message="new", last="2026-10-31 12:05:00 UTC"),
+    ]
+    acks = {"acks": [{
+        "kind": "pattern", "code": "TOKEN_BLOAT", "identity": None,
+        "acked_at": "2026-10-31T12:00:00Z",
+        "last_seen_at_ack": "2026-10-31 12:00:00 UTC", "issue_url": None,
+    }]}
+
+    hud = group_workspace_sentinel_alerts(alerts, acks)
+
+    assert hud["active_count"] == 2
+    assert [member["message"] for member in hud["groups"][0]["members"]] == ["old", "new"]
+    assert hud["acked"] == []
+
+
+def test_occurrence_ack_keeps_hidden_member_in_acked_with_active_sibling():
+    from synlynk.sentinel import _alert_identity
+
+    alerts = [_alert("X", message="hidden"), _alert("X", message="visible")]
+    identity = list(_alert_identity({
+        "severity": "WARNING", "code": "X", "message": "hidden",
+    }))
+    hud = group_workspace_sentinel_alerts(alerts, {"acks": [{
+        "kind": "occurrence", "code": "X", "identity": identity,
+        "last_seen_at_ack": "2026-10-31 12:00:00 UTC",
+    }]})
+
+    assert hud["active_count"] == 1
+    assert hud["acked_count"] == 1
+    assert hud["groups"][0]["members"][0]["message"] == "visible"
+    assert hud["acked"][0]["members"][0]["message"] == "hidden"
+
+
+def test_unparsed_occurrence_ack_uses_empty_code_identity():
+    from synlynk.sentinel import _alert_identity
+
+    alert = _alert("", message="legacy")
+    identity = list(_alert_identity({
+        "severity": "WARNING", "code": "", "message": "legacy",
+    }))
+    hud = group_workspace_sentinel_alerts([alert], {"acks": [{
+        "kind": "occurrence", "code": "UNPARSED", "identity": identity,
+        "last_seen_at_ack": "2026-10-31 12:00:00 UTC",
+    }]})
+
+    assert hud["groups"] == []
+    assert hud["acked"][0]["code"] == "UNPARSED"
+
+
 def test_acks_are_isolated_per_sidecar_file(tmp_path):
     a_path = tmp_path / "a.json"
     b_path = tmp_path / "b.json"
@@ -153,6 +205,31 @@ def test_acks_are_isolated_per_sidecar_file(tmp_path):
     assert load_sentinel_acks(str(b_path))["acks"] == []
     assert load_sentinel_acks(str(a_path))["slug"] == "one"
     assert json.loads(a_path.read_text())["slug"] == "one"
+
+
+def test_concurrent_ack_writes_preserve_both_rows(tmp_path):
+    path = tmp_path / "sentinel-acks.json"
+    barrier = threading.Barrier(2)
+    errors = []
+
+    def write(code):
+        try:
+            barrier.wait()
+            save_sentinel_ack(str(path), {
+                "kind": "pattern", "code": code, "identity": None,
+                "acked_at": "t", "last_seen_at_ack": "t", "issue_url": None,
+            }, slug="acme")
+        except Exception as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=write, args=(code,)) for code in ("A", "B")]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert {row["code"] for row in load_sentinel_acks(str(path))["acks"]} == {"A", "B"}
 
 
 def _workspace_server(tmp_path, monkeypatch):
@@ -235,6 +312,40 @@ def test_post_ack_requires_auth_then_writes_workspace_sidecar(tmp_path, monkeypa
     assert json.loads(sidecar.read_text())["slug"] == "acme"
 
 
+def test_post_ack_can_target_member_revealed_beyond_render_cap(tmp_path, monkeypatch):
+    from synlynk.local_http_auth import ensure_local_token
+    from synlynk.sentinel import _alert_identity
+
+    httpd, repo = _workspace_server(tmp_path, monkeypatch)
+    lines = [
+        f"- [WARNING] [2026-10-31 12:00:00 UTC] MANY: message {index}\n"
+        for index in range(51)
+    ]
+    (repo / ".synlynk" / "sentinel.md").write_text("".join(lines))
+    token = ensure_local_token()
+
+    def identity(index):
+        return list(_alert_identity({
+            "severity": "WARNING", "code": "MANY", "message": f"message {index}",
+        }))
+
+    try:
+        first_status, _ = _request(
+            httpd, "POST", "/w/acme/api/sentinel/ack", token=token,
+            payload={"scope": "occurrence", "code": "MANY", "identity": identity(0)},
+        )
+        revealed_status, _ = _request(
+            httpd, "POST", "/w/acme/api/sentinel/ack", token=token,
+            payload={"scope": "occurrence", "code": "MANY", "identity": identity(50)},
+        )
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+    assert first_status == 200
+    assert revealed_status == 200
+
+
 def test_raise_sentinel_issue_uses_support_role_without_host_auth(monkeypatch):
     calls = []
 
@@ -248,7 +359,7 @@ def test_raise_sentinel_issue_uses_support_role_without_host_auth(monkeypatch):
     monkeypatch.setattr(subprocess, "run", fake_run)
     group = group_workspace_sentinel_alerts([_alert("TOKEN_BLOAT", n=3)], {})["groups"][0]
 
-    issue_url = raise_sentinel_issue("acme", group)
+    issue_url = raise_sentinel_issue("acme", "/workspace/acme", group)
 
     argv, kwargs = calls[0]
     assert argv[:5] == ["synlynk", "gh", "--role", "support", "--"]
@@ -256,6 +367,7 @@ def test_raise_sentinel_issue_uses_support_role_without_host_auth(monkeypatch):
     assert argv[6] == "create"
     assert "[support] sentinel: TOKEN_BLOAT (3)" in argv
     assert "SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH" not in kwargs["env"]
+    assert kwargs["cwd"] == "/workspace/acme"
     assert issue_url.endswith("/issues/1")
 
 
@@ -263,7 +375,7 @@ def test_post_issue_returns_502_without_ack_on_gh_failure(tmp_path, monkeypatch)
     from synlynk.local_http_auth import ensure_local_token
     import synlynk.viz.data as viz_data
 
-    def fail_raise(slug, group):
+    def fail_raise(slug, repo_path, group):
         raise RuntimeError("gh failed")
 
     monkeypatch.setattr(viz_data, "raise_sentinel_issue", fail_raise)
@@ -288,7 +400,10 @@ def test_post_issue_success_records_url_on_pattern_ack(tmp_path, monkeypatch):
     import synlynk.viz.data as viz_data
 
     issue_url = "https://github.com/nikhilsoman/synlynk/issues/1"
-    monkeypatch.setattr(viz_data, "raise_sentinel_issue", lambda slug, group: issue_url)
+    monkeypatch.setattr(
+        viz_data, "raise_sentinel_issue",
+        lambda slug, repo_path, group: issue_url,
+    )
     httpd, repo = _workspace_server(tmp_path, monkeypatch)
     try:
         status, result = _request(
@@ -352,6 +467,32 @@ def test_overview_has_group_and_member_sentinel_actions_with_relative_fetches():
     assert "navigator.clipboard.writeText" in html
     assert "reproduce" not in html.lower()
     assert "shell" not in inline.lower()
+    assert "\\bjob-[0-9a-f]+\\b" in inline
+    assert "\x08" not in inline
+    group_markup = html.split('<details class="sentinel-group"', 1)[1].split("</summary>", 1)[0]
+    assert ">Ignore<" in group_markup
+
+
+def test_overview_actions_distinguish_active_and_acked_groups_with_same_code():
+    from synlynk.sentinel import _alert_identity
+    from synlynk.viz.overview import generate_overview_html
+
+    alerts = [_alert("X", message="hidden"), _alert("X", message="visible")]
+    identity = list(_alert_identity({
+        "severity": "WARNING", "code": "X", "message": "hidden",
+    }))
+    html = generate_overview_html({
+        "workspace": {"name": "acme"},
+        "telemetry": {"sentinel_alerts": alerts},
+        "sentinel_acks": {"acks": [{
+            "kind": "occurrence", "code": "X", "identity": identity,
+            "last_seen_at_ack": "2026-10-31 12:00:00 UTC",
+        }]},
+    }, 33333)
+
+    assert 'data-sentinel-section="active"' in html
+    assert 'data-sentinel-section="acked"' in html
+    assert "button.getAttribute('data-sentinel-section')" in html
 
 
 def test_overview_renders_groups_not_six_flat_rows():

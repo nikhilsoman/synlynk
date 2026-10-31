@@ -984,7 +984,7 @@ def build_workspace_routing_handler():
                             sentinel_path, active_only=True
                         )
                         hud = group_workspace_sentinel_alerts(
-                            alerts, load_sentinel_acks(acks_path)
+                            alerts, {}, member_cap=max(50, len(alerts))
                         )
                         groups = list(hud.get("groups") or []) + list(hud.get("acked") or [])
                         group = next((item for item in groups if item.get("code") == code), None)
@@ -1000,7 +1000,7 @@ def build_workspace_routing_handler():
                         if scope == "occurrence":
                             member = next((item for item in group.get("members") or [] if list(_alert_identity({
                                 "severity": item.get("severity"),
-                                "code": code,
+                                "code": "" if code == "UNPARSED" else code,
                                 "message": item.get("message") or "",
                             })) == identity), None)
                             if member is None:
@@ -1024,7 +1024,9 @@ def build_workspace_routing_handler():
                                     "members": [member],
                                 }
                             try:
-                                issue_url = raise_sentinel_issue(slug, issue_group)
+                                issue_url = raise_sentinel_issue(
+                                    slug, str(ctx.repo_path), issue_group
+                                )
                             except Exception:
                                 body = json.dumps({"ok": False, "error": "gh_failed"}).encode("utf-8")
                                 self.send_response(502)
