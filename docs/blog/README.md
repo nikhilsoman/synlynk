@@ -613,6 +613,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [532](./532-pr4981-memory-devlog-entry-for-gh-2653-pr-2655-.md) | PR #4981 — memory + devlog entry for gh:#2653 PR #2655 close-out session | [#4981](https://github.com/nikhilsoman/synlynk/pull/4981) | 2026-10-31 |
 | [533](./533-pr4976-vizor-gantt-uses-governs-columns-and-tas.md) | PR #4976 — Vizor Gantt uses GOVERNS columns and task rows | [#4976](https://github.com/nikhilsoman/synlynk/pull/4976) | 2026-10-31 |
 | [534](./534-pr4983-proxy-vizor-notes-through-w-slug-api-not.md) | PR #4983 — proxy Vizor notes through /w/<slug>/api/note | [#4983](https://github.com/nikhilsoman/synlynk/pull/4983) | 2026-10-31 |
+| [535](./535-pr4984-prepare-v0-26-7-vizor-interactive-write-.md) | PR #4984 — prepare v0.26.7 Vizor Interactive write-path | [#4984](https://github.com/nikhilsoman/synlynk/pull/4984) | 2026-10-31 |
 
 ## Per-PR Post Template
 

@@ -4606,5 +4606,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #4983 \u2014 proxy Vizor notes through /w/<slug>/api/note (PR #4983, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #4983.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-31) - PR #4983\n- Merged improvements and fixes for PR #4983."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/535-pr4984-prepare-v0-26-7-vizor-interactive-write-.md",
+    "title": "PR #4984 \u2014 prepare v0.26.7 Vizor Interactive write-path",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-31",
+    "pr": "#4984",
+    "version": "0.26.7",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #4984."
+    ],
+    "tweet": "\ud83d\ude80 PR #4984 \u2014 prepare v0.26.7 Vizor Interactive write-path (PR #4984, v0.26.7)\n\n\u2022 Merged improvements and fixes for PR #4984.\n\n#posts",
+    "changelog": "### v0.26.7 (2026-10-31) - PR #4984\n- Merged improvements and fixes for PR #4984."
   }
 ]
