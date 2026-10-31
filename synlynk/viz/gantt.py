@@ -969,6 +969,40 @@ function renderByGoal() {
   body.innerHTML = html;
 }
 
+function bindSummaryCards() {
+  const costs = (window.VIZOR_DATA && window.VIZOR_DATA.costs) || {};
+  const spend = Number(costs.total_usd || 0);
+  const spendEl = document.getElementById('spend-value');
+  const spendCard = document.getElementById('spend-card');
+  if (spendEl && spend > 0) {
+    spendEl.textContent = '$' + spend.toFixed(2);
+    if (spendCard) spendCard.style.display = '';
+  } else if (spendCard) {
+    spendCard.style.display = 'none';
+  }
+  const dates = (releases || []).map(r => r.target_date).filter(Boolean).sort();
+  const shipEl = document.getElementById('next-ship-value');
+  const shipCard = document.getElementById('ship-card');
+  if (shipEl && dates.length) {
+    shipEl.textContent = dates[0];
+    if (shipCard) shipCard.style.display = '';
+  } else if (shipCard) {
+    shipCard.style.display = 'none';
+  }
+  const names = new Set();
+  (releases || []).forEach(rel => (rel.stages || []).forEach(st => (st.tasks || []).forEach(t => {
+    if (String(t.status || '').toLowerCase() === 'active' && t.agent) names.add(String(t.agent));
+  })));
+  const agentEl = document.getElementById('agent-count');
+  const agentCard = document.getElementById('agent-card');
+  if (agentEl && names.size) {
+    agentEl.textContent = String(names.size);
+    if (agentCard) agentCard.style.display = '';
+  } else if (agentCard) {
+    agentCard.style.display = 'none';
+  }
+}
+
 function renderTimeline() {
   const wsSub = document.getElementById('ws-sub');
   const releaseCount = document.getElementById('dream-count');
@@ -984,6 +1018,7 @@ function renderTimeline() {
     if (statusWorkspaces) statusWorkspaces.textContent = '0 releases';
     renderGoals();
     renderVerified();
+    bindSummaryCards();
     return;
   }
 
@@ -1006,6 +1041,7 @@ function renderTimeline() {
   if (statusWorkspaces) statusWorkspaces.textContent = releaseCountValue + ' releases';
   renderGoals();
   renderVerified();
+  bindSummaryCards();
 
   const firstRel = releases[0];
   const firstStage = firstRel && Array.isArray(firstRel.stages) ? (firstRel.stages.find(s => String(s.status || '').toLowerCase() === 'active') || firstRel.stages[0]) : null;
@@ -1022,6 +1058,7 @@ function renderDreams() {
 
 setTheme(safeStorageGet('vizor-theme', 'light'));
 renderTimeline();
+bindSummaryCards();
 """.replace("__PORT__", str(port))
 
     return f"""<!DOCTYPE html>
@@ -1122,9 +1159,9 @@ renderTimeline();
 
   <div class="srow">
     <div class="sc teal editable"><div class="sl">Releases tracked</div><div class="sv" id="dream-count">0</div><div class="ss" id="dream-sub">0 stages</div><div class="wow">⚡ live</div><div class="pencil-wrap note-none" onclick="openNote('summary','Summary');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
-    <div class="sc blue editable"><div class="sl">Active agents</div><div class="sv">3</div><div class="aa-stack" style="margin-top:6px"><div class="aa aa-agy">A</div><div class="aa aa-codex">Co</div><div class="aa aa-grok">G</div></div><div class="pencil-wrap note-none" onclick="openNote('agents','Agents');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
-    <div class="sc org editable"><div class="sl">Total spend</div><div class="sv">$28.50</div><div class="ss">of ~$71 · 40% in</div><div class="pencil-wrap note-none" onclick="openNote('cost','Total spend');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
-    <div class="sc purp editable"><div class="sl">Next ship</div><div class="sv">Jul 24</div><div class="ss">Module Extraction → main</div><div class="pencil-wrap note-none" onclick="openNote('ship','Next ship');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
+    <div class="sc blue editable" id="agent-card"><div class="sl">Active agents</div><div class="sv" id="agent-count"></div><div class="aa-stack" id="agent-stack" style="margin-top:6px"></div><div class="pencil-wrap note-none" onclick="openNote('agents','Agents');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
+    <div class="sc org editable" id="spend-card"><div class="sl">Total spend</div><div class="sv" id="spend-value"></div><div class="ss" id="spend-sub"></div><div class="pencil-wrap note-none" onclick="openNote('cost','Total spend');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
+    <div class="sc purp editable" id="ship-card"><div class="sl">Next ship</div><div class="sv" id="next-ship-value"></div><div class="ss" id="next-ship-sub"></div><div class="pencil-wrap note-none" onclick="openNote('ship','Next ship');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
     <div class="sc teal editable" onclick="toggleGoalsPanel()" style="cursor:pointer;"><div class="sl">Business Goals</div><div class="sv" id="goal-count">0</div><div class="ss" id="goal-sub">0 active</div><div class="pencil-wrap note-none" onclick="openNote('goals','Business Goals');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
     <div class="sc teal editable" onclick="toggleVerifiedPanel()" style="cursor:pointer;"><div class="sl">Spec Verified</div><div class="sv" id="spec-verified-count">0</div><div class="ss" id="spec-verified-sub">0 verified PRs</div></div>
   </div>

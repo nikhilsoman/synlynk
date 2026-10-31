@@ -51,3 +51,12 @@ def test_gantt_js_uses_stage_columns():
     assert "date-chip" in html
     assert "tb-blocked" in html
     assert "workspace_views" not in html
+
+
+def test_gantt_html_has_no_hardcoded_spend_or_jul24():
+    html = generate_gantt_html(_mini_gantt(), 33333)
+    assert "$28.50" not in html
+    assert "Jul 24" not in html
+    assert 'id="spend-value"' in html
+    assert 'id="next-ship-value"' in html
+    assert 'id="agent-count"' in html
