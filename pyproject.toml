@@ -40,8 +40,8 @@ Repository = "https://github.com/nikhilsoman/synlynk"
 "Bug Tracker" = "https://github.com/nikhilsoman/synlynk/issues"
 Changelog = "https://github.com/nikhilsoman/synlynk/blob/main/CHANGELOG.md"
 
-[project.scripts]
-synlynk = "synlynk:main"
+[tool.setuptools]
+script-files = ["scripts/synlynk"]
 
 [tool.setuptools.packages.find]
 where = ["."]
