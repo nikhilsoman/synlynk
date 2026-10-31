@@ -11,6 +11,9 @@ from synlynk.vizor_daemon import build_workspace_routing_handler
 
 
 def test_concurrent_multi_workspace_and_root_cwd(tmp_path, monkeypatch):
+    from synlynk.local_http_auth import TOKEN_HEADER, ensure_local_token
+
+    auth_token = ensure_local_token()
     cache_dir = tmp_path / "cache"
     cache_dir.mkdir()
     monkeypatch.setattr("synlynk.vizor_daemon.CACHE_ROOT", cache_dir)
@@ -74,7 +77,7 @@ def test_concurrent_multi_workspace_and_root_cwd(tmp_path, monkeypatch):
         req = Request(
             f"http://127.0.0.1:{port}/w/alpha/api/board/stage",
             data=json.dumps({"story_id": "alpha-1", "stage": "execute"}).encode(),
-            headers={"Content-Type": "application/json"}
+            headers={"Content-Type": "application/json", TOKEN_HEADER: auth_token},
         )
         with urlopen(req) as r:
             assert r.status == 200

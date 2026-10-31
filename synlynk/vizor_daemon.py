@@ -910,6 +910,27 @@ def build_workspace_routing_handler():
                             self.wfile.write(body)
                         return False
 
+                    if api_route == "note" and self.command == "POST":
+                        from synlynk.viz.server import save_viz_note, _pkg
+
+                        length = int(self.headers.get("Content-Length", 0) or 0)
+                        payload = json.loads(self.rfile.read(length) or b"{}")
+                        try:
+                            result = save_viz_note(_pkg().VIZ_NOTES_PATH, payload)
+                        except ValueError as exc:
+                            body = json.dumps({"ok": False, "error": str(exc)}).encode("utf-8")
+                            self.send_response(400)
+                            self.send_header("Content-Type", "application/json")
+                            self.end_headers()
+                            self.wfile.write(body)
+                            return False
+                        body = json.dumps(result).encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json")
+                        self.end_headers()
+                        self.wfile.write(body)
+                        return False
+
                     if api_route == "daemon/stream" and self.command == "GET":
                         from synlynk.viz.server import serve_daemon_stream
 
@@ -975,6 +996,12 @@ def build_workspace_routing_handler():
                 super().do_HEAD()
 
         def do_POST(self):
+            from synlynk.local_http_auth import authorize_local_request
+
+            ok, code, message = authorize_local_request(self.headers)
+            if not ok:
+                self.send_error(code, message)
+                return
             if self._route_path():
                 super().do_POST()
 

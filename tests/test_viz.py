@@ -700,7 +700,7 @@ def test_generate_gantt_html_renders_dreams_and_notes():
     assert "Gantt view" in html
     assert "note-info" in html
     assert "note-urgent" in html
-    assert "fetch('/note'" in html
+    assert "fetch('api/note'" in html
     assert "vizorAuthHeaders" in html
     assert '<div class="sidenav">' not in html
     assert '<div class="view-tabs">' not in html

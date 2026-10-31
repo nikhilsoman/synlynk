@@ -17,6 +17,29 @@ def _pkg():
     import synlynk.viz as viz
     return viz
 
+
+def save_viz_note(notes_path, payload: dict) -> dict:
+    """Write one note into VIZ_NOTES_PATH (existing sidecar, not a second store)."""
+    notes_path = Path(notes_path)
+    notes = {}
+    if notes_path.exists():
+        try:
+            notes = json.loads(notes_path.read_text())
+        except json.JSONDecodeError:
+            notes = {}
+    element_id = (payload or {}).get("id", "")
+    if not element_id:
+        raise ValueError("Missing id")
+    notes[element_id] = {
+        "text": payload.get("text", ""),
+        "tags": payload.get("tags", []),
+        "state": payload.get("state", "info"),
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    notes_path.parent.mkdir(parents=True, exist_ok=True)
+    notes_path.write_text(json.dumps(notes, indent=2))
+    return {"ok": True}
+
 class VizorHandler(http.server.SimpleHTTPRequestHandler):
     """Serves viz-cache/ and handles Vizor POST routes."""
 
@@ -608,26 +631,12 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         except json.JSONDecodeError:
             self.send_error(400, "Invalid JSON")
             return
-        notes = {}
-        if os.path.exists(_pkg().VIZ_NOTES_PATH):
-            with open(_pkg().VIZ_NOTES_PATH) as f:
-                try:
-                    notes = json.load(f)
-                except json.JSONDecodeError:
-                    notes = {}
-        element_id = note.get("id", "")
-        if not element_id:
-            self.send_error(400, "Missing id")
+        try:
+            result = save_viz_note(_pkg().VIZ_NOTES_PATH, note)
+        except ValueError as exc:
+            self.send_error(400, str(exc))
             return
-        notes[element_id] = {
-            "text": note.get("text", ""),
-            "tags": note.get("tags", []),
-            "state": note.get("state", "info"),
-            "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        }
-        with open(_pkg().VIZ_NOTES_PATH, "w") as f:
-            json.dump(notes, f, indent=2)
-        self._send_json_ok({"ok": True})
+        self._send_json_ok(result)
 
     def _handle_dispatch(self, payload: dict) -> dict:
         from synlynk import uxcore
