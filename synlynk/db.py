@@ -1752,6 +1752,8 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE capability_watch ADD COLUMN last_sweep_at TEXT")
         if "sweep_job_count" not in capability_watch_cols:
             conn.execute("ALTER TABLE capability_watch ADD COLUMN sweep_job_count INTEGER NOT NULL DEFAULT 0")
+        if "last_quota_calibration_at" not in capability_watch_cols:
+            conn.execute("ALTER TABLE capability_watch ADD COLUMN last_quota_calibration_at TEXT")
         conn.execute(
             "INSERT OR IGNORE INTO capability_watch (id, last_probe_at, last_green_probe_at, "
             "last_smoke_test_at, last_green_smoke_at, last_sweep_at, sweep_job_count) "

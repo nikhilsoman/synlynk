@@ -1100,3 +1100,83 @@ def calibrate_and_update_quota(
         if own_conn and conn is not None:
             conn.close()
     return cal
+
+
+def is_quota_calibration_stale(conn, threshold_hours: int = 24) -> bool:
+    """Mirrors capability_watch.is_probe_stale's pattern for the new column."""
+    row = conn.execute(
+        "SELECT last_quota_calibration_at FROM capability_watch WHERE id = 1"
+    ).fetchone()
+    last_raw = row[0] if row else None
+    if not last_raw:
+        return True
+    try:
+        last = datetime.fromisoformat(last_raw.replace("Z", "+00:00"))
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=UTC)
+    except ValueError:
+        return True
+    return (datetime.now(UTC) - last).total_seconds() > threshold_hours * 3600
+
+
+def maybe_calibrate_quota(conn=None) -> list[dict[str, Any]]:
+    """Automatically re-calibrates quota ceilings for every harness/window
+    that has at least two quota_snapshots rows, deriving delta_tokens from
+    cost_entries actual usage between those two snapshot timestamps instead
+    of requiring a human to supply p1_pct/p2_pct/delta_tokens by hand.
+
+    Also refreshes the quota_burn_rate_weights cache (Task 3) in the same
+    pass, and stamps capability_watch.last_quota_calibration_at so
+    is_quota_calibration_stale() reflects this run. Returns one result dict
+    per harness/window pair attempted.
+    """
+    own_conn = conn is None
+    if own_conn:
+        conn = _pkg("_get_db")()
+    try:
+        pairs = conn.execute(
+            "SELECT DISTINCT harness, window FROM quota_snapshots"
+        ).fetchall()
+        results: list[dict[str, Any]] = []
+        for harness, window in pairs:
+            snaps = conn.execute(
+                "SELECT used_percent, captured_at FROM quota_snapshots "
+                "WHERE harness = ? AND window = ? ORDER BY captured_at DESC, id DESC LIMIT 2",
+                (harness, window),
+            ).fetchall()
+            if len(snaps) < 2:
+                continue
+            p2_pct, p2_at = snaps[0]
+            p1_pct, p1_at = snaps[1]
+            delta_row = conn.execute(
+                "SELECT COALESCE(SUM(COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0)), 0) "
+                "FROM cost_entries WHERE lower(harness) = lower(?) "
+                "AND recorded_at > ? AND recorded_at <= ?",
+                (harness, p1_at, p2_at),
+            ).fetchone()
+            delta_tokens = int(delta_row[0] or 0)
+            if delta_tokens <= 0:
+                continue
+            cal = calibrate_and_update_quota(
+                harness, window, p1_pct=p1_pct, p2_pct=p2_pct,
+                delta_tokens=delta_tokens, conn=conn,
+            )
+            results.append({"harness": harness, "window": window, **cal})
+
+        refresh_burn_rate_weights(conn=conn)
+
+        conn.execute(
+            "UPDATE capability_watch SET last_quota_calibration_at = ? WHERE id = 1",
+            (datetime.now(UTC).isoformat(),)
+        )
+        if conn.execute("SELECT changes()").fetchone()[0] == 0:
+            conn.execute(
+                "INSERT INTO capability_watch (id, last_quota_calibration_at) VALUES (1, ?)",
+                (datetime.now(UTC).isoformat(),)
+            )
+        conn.commit()
+        return results
+    finally:
+        if own_conn:
+            conn.close()
+
