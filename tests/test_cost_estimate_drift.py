@@ -57,8 +57,8 @@ def test_insert_cost_row_populates_estimate_from_reservation(tmp_path, monkeypat
             "SELECT estimated_input_tokens, estimated_output_tokens, estimated_cost_usd "
             "FROM cost_entries WHERE job_id='job-drift-1'"
         ).fetchone()
-        assert row[0] == 10_000
-        assert row[1] == 0
+        assert row[0] == 7_000
+        assert row[1] == 3_000
         assert row[2] is not None and row[2] > 0.0
     finally:
         conn.close()
@@ -121,4 +121,40 @@ def test_insert_cost_row_no_alert_within_threshold(tmp_path, monkeypatch):
 
     sentinel_path = tmp_path / ".synlynk" / "sentinel.md"
     assert not sentinel_path.exists() or "COST_ESTIMATE_DRIFT" not in sentinel_path.read_text()
+
+
+def test_insert_cost_row_estimate_uses_70_30_split_not_all_input(tmp_path, monkeypatch):
+    db_file = tmp_path / "state.db"
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_file))
+    conn = sl._get_db(str(db_file))
+    try:
+        _seed_reservation(conn, "job-drift-4", 10_000)
+    finally:
+        conn.close()
+
+    _insert_cost_row(
+        session_date="2026-10-31",
+        agent="claude",
+        harness="claude",
+        model="claude-opus-4-8",
+        input_tokens=7_000,
+        output_tokens=3_000,
+        cost_source="actual",
+        total_cost_usd=0.19,
+        actual_usd=0.19,
+        job_id="job-drift-4",
+    )
+
+    conn = sl._get_db(str(db_file))
+    try:
+        row = conn.execute(
+            "SELECT estimated_input_tokens, estimated_output_tokens, estimated_cost_usd "
+            "FROM cost_entries WHERE job_id='job-drift-4'"
+        ).fetchone()
+        assert row[0] == 7_000
+        assert row[1] == 3_000
+        assert row[2] is not None and row[2] > 0.0
+    finally:
+        conn.close()
+
 

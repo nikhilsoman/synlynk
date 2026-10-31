@@ -2502,8 +2502,12 @@ def _insert_cost_row(
             except sqlite3.Error:
                 res_row = None
             if res_row and res_row[0] is not None:
-                estimated_input_tokens = int(res_row[0])
-                estimated_output_tokens = 0
+                _reserved_tokens = int(res_row[0])
+                # Assume ~70% input / 30% output, matching the same ranking-time
+                # assumption used in quota.py::_estimate_story_cost_usd — a pre-dispatch
+                # reservation is a single blended token count with no input/output split.
+                estimated_input_tokens = int(_reserved_tokens * 0.7)
+                estimated_output_tokens = _reserved_tokens - estimated_input_tokens
                 _param_api_equivalent_usd = api_equivalent_usd
                 from synlynk.costs import api_equivalent_usd
                 estimated_cost_usd = api_equivalent_usd(
