@@ -73,3 +73,25 @@ def test_resolve_burn_rate_multiplier_computes_ratio_at_threshold(tmp_path):
         assert multiplier == 20_000 / 12_000
     finally:
         conn.close()
+
+
+
+from synlynk.quota import refresh_burn_rate_weights
+
+
+def test_refresh_burn_rate_weights_writes_cache_row(tmp_path):
+    db_file = tmp_path / "state.db"
+    conn = sl._get_db(str(db_file))
+    try:
+        _seed_cost_entries(conn, [("codex", "gpt-5-codex", 8_000, 2_000)] * 6)
+        _seed_cost_entries(conn, [("codex", "gpt-5-codex-mini", 2_000, 500)] * 6)
+        refresh_burn_rate_weights(conn=conn)
+        row = conn.execute(
+            "SELECT multiplier, sample_count FROM quota_burn_rate_weights "
+            "WHERE harness='codex' AND model='gpt-5-codex'"
+        ).fetchone()
+        assert row is not None
+        assert row[1] == 6
+        assert row[0] == 10_000 / 6_250  # (10000*6 + 2500*6) / 12 = 6250
+    finally:
+        conn.close()

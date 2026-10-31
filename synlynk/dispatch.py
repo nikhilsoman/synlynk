@@ -4780,9 +4780,19 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             # Ad-hoc call with no story estimate: rough heuristic, ~4 chars/token.
             _est_tokens = max(1000, len(task) // 4)
 
+        # Weight the raw token estimate by this (harness, model)'s historical
+        # burn rate so a heavier model correctly predicts eating more of the
+        # pooled 5h/weekly window than the same token count on a lighter one.
+        cached_multiplier_fn = _pkg("cached_burn_rate_multiplier")
+        _weighted_est_tokens = _est_tokens
+        if cached_multiplier_fn:
+            _weighted_est_tokens = int(round(
+                _est_tokens * cached_multiplier_fn(agent, model, dconn)
+            ))
+
         quota_status_fn = _pkg("_quota_status_for_agent")
         qstatus = (
-            quota_status_fn(dconn, agent, estimated_tokens=_est_tokens)
+            quota_status_fn(dconn, agent, estimated_tokens=_weighted_est_tokens)
             if quota_status_fn
             else {"status": "unknown", "degraded": True}
         )
@@ -4841,7 +4851,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 open_reservation_fn(
                     dconn,
                     agent,
-                    _est_tokens,
+                    _weighted_est_tokens,
                     scope=_scope,
                     scope_id=os.environ.get("SYNLYNK_SCHEDULE_RUN_ID"),
                     job_id=job_id,

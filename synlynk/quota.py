@@ -490,6 +490,54 @@ def resolve_burn_rate_multiplier(harness: str, model: str, conn=None) -> float:
             conn.close()
 
 
+def refresh_burn_rate_weights(conn=None) -> int:
+    """Recomputes and caches resolve_burn_rate_multiplier() for every
+    (harness, model) pair with enough samples. Returns the number of rows
+    written. Called from the daemon's quota calibration tick (Task 7).
+    """
+    own_conn = conn is None
+    if own_conn:
+        conn = _pkg("_get_db")()
+    try:
+        pairs = conn.execute(
+            "SELECT harness, model, COUNT(*) FROM cost_entries "
+            "WHERE harness IS NOT NULL AND model IS NOT NULL "
+            "GROUP BY lower(harness), model "
+            "HAVING COUNT(*) >= ?",
+            (_BURN_RATE_MIN_SAMPLES,),
+        ).fetchall()
+        written = 0
+        for harness, model, sample_count in pairs:
+            multiplier = resolve_burn_rate_multiplier(harness, model, conn=conn)
+            conn.execute(
+                "INSERT INTO quota_burn_rate_weights (harness, model, multiplier, sample_count, updated_at) "
+                "VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) "
+                "ON CONFLICT(harness, model) DO UPDATE SET "
+                "multiplier=excluded.multiplier, sample_count=excluded.sample_count, "
+                "updated_at=excluded.updated_at",
+                (harness, model, multiplier, sample_count),
+            )
+            written += 1
+        conn.commit()
+        return written
+    finally:
+        if own_conn:
+            conn.close()
+
+
+def cached_burn_rate_multiplier(harness: str, model: Optional[str], conn) -> float:
+    """Reads the cached multiplier for dispatch-time use (no live recompute,
+    since dispatch is latency-sensitive). 1.0 if no cached row exists yet.
+    """
+    if not model:
+        return 1.0
+    row = conn.execute(
+        "SELECT multiplier FROM quota_burn_rate_weights WHERE lower(harness) = lower(?) AND model = ?",
+        (harness, model),
+    ).fetchone()
+    return float(row[0]) if row else 1.0
+
+
 def _upsert_agent_quota(
     agent: str,
     quota_type: str,
