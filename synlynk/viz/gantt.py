@@ -239,6 +239,9 @@ body { font-family:'SF Mono','JetBrains Mono',monospace; background:var(--bg); c
 [data-theme="dark"] .tb-active { background:linear-gradient(90deg,#1a4a2e,#2a6a3e,#1a4a2e);background-size:200% 100%; }
 .tb-queued { background:var(--bg3);border-color:var(--border);color:var(--text3);opacity:.55; }
 .tb-blocked{ background:#fef2f2;border-color:#fca5a5;color:#dc2626; }
+.tcell { min-width:120px; border-right:1px solid var(--border2); }
+.tb { position: relative; left: auto; }
+.date-chip { font-size:10px; padding:1px 6px; border-radius:4px; background:var(--bg3); margin-left:8px; }
 
 /* Status dot */
 .st-dot { width:7px;height:7px;border-radius:50%;flex-shrink:0; }
@@ -599,65 +602,67 @@ async function saveNote() {
   closeNote();
 }
 
-function renderTask(task, releaseId, stageKey, index, total) {
+function renderTask(task, columns, occupyingKey) {
   const status = String(task.status || 'queued').trim().toLowerCase();
   const tbClass = status === 'done' ? 'tb-done' : status === 'active' ? 'tb-active' : status === 'blocked' ? 'tb-blocked' : 'tb-queued';
   const dotClass = status === 'done' ? 'done' : status === 'active' ? 'active' : status === 'blocked' ? 'blocked' : 'queued';
-  const note = task.note || null;
+  const note = task.note || noteData(task.id) || null;
   const noteClass = noteStateClass(note && note.state);
-  const leftPct = total > 0 ? ((index / total) * 100).toFixed(1) : '0.0';
-  const widthPct = total > 0 ? ((0.85 / total) * 100).toFixed(1) : '100.0';
   const agent = String(task.agent || '').trim().toLowerCase();
   const agentClass = agent === 'agy' ? 'aa-agy' : agent === 'codex' ? 'aa-codex' : agent === 'grok' ? 'aa-grok' : 'aa-claude';
   const agentLabel = agent === 'codex' ? 'Co' : agent === 'grok' ? 'G' : agent === 'claude' ? 'C' : 'A';
+  const cells = columns.map((key) => {
+    if (key !== occupyingKey) return '<div class="tcell"></div>';
+    return `<div class="tcell occupying"><div class="tb ${tbClass}" style="width:100%"><div class="st-dot ${dotClass}"></div></div></div>`;
+  }).join('');
+  const fullName = escapeHtml(task.name || task.id || 'Task');
   return `
-    <div class="trow editable" style="grid-template-columns:260px repeat(${total || 1}, 1fr)" title="ID: ${escapeHtml(task.id)}">
+    <div class="trow editable" style="grid-template-columns:260px repeat(${columns.length}, 120px)" title="ID: ${escapeHtml(task.id || '')}">
       <div class="tlbl">
         <div class="aa ${agentClass}" title="${escapeHtml(task.agent || 'agent')}">${agentLabel}</div>
-        <div class="tname">${escapeHtml(task.name || 'Task')}</div>
-        <div class="pencil-wrap ${noteClass}" data-note-target="${escapeHtml(task.id)}" data-note-label="${escapeHtml(task.name || task.id)}" onclick="openNoteFromEl(this);event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div>
+        <div class="tname" title="${fullName}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fullName}</div>
+        <div class="pencil-wrap ${noteClass}" data-note-target="${escapeHtml(task.id)}" data-note-label="${fullName}" onclick="openNoteFromEl(this);event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div>
       </div>
-      <div class="tbars" style="grid-column:2/span ${total || 1}">
-        <div class="tb ${tbClass}" style="left:${leftPct}%;width:${widthPct}%">
-          <div class="st-dot ${dotClass}"></div>
-          <span class="tb-name">${escapeHtml(task.name || 'Task')}</span>
-          <div class="tb-right">
-            <div class="aa sm ${agentClass}" title="${escapeHtml(task.agent || 'agent')}">${agentLabel}</div>
-            <span class="tb-cost">${escapeHtml(status)}${note && note.text ? ' · note' : ''}</span>
-          </div>
-        </div>
-      </div>
+      ${cells}
     </div>`;
 }
 
 function renderDrill(releaseId, stageKey) {
   const rel = releases.find(d => d.id === releaseId);
-  const stage = rel && Array.isArray(rel.stages) ? rel.stages.find(s => s.key === stageKey) : null;
   const dr = document.getElementById('drill-' + releaseId);
   if (!dr) return;
-  if (!stage) {
-    dr.innerHTML = `<div style="padding:12px 14px;font-size:11px;color:var(--text3)">No tasks defined. <span style="color:var(--accent);cursor:pointer">📝 Add note</span></div>`;
+  const stages = rel && Array.isArray(rel.stages) ? rel.stages : [];
+  const columns = stages.map(s => s.key);
+  const wip = {};
+  columns.forEach(k => { wip[k] = 0; });
+  const rows = [];
+  stages.forEach(stage => {
+    (stage.tasks || []).forEach(task => {
+      const status = String(task.status || 'queued').trim().toLowerCase();
+      if (status === 'active') wip[stage.key] = (wip[stage.key] || 0) + 1;
+      rows.push({ task, occupying: stage.key });
+    });
+  });
+  if (!columns.length) {
+    dr.innerHTML = `<div style="padding:12px 14px;font-size:11px;color:var(--text3)">No stages defined.</div>`;
     return;
   }
-
-  const tasks = Array.isArray(stage.tasks) ? stage.tasks : [];
-  const total = Math.max(tasks.length, 1);
-  const gridCols = `260px repeat(${total}, 1fr)`;
-  const headerCols = tasks.map((task, idx) => `<div class="zoom-col">${escapeHtml(task.name || ('Task ' + (idx + 1)))}</div>`).join('');
-  const taskRows = tasks.map((task, idx) => renderTask(task, releaseId, stageKey, idx, total)).join('');
-  const pillKey = classForStage(stageKey);
-  const lastLabel = tasks.length > 1 ? tasks[tasks.length - 1].name : '';
+  const gridCols = `260px repeat(${columns.length}, 120px)`;
+  const headerCols = columns.map(key => `<div class="zoom-col">${escapeHtml(key)} · ${wip[key] || 0}</div>`).join('');
+  const dateChip = rel && rel.target_date ? `<span class="date-chip">${escapeHtml(rel.target_date)}</span>` : '';
+  window._ganttDrillRows = window._ganttDrillRows || {};
+  window._ganttDrillRows[releaseId] = { rows, columns };
+  const taskRows = rows.map(({ task, occupying }) => renderTask(task, columns, occupying)).join('');
   dr.innerHTML = `
     <div class="drill-header">
-      <div class="stage-pill" style="${STAGE_STYLE[pillKey] || STAGE_STYLE.plan}">${escapeHtml(iconForStage(stageKey))} stage</div>
-      <div class="drill-ttl">${escapeHtml(releaseId.toUpperCase())} — ${tasks.length} task${tasks.length !== 1 ? 's' : ''} · zoomed to stage window</div>
+      <div class="drill-ttl">${escapeHtml(String(releaseId).toUpperCase())} — ${rows.length} task${rows.length !== 1 ? 's' : ''} ${dateChip}</div>
       <div class="drill-close" onclick="closeDrill('${escapeHtml(releaseId)}')">✕ collapse</div>
     </div>
-    <div class="zoom-grid" style="grid-template-columns:${gridCols}">
-      <div class="zoom-lbl">↳ zoomed: ${escapeHtml(stage.key || stageKey)}${lastLabel ? ' → ' + escapeHtml(lastLabel) : ''}</div>
+    <div class="zoom-grid" style="grid-template-columns:${gridCols};overflow-x:auto">
+      <div class="zoom-lbl">stages</div>
       ${headerCols}
     </div>
-    ${taskRows}`;
+    <div class="drill-body" id="drill-body-${escapeHtml(releaseId)}" style="max-height:420px;overflow:auto">${taskRows}</div>`;
 }
 
 function zoomStage(releaseId, stageKey, barEl) {
