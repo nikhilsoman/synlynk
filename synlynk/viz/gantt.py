@@ -239,6 +239,9 @@ body { font-family:'SF Mono','JetBrains Mono',monospace; background:var(--bg); c
 [data-theme="dark"] .tb-active { background:linear-gradient(90deg,#1a4a2e,#2a6a3e,#1a4a2e);background-size:200% 100%; }
 .tb-queued { background:var(--bg3);border-color:var(--border);color:var(--text3);opacity:.55; }
 .tb-blocked{ background:#fef2f2;border-color:#fca5a5;color:#dc2626; }
+.tcell { min-width:120px; border-right:1px solid var(--border2); }
+.tb { position: relative; left: auto; }
+.date-chip { font-size:10px; padding:1px 6px; border-radius:4px; background:var(--bg3); margin-left:8px; }
 
 /* Status dot */
 .st-dot { width:7px;height:7px;border-radius:50%;flex-shrink:0; }
@@ -478,7 +481,7 @@ function applyGovernanceRelayEvent(event) {
 
 if (typeof EventSource !== 'undefined') {
   try {
-    const relay = new EventSource('/events');
+    const relay = new EventSource('api/daemon/stream');
     relay.onmessage = (message) => {
       try { applyGovernanceRelayEvent(JSON.parse(message.data)); } catch (err) {}
     };
@@ -599,65 +602,90 @@ async function saveNote() {
   closeNote();
 }
 
-function renderTask(task, releaseId, stageKey, index, total) {
+function renderTask(task, columns, occupyingKey) {
   const status = String(task.status || 'queued').trim().toLowerCase();
   const tbClass = status === 'done' ? 'tb-done' : status === 'active' ? 'tb-active' : status === 'blocked' ? 'tb-blocked' : 'tb-queued';
   const dotClass = status === 'done' ? 'done' : status === 'active' ? 'active' : status === 'blocked' ? 'blocked' : 'queued';
-  const note = task.note || null;
+  const note = task.note || noteData(task.id) || null;
   const noteClass = noteStateClass(note && note.state);
-  const leftPct = total > 0 ? ((index / total) * 100).toFixed(1) : '0.0';
-  const widthPct = total > 0 ? ((0.85 / total) * 100).toFixed(1) : '100.0';
   const agent = String(task.agent || '').trim().toLowerCase();
   const agentClass = agent === 'agy' ? 'aa-agy' : agent === 'codex' ? 'aa-codex' : agent === 'grok' ? 'aa-grok' : 'aa-claude';
   const agentLabel = agent === 'codex' ? 'Co' : agent === 'grok' ? 'G' : agent === 'claude' ? 'C' : 'A';
+  const cells = columns.map((key) => {
+    if (key !== occupyingKey) return '<div class="tcell"></div>';
+    return `<div class="tcell occupying"><div class="tb ${tbClass}" style="width:100%"><div class="st-dot ${dotClass}"></div></div></div>`;
+  }).join('');
+  const fullName = escapeHtml(task.name || task.id || 'Task');
   return `
-    <div class="trow editable" style="grid-template-columns:260px repeat(${total || 1}, 1fr)" title="ID: ${escapeHtml(task.id)}">
+    <div class="trow editable" style="grid-template-columns:260px repeat(${columns.length}, 120px)" title="ID: ${escapeHtml(task.id || '')}">
       <div class="tlbl">
         <div class="aa ${agentClass}" title="${escapeHtml(task.agent || 'agent')}">${agentLabel}</div>
-        <div class="tname">${escapeHtml(task.name || 'Task')}</div>
-        <div class="pencil-wrap ${noteClass}" data-note-target="${escapeHtml(task.id)}" data-note-label="${escapeHtml(task.name || task.id)}" onclick="openNoteFromEl(this);event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div>
+        <div class="tname" title="${fullName}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fullName}</div>
+        <div class="pencil-wrap ${noteClass}" data-note-target="${escapeHtml(task.id)}" data-note-label="${fullName}" onclick="openNoteFromEl(this);event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div>
       </div>
-      <div class="tbars" style="grid-column:2/span ${total || 1}">
-        <div class="tb ${tbClass}" style="left:${leftPct}%;width:${widthPct}%">
-          <div class="st-dot ${dotClass}"></div>
-          <span class="tb-name">${escapeHtml(task.name || 'Task')}</span>
-          <div class="tb-right">
-            <div class="aa sm ${agentClass}" title="${escapeHtml(task.agent || 'agent')}">${agentLabel}</div>
-            <span class="tb-cost">${escapeHtml(status)}${note && note.text ? ' · note' : ''}</span>
-          </div>
-        </div>
-      </div>
+      ${cells}
     </div>`;
+}
+
+function renderVisibleRows(releaseId) {
+  const pack = (window._ganttDrillRows || {})[releaseId];
+  const body = document.getElementById('drill-body-' + releaseId);
+  if (!pack || !body) return;
+  const rowHeight = 28;
+  if (pack.rows.length <= 200) {
+    body.innerHTML = pack.rows.map(({ task, occupying }) => renderTask(task, pack.columns, occupying)).join('');
+    return;
+  }
+  const start = Math.max(0, Math.floor(body.scrollTop / rowHeight) - 5);
+  const end = Math.min(pack.rows.length, Math.ceil((body.scrollTop + body.clientHeight) / rowHeight) + 5);
+  const topPad = start * rowHeight;
+  const botPad = (pack.rows.length - end) * rowHeight;
+  const slice = pack.rows.slice(start, end).map(({ task, occupying }) => renderTask(task, pack.columns, occupying)).join('');
+  body.innerHTML = `<div style="height:${topPad}px"></div>${slice}<div style="height:${botPad}px"></div>`;
 }
 
 function renderDrill(releaseId, stageKey) {
   const rel = releases.find(d => d.id === releaseId);
-  const stage = rel && Array.isArray(rel.stages) ? rel.stages.find(s => s.key === stageKey) : null;
   const dr = document.getElementById('drill-' + releaseId);
   if (!dr) return;
-  if (!stage) {
-    dr.innerHTML = `<div style="padding:12px 14px;font-size:11px;color:var(--text3)">No tasks defined. <span style="color:var(--accent);cursor:pointer">📝 Add note</span></div>`;
+  const stages = rel && Array.isArray(rel.stages) ? rel.stages : [];
+  const columns = stages.map(s => s.key);
+  const wip = {};
+  columns.forEach(k => { wip[k] = 0; });
+  const rows = [];
+  stages.forEach(stage => {
+    (stage.tasks || []).forEach(task => {
+      const status = String(task.status || 'queued').trim().toLowerCase();
+      if (status === 'active') wip[stage.key] = (wip[stage.key] || 0) + 1;
+      rows.push({ task, occupying: stage.key });
+    });
+  });
+  if (!columns.length) {
+    dr.innerHTML = `<div style="padding:12px 14px;font-size:11px;color:var(--text3)">No stages defined.</div>`;
     return;
   }
-
-  const tasks = Array.isArray(stage.tasks) ? stage.tasks : [];
-  const total = Math.max(tasks.length, 1);
-  const gridCols = `260px repeat(${total}, 1fr)`;
-  const headerCols = tasks.map((task, idx) => `<div class="zoom-col">${escapeHtml(task.name || ('Task ' + (idx + 1)))}</div>`).join('');
-  const taskRows = tasks.map((task, idx) => renderTask(task, releaseId, stageKey, idx, total)).join('');
-  const pillKey = classForStage(stageKey);
-  const lastLabel = tasks.length > 1 ? tasks[tasks.length - 1].name : '';
+  const gridCols = `260px repeat(${columns.length}, 120px)`;
+  const headerCols = columns.map(key => `<div class="zoom-col">${escapeHtml(key)} · ${wip[key] || 0}</div>`).join('');
+  const dateChip = rel && rel.target_date ? `<span class="date-chip">${escapeHtml(rel.target_date)}</span>` : '';
+  window._ganttDrillRows = window._ganttDrillRows || {};
+  window._ganttDrillRows[releaseId] = { rows, columns };
+  const virtualize = rows.length > 200;
+  const taskRows = virtualize ? '' : rows.map(({ task, occupying }) => renderTask(task, columns, occupying)).join('');
   dr.innerHTML = `
     <div class="drill-header">
-      <div class="stage-pill" style="${STAGE_STYLE[pillKey] || STAGE_STYLE.plan}">${escapeHtml(iconForStage(stageKey))} stage</div>
-      <div class="drill-ttl">${escapeHtml(releaseId.toUpperCase())} — ${tasks.length} task${tasks.length !== 1 ? 's' : ''} · zoomed to stage window</div>
+      <div class="drill-ttl">${escapeHtml(String(releaseId).toUpperCase())} — ${rows.length} task${rows.length !== 1 ? 's' : ''} ${dateChip}</div>
       <div class="drill-close" onclick="closeDrill('${escapeHtml(releaseId)}')">✕ collapse</div>
     </div>
-    <div class="zoom-grid" style="grid-template-columns:${gridCols}">
-      <div class="zoom-lbl">↳ zoomed: ${escapeHtml(stage.key || stageKey)}${lastLabel ? ' → ' + escapeHtml(lastLabel) : ''}</div>
+    <div class="zoom-grid" style="grid-template-columns:${gridCols};overflow-x:auto">
+      <div class="zoom-lbl">stages</div>
       ${headerCols}
     </div>
-    ${taskRows}`;
+    <div class="drill-body" id="drill-body-${escapeHtml(releaseId)}" style="max-height:420px;overflow:auto">${taskRows}</div>`;
+  if (virtualize) {
+    const body = document.getElementById('drill-body-' + releaseId);
+    if (body) body.addEventListener('scroll', () => renderVisibleRows(releaseId));
+    renderVisibleRows(releaseId);
+  }
 }
 
 function zoomStage(releaseId, stageKey, barEl) {
@@ -964,6 +992,40 @@ function renderByGoal() {
   body.innerHTML = html;
 }
 
+function bindSummaryCards() {
+  const costs = (window.VIZOR_DATA && window.VIZOR_DATA.costs) || {};
+  const spend = Number(costs.total_usd || 0);
+  const spendEl = document.getElementById('spend-value');
+  const spendCard = document.getElementById('spend-card');
+  if (spendEl && spend > 0) {
+    spendEl.textContent = '$' + spend.toFixed(2);
+    if (spendCard) spendCard.style.display = '';
+  } else if (spendCard) {
+    spendCard.style.display = 'none';
+  }
+  const dates = (releases || []).map(r => r.target_date).filter(Boolean).sort();
+  const shipEl = document.getElementById('next-ship-value');
+  const shipCard = document.getElementById('ship-card');
+  if (shipEl && dates.length) {
+    shipEl.textContent = dates[0];
+    if (shipCard) shipCard.style.display = '';
+  } else if (shipCard) {
+    shipCard.style.display = 'none';
+  }
+  const names = new Set();
+  (releases || []).forEach(rel => (rel.stages || []).forEach(st => (st.tasks || []).forEach(t => {
+    if (String(t.status || '').toLowerCase() === 'active' && t.agent) names.add(String(t.agent));
+  })));
+  const agentEl = document.getElementById('agent-count');
+  const agentCard = document.getElementById('agent-card');
+  if (agentEl && names.size) {
+    agentEl.textContent = String(names.size);
+    if (agentCard) agentCard.style.display = '';
+  } else if (agentCard) {
+    agentCard.style.display = 'none';
+  }
+}
+
 function renderTimeline() {
   const wsSub = document.getElementById('ws-sub');
   const releaseCount = document.getElementById('dream-count');
@@ -979,6 +1041,7 @@ function renderTimeline() {
     if (statusWorkspaces) statusWorkspaces.textContent = '0 releases';
     renderGoals();
     renderVerified();
+    bindSummaryCards();
     return;
   }
 
@@ -1001,6 +1064,7 @@ function renderTimeline() {
   if (statusWorkspaces) statusWorkspaces.textContent = releaseCountValue + ' releases';
   renderGoals();
   renderVerified();
+  bindSummaryCards();
 
   const firstRel = releases[0];
   const firstStage = firstRel && Array.isArray(firstRel.stages) ? (firstRel.stages.find(s => String(s.status || '').toLowerCase() === 'active') || firstRel.stages[0]) : null;
@@ -1017,6 +1081,7 @@ function renderDreams() {
 
 setTheme(safeStorageGet('vizor-theme', 'light'));
 renderTimeline();
+bindSummaryCards();
 """.replace("__PORT__", str(port))
 
     return f"""<!DOCTYPE html>
@@ -1117,9 +1182,9 @@ renderTimeline();
 
   <div class="srow">
     <div class="sc teal editable"><div class="sl">Releases tracked</div><div class="sv" id="dream-count">0</div><div class="ss" id="dream-sub">0 stages</div><div class="wow">⚡ live</div><div class="pencil-wrap note-none" onclick="openNote('summary','Summary');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
-    <div class="sc blue editable"><div class="sl">Active agents</div><div class="sv">3</div><div class="aa-stack" style="margin-top:6px"><div class="aa aa-agy">A</div><div class="aa aa-codex">Co</div><div class="aa aa-grok">G</div></div><div class="pencil-wrap note-none" onclick="openNote('agents','Agents');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
-    <div class="sc org editable"><div class="sl">Total spend</div><div class="sv">$28.50</div><div class="ss">of ~$71 · 40% in</div><div class="pencil-wrap note-none" onclick="openNote('cost','Total spend');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
-    <div class="sc purp editable"><div class="sl">Next ship</div><div class="sv">Jul 24</div><div class="ss">Module Extraction → main</div><div class="pencil-wrap note-none" onclick="openNote('ship','Next ship');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
+    <div class="sc blue editable" id="agent-card"><div class="sl">Active agents</div><div class="sv" id="agent-count"></div><div class="aa-stack" id="agent-stack" style="margin-top:6px"></div><div class="pencil-wrap note-none" onclick="openNote('agents','Agents');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
+    <div class="sc org editable" id="spend-card"><div class="sl">Total spend</div><div class="sv" id="spend-value"></div><div class="ss" id="spend-sub"></div><div class="pencil-wrap note-none" onclick="openNote('cost','Total spend');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
+    <div class="sc purp editable" id="ship-card"><div class="sl">Next ship</div><div class="sv" id="next-ship-value"></div><div class="ss" id="next-ship-sub"></div><div class="pencil-wrap note-none" onclick="openNote('ship','Next ship');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
     <div class="sc teal editable" onclick="toggleGoalsPanel()" style="cursor:pointer;"><div class="sl">Business Goals</div><div class="sv" id="goal-count">0</div><div class="ss" id="goal-sub">0 active</div><div class="pencil-wrap note-none" onclick="openNote('goals','Business Goals');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
     <div class="sc teal editable" onclick="toggleVerifiedPanel()" style="cursor:pointer;"><div class="sl">Spec Verified</div><div class="sv" id="spec-verified-count">0</div><div class="ss" id="spec-verified-sub">0 verified PRs</div></div>
   </div>
