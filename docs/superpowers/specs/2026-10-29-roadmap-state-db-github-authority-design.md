@@ -1,7 +1,7 @@
 ---
 title: "Roadmap/Cost/Decision Authority: state.db + GitHub, No Git-Tracked Markdown Mirrors"
 date: 2026-10-29
-status: draft
+status: approved
 author: "Claude (Home Conductor)"
 goal: "goal-6733bbf1"
 epic: "#2653"
@@ -12,7 +12,7 @@ issue: "#2653"
 
 # Roadmap/Cost/Decision Authority: state.db + GitHub, No Git-Tracked Markdown Mirrors
 
-- **Status:** Draft — pending user review
+- **Status:** Approved and implemented — plan executed and merged via PR #4964
 - **Date:** 2026-10-29
 - **Related:** gh:#2653 (parent investigation issue), PR #2654 (triggering incident)
 - **Supersedes (for roadmap.md/memory.md scope):** the "Out of scope" deferral in
