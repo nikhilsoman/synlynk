@@ -613,6 +613,7 @@ body { margin:0; font-family:'SF Mono',monospace; background:#f6f8fa; color:#1f2
 def generate_architect_map_html(data: dict, port: int) -> str:
     """Generate the Architect Map view shell."""
     import json
+    from synlynk.viz.format import TUBE_EMBED_KEYS, view_embed
     from synlynk.viz_views import derive_canonical_community_names
 
     workspace = data.get("workspace", {})
@@ -652,7 +653,7 @@ def generate_architect_map_html(data: dict, port: int) -> str:
     )
 
     style_content = _ARCHITECT_MAP_STYLE
-    json_data = json.dumps(data)
+    json_data = json.dumps(view_embed(data, TUBE_EMBED_KEYS))
     live_js_html = _live_js(port)
 
     is_monorepo = len(repos) <= 1

@@ -2400,6 +2400,16 @@ _VALID_COST_SOURCES = {
 }
 
 
+def repoint_cost_entries_epic_id(
+    conn: sqlite3.Connection, old_epic_id: int, new_epic_id: int
+) -> None:
+    """Repoint cost rows from a duplicate roadmap arc to its canonical arc."""
+    conn.execute(
+        "UPDATE cost_entries SET epic_id = ? WHERE epic_id = ?",
+        (new_epic_id, old_epic_id),
+    )
+
+
 def _insert_cost_row(
     session_date: str,
     agent: str = None,
@@ -2466,6 +2476,25 @@ def _insert_cost_row(
                 if r_row and r_row[0]:
                     role_val = r_row[0]
             except Exception:
+                pass
+
+        if epic_id is None and phase_id is None and story_id:
+            try:
+                p_row = conn.execute(
+                    "SELECT id, arc_version FROM roadmap_phases WHERE story_id=?",
+                    (story_id,),
+                ).fetchone()
+                if p_row:
+                    phase_id = p_row[0]
+                    arc_row = conn.execute(
+                        "SELECT id FROM roadmap_arcs WHERE version=?",
+                        (p_row[1],),
+                    ).fetchone()
+                    if arc_row:
+                        epic_id = arc_row[0]
+                elif estimate_basis is None:
+                    estimate_basis = "epic_unresolved"
+            except sqlite3.Error:
                 pass
 
         # Inherit context_mode from the job row when the caller did not pass one
@@ -3573,6 +3602,64 @@ def _generate_roadmap_md() -> None:
 
     _write_generated_project_doc("roadmap.md", "".join(lines))
 
+
+def _try_sync_arc_by_version(version: str) -> None:
+    """Best-effort GitHub Milestone sync. Never raises."""
+    from synlynk import _get_db
+    from synlynk.gh_sync import sync_arc
+    from synlynk.github_repo import resolve_owner_repo
+
+    conn = None
+    try:
+        owner, repo = resolve_owner_repo()
+        conn = _get_db()
+        row = conn.execute(
+            "SELECT id FROM roadmap_arcs WHERE version=?", (version,)
+        ).fetchone()
+        if row:
+            sync_arc(conn, arc_id=row[0], owner=owner, repo=repo)
+    except Exception:
+        pass
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+def _try_sync_story(story_id: str) -> None:
+    """Best-effort GitHub Issue sync for a single story. Never raises."""
+    from synlynk import _get_db
+    from synlynk.gh_sync import sync_story
+    from synlynk.github_repo import resolve_owner_repo
+
+    conn = None
+    try:
+        owner, repo = resolve_owner_repo()
+        conn = _get_db()
+        phase = conn.execute(
+            "SELECT arc_version FROM roadmap_phases WHERE story_id=?", (story_id,)
+        ).fetchone()
+        milestone_number = None
+        if phase:
+            mapped = conn.execute(
+                "SELECT gm.github_number FROM github_sync_map gm "
+                "JOIN roadmap_arcs ra ON ra.id = CAST(gm.entity_id AS INTEGER) "
+                "WHERE gm.entity_type='roadmap_arc' AND ra.version=?",
+                (phase[0],),
+            ).fetchone()
+            milestone_number = mapped[0] if mapped else None
+        sync_story(
+            conn,
+            story_id=story_id,
+            owner=owner,
+            repo=repo,
+            milestone_number=milestone_number,
+        )
+    except Exception:
+        pass
+    finally:
+        if conn is not None:
+            conn.close()
+
 def _generate_costs_md() -> None:
     """Writes costs.md as a generated view of cost_entries.
     Post-migration: writes to .synlynk/project-docs/costs.md.
@@ -4098,6 +4185,10 @@ def cmd_roadmap_add(
         conn.close()
 
     _generate_roadmap_md()
+    try:
+        _try_sync_arc_by_version(version)
+    except Exception:
+        pass
     label = phase_title if phase_title else (title or version)
     print(f"  {_GREEN}✓{_RESET} Roadmap updated — {version}: {label}")
 
@@ -4185,6 +4276,10 @@ def cmd_roadmap_update(
         conn.close()
 
     _generate_roadmap_md()
+    try:
+        _try_sync_arc_by_version(new_arc)
+    except Exception:
+        pass
     print(f"  {_GREEN}✓{_RESET} Roadmap phase updated — ID {row[0]} ({new_arc}): {new_title}")
 
 
@@ -4351,6 +4446,10 @@ def cmd_story_done(story_id: str, conn=None) -> None:
     goal_ids.extend(g[0] for g in secondary if g[0] not in goal_ids)
     if phase_result.rowcount:
         _generate_roadmap_md()
+    try:
+        _try_sync_story(story_id)
+    except Exception:
+        pass
     emit_event(
         "story_done",
         {"story_id": story_id, "goal_ids": goal_ids},

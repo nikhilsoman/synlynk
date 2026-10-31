@@ -24,6 +24,9 @@ CACHE_ROOT = Path(os.environ.get("SYNLYNK_VIZOR_CACHE_ROOT", os.path.expanduser(
 DEFAULT_POLL_INTERVAL = 15
 LOG_MAX_BYTES = 1_048_576
 STALL_GRACE_S = 120.0
+# One workspace render may run this long before its heartbeat pump stops.
+# The stall watch can then exit. A render inside this limit is still working.
+RENDER_LIMIT_S = 30 * 60
 ENSURE_INTERVAL_S = 60
 ENSURE_BACKOFF_LIMIT = 3
 ENSURE_BACKOFF_WINDOW_S = 600
@@ -174,6 +177,46 @@ def _is_transient_test_path(path_str: str) -> bool:
     return any(marker in path_str for marker in test_markers)
 
 
+def _without_pytest_basetemp(norm: str) -> str:
+    """Drop pytest's runner directories before the transient-path check.
+
+    ``tmp_path`` is ``.../pytest-of-<user>/pytest-<n>/...``. That prefix
+    contains ``/pytest-``, which would mark a durable dev clone such as
+    ``dev/coldtest`` ephemeral. ``/pytest-`` segments outside that prefix
+    still count.
+    """
+    parts = [part for part in norm.split("/") if part]
+    cleaned: list[str] = []
+    index = 0
+    while index < len(parts):
+        part = parts[index]
+        nxt = parts[index + 1] if index + 1 < len(parts) else ""
+        if part.startswith("pytest-of-") and nxt.startswith("pytest-"):
+            index += 2
+            continue
+        cleaned.append(part)
+        index += 1
+    return "/" + "/".join(cleaned)
+
+
+def workspace_kind(entry: dict, slug: str) -> str:
+    raw = str((entry or {}).get("kind") or "").strip().lower()
+    if raw in {"local", "hosted", "ephemeral"}:
+        return raw
+    path = str((entry or {}).get("path_root") or (entry or {}).get("repo_path") or slug)
+    norm = path.replace("\\", "/")
+    if "/.worktrees/" in f"/{norm}/" or "/worktrees/job-" in norm or "/worktrees/djob-" in norm:
+        return "ephemeral"
+    classified = _without_pytest_basetemp(norm)
+    if _is_transient_test_path(classified) or _is_transient_test_path(slug):
+        return "ephemeral"
+    return "local"
+
+
+def is_durable_hub_entry(slug: str, entry: dict) -> bool:
+    return workspace_kind(entry, slug) != "ephemeral"
+
+
 def _registered_workspaces() -> dict:
     """Return {slug: entry} for every registered product, or {} if no registry yet."""
     from synlynk.state_registry import _read_unlocked, registry_path
@@ -203,6 +246,8 @@ def _registered_workspaces() -> dict:
         if not repo_p.is_dir() or not db_p.is_file():
             continue
         if not is_custom_registry and (_is_transient_test_path(str(repo_path)) or _is_transient_test_path(str(slug))):
+            continue
+        if not is_durable_hub_entry(slug, entry):
             continue
         valid_workspaces[slug] = entry
     return valid_workspaces
@@ -252,6 +297,71 @@ def _remember_beat(*, pid: int, status: str, cycle_count: int, active_task: Opti
     )
 
 
+def render_limit_s() -> float:
+    """How long one workspace render may keep its own heartbeat fresh."""
+    raw = os.environ.get("SYNLYNK_VIZOR_RENDER_LIMIT_S")
+    if not raw:
+        return RENDER_LIMIT_S
+    try:
+        value = float(raw)
+    except ValueError:
+        return RENDER_LIMIT_S
+    if value <= 0:
+        return RENDER_LIMIT_S
+    return value
+
+
+def beat_while_render_s() -> float:
+    """Pump interval while a render is in progress. Stays inside the stall grace."""
+    return max(min(stall_grace_s() / 4.0, 30.0), 0.05)
+
+
+def _pump_render_beat(slug: str, cycle_count: int, stop_event: threading.Event, started: float) -> None:
+    """Refresh the beat until the render finishes or passes the render limit."""
+    import time
+
+    pid = os.getpid()
+    limit = render_limit_s()
+    interval = beat_while_render_s()
+    while not stop_event.is_set():
+        if time.monotonic() - started >= limit:
+            _log(f"render beat stopped for {slug!r}: still running after {limit:.0f}s")
+            return
+        _safe_heartbeat(lambda: _remember_beat(
+            pid=pid,
+            status="running",
+            cycle_count=cycle_count,
+            active_task=slug,
+        ))
+        if stop_event.wait(interval):
+            return
+
+
+@contextlib.contextmanager
+def keep_render_beat(slug: str, cycle_count: int):
+    """Keep the heartbeat fresh while one workspace render is still working.
+
+    The stall watch reads beat age. A render that outlasts the grace is not a
+    wedged poll loop, so the beat moves until ``render_limit_s`` elapses.
+    """
+    import time
+
+    stop_event = threading.Event()
+    started = time.monotonic()
+    thread = threading.Thread(
+        target=_pump_render_beat,
+        args=(slug, cycle_count, stop_event, started),
+        daemon=True,
+        name="vizor-render-beat",
+    )
+    thread.start()
+    try:
+        yield
+    finally:
+        stop_event.set()
+        thread.join(timeout=2)
+
+
 def poll_once(port: int) -> dict:
     """Refresh every registered workspace once. Never lets one failure stop another."""
     from synlynk.viz.heartbeats import pid_alive, read_beat
@@ -290,7 +400,8 @@ def poll_once(port: int) -> dict:
             active_task=slug,
         ))
         try:
-            refresh_workspace(slug, entry, port)
+            with keep_render_beat(slug, cycle_count):
+                refresh_workspace(slug, entry, port)
             results[slug] = "ok"
         except Exception as exc:
             results[slug] = f"error: {exc}"
@@ -979,9 +1090,21 @@ def _watch_for_stall(stop_event: threading.Event) -> None:
         os._exit(1)
 
 
+def make_httpd(handler_cls, port: int):
+    """One thread per request.
+
+    Overview holds ``/api/daemon/stream`` open for the life of that page.
+    ``HTTPServer`` serves a single request at a time, so Board and every other
+    view wait behind that socket. ``ThreadingHTTPServer`` accepts the next
+    request while the stream is still open.
+    """
+    import http.server
+
+    return http.server.ThreadingHTTPServer(("127.0.0.1", port), handler_cls)
+
+
 def run_forever(port: Optional[int] = None) -> None:
     """Daemon entrypoint: serve forever, refreshing every registered workspace on a timer."""
-    import http.server
     import threading
 
     extra_paths = [
@@ -1002,7 +1125,7 @@ def run_forever(port: Optional[int] = None) -> None:
 
     CACHE_ROOT.mkdir(parents=True, exist_ok=True)
     handler_cls = build_workspace_routing_handler()
-    server = http.server.HTTPServer(("127.0.0.1", resolved_port), handler_cls)
+    server = make_httpd(handler_cls, resolved_port)
     _write_state(pid=os.getpid(), port=resolved_port)
     _log(f"daemon starting on port {resolved_port}")
 

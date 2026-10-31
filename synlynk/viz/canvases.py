@@ -2,8 +2,40 @@
 import html
 import json
 from typing import Dict
+from synlynk.viz import nav
 from synlynk.viz.chrome import _live_js
 from synlynk.viz.architect import _ARCHITECT_MAP_STYLE
+
+
+def _workspace_view_anchor(route: str, class_name: str, inner_html: str) -> str:
+    """Rewrite a known Vizor view route to a workspace-relative chip."""
+    raw = str(route or "#").strip()
+    stem = raw[1:] if raw.startswith("/") else raw
+    view_id = stem[:-5] if stem.endswith(".html") else ""
+    try:
+        href, canonical = nav.workspace_view_href(view_id)
+    except KeyError:
+        return f'<a href="{html.escape(raw)}" class="{class_name}">{inner_html}</a>'
+    _filename, cat, label = nav.VIEW_CATALOG[canonical]
+    return (
+        f'<a href="{html.escape(href)}" class="{class_name}" '
+        f'data-viz-view="{html.escape(canonical)}" '
+        f'data-viz-cat="{html.escape(cat)}" '
+        f'data-viz-label="{html.escape(label)}">{inner_html}</a>'
+    )
+LOGICAL_LLD_LIMIT = 16
+
+
+def _logical_first_paint_nodes(nodes: list) -> list:
+    """Slim records for the LLD tab. HLD cards are already server HTML."""
+    out = []
+    for node in (nodes or [])[:LOGICAL_LLD_LIMIT]:
+        item = {}
+        for key in ("id", "label", "kind"):
+            if node.get(key) is not None:
+                item[key] = node[key]
+        out.append(item)
+    return out
 _BS6_VIEW_JS = """
 function bs6LayoutGraph(nodes, edges) {
   const W = 900, H = 620, ITER = 200;
@@ -994,15 +1026,7 @@ body {
     <span class="logo-badge">synlynk</span>
     <span class="view-title">Product View & User Journeys · __WORKSPACE_NAME__</span>
   </div>
-  <nav class="view-nav">
-    <a href="/tube.html" class="nav-btn">🚇 Architect Map</a>
-    <a href="/logical.html" class="nav-btn">🧠 Logical Engine</a>
-    <a href="/product.html" class="nav-btn active">📦 Product Journeys</a>
-    <a href="/infra.html" class="nav-btn">⚡ Infra Topology</a>
-    <a href="/world.html" class="nav-btn">🌐 Ecosystem Radar</a>
-    <a href="/board.html" class="nav-btn">📋 Board</a>
-    <a href="/timeline.html" class="nav-btn">⏱️ Timeline</a>
-  </nav>
+  __VIEW_NAV__
 </header>
 
 <div class="tab-bar">
@@ -1178,6 +1202,7 @@ try {
 } catch (_) {}
 </script>
 __LIVE_JS_HTML__
+__IFRAME_NAV_SCRIPT__
 </body>
 </html>"""
 
@@ -1244,6 +1269,7 @@ __LIVE_JS_HTML__
         s_route = s_attrs.get("route") or "#"
         s_desc = s_attrs.get("description") or "Vizor interactive interface"
         s_cat = s_attrs.get("category") or "view"
+        screen_link = _workspace_view_anchor(s_route, "screen-link", "Open View ➔")
         screen_cards.append(f"""
         <div class="screen-card">
           <div class="screen-card-top">
@@ -1251,7 +1277,7 @@ __LIVE_JS_HTML__
             <span class="screen-category-badge">{html.escape(s_cat)}</span>
           </div>
           <div class="screen-desc">{html.escape(s_desc)}</div>
-          <a href="{html.escape(s_route)}" class="screen-link">Open View ➔</a>
+          {screen_link}
         </div>
         """)
     screens_grid_html = "\n".join(screen_cards)
@@ -1265,6 +1291,8 @@ __LIVE_JS_HTML__
         .replace("__ACTIVE_JOURNEY_DETAIL_HTML__", active_detail_html)
         .replace("__SCREENS_GRID_HTML__", screens_grid_html)
         .replace("__JOURNEYS_DATA_JSON__", json.dumps(journeys))
+        .replace("__VIEW_NAV__", nav.switcher_html(active="product"))
+        .replace("__IFRAME_NAV_SCRIPT__", nav.iframe_nav_script())
         .replace("__LIVE_JS_HTML__", live_js_html)
     )
 
@@ -1739,8 +1767,8 @@ __LIVE_JS_HTML__
         .replace("__WORKSPACE_NAME__", html.escape(workspace_name))
         .replace("__STALENESS_BANNER__", staleness_banner_html)
         .replace("__HLD_CONTENT__", hld_html)
-        .replace("__NODES_JSON__", json.dumps(nodes))
-        .replace("__EDGES_JSON__", json.dumps(edges))
+        .replace("__NODES_JSON__", json.dumps(_logical_first_paint_nodes(nodes)))
+        .replace("__EDGES_JSON__", json.dumps([]))
         .replace("__LIVE_JS_HTML__", live_js_html)
     )
 
@@ -2049,15 +2077,7 @@ body {
     <span class="logo-badge">synlynk</span>
     <span class="view-title">Infra Topology & Execution Boundary · __WORKSPACE_NAME__</span>
   </div>
-  <nav class="view-nav">
-    <a href="/tube.html" class="nav-btn">🚇 Architect Map</a>
-    <a href="/logical.html" class="nav-btn">🧠 Logical Engine</a>
-    <a href="/product.html" class="nav-btn">📦 Product Journeys</a>
-    <a href="/infra.html" class="nav-btn active">⚡ Infra Topology</a>
-    <a href="/world.html" class="nav-btn">🌐 Ecosystem Radar</a>
-    <a href="/board.html" class="nav-btn">📋 Board</a>
-    <a href="/timeline.html" class="nav-btn">⏱️ Timeline</a>
-  </nav>
+  __VIEW_NAV__
 </header>
 
 <div class="security-bar">
@@ -2104,6 +2124,7 @@ try {
 } catch (_) {}
 </script>
 __LIVE_JS_HTML__
+__IFRAME_NAV_SCRIPT__
 </body>
 </html>"""
 
@@ -2163,6 +2184,8 @@ __LIVE_JS_HTML__
         .replace("__WORKSPACE_NAME__", html.escape(workspace_name))
         .replace("__HOST_LOCAL_CARDS_HTML__", host_local_html)
         .replace("__OUTBOUND_CARDS_HTML__", outbound_html)
+        .replace("__VIEW_NAV__", nav.switcher_html(active="infra"))
+        .replace("__IFRAME_NAV_SCRIPT__", nav.iframe_nav_script())
         .replace("__LIVE_JS_HTML__", live_js_html)
     )
 
@@ -2447,15 +2470,7 @@ body {
     <span class="logo-badge">synlynk</span>
     <span class="view-title">Ecosystem Radar (World View) · __WORKSPACE_NAME__</span>
   </div>
-  <nav class="view-nav">
-    <a href="/tube.html" class="nav-btn">🚇 Architect Map</a>
-    <a href="/logical.html" class="nav-btn">🧠 Logical Engine</a>
-    <a href="/product.html" class="nav-btn">📦 Product Journeys</a>
-    <a href="/infra.html" class="nav-btn">⚡ Infra Topology</a>
-    <a href="/world.html" class="nav-btn active">🌐 Ecosystem Radar</a>
-    <a href="/board.html" class="nav-btn">📋 Board</a>
-    <a href="/timeline.html" class="nav-btn">⏱️ Timeline</a>
-  </nav>
+  __VIEW_NAV__
 </header>
 
 <div class="legend-bar">
@@ -2526,6 +2541,7 @@ try {
 } catch (_) {}
 </script>
 __LIVE_JS_HTML__
+__IFRAME_NAV_SCRIPT__
 </body>
 </html>"""
 
@@ -2594,6 +2610,8 @@ __LIVE_JS_HTML__
         .replace("__TOTAL_NODES__", str(total_nodes))
         .replace("__RADAR_BLIPS_SVG__", "\n".join(blips_svg_list))
         .replace("__BLIPS_LIST_HTML__", "\n".join(blips_html_list))
+        .replace("__VIEW_NAV__", nav.switcher_html(active="world"))
+        .replace("__IFRAME_NAV_SCRIPT__", nav.iframe_nav_script())
         .replace("__LIVE_JS_HTML__", live_js_html)
     )
 

@@ -3,6 +3,7 @@ import json
 import os
 import socket
 import threading
+import time
 from http.server import HTTPServer
 from pathlib import Path
 
@@ -128,6 +129,47 @@ def test_workspace_stream_emits_sentinel_from_repo(tmp_path, monkeypatch):
     assert "/tmp/nope" not in text
     assert b"404" in missing or b"Unknown workspace" in missing
     assert read_beat(home) is None or True
+
+
+def test_open_stream_does_not_block_the_next_request(tmp_path, monkeypatch):
+    home = tmp_path / "daemon-home"
+    _isolate_home(monkeypatch, home)
+    (home / "port").write_text("33333")
+    upsert_beat(
+        home,
+        pid=os.getpid(),
+        status="running",
+        last_beat_at=datetime.now(timezone.utc),
+        cycle_count=1,
+        active_task="idle",
+    )
+    monkeypatch.setattr(vizor_daemon, "poll_interval", lambda: 30)
+
+    handler = vizor_daemon.build_workspace_routing_handler()
+    httpd = vizor_daemon.make_httpd(handler, 0)
+    server_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    server_thread.start()
+    port = httpd.server_address[1]
+    held = socket.create_connection(("127.0.0.1", port), timeout=2)
+    try:
+        held.sendall(b"GET /api/daemon/stream HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+        held.settimeout(2)
+        opened = b""
+        while b": ping" not in opened:
+            chunk = held.recv(4096)
+            assert chunk
+            opened += chunk
+        started = time.monotonic()
+        follow = _read_until(port, "/not-a-view", b"\r\n")
+        elapsed = time.monotonic() - started
+    finally:
+        held.close()
+        httpd.shutdown()
+        httpd.server_close()
+
+    assert b"event: heartbeat" in opened
+    assert elapsed < 2
+    assert follow.startswith(b"HTTP/1.")
 
 
 def test_overview_inspection_is_read_only():

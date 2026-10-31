@@ -1,0 +1,217 @@
+<!-- generated - source of truth is state.db -->
+---
+decision_id: dec-be95cbbf
+topic: "v0.26.7 Vizor hosted+local future R2 20261031
+
+You are on a synlynk decide panel ROUND 2. Ignore the 200-400 word cap. Answer ALL questions with architectural evidence. Do not implement code. Do not bump VERSION. This round is FUTURE DIRECTION only — it must not expand v0.26.7 implementation scope. Outputs are foundation constraints that the current local write-path spec should absorb so later hosted Vizor does not require a rewrite.
+
+ROUND 1 CONTEXT (recorded, not yet merged into the spec)
+- Decision id: dec-2802c17e
+- File: project-docs/decisions/2026-10-31-v0-26-7-vizor-interactive-spec-panel-202.md
+- Agenda was PR #4969 / issue #4966 / spec docs/superpowers/specs/2026-10-31-v0.26.7-vizor-interactive-write-path-design.md
+- Round-1 decision: approve one v0.26.7 edition; Jantt is optional Wave E and does not gate Wave B; before sign-off amend spec with (a) named out-of-scope for cross-workspace rollup / cost aggregation / CLI parity, (b) named live-write/stub/missing table for Wave C, (c) promote Hub ephemeral fencing from Wave F into Wave A/C via registry kind/path-root. Board stage/status is live; daemon drops other VizorHandler POSTs. Bind today is 127.0.0.1 + authorize_local_request + local token.
+
+READ IF YOU CAN
+- docs/superpowers/specs/2026-10-31-v0.26.7-vizor-interactive-write-path-design.md
+- docs/superpowers/specs/2026-10-23-synlynk-com-platform-vision-design.md  (Approved 2026-10-23)
+
+PLATFORM VISION DIGEST (if you cannot read the file)
+Entity: Account (billing Owner) → optional Org → Workspace (= today's ~/.synlynk/workspaces/<name>/state.db) → Repo. Person has one identity, N account memberships. Stable ARN-style IDs; re-pointable parent edges. GOVERNS agent roles (pm/qa/…) stay orthogonal to human Account/Org/Workspace roles.
+Existing-surface map already says Vizor Architect Map visualizes the Workspace multi-repo graph for an account dashboard — no rename.
+Phases: 0 static hosting shell; 1 accounts/plans on Aurora Serverless v2; 2 Hosted Workstation (Fargate + EFS, synlynk CLI, idle teardown, cost_entries metering); 3 Hosted Relay (pair cloud workstation to local models/files); 4 swarm dispatch nodes; 5 community.
+Cost: scale-to-zero compute, no always-on EC2. Auth/billing behind seams (GitHub login is a future adapter, not Cognito baked into Vizor).
+
+TODAY'S VIZOR (must remain the foundation)
+- Machine-scoped daemon, 127.0.0.1, memorable ports, local token, POST authorize_local_request.
+- Chrome iframe + /w/<slug>/… views. Write-path Wave C proxies VizorHandler routes per workspace.
+- Hub lists local workspace slugs (junk djob-* still leaking).
+
+QUESTIONS
+
+1. REMOTE WORKSPACE WRITE-PATH: If a workspace runs on a cloud VPS/VM (Phase 2 Hosted Workstation) and Vizor is reachable from synlynk.com behind "Login with GitHub", how should the proposed v0.26.7 write-path (authorize_local_request, /w/<slug>/api/*, lock-by-default GOVERNS edits, notes, board stage/status) work without becoming a second product? What stays identical on the node vs what must be an auth adapter in front (GitHub identity → Account/Org/Workspace membership → Application credential)? What must NEVER be done (bind 0.0.0.0 with the local token, personal GH tokens, skipping lock-by-default)?
+
+2. FOUNDATION CONSTRAINTS: What architectural seams must the CURRENT local spec add (even as "future: do not implement") so hosted Vizor is an evolution, not a fork? Examples to accept or reject: workspace-relative APIs only (no site-root /note); workspace identity as slug vs ARN; chrome Hub as Account-shaped list of Workspaces (local and hosted); authn/authz as a replaceable authorize_* function; SSE/heartbeat as node-local telemetry exported, not a cloud bus.
+
+3. LOCAL + HOSTED IN ONE ACCOUNT: How should Vizor combine local workspaces (laptop daemon) and hosted workspaces (VPS/Fargate) in one Account Hub? Registry kind=local|hosted, relay pairing (Phase 3), never merging two state.db files, Hub cards that deep-link to the node that owns the workspace. How does Hub junk-fencing from round 1 apply to hosted ephemeral swarm nodes (Phase 4 job-* machines)?
+
+4. SCOPE GUARD: Which of the above belongs as a "Future evolution" appendix in the v0.26.7 spec vs a later synlynk.com phase spec? Round 1 already deferred cross-workspace rollup and CLI-service parity — do not smuggle them back in as implementation. Name the minimum appendix bullets so local write-path stays the foundation.
+
+End with a clear position: what to add to the v0.26.7 spec as a non-implementing Future section, and what to leave entirely to the synlynk.com phase specs."
+date: 2026-10-31
+panel: [claude, agy, codex, grok]
+status: approved
+---
+
+## Topic
+v0.26.7 Vizor hosted+local future R2 20261031
+
+You are on a synlynk decide panel ROUND 2. Ignore the 200-400 word cap. Answer ALL questions with architectural evidence. Do not implement code. Do not bump VERSION. This round is FUTURE DIRECTION only — it must not expand v0.26.7 implementation scope. Outputs are foundation constraints that the current local write-path spec should absorb so later hosted Vizor does not require a rewrite.
+
+ROUND 1 CONTEXT (recorded, not yet merged into the spec)
+- Decision id: dec-2802c17e
+- File: project-docs/decisions/2026-10-31-v0-26-7-vizor-interactive-spec-panel-202.md
+- Agenda was PR #4969 / issue #4966 / spec docs/superpowers/specs/2026-10-31-v0.26.7-vizor-interactive-write-path-design.md
+- Round-1 decision: approve one v0.26.7 edition; Jantt is optional Wave E and does not gate Wave B; before sign-off amend spec with (a) named out-of-scope for cross-workspace rollup / cost aggregation / CLI parity, (b) named live-write/stub/missing table for Wave C, (c) promote Hub ephemeral fencing from Wave F into Wave A/C via registry kind/path-root. Board stage/status is live; daemon drops other VizorHandler POSTs. Bind today is 127.0.0.1 + authorize_local_request + local token.
+
+READ IF YOU CAN
+- docs/superpowers/specs/2026-10-31-v0.26.7-vizor-interactive-write-path-design.md
+- docs/superpowers/specs/2026-10-23-synlynk-com-platform-vision-design.md  (Approved 2026-10-23)
+
+PLATFORM VISION DIGEST (if you cannot read the file)
+Entity: Account (billing Owner) → optional Org → Workspace (= today's ~/.synlynk/workspaces/<name>/state.db) → Repo. Person has one identity, N account memberships. Stable ARN-style IDs; re-pointable parent edges. GOVERNS agent roles (pm/qa/…) stay orthogonal to human Account/Org/Workspace roles.
+Existing-surface map already says Vizor Architect Map visualizes the Workspace multi-repo graph for an account dashboard — no rename.
+Phases: 0 static hosting shell; 1 accounts/plans on Aurora Serverless v2; 2 Hosted Workstation (Fargate + EFS, synlynk CLI, idle teardown, cost_entries metering); 3 Hosted Relay (pair cloud workstation to local models/files); 4 swarm dispatch nodes; 5 community.
+Cost: scale-to-zero compute, no always-on EC2. Auth/billing behind seams (GitHub login is a future adapter, not Cognito baked into Vizor).
+
+TODAY'S VIZOR (must remain the foundation)
+- Machine-scoped daemon, 127.0.0.1, memorable ports, local token, POST authorize_local_request.
+- Chrome iframe + /w/<slug>/… views. Write-path Wave C proxies VizorHandler routes per workspace.
+- Hub lists local workspace slugs (junk djob-* still leaking).
+
+QUESTIONS
+
+1. REMOTE WORKSPACE WRITE-PATH: If a workspace runs on a cloud VPS/VM (Phase 2 Hosted Workstation) and Vizor is reachable from synlynk.com behind "Login with GitHub", how should the proposed v0.26.7 write-path (authorize_local_request, /w/<slug>/api/*, lock-by-default GOVERNS edits, notes, board stage/status) work without becoming a second product? What stays identical on the node vs what must be an auth adapter in front (GitHub identity → Account/Org/Workspace membership → Application credential)? What must NEVER be done (bind 0.0.0.0 with the local token, personal GH tokens, skipping lock-by-default)?
+
+2. FOUNDATION CONSTRAINTS: What architectural seams must the CURRENT local spec add (even as "future: do not implement") so hosted Vizor is an evolution, not a fork? Examples to accept or reject: workspace-relative APIs only (no site-root /note); workspace identity as slug vs ARN; chrome Hub as Account-shaped list of Workspaces (local and hosted); authn/authz as a replaceable authorize_* function; SSE/heartbeat as node-local telemetry exported, not a cloud bus.
+
+3. LOCAL + HOSTED IN ONE ACCOUNT: How should Vizor combine local workspaces (laptop daemon) and hosted workspaces (VPS/Fargate) in one Account Hub? Registry kind=local|hosted, relay pairing (Phase 3), never merging two state.db files, Hub cards that deep-link to the node that owns the workspace. How does Hub junk-fencing from round 1 apply to hosted ephemeral swarm nodes (Phase 4 job-* machines)?
+
+4. SCOPE GUARD: Which of the above belongs as a "Future evolution" appendix in the v0.26.7 spec vs a later synlynk.com phase spec? Round 1 already deferred cross-workspace rollup and CLI-service parity — do not smuggle them back in as implementation. Name the minimum appendix bullets so local write-path stays the foundation.
+
+End with a clear position: what to add to the v0.26.7 spec as a non-implementing Future section, and what to leave entirely to the synlynk.com phase specs.
+
+## Panel Inputs
+
+### claude
+[model=default; version=2.1.311 (Claude Code)]
+
+## Panel Round 2 — Analysis
+
+**Q1 — Remote write-path.** Keep the node identical: `authorize_local_request`, `/w/<slug>/api/*`, lock-by-default GOVERNS edits, `state.db` as the only writer of record. What changes is strictly *in front* of the node: GitHub-login → Account/Org/Workspace membership resolves to a short-lived Application credential scoped to one workspace ARN, which the node's `authorize_*` function accepts as an additional principal type alongside the local token — not a replacement for it. Never bind `0.0.0.0` with the local token (the local token is a co-located-process secret, not a bearer credential for the internet); never let a personal GH token stand in for an Application credential; never ship a "trusted caller" bypass of lock-by-default just because the caller authenticated via GitHub. The Hosted Workstation is reached via a reverse-proxy/relay in front of the still-127.0.0.1-bound daemon inside its Fargate task, identical to how a laptop's daemon is never exposed directly.
+
+**Q2 — Foundation seams for the current spec.** Accept all four examples:
+- Workspace-relative APIs only (`/w/<slug>/api/*`, never a site-root `/note` or `/board/stage`) — already true per the surface inventory; the spec should say explicitly that no future route is added outside this prefix.
+- Workspace identity as slug *locally*, but the slug must be stable and mappable 1:1 to a future ARN segment — don't let slugs collide across workspaces the way `job-*`/`djob-*` already collide in Hub today.
+- `authorize_local_request` should be named/structured as a replaceable `authorize_*` seam (single call site, not inlined per-handler), so a hosted adapter can wrap it without touching each route.
+- SSE/heartbeat stays node-local telemetry; do not design it as a bus — a hosted account view aggregates by polling/relaying per-node streams, not by having nodes publish to a shared channel.
+Reject nothing here; all four are cheap to seed now and expensive to retrofit.
+
+**Q3 — One Account, mixed nodes.** Registry entries need a `kind: local|hosted` field and a `node` pointer (host:port or relay-pair id) from day one, even though only `local` is populated today. Two `state.db` files are never merged — Hub aggregates by reading each node's own live state, same pattern as polling multiple laptops. Hub cards deep-link through the node, not through a shared API. Round 1's junk-fencing (hiding `job-*`/`djob-*` slugs) generalizes directly to Phase 4 swarm nodes: the same registry `kind`/path-root filter that hides ephemeral local dispatch worktrees should hide ephemeral hosted job-* machines — one filter, two populations.
+
+**Q4 — Scope guard.** Add to v0.26.7 as a short, explicitly non-implementing "Future: Hosted Evolution" appendix, four bullets only: (1) workspace-relative-API invariant, (2) `authorize_*` as a named replaceable seam, (3) registry `kind=local|hosted` + ARN-mappable slug, (4) SSE/heartbeat is node-local-only, never a bus. Everything else — GitHub-login adapter, Application credentials, relay pairing, Fargate node topology, swarm job-* fencing mechanics — belongs entirely to the synlynk.com Phase 1–4 specs. Do not let this appendix grow past four bullets or acquire any API shape, schema, or endpoint name; that is where scope creep back into implementation would start.
+
+**Position:** Add the four-bullet "Future: Hosted Evolution" appendix to the v0.26.7 spec (no code, no new endpoints, no VERSION bump) so Wave B/C's write-path doesn't bake in a site-root or bus-shaped mistake. Leave GitHub auth, Application credentials, relay pairing, and swarm-node fencing mechanics entirely to the synlynk.com phase specs — Round 1's deferral of cross-workspace rollup and CLI parity stands unchanged.
+
+### agy
+[model=default; version=1.4.12]
+
+**Last completed task:** Round 1 decision recorded on v0.26.7 Vizor Interactive write-path spec ([dec-2802c17e](file:///Users/nikhilsoman/dev/synlynk/.worktrees/docs-grok-v0267-vizor-interactive/project-docs/decisions/2026-10-31-v0-26-7-vizor-interactive-spec-panel-202.md), [PR #4969](https://github.com/nikhilsoman/synlynk/pull/4969))  
+**Next task from `todo.md`:** Round 2 panel decision on v0.26.7 Vizor hosted+local future direction ([#4966](https://github.com/nikhilsoman/synlynk/issues/4966))
+
+---
+
+### 1. Remote Workspace Write-Path
+* **Identical on the Node:** The node daemon (`vizor_daemon.py`), workspace-scoped routing (`/w/<slug>/api/*`), SQLite transaction isolation in `state.db`, and **lock-by-default GOVERNS edits** remain identical. The daemon must not care whether an HTTP call arrived from localhost or an internal VPC proxy.
+* **Auth Adapter in Front:** synlynk.com handles GitHub OAuth, verifies Account/Org/Workspace membership against Aurora, and signs a short-lived, scoped Application Credential. The fronting gateway proxies requests to the node over TLS/relay with `Authorization: Bearer <app_token>`. The node’s auth seam verifies the credential without speaking directly to GitHub.
+* **NEVER Do:**
+  * NEVER bind `0.0.0.0` with the static local loopback token.
+  * NEVER pass or store personal GitHub PATs or OAuth tokens on the compute node.
+  * NEVER bypass or soften lock-by-default transactional checks in `state.db` for cloud callers.
+
+### 2. Foundation Constraints
+* **Accept — Workspace-relative APIs only:** Eliminate root-relative routes like `/note`. Every endpoint must route under `/w/<slug>/api/*` to guarantee multitenant proxyability.
+* **Accept with Seam — Workspace identity (Slug vs. ARN):** Keep `<slug>` as the node-local URL segment, but permit the header/envelope to carry the canonical ARN (`synlynk:account/...:workspace/<id>`) without forcing schema rewrites.
+* **Reject — Chrome Hub as Account-shaped hierarchy in v0.26.7:** Keep the local Hub as a machine daemon index; do not emulate Aurora Account/Org trees locally.
+* **Accept — Pluggable `authorize_request`:** Structure `authorize_local_request` behind a generic interface accepting header tokens, enabling the cloud bearer-token adapter.
+* **Accept — Node-local SSE/telemetry:** Retain SSE (`/w/<slug>/api/daemon/stream`) as an isolated node stream; do not couple local daemons to cloud message brokers.
+
+### 3. Local + Hosted in One Account
+* **Never merge `state.db` files:** Compute nodes authoritatively own their SQLite `state.db` (EFS on Fargate; `~/.synlynk/` on laptops). Distributed database syncing is an anti-pattern.
+* **Hub Routing:** The synlynk.com Account Hub lists cards using registry `kind=local|hosted`. Hosted workspaces deep-link to cloud endpoints; local workspaces deep-link via Phase 3 Relay pairing tunnels or loopback URLs.
+* **Swarm Fencing:** Phase 4 ephemeral swarm nodes (`job-*`) mount transient execution roots, report telemetry directly into the parent workspace's `cost_entries`/`capability_ratings`, and are tagged `kind=ephemeral`, completely preventing them from minting standalone Workspace cards in the Account Hub.
+
+### 4. Scope Guard & Position
+Add a non-implementing appendix, **"Future Evolution: Hosted & Remote Seams"**, to the [v0.26.7 design spec](file:///Users/nikhilsoman/dev/synlynk/.worktrees/docs-grok-v0267-vizor-interactive/docs/superpowers/specs/2026-10-31-v0.26.7-vizor-interactive-write-path-design.md), restricted to four architectural invariants:
+1. *Strict Workspace-Relative Addressing:* Enforce `/w/<slug>/api/*` across all write handlers.
+2. *Replaceable Auth Seam:* Encapsulate loopback checks within an abstract `authorize_request` function signature.
+3. *Registry Metadata Seam:* Require `kind` (`canonical` | `ephemeral` | `remote_ref`) to fence transient worktrees and cloud nodes uniformly.
+4. *Authoritative Local State:* Explicitly prohibit cross-node `state.db` reconciliation.
+
+Leave all cloud authentication, Aurora schemas, Fargate/EFS provisioning, and swarm orchestration strictly to the synlynk.com Phase 1–4 specs. I recommend signing off on the v0.26.7 spec with this non-implementing boundary locked in place.
+
+### codex
+[model=default; version=codex-cli 0.163.0]
+
+The remote write-path should preserve the node contract exactly. A Hosted Workstation runs the same workspace daemon and exposes the same `/w/<slug>/api/*` routes, transactional `state.db` updates, notes store, board stage/status, and lock-by-default GOVERNS edits. The difference is an authenticated edge adapter: GitHub login resolves Person → Account/Org/Workspace membership, then issues a scoped Application credential to the Vizor session. That credential is translated into the node-local authorization context consumed by `authorize_local_request` (or its replaceable equivalent). GitHub identity must never be passed directly into workspace mutation logic. Never expose `0.0.0.0` with the local token, accept personal GitHub tokens as application authorization, or bypass lock-by-default.
+
+The local spec should add future-only seams: workspace-relative APIs are mandatory, with no site-root `/note` contract; slug is a local routing alias, while hosted identity must additionally support a stable ARN/resource ID. `authorize_*` should be documented as an authorization seam, not hard-coded as permanently local-token-specific. Hub should already be conceptually Account-shaped: it lists Workspace records, not merely local folders. SSE/heartbeat remain node-local telemetry; hosted control planes may export/aggregate derived health, but Vizor’s event stream must not become a cloud message bus. These constraints follow the vision’s stable ARN, re-pointable parent edge, Application credential, and provider-agnostic auth seams.
+
+A unified Hub should represent `registry.kind=local|hosted`, owner endpoint, stable workspace identity, and deep-link metadata. It must never merge two `state.db` files: one node remains authoritative, while relay pairing later provides connectivity. Hosted ephemeral Phase-4 `job-*` nodes are leases/jobs, not durable Workspaces; the round-1 registry kind/path-root fencing must exclude them from durable Hub cards unless explicitly promoted.
+
+Only these principles belong in v0.26.7’s non-implementing Future appendix: stable workspace identity beyond slug; replaceable authorization; workspace-relative route discipline; local/hosted registry records and authoritative-node deep links; relay and ephemeral-node fencing; node-local telemetry export; explicit prohibition on database merging and token exposure. Account APIs, GitHub adapter details, billing, cross-workspace rollups, CLI-service parity, provisioning, and swarm orchestration belong entirely to later synlynk.com phase specs.
+
+**Position:** amend the current spec with that short Future section as foundation constraints only. Do not implement hosted auth, Account Hub, relay, aggregation, or cloud transport in v0.26.7; the local write-path remains the sole shipped product and the compatibility contract for future phases.
+
+### grok
+[model=default; version=grok 1.0.70 (f50904eaee6c) [stable]]
+
+I'll ground this in the v0.26.7 write-path spec and the synlynk.com platform vision, then answer the four future-direction questions as foundation constraints only.## 1. Remote workspace write-path
+
+A Hosted Workstation (platform vision Phase 2) runs the same Vizor node: machine-scoped daemon, `state.db` resolved only through the registry, writes under `/w/<slug>/…`. `resolve_workspace_context` already refuses client-supplied filesystem paths and loads `repo_path` plus `canonical_path` from the registry. Board stage/status stays the live write. Notes stay in the existing `.synlynk/viz-notes.json` sidecar. GOVERNS stage edits stay locked by default and commit through `roadmap update`. GOVERNS agent roles stay orthogonal to human Account/Org/Workspace roles, as the 2026-10-23 vision already requires.
+
+What changes is the door in front of that node. `authorize_local_request` in `synlynk/local_http_auth.py` is a loopback shared secret: `X-Synlynk-Token` from `~/.synlynk/daemon.token` (mode 0600), plus an Origin/Referer check limited to `localhost` / `127.0.0.1` / `::1`. Cookies are already forbidden because browsers would attach them on cross-site POSTs. On synlynk.com the sequence is GitHub login (an auth adapter, not Cognito inside Vizor) to a Person, then Account/Org/Workspace membership, then a Phase 1 Application credential. The edge presents that credential to the node. The node never receives the person's GitHub OAuth token or a personal `GH_TOKEN`.
+
+Never bind `0.0.0.0` with the local token. Never put the daemon token in the browser. Never skip lock-by-default because the caller is logged in. Never let a human Account role stand in for `merge_authority`.
+
+## 2. Foundation constraints for this spec
+
+Accept these as non-implementing constraints:
+
+- **Workspace-relative writes only.** Section 6 still allows "or a documented global path." Today's Gantt `fetch('/note')` hits the site root and 404s. The hosted contract is `/w/<slug>/api/*`. A local compatibility shim may inject the slug. It is not a second API.
+- **Slug is the route key. It is not the durable id.** Registry entries already carry `product_id` separate from `slug`. The vision's ARN (`synlynk:account/…:workspace/<id>`) is a re-pointable parent edge in a later store. Do not encode Account or Org into Vizor URLs or into `state.db`.
+- **Hub is a projection of registry entries**, shaped like an Account's workspace list. Locally that Account is one machine. Cards carry slug, kind, and the node that owns the workspace.
+- **One authorize function.** Call sites use `authorize_local_request(headers) -> (ok, status, message)`. A later adapter may accept an Application credential. Do not inline the token compare, and do not add a second auth stack in the handlers.
+- **SSE and heartbeat stay node-local.** `/w/<slug>/api/daemon/stream` is telemetry exported from the node that holds `state.db`. It is not a cloud bus.
+
+Reject for this edition, including as hidden implementation: cross-workspace rollup, cost aggregation, CLI-service parity, Aurora, GitHub OAuth, Fargate, relay pairing, and any Workspace rename. The Architect Map already visualizes the Workspace multi-repo graph. No rename.
+
+## 3. Local and hosted in one Account
+
+One Account Hub lists both kinds. `kind=local` cards open `http://127.0.0.1:<memorable-port>/w/<slug>/…` on the laptop daemon. `kind=hosted` cards deep-link to the Phase 2 workstation endpoint that owns that `state.db`. Phase 3 relay pairing (`relay_hub.py`, today's `devices.json`) connects a cloud workstation to local models and files. It does not copy or merge databases. A Repo has one canonical owning Workspace. Attachment edges are read/link-only. Two `state.db` files never merge.
+
+Round 1's fence is the same rule for Phase 4. Registry `kind` plus path-root, not slug prefixes. Durable workspaces live under the workspace root (`~/.synlynk/workspaces/…` locally, the EFS workspace root when hosted). `job-*`, `djob-*`, and swarm dispatch machines are `kind=ephemeral` and stay off the Hub. A Phase 4 node is a dispatch target that runs `synlynk dispatch` and tears down. It is not a Workspace and must not register as a Hub product. Phase 2's Fargate and EFS primitive is what Phase 4 reuses. Vizor does not grow a second control plane for it.
+
+## 4. Scope guard
+
+**Add to the v0.26.7 spec as a non-implementing "Future evolution" appendix:**
+
+- New writes are `/w/<slug>/api/*`. Site-root POST is not the contract.
+- `authorize_local_request` is the only auth seam. Bind stays `127.0.0.1` on the node. `daemon.token` never leaves the node. Personal GitHub tokens never enter Vizor. Cookies stay forbidden.
+- Reserve optional registry fields, unset in this edition: `kind` (`durable|ephemeral`, with room for `local|hosted`), `path_root`, `node_origin`. Hub shows durable only. The same fence covers local junk slugs and future swarm nodes.
+- Slug routes. Existing `product_id` is the stable local id. ARNs are not stored in `state.db`.
+- SSE and heartbeat remain node-local.
+- Repeat the round-1 deferrals: no cross-workspace rollup, no cost aggregation, no CLI-service parity.
+- Lock-by-default and Role App tokens stay on the GOVERNS axis, separate from human Account roles.
+
+**Leave entirely to the synlynk.com phase specs:** Phase 1 membership, Application credentials, ARN parent edges, and the GitHub login adapter; Phase 2 TLS edge, credential injection, EFS placement of `state.db`, idle teardown; Phase 3 relay pairing; Phase 4 swarm provisioning; the Account dashboard UI.
+
+## Position
+
+Amend the v0.26.7 spec with that appendix and nothing else. Do not add routes, auth modes, registry population, or a hosted client. The local write-path stays the product: loopback daemon, registry-resolved `state.db`, workspace-scoped POSTs, lock-by-default GOVERNS edits. Hosted Vizor is the same node behind an auth adapter. Building the adapter, the Account Hub, or swarm fencing beyond the reserved fields belongs in the phase specs, not in this milestone.
+
+## Synthesis
+Decision: Approve the v0.26.7 spec's write-path as scoped, amended with a single non-implementing "Future Evolution: Hosted & Remote Seams" appendix — no code, no new endpoints, no VERSION bump, no expansion of Wave B/C scope. The four panelists converge tightly: the node contract (daemon, `/w/<slug>/api/*`, `state.db`-as-sole-writer, lock-by-default GOVERNS edits, node-local SSE/telemetry) stays byte-for-byte identical whether local or hosted; everything hosted-specific (GitHub OAuth, Account/Org/Workspace membership, Application credentials, Aurora, Fargate/EFS, relay pairing, swarm provisioning) is strictly an edge adapter in front of that node and belongs entirely to the synlynk.com phase specs, not this one.
+
+Appendix bullets (exactly these, nothing more):
+1. **Workspace-relative addressing only** — all writes under `/w/<slug>/api/*`; no site-root routes (e.g. the Gantt `/note` bug is the cautionary example, not a precedent).
+2. **Replaceable `authorize_*` seam** — `authorize_local_request` is named/structured as a single-call-site interface so a future bearer-credential adapter can wrap it without touching per-route handlers.
+3. **Registry `kind` + stable-id seam** — add (unset today) `kind: local|hosted|ephemeral` plus a path-root/owning-node pointer; slug remains the local routing key, but is documented as mappable 1:1 to a future ARN segment. This single field generalizes round 1's Hub junk-fencing (`job-*`/`djob-*`) to Phase 4 swarm nodes later — same filter, two populations.
+4. **Node-local telemetry, never a bus** — SSE/heartbeat stay per-node; hosted aggregation polls/relays, it does not publish into a shared channel.
+5. **Explicit non-negotiables carried forward**: never bind `0.0.0.0` with the local token; never accept a personal GitHub token as an authorization principal; never bypass lock-by-default for an authenticated-but-remote caller; never merge two `state.db` files.
+
+Everything else raised in this round — the GitHub-login adapter mechanics, Application credential issuance, Account-shaped Hub hierarchy, relay pairing, Fargate/EFS node topology, and swarm job-* orchestration — is explicitly deferred to the synlynk.com Phase 1–4 specs, consistent with round 1's existing deferral of cross-workspace rollup and CLI-service parity. No panelist dissents from this boundary; Agy's suggestion to reject "Account-shaped Hub" in this edition is adopted (keep Hub as a local machine index for now, with the registry `kind` field merely reserved for later).
+
+## Decision
+Decision: Approve the v0.26.7 spec's write-path as scoped, amended with a single non-implementing "Future Evolution: Hosted & Remote Seams" appendix — no code, no new endpoints, no VERSION bump, no expansion of Wave B/C scope. The four panelists converge tightly: the node contract (daemon, `/w/<slug>/api/*`, `state.db`-as-sole-writer, lock-by-default GOVERNS edits, node-local SSE/telemetry) stays byte-for-byte identical whether local or hosted; everything hosted-specific (GitHub OAuth, Account/Org/Workspace membership, Application credentials, Aurora, Fargate/EFS, relay pairing, swarm provisioning) is strictly an edge adapter in front of that node and belongs entirely to the synlynk.com phase specs, not this one.
+
+> Signatures: see 2026-10-31-v0-26-7-vizor-hosted-local-future-r2-202.json

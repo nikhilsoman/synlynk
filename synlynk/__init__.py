@@ -46,6 +46,7 @@ def _vizor_daemon_process() -> bool:
 if not _FAST_CLI:
     import argparse
     from pathlib import Path
+    from synlynk.db import _try_sync_arc_by_version
 
 # The compatibility surface below historically relied on these names being
 # available from the package module.  Keep that behavior for imports/tests,
@@ -2834,6 +2835,19 @@ def checkpoint() -> None:
         print(f"  Archived: {names}")
     print(f"  Budget: ${total_usd:.2f} / ${limit_usd:.2f} ({pct:.0f}%)  ·  {total_requests} requests")
 
+def _mark_roadmap_arc_shipped(version: str) -> None:
+    """Flip a roadmap arc to shipped and sync its Milestone closed."""
+    conn = _get_db()
+    try:
+        conn.execute(
+            "UPDATE roadmap_arcs SET status='shipped' WHERE version=?", (version,)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    _try_sync_arc_by_version(version)
+
+
 def cmd_release(
     dry_run: bool = False,
     version: Optional[str] = None,
@@ -3144,7 +3158,11 @@ merged: YYYY-MM-DD (or status: open)
     print(f"    - [{'x' if ceremony_res.docs_updated else ' '}] Synlynk Docs bundles synchronized: Quick Start, Official Reference, Command Ref (HTML & PDF)")
     print(f"[ ] git tag v{next_version} && git push --tags")
     print(f"[ ] gh release create v{next_version}")
-    print("[ ] Roadmap row marked shipped")
+    if dry_run:
+        print(f"  [ ] Roadmap row would be marked shipped and Milestone closed — {next_version}")
+    else:
+        _mark_roadmap_arc_shipped(next_version)
+        print(f"  [x] Roadmap row marked shipped and Milestone closed — {next_version}")
 
 
 def cmd_marketing_ceremony(
