@@ -376,3 +376,55 @@ containerized execution — is the next queued item per the blog post's stated g
   existing comments first to avoid duplicating prior phase-rollup content already posted
   by `synlynk-synlynk-dev`/`synlynk-synlynk-qa`/`nikhilsoman`.
 [@claude]
+
+## 2026-10-31 — roadmap.md/state.db "divergence" root-caused as gh:#2653 cutover (non-bug), branch rebased, 4 Dependabot alerts fixed via dispatch
+
+- Investigated an apparent data-integrity gap: `~/.synlynk/workspaces/synlynk/state.db`'s
+  `roadmap_phases` table had no rows for v0.26.7–v0.27.5 even though the committed
+  `project-docs/roadmap.md` on this branch described that content. Ruled out `get_state_db_path()`
+  resolution (`synlynk/__init__.py`) and `synlynk/_fast_cli.py`'s cold-start shortcuts as causes —
+  both were resolving/behaving correctly. `git log --oneline --all -S "v0.27.5" -- project-docs/roadmap.md`
+  surfaced the real cause: commit `00520644` (PR #4964, gh:#2653) retired `roadmap.md`/`todo.md`/
+  `costs.md` from git tracking entirely — `state.db` is now sole authority, GitHub Milestones/
+  Issues (via `synlynk gh sync-roadmap`) are the shareable projection. This branch simply predated
+  that cutover (11 commits behind on the file). Not a bug — documented the correction in this
+  devlog's addendum entry and in memory (`gh2139-still-open-correction.md`).
+- Rebased `docs/claude/synlynk-com-platform-vision` onto `origin/main` to pick up gh:#2653 and
+  everything since. Hit 4 conflicts on commit `6d322dd2`: `project-docs/costs.md`/`todo.md`
+  (modify/delete — resolved by accepting upstream's deletion, since they're no longer tracked)
+  and `project-docs/archive/.costs-archive.cursor` / `costs-2026-H10.md` (content conflicts —
+  resolved by keeping HEAD's newer/more-complete side, since in a rebase conflict HEAD represents
+  the already-rebased-onto content and the incoming side is the stale pre-rebase commit). Used a
+  one-off Python regex pass to strip conflict markers, fixing a silent miss on
+  `costs-2026-H10.md` where the incoming block was empty (`(?:.*?\n)?` instead of a
+  required-content `.*?\n`). Rebase completed cleanly through all 12 commits; verified
+  `origin/main` is an ancestor of `HEAD` post-rebase. Pushed (branch had never been pushed before,
+  confirmed via `git ls-remote` showing nothing remote, so no force-push risk).
+- The push surfaced 4 open Dependabot alerts on `main`. Role-scoped `gh api` reads of the
+  alerts endpoint 403'd for every available identity (`qa`, `architect`, `pm`, `dev` — none has
+  the `security_events` scope), so asked Nikhil to run the `gh api .../dependabot/alerts` read
+  himself via the `!` prefix per the "only ask when genuinely can't" rule — got back 2 high
+  `js-yaml` alerts (CVE-2026-84375) and a high+low `markdown-it` pair (CVE-2026-111758/111766),
+  all CWE-400/407 CPU-DoS class. Traced both to transitive devDependencies of `@11ty/eleventy`
+  (website's static-site build tool only, not runtime code) via `website/package-lock.json`, and
+  confirmed via local `npm audit --json` that `fixAvailable: true` for all 5 related findings
+  with no `--force`/major bump needed.
+- Filed gh:#4986 as the tracking issue and dispatched the actual fix rather than doing it myself,
+  per the Default Agent Role split (implementation work routes off Claude by default even when
+  mechanical). Codex (`job-7dfa3f4e`, ~$0.19) ran `npm audit fix` in `website/`, verified
+  `npm run build` (537 files) and the pytest slice (83 passed), and opened PR #4987 with only
+  `website/package-lock.json` touched. Dispatched Grok as a cross-harness+model reviewer
+  (`job-1dd35a03`, ~$0.41, `qa` role) per the Hardened PR Review Policy — it independently
+  re-ran the build/audit/tests, confirmed `synlynk pr check`/`policy check-merge` green, posted
+  qa APPROVE, and merged PR #4987 itself (`bde47f14`) as the final step of its own dispatch
+  (never the interactive session, per the PR #2149 auto-mode-classifier RCA). Independently
+  re-verified the merge via `gh pr view --json state,mergedAt,mergeCommit,reviews` rather than
+  trusting either job's self-report. Result: `npm audit` now reports 0 high / 0 low (down from
+  2 high + 1 low); 3 moderate findings remain in the `@11ty/eleventy → recursive-copy → minimatch`
+  chain, documented as out of scope (needs a `minimatch` major v11 bump).
+- Swept both dispatch worktrees/branches (`job-7dfa3f4e`/`chore/codex/npm-audit-fix-website`,
+  `job-1dd35a03`/`dispatch/grok/job-1dd35a03`) same-turn per Worktree Hygiene Protocol — both
+  clean, PR state confirmed MERGED before removal. Posted the status rollup on the tracking
+  issue (gh:#4986#issuecomment-6545548566); the issue had already auto-closed via PR #4987's
+  "Fixes #4986" text.
+[@claude]
