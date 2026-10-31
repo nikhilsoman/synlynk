@@ -54,6 +54,117 @@ def load_workspace_sentinel_alerts(sentinel_path: str, *, active_only: bool = Fa
         })
     return alerts
 
+
+def load_sentinel_acks(path: str) -> dict:
+    """Read the ack sidecar. A missing or corrupt file is an empty ack set.
+
+    Writes land in a later change. This reader must not create the file.
+    """
+    empty = {"version": 1, "acks": []}
+    if not path or not os.path.isfile(path):
+        return empty
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        import logging
+        logging.getLogger(__name__).info("sentinel acks unreadable: %s", path)
+        return {"version": 1, "acks": []}
+    if not isinstance(data, dict) or not isinstance(data.get("acks"), list):
+        import logging
+        logging.getLogger(__name__).info("sentinel acks unreadable: %s", path)
+        return {"version": 1, "acks": []}
+    return {"version": 1, "acks": data["acks"]}
+
+
+_SEV_RANK = {"CRITICAL": 3, "CRIT": 3, "WARNING": 2, "WARN": 2, "INFO": 1}
+
+
+def _code_key(alert: dict) -> str:
+    code = str(alert.get("pattern") or alert.get("code") or "").strip().upper()
+    return code or "UNPARSED"
+
+
+def _last_seen(alert: dict) -> str:
+    return str(alert.get("last_seen") or alert.get("ts") or "")
+
+
+def group_workspace_sentinel_alerts(alerts, acks=None, *, member_cap: int = 50) -> dict:
+    """Split projected alerts into Active groups and Acked groups.
+
+    ``acks`` is the sidecar object ``{"version": 1, "acks": [...]}`` or ``{}``.
+    Occurrence / pattern hide rules are applied here so Overview and SSE share one shape.
+    """
+    from synlynk.sentinel import _alert_identity
+
+    acks = acks or {}
+    ack_rows = list(acks.get("acks") or [])
+    active_alerts = [a for a in (alerts or []) if not a.get("resolved")]
+    buckets = {}
+    for alert in active_alerts:
+        key = _code_key(alert)
+        bucket = buckets.setdefault(key, [])
+        bucket.append(alert)
+
+    def _hidden(alert, code):
+        identity = list(_alert_identity({
+            "severity": alert.get("severity"),
+            "code": code if code != "UNPARSED" else "",
+            "message": alert.get("message") or "",
+        }))
+        last = _last_seen(alert)
+        for row in ack_rows:
+            kind = row.get("kind")
+            if kind == "occurrence" and list(row.get("identity") or []) == identity:
+                watermark = str(row.get("last_seen_at_ack") or "")
+                if not last or last <= watermark:
+                    return True
+            if kind in ("pattern", "group") and str(row.get("code") or "").upper() == code:
+                watermark = str(row.get("last_seen_at_ack") or "")
+                if not last or last <= watermark:
+                    return True
+        return False
+
+    def _pack(code, members, collapsed_default):
+        count = sum(int(m.get("occurrences") or 1) for m in members)
+        firsts = [m.get("first_seen") or m.get("ts") or "" for m in members]
+        lasts = [_last_seen(m) for m in members]
+        worst = max(members, key=lambda m: _SEV_RANK.get(str(m.get("severity") or "").upper(), 0))
+        shown = members[:member_cap]
+        return {
+            "code": code,
+            "severity": str(worst.get("severity") or "WARNING").upper(),
+            "count": count,
+            "first_seen": min((x for x in firsts if x), default=""),
+            "last_seen": max((x for x in lasts if x), default=""),
+            "collapsed": bool(collapsed_default if collapsed_default is not None else count > 3),
+            "members": shown,
+            "hidden_member_count": max(0, len(members) - len(shown)),
+        }
+
+    groups = []
+    acked = []
+    for code, members in buckets.items():
+        visible = [m for m in members if not _hidden(m, code)]
+        hidden = [m for m in members if _hidden(m, code)]
+        if visible:
+            packed = _pack(code, visible, None)
+            packed["collapsed"] = packed["count"] > 3
+            groups.append(packed)
+        if hidden and not visible:
+            packed = _pack(code, hidden, True)
+            packed["collapsed"] = True
+            acked.append(packed)
+    groups.sort(key=lambda g: (-_SEV_RANK.get(g["severity"], 0), -g["count"], g["code"]))
+    acked.sort(key=lambda g: g["code"])
+    return {
+        "groups": groups,
+        "acked": acked,
+        "active_count": sum(g["count"] for g in groups),
+        "acked_count": sum(g["count"] for g in acked),
+    }
+
+
 def collect_data(*, db_path: Optional[str] = None) -> dict:
     """Collect workspace-owned goal data from an explicitly scoped ledger.
 
