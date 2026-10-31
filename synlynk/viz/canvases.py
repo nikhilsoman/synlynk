@@ -254,77 +254,6 @@ window.addEventListener('message', function(e) {
   }
 });
 
-function triggerBs6KgRefresh(btn) {
-  if (!btn) btn = document.getElementById('bs6-kg-refresh-btn');
-  const chip = document.getElementById('bs6-kg-status-chip') || document.querySelector('.am-kg-chip');
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = '🔄 Refreshing...';
-  }
-  if (chip) chip.textContent = '⏳ Extracting AST Knowledge Graph...';
-
-  const pathParts = window.location.pathname.split('/');
-  let refreshUrl = '/api/graph/refresh';
-  if (pathParts[1] === 'w' && pathParts[2]) {
-    refreshUrl = '/w/' + encodeURIComponent(pathParts[2]) + '/api/graph/refresh';
-  }
-
-  fetch(refreshUrl, {
-    method: 'POST',
-    headers: window.vizorAuthHeaders ? window.vizorAuthHeaders({ 'Content-Type': 'application/json' }) : { 'Content-Type': 'application/json' },
-    body: JSON.stringify({})
-  })
-  .then(res => {
-    if (!res.ok) throw new Error('Refresh failed with status ' + res.status);
-    return res.json();
-  })
-  .then(data => {
-    if (btn) {
-      btn.textContent = '✓ Refreshed';
-      setTimeout(() => { btn.textContent = '🔄 Refresh Graph'; btn.disabled = false; }, 2000);
-    }
-    if (chip) chip.textContent = '✓ Graph Refreshed';
-    const iframe = document.getElementById('bs6-graphify-frame') || document.querySelector('iframe');
-    if (iframe) {
-      iframe.src = iframe.src;
-    }
-  })
-  .catch(err => {
-    console.error(err);
-    if (btn) {
-      btn.textContent = '✗ Failed';
-      setTimeout(() => { btn.textContent = '🔄 Refresh Graph'; btn.disabled = false; }, 2500);
-    }
-    if (chip) chip.textContent = '✗ Extraction Failed';
-  });
-}
-
-function triggerGraphRefresh(el) {
-  if (el) el.textContent = '[Refreshing...]';
-  const pathParts = window.location.pathname.split('/');
-  let refreshUrl = '/api/graph/refresh';
-  if (pathParts[1] === 'w' && pathParts[2]) {
-    refreshUrl = '/w/' + encodeURIComponent(pathParts[2]) + '/api/graph/refresh';
-  }
-  fetch(refreshUrl, {
-    method: 'POST',
-    headers: window.vizorAuthHeaders ? window.vizorAuthHeaders({ 'Content-Type': 'application/json' }) : { 'Content-Type': 'application/json' },
-    body: JSON.stringify({})
-  })
-  .then(res => {
-    if (!res.ok) throw new Error('Refresh failed with status ' + res.status);
-    return res.json();
-  })
-  .then(data => {
-    if (el) el.textContent = '[Refreshed ✓]';
-    setTimeout(() => { location.reload(); }, 600);
-  })
-  .catch(err => {
-    if (el) el.textContent = '[Refresh Failed ✗]';
-    console.error(err);
-  });
-}
-
 function openKgSourceDrawer(filePath, startLine, endLine) {
   if (!filePath) return;
   const drawer = document.getElementById('kg-source-drawer');
@@ -447,8 +376,7 @@ def _generate_bs6_view_html(data: dict, port: int, view_key: str, view_title: st
     if is_stale:
         staleness_banner_html = (
             '<div class="am-stale-banner" id="graph-stale-banner">'
-            '<span>⚠️ Graph Stale (differs from HEAD commit) — '
-            '<a href="#" onclick="triggerGraphRefresh(this); return false;" style="color:#b45309;text-decoration:underline;">[Refresh]</a></span>'
+            '<span>⚠️ Graph Stale (differs from HEAD commit)</span>'
             '</div>'
         )
 
@@ -521,7 +449,6 @@ def _generate_bs6_view_html(data: dict, port: int, view_key: str, view_title: st
         <label class="am-kind-chip"><input type="checkbox" value="Test Suite" onchange="toggleAmKindFilter(this)"> Tests</label>
       </div>
       <span class="am-kg-chip" id="bs6-kg-status-chip">{num_clusters} Clusters · {total_symbols} AST Symbols</span>
-      <button type="button" id="bs6-kg-refresh-btn" class="am-btn-action" onclick="triggerBs6KgRefresh(this)" title="Re-extract AST Knowledge Graph">🔄 Refresh Graph</button>
     </div>
   </div>
   <div class="am-kg-canvas-full">

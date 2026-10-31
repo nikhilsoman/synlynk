@@ -306,7 +306,11 @@ def board_data_for_context(
         conn.close()
 
 
-def update_stage_for_context(ctx: WorkspaceContext, story_id: str, stage: str) -> bool:
+def update_stage_for_context(
+    ctx: WorkspaceContext, story_id: str, stage: str, *, unlocked: bool = False
+) -> bool:
+    if not unlocked:
+        return False
     stage_val = stage.strip().lower()
     if stage_val not in GOVERNS_STAGES:
         raise ValueError(f"invalid stage: {stage!r}")

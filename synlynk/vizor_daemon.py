@@ -217,6 +217,17 @@ def is_durable_hub_entry(slug: str, entry: dict) -> bool:
     return workspace_kind(entry, slug) != "ephemeral"
 
 
+def stamp_workspace_kind(slug: str, entry: dict) -> dict:
+    """Persist the derived workspace classification during a refresh write path."""
+    kind = workspace_kind(entry, slug)
+    path_root = str(entry.get("path_root") or entry.get("repo_path") or "")
+    if entry.get("kind") == kind and entry.get("path_root") == path_root:
+        return entry
+    from synlynk.state_registry import update_registered_product
+
+    return update_registered_product(slug, kind=kind, path_root=path_root)
+
+
 def _registered_workspaces() -> dict:
     """Return {slug: entry} for every registered product, or {} if no registry yet."""
     from synlynk.state_registry import _read_unlocked, registry_path
@@ -257,6 +268,7 @@ def refresh_workspace(slug: str, entry: dict, port: int) -> None:
     """Render one workspace's views into CACHE_ROOT/<slug>/. Raises on failure."""
     import synlynk.viz as viz_module
 
+    entry = stamp_workspace_kind(slug, entry)
     repo_path = entry.get("repo_path")
     db_path = entry.get("canonical_path")
     if not repo_path or not db_path:
@@ -910,6 +922,27 @@ def build_workspace_routing_handler():
                             self.wfile.write(body)
                         return False
 
+                    if api_route == "note" and self.command == "POST":
+                        from synlynk.viz.server import save_viz_note, _pkg
+
+                        length = int(self.headers.get("Content-Length", 0) or 0)
+                        payload = json.loads(self.rfile.read(length) or b"{}")
+                        try:
+                            result = save_viz_note(_pkg().VIZ_NOTES_PATH, payload)
+                        except ValueError as exc:
+                            body = json.dumps({"ok": False, "error": str(exc)}).encode("utf-8")
+                            self.send_response(400)
+                            self.send_header("Content-Type", "application/json")
+                            self.end_headers()
+                            self.wfile.write(body)
+                            return False
+                        body = json.dumps(result).encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json")
+                        self.end_headers()
+                        self.wfile.write(body)
+                        return False
+
                     if api_route == "daemon/stream" and self.command == "GET":
                         from synlynk.viz.server import serve_daemon_stream
 
@@ -933,7 +966,10 @@ def build_workspace_routing_handler():
 
                         length = int(self.headers.get("Content-Length", 0))
                         payload = json.loads(self.rfile.read(length))
-                        ok = update_stage_for_context(ctx, payload["story_id"], payload["stage"])
+                        ok = update_stage_for_context(
+                            ctx, payload["story_id"], payload["stage"],
+                            unlocked=bool(payload.get("unlocked")),
+                        )
                         res = json.dumps({"ok": ok}).encode("utf-8")
                         self.send_response(200 if ok else 400)
                         self.send_header("Content-Type", "application/json")
@@ -975,6 +1011,12 @@ def build_workspace_routing_handler():
                 super().do_HEAD()
 
         def do_POST(self):
+            from synlynk.local_http_auth import authorize_local_request
+
+            ok, code, message = authorize_local_request(self.headers)
+            if not ok:
+                self.send_error(code, message)
+                return
             if self._route_path():
                 super().do_POST()
 
