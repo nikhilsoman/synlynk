@@ -4558,5 +4558,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2655 \u2014 roadmap/cost/decision authority design spec + implementation plan (gh:#2653) (PR #2655, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #2655.\n\n#posts",
     "changelog": "### v0.26.6 (2026-10-31) - PR #2655\n- Merged improvements and fixes for PR #2655."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/532-pr4981-memory-devlog-entry-for-gh-2653-pr-2655-.md",
+    "title": "PR #4981 \u2014 memory + devlog entry for gh:#2653 PR #2655 close-out session",
+    "author": "nikhilsoman",
+    "date": "2026-10-31",
+    "pr": "#4981",
+    "version": "0.26.6",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #4981."
+    ],
+    "tweet": "\ud83d\ude80 PR #4981 \u2014 memory + devlog entry for gh:#2653 PR #2655 close-out session (PR #4981, v0.26.6)\n\n\u2022 Merged improvements and fixes for PR #4981.\n\n#posts",
+    "changelog": "### v0.26.6 (2026-10-31) - PR #4981\n- Merged improvements and fixes for PR #4981."
   }
 ]
