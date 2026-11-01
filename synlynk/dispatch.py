@@ -4812,13 +4812,18 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             _payment_mode = "credit_grant"
 
         _scope = "plan" if os.environ.get("SYNLYNK_SCHEDULE_RUN_ID") else "session"
-        if agent == "agy":
+        has_reservations_table = dconn.execute(
+            "SELECT 1 FROM sqlite_master "
+            "WHERE type='table' AND name='harness_reservations'"
+        ).fetchone()
+        existing_reservation = None
+        if has_reservations_table and agent == "agy":
             existing_reservation = dconn.execute(
                 "SELECT id FROM harness_reservations "
                 "WHERE status='open' AND job_id=? AND harness=? AND model=? AND track=?",
                 (job_id, agent, model or "unknown", _track),
             ).fetchone()
-        else:
+        elif has_reservations_table:
             existing_reservation = dconn.execute(
                 "SELECT id FROM harness_reservations "
                 "WHERE status='open' AND job_id=? AND harness=?",
@@ -4826,7 +4831,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             ).fetchone()
         reserve_result = {"accepted": True, "reason": "existing_reservation"}
         check_and_reserve_fn = _pkg("_check_and_reserve_quota")
-        if not existing_reservation and check_and_reserve_fn:
+        if (
+            not existing_reservation
+            and check_and_reserve_fn
+            and has_reservations_table
+        ):
             reserve_result = check_and_reserve_fn(
                 dconn,
                 harness=agent,

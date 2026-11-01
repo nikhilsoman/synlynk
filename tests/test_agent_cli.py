@@ -13,6 +13,22 @@ import pytest
 from synlynk.agent_cli import SEED_CHARTERS
 
 
+def _seed_agy_preflight_capacity():
+    import synlynk as sl
+
+    conn = sl._get_db()
+    for model in ("gemini-3.8-flash-low", "gemini-3.8-flash-medium", "gemini-3.8-flash-high"):
+        sl._upsert_agent_quota(
+            "agy", "5h", 1_000_000, track="gemini", model=model, conn=conn
+        )
+    conn.execute(
+        "INSERT INTO credit_grants (agent, face_value_usd, remaining_usd, granted_at) "
+        "VALUES ('agy', 100.0, 100.0, '2026-11-01')"
+    )
+    conn.commit()
+    conn.close()
+
+
 def _governs_gate_db():
     db = sqlite3.connect(":memory:")
     db.executescript(
@@ -3260,6 +3276,7 @@ def test_agy_headless_parity_pass_printtimeout_30(project_dir, monkeypatch):
         return type("DummyProc", (), {"pid": 9999})()
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    _seed_agy_preflight_capacity()
 
     dispatch_mod.dispatch_agent(
         agent="agy",

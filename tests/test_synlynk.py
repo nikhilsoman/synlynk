@@ -12,6 +12,20 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import synlynk
 
 
+def _seed_agy_preflight_capacity():
+    conn = synlynk._get_db()
+    for model in ("gemini-3.8-flash-low", "gemini-3.8-flash-medium", "gemini-3.8-flash-high"):
+        synlynk._upsert_agent_quota(
+            "agy", "5h", 1_000_000, track="gemini", model=model, conn=conn
+        )
+    conn.execute(
+        "INSERT INTO credit_grants (agent, face_value_usd, remaining_usd, granted_at) "
+        "VALUES ('agy', 100.0, 100.0, '2026-11-01')"
+    )
+    conn.commit()
+    conn.close()
+
+
 def test_cmd_config_set_routes_workspace_key(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     synlynk.cmd_config_set("local_fallback", "codex")
@@ -1118,6 +1132,7 @@ def test_dispatch_agent_injects_agy_permissions_header(tmp_path, isolated_db, mo
     monkeypatch.setattr("synlynk.dispatch.subprocess.Popen", fake_popen)
     monkeypatch.setattr(synlynk, "_probe_model_version", lambda *args, **kwargs: "unknown")
     from synlynk.dispatch import dispatch_agent
+    _seed_agy_preflight_capacity()
 
     with pytest.raises(RuntimeError):
         dispatch_agent(
@@ -4671,6 +4686,7 @@ def test_agy_dispatch_prompt_flag_after_other_flags(project_dir, monkeypatch):
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
+    _seed_agy_preflight_capacity()
 
     sl.dispatch_agent("agy", "summarise PRs", story_id="7", force_agent=True)
     shell_cmd = captured["cmd"][2]
@@ -4715,6 +4731,7 @@ def test_dispatch_agent_writes_prompt_file(project_dir, monkeypatch):
         pid = 99
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
+    _seed_agy_preflight_capacity()
     job = sl.dispatch_agent("agy", "write tests")
     assert os.path.exists(job["prompt_file"])
     content = open(job["prompt_file"]).read()
@@ -9029,6 +9046,7 @@ def test_agy_dispatch_injects_pythonunbuffered(project_dir, monkeypatch):
     monkeypatch.setattr(subprocess, "Popen", mock_popen)
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sl, "_probe_model_version", lambda agent, cli: "mock-model")
+    _seed_agy_preflight_capacity()
 
     # call dispatch_agent for agy with a minimal task
     sl.dispatch_agent("agy", "echo test")
