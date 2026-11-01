@@ -7,7 +7,8 @@ def test_goals_table_created():
     cols = {row[1] for row in conn.execute("PRAGMA table_info(goals)")}
     assert cols == {
         "id", "goal_id", "product_id", "outcome", "criterion", "deadline",
-        "status", "created_at", "kind",
+        "status", "created_at", "kind", "phase_id", "placement_status",
+        "placement_reason",
     }
     conn.close()
 

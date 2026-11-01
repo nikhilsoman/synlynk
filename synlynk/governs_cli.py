@@ -9,11 +9,86 @@ from __future__ import annotations
 import os
 import sqlite3
 import sys
+import hashlib
+import time
 from typing import Any, Dict, Optional
 
 from synlynk import _CYAN, _GREEN, _RED, _RESET, _YELLOW
 from synlynk.context import harvest_workspace_artifacts
 from synlynk.governs_engine import scoped_goals
+
+
+def cmd_governs_start(
+    *,
+    outcome: str,
+    criterion: str,
+    version: str | None = None,
+    phase_title: str | None = None,
+    deadline: str | None = None,
+    role: str = "pm",
+    kind: str = "feature",
+    unplaced: bool = False,
+    placement_reason: str | None = None,
+    conn: Optional[sqlite3.Connection] = None,
+) -> tuple[str, int | None]:
+    """Create a GOVERNS goal and its phase as one transaction.
+
+    The default path requires an existing roadmap arc and creates a phase.
+    ``unplaced`` is an explicit escape hatch for strategic/speculative work;
+    it always requires a reason and creates no phase.
+    """
+    from synlynk.policy import check_authority
+
+    if not outcome or not criterion:
+        raise ValueError("outcome and criterion are required")
+    if unplaced:
+        if version or phase_title:
+            raise ValueError("unplaced goals cannot specify a roadmap phase")
+        if not placement_reason:
+            raise ValueError("unplaced goals require a reason")
+    elif not version or not phase_title:
+        raise ValueError("a goal must have a roadmap version and phase title")
+
+    authority = check_authority("goal_create", role=role, repo_path=os.getcwd())
+    if not authority.allowed:
+        raise RuntimeError(f"Goal creation refused: role {role!r} is not authorized per policy.json.")
+
+    owns_conn = conn is None
+    if conn is None:
+        from synlynk import _get_db
+        conn = _get_db()
+    goal_id = "goal-" + hashlib.md5(f"{outcome}{time.time()}".encode()).hexdigest()[:8]
+    phase_id = None
+    try:
+        conn.execute("BEGIN")
+        if unplaced:
+            conn.execute(
+                "INSERT INTO goals (goal_id, outcome, criterion, deadline, kind, placement_status, placement_reason) "
+                "VALUES (?, ?, ?, ?, ?, 'unplaced', ?)",
+                (goal_id, outcome, criterion, deadline, kind, placement_reason),
+            )
+        else:
+            if not conn.execute("SELECT 1 FROM roadmap_arcs WHERE version=?", (version,)).fetchone():
+                raise ValueError(f"no roadmap arc with version={version!r}")
+            conn.execute(
+                "INSERT INTO roadmap_phases (arc_version, phase_title, status, priority, notes) "
+                "VALUES (?, ?, 'planned', 'P0', ?)",
+                (version, phase_title, f"GOVERNS goal: {goal_id}"),
+            )
+            phase_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(
+                "INSERT INTO goals (goal_id, outcome, criterion, deadline, kind, phase_id, placement_status) "
+                "VALUES (?, ?, ?, ?, ?, ?, 'placed')",
+                (goal_id, outcome, criterion, deadline, kind, phase_id),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        if owns_conn:
+            conn.close()
+    return goal_id, phase_id
 
 
 def cmd_governs_sweep(

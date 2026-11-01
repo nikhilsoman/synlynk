@@ -626,6 +626,18 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     governs_parser = subparsers.add_parser("governs", help="Manage GOVERNS lifecycle and reconciliation")
     governs_parser.add_argument("--full", action="store_true", help="Show full 7-stage internal GOVERNS FSM breakdown")
     governs_sub = governs_parser.add_subparsers(dest="governs_action")
+    governs_start_parser = governs_sub.add_parser(
+        "start", help="Create a GOVERNS goal and roadmap phase atomically"
+    )
+    governs_start_parser.add_argument("--outcome", required=True)
+    governs_start_parser.add_argument("--criterion", required=True)
+    governs_start_parser.add_argument("--version", default=None)
+    governs_start_parser.add_argument("--phase-title", default=None, dest="phase_title")
+    governs_start_parser.add_argument("--deadline", default=None)
+    governs_start_parser.add_argument("--role", default="pm")
+    governs_start_parser.add_argument("--kind", default="feature", choices=["feature", "loop"])
+    governs_start_parser.add_argument("--unplaced", action="store_true")
+    governs_start_parser.add_argument("--reason", default=None, dest="placement_reason")
     governs_sweep_parser = governs_sub.add_parser("sweep", help="Reconcile and backfill 100%% GOVERNS goal linkages and stages across workspace")
     governs_sweep_parser.add_argument("--dry-run", action="store_true", help="Calculate linkages and stage transitions without writing to state.db")
     governs_sweep_parser.add_argument("--strict", action="store_true", help="Fail with non-zero exit if any unlinked stories remain")
@@ -3539,9 +3551,22 @@ def main(argv=None) -> None:
         else:
             help_parsers.get("goal", parser).print_help()
     elif args.command == "governs":
-        from synlynk.governs_cli import cmd_governs_sweep, cmd_governs
+        from synlynk.governs_cli import cmd_governs_sweep, cmd_governs, cmd_governs_start
         action = getattr(args, "governs_action", None)
-        if action == "sweep":
+        if action == "start":
+            goal_id, phase_id = cmd_governs_start(
+                outcome=args.outcome,
+                criterion=args.criterion,
+                version=args.version,
+                phase_title=args.phase_title,
+                deadline=args.deadline,
+                role=args.role,
+                kind=args.kind,
+                unplaced=args.unplaced,
+                placement_reason=args.placement_reason,
+            )
+            print(f"GOVERNS started: {goal_id} phase={phase_id or 'unplaced'}")
+        elif action == "sweep":
             cmd_governs_sweep(dry_run=getattr(args, "dry_run", False), strict=getattr(args, "strict", False), verbose=getattr(args, "verbose", False))
         else:
             cmd_governs(full=getattr(args, "full", False))
