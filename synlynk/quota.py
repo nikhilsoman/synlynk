@@ -922,11 +922,17 @@ def _quota_status_for_agent(
                 reset = reset.replace(tzinfo=UTC)
         except (TypeError, ValueError):
             updated, reset = None, None
-        if updated is None or now - updated > timedelta(hours=24) or (reset is not None and reset <= now):
+        if updated is None or now - updated > timedelta(hours=24):
             return {
                 "status": "unknown", "headroom": None, "unit": None,
                 "degraded": True, "reason": "quota_stale",
             }
+        if reset is not None and reset <= now:
+            # A completed window is a normal rollover, not stale telemetry.
+            # Treat the next window as fresh until the next capture arrives.
+            row = dict(row)
+            row["used_tokens"] = 0
+            row["headroom"] = row.get("limit_tokens")
     if not rows:
         # No per-harness signal. Optionally fold in project request budget so
         # limit_requests is not an orphan field relative to the quota matrix.
@@ -1081,7 +1087,7 @@ def _check_and_reserve_quota(
         if quota.get("status") == "exhausted":
             conn.commit() if existing_reservation_id is not None else conn.rollback()
             return {"accepted": False, "reason": "quota_exhausted", "quota": quota}
-        if quota.get("reason") == "quota_stale":
+        if harness == "agy" and quota.get("reason") == "quota_stale":
             conn.commit()
             return {"accepted": False, "reason": "quota_stale", "quota": quota}
         if harness == "agy" and (

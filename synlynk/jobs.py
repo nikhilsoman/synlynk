@@ -491,24 +491,22 @@ def _provider_quota_failure_reason(log_text: str, exit_code: Optional[int] = Non
     """Classify provider capacity failures without conflating task failure."""
     if exit_code == 0:
         return None
-    text = (log_text or "").lower()
+    lines = (log_text or "").splitlines()[-40:]
+    lines = [
+        line for line in lines
+        if not re.search(r"\bpytest\b.*\bfailed\b|\btests?\b.*\bfailed\b", line, re.IGNORECASE)
+    ]
+    text = "\n".join(lines).lower()
     if not text:
         return None
-    if "429" in text and any(
-        marker in text
-        for marker in ("resource_exhausted", "resource exhausted", "quota", "credit", "too many requests")
-    ):
+    provider_429 = (
+        re.search(r"(?:error|exception|failed).*429", text)
+        or re.search(r"429.*(?:too many requests|resource[_ ]exhausted|credit|quota)", text)
+        or re.search(r"resource[_ ]exhausted.*(?:credit|balance|quota)", text)
+    )
+    if provider_429:
         return "provider_quota_429"
-    if any(
-        marker in text
-        for marker in (
-            "resource_exhausted",
-            "resource exhausted",
-            "quota exceeded",
-            "insufficient_quota",
-            "credits balance is too low",
-        )
-    ):
+    if re.search(r"(?:error|exception|failed).*?(?:quota exceeded|insufficient_quota|credits balance is too low)", text):
         return "provider_quota_exhausted"
     return None
 

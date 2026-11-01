@@ -412,6 +412,43 @@ def test_stale_selected_pool_is_unknown(project_dir):
     assert result["reason"] == "quota_stale"
 
 
+def test_elapsed_subscription_window_is_not_stale(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    past_reset = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - 60))
+    sl._upsert_agent_quota(
+        "codex", "5h", limit_tokens=100_000, used_tokens=0,
+        model="gpt-5", track="default", reset_at=past_reset, conn=conn,
+    )
+    result = sl._check_and_reserve_quota(
+        conn, harness="codex", model="gpt-5", track="default",
+        estimated_tokens=1000, estimated_cost_usd=0, payment_mode="subscription",
+        scope="session", job_id="job-rollover",
+    )
+    assert result["accepted"] is True
+
+
+def test_stale_subscription_harness_does_not_block_dispatch(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    sl._upsert_agent_quota(
+        "claude", "5h", limit_tokens=100_000, used_tokens=0,
+        model="claude-sonnet", track="default", conn=conn,
+    )
+    conn.execute(
+        "UPDATE harness_quotas SET updated_at='2000-01-01 00:00:00' WHERE harness='claude'"
+    )
+    conn.commit()
+    result = sl._check_and_reserve_quota(
+        conn, harness="claude", model="claude-sonnet", track="default",
+        estimated_tokens=1000, estimated_cost_usd=0, payment_mode="subscription",
+        scope="session", job_id="job-stale-subscription",
+    )
+    assert result["accepted"] is True
+
+
 def test_unchecked_existing_reservation_is_revalidated(project_dir):
     import synlynk as sl
 

@@ -4697,6 +4697,15 @@ def test_provider_quota_classifier_recognizes_standard_http_429():
     ) == "provider_quota_429"
 
 
+def test_provider_quota_classifier_ignores_429_in_ordinary_failure_prose():
+    from synlynk.jobs import _provider_quota_failure_reason
+
+    assert _provider_quota_failure_reason(
+        "pytest failed: mock provider returned 429 RESOURCE_EXHAUSTED for quota probe",
+        exit_code=1,
+    ) is None
+
+
 def test_zombie_reap_skips_worktree_when_terminal_cas_loses(
     tmp_path, project_dir, monkeypatch
 ):
