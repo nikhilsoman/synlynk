@@ -60,6 +60,7 @@ STATUS_UNKNOWN = "unknown"
 STATUS_CANCELLED = "cancelled"
 STATUS_INTERRUPTED = "interrupted"
 STATUS_PERMISSION_DENIED = "permission_denied"
+STATUS_PROVIDER_QUOTA_EXHAUSTED = "provider_quota_exhausted"
 STATUS_TASK_DELIVERY_FAILED = "task_delivery_failed"
 STATUS_FAILED_UNVERIFIED = "failed_unverified"
 STATUS_NEEDS_FIX = "needs_fix"
@@ -99,6 +100,7 @@ ALL_JOB_STATUSES = frozenset({
     STATUS_CANCELLED,
     STATUS_INTERRUPTED,
     STATUS_PERMISSION_DENIED,
+    STATUS_PROVIDER_QUOTA_EXHAUSTED,
     STATUS_TASK_DELIVERY_FAILED,
     STATUS_FAILED_UNVERIFIED,
     STATUS_NEEDS_FIX,
@@ -121,6 +123,7 @@ TERMINAL_JOB_STATUSES = frozenset({
     STATUS_CANCELLED,
     STATUS_INTERRUPTED,
     STATUS_PERMISSION_DENIED,
+    STATUS_PROVIDER_QUOTA_EXHAUSTED,
     STATUS_TASK_DELIVERY_FAILED,
     STATUS_FAILED_UNVERIFIED,
     STATUS_NEEDS_FIX,
@@ -152,6 +155,7 @@ FAILURE_LOOKING_JOB_STATUSES = frozenset({
     STATUS_CANCELLED,
     STATUS_INTERRUPTED,
     STATUS_PERMISSION_DENIED,
+    STATUS_PROVIDER_QUOTA_EXHAUSTED,
     STATUS_TASK_DELIVERY_FAILED,
     STATUS_FAILED_UNVERIFIED,
     STATUS_NEEDS_FIX,
@@ -481,6 +485,30 @@ def _force_scope_review_for_sentinel_cotrip(
 def _log_has_permission_denied_signature(log_text: str) -> bool:
     detector = _pkg("_log_has_permission_denied_signature")
     return bool(detector(log_text)) if detector else False
+
+
+def _provider_quota_failure_reason(log_text: str) -> Optional[str]:
+    """Classify provider capacity failures without conflating task failure."""
+    text = (log_text or "").lower()
+    if not text:
+        return None
+    if "429" in text and any(
+        marker in text
+        for marker in ("resource_exhausted", "resource exhausted", "quota", "credit")
+    ):
+        return "provider_quota_429"
+    if any(
+        marker in text
+        for marker in (
+            "resource_exhausted",
+            "resource exhausted",
+            "quota exceeded",
+            "insufficient_quota",
+            "credits balance is too low",
+        )
+    ):
+        return "provider_quota_exhausted"
+    return None
 
 
 def _should_classify_permission_denied(
@@ -6103,6 +6131,23 @@ def _reconcile_daemon_jobs() -> None:
                         summary_status = noop_label
                         summary_note = noop_note
 
+                provider_quota_reason = _provider_quota_failure_reason(log_text)
+                partial_work_evidence = None
+                if provider_quota_reason:
+                    status = STATUS_PROVIDER_QUOTA_EXHAUSTED
+                    summary_status = STATUS_PROVIDER_QUOTA_EXHAUSTED
+                    summary_note = (
+                        "provider quota or credit capacity was exhausted; "
+                        "partial worktree evidence was preserved"
+                    )
+                    partial_work_evidence = json.dumps(
+                        {
+                            "changed_files": sorted(set(files_touched)),
+                            "worktree_path": worktree_path,
+                        },
+                        sort_keys=True,
+                    )
+
                 # Reconciliation can overlap with the sentinel path or a
                 # second daemon pass.  Do not let a stale inspection overwrite
                 # a terminal state that another actor already committed.
@@ -6119,6 +6164,12 @@ def _reconcile_daemon_jobs() -> None:
                     # race.  Its status is authoritative; avoid emitting
                     # stale summaries, costs, or permission classifications.
                     continue
+                if provider_quota_reason:
+                    conn.execute(
+                        "UPDATE daemon_jobs SET terminal_reason=?, partial_work_evidence=? "
+                        "WHERE job_id=?",
+                        (provider_quota_reason, partial_work_evidence, job_id),
+                    )
                 duration_s = None
                 try:
                     end_ts = time.mktime(time.strptime(now, "%Y-%m-%dT%H:%M:%S"))

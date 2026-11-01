@@ -5644,7 +5644,16 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     elif _startup_failover and startup_exit not in (None, 0):
         secondary = _secondary_harness(agent, baselines_map)
         touched = _worktree_files_touched(worktree_path) if worktree_path else []
-        if secondary and not touched:
+        quota_failure_fn = _pkg("_provider_quota_failure_reason")
+        try:
+            with open(log_file, encoding="utf-8", errors="replace") as startup_log:
+                startup_log_text = startup_log.read()
+        except OSError:
+            startup_log_text = ""
+        startup_quota_failure = (
+            quota_failure_fn(startup_log_text) if quota_failure_fn else None
+        )
+        if secondary and not touched and not startup_quota_failure:
             if local_slot_claimed:
                 dconn.rollback()
             print(f"  ↪ startup failure on '{agent}' (exit {startup_exit}); failing over to '{secondary}'")

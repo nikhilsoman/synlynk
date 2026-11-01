@@ -245,6 +245,8 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     gh_write_evidence TEXT,
     gh_write_verification_attempts INTEGER NOT NULL DEFAULT 0,
     terminal_evidence_strength TEXT NOT NULL DEFAULT 'unknown',
+    terminal_reason TEXT,
+    partial_work_evidence TEXT,
     cost_missing_reason TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);
