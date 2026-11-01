@@ -4179,8 +4179,9 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
     required_capabilities = _story_routing_capabilities(
         task, task_type, requires, requires_gh_write
     )
+    auto_selection = agent is None or agent == "auto"
     picked = None
-    if task_domain and not static_baseline:
+    if auto_selection and task_domain and not static_baseline:
         try:
             from synlynk import _get_db
             conn = _get_db()
@@ -4195,13 +4196,13 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
                 picked = choice["harness"] if choice else None
         except Exception:
             picked = None
-    if story_id and not static_baseline and picked is None:
+    if auto_selection and story_id and not static_baseline and picked is None:
         best_agent = _pkg("_best_agent_for_story")
         if best_agent:
             best = _call_best_agent(best_agent, story_id, required_capabilities)
             if best and best in baselines_map:
                 picked = best
-    if picked is None and resolved_agent_role and not static_baseline:
+    if auto_selection and picked is None and resolved_agent_role and not static_baseline:
         from synlynk._constants import _role_dispatch_story_id
 
         synthetic_story_id = _role_dispatch_story_id(resolved_agent_role)
@@ -4210,7 +4211,7 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
             best = _call_best_agent(best_agent, synthetic_story_id, required_capabilities)
             if best and best in baselines_map:
                 picked = best
-    if picked is None and resolved_agent_role:
+    if auto_selection and picked is None and resolved_agent_role:
         picked = _harness_for_org_role(resolved_agent_role, baselines_map, requires_gh_write)
 
     # An explicitly forced harness is binding.  Auto-routing may still

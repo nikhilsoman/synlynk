@@ -17,6 +17,50 @@ def _register_agent(tmp_path, monkeypatch, agent_id, org_role):
     return agent_id
 
 
+def test_explicit_harness_is_binding_before_capability_probe(monkeypatch):
+    import synlynk as sl
+    import synlynk.capability_probe as probe_mod
+    from synlynk.dispatch import resolve_dispatch_harness
+
+    monkeypatch.setattr(sl, "_best_agent_for_story", lambda *_args, **_kwargs: "agy")
+    probed = []
+
+    def capture_probe(**kwargs):
+        probed.append(kwargs["candidate_harness"])
+        return kwargs["candidate_harness"]
+
+    monkeypatch.setattr(probe_mod, "resolve_capable_dispatch_harness", capture_probe)
+
+    resolved = resolve_dispatch_harness(
+        "codex", story_id="story-learned-agy", task="implement the requested fix"
+    )
+
+    assert resolved == "codex"
+    assert probed == ["codex"]
+
+
+def test_auto_harness_uses_learned_route_before_capability_probe(monkeypatch):
+    import synlynk as sl
+    import synlynk.capability_probe as probe_mod
+    from synlynk.dispatch import resolve_dispatch_harness
+
+    monkeypatch.setattr(sl, "_best_agent_for_story", lambda *_args, **_kwargs: "agy")
+    probed = []
+
+    def capture_probe(**kwargs):
+        probed.append(kwargs["candidate_harness"])
+        return kwargs["candidate_harness"]
+
+    monkeypatch.setattr(probe_mod, "resolve_capable_dispatch_harness", capture_probe)
+
+    resolved = resolve_dispatch_harness(
+        "auto", story_id="story-learned-agy", task="implement the requested fix"
+    )
+
+    assert resolved == "agy"
+    assert probed == ["agy"]
+
+
 def test_role_only_dispatch_uses_synthetic_story_capability_score(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     os.makedirs("synlynk/state", exist_ok=True)
@@ -42,7 +86,7 @@ def test_role_only_dispatch_uses_synthetic_story_capability_score(tmp_path, monk
     conn.commit()
     conn.close()
 
-    result = resolve_dispatch_harness("claude", agent_id="dev-agent-1")
+    result = resolve_dispatch_harness("auto", agent_id="dev-agent-1")
     assert result == "codex"
 
 
@@ -52,7 +96,7 @@ def test_role_only_dispatch_cold_start_falls_back_to_static_baseline(tmp_path, m
 
     _register_agent(tmp_path, monkeypatch, "dev-agent-2", "architect")
 
-    result = resolve_dispatch_harness("codex", agent_id="dev-agent-2")
+    result = resolve_dispatch_harness("auto", agent_id="dev-agent-2")
     assert result == "claude"
 
 
@@ -82,7 +126,7 @@ def test_static_baseline_forces_static_pick_over_synthetic_story_score(tmp_path,
     conn.close()
 
     result = resolve_dispatch_harness(
-        "codex", agent_id="dev-agent-3", static_baseline=True
+        "auto", agent_id="dev-agent-3", static_baseline=True
     )
     assert result == "claude"
 
@@ -111,7 +155,7 @@ def test_static_baseline_forces_static_pick_even_with_real_story_id_score(tmp_pa
     conn.close()
 
     result = resolve_dispatch_harness(
-        "codex", agent_id="dev-agent-4", story_id="story-real-1", static_baseline=True
+        "auto", agent_id="dev-agent-4", story_id="story-real-1", static_baseline=True
     )
     assert result == "claude"
 
