@@ -4831,10 +4831,15 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             ).fetchone()
         reserve_result = {"accepted": True, "reason": "quota_check_unavailable"}
         check_and_reserve_fn = _pkg("_check_and_reserve_quota")
+        if check_and_reserve_fn is None:
+            # The package compatibility surface is lazy and can be incomplete
+            # in parallel test/CLI startup. Quota enforcement must not fail
+            # open when that export has not yet been populated.
+            from synlynk.quota import _check_and_reserve_quota
+            check_and_reserve_fn = _check_and_reserve_quota
         if (
             check_and_reserve_fn
             and has_reservations_table
-            and not skip_preflight
         ):
             reserve_result = check_and_reserve_fn(
                 dconn,
