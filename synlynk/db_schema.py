@@ -544,6 +544,15 @@ CREATE TABLE IF NOT EXISTS harness_reservations (
 );
 CREATE INDEX IF NOT EXISTS idx_harness_reservations_harness ON harness_reservations(harness, status);
 
+CREATE TABLE IF NOT EXISTS quota_burn_rate_weights (
+    harness       TEXT NOT NULL,
+    model         TEXT NOT NULL,
+    multiplier    REAL NOT NULL DEFAULT 1.0,
+    sample_count  INTEGER NOT NULL DEFAULT 0,
+    updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (harness, model)
+);
+
 CREATE TABLE IF NOT EXISTS credit_grants (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     agent           TEXT NOT NULL,

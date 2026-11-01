@@ -54,6 +54,11 @@ def test_dispatch_agent_attaches_fence_estimate(monkeypatch, tmp_path):
         conn.execute(
             "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, story_id TEXT, status TEXT, priority INTEGER, depends_on TEXT, pid INTEGER, enqueued_at TEXT, started_at TEXT, log_path TEXT, dispatch_context TEXT)"
         )
+        conn.execute(
+            "CREATE TABLE quota_burn_rate_weights (harness TEXT NOT NULL, model TEXT NOT NULL, "
+            "multiplier REAL NOT NULL DEFAULT 1.0, sample_count INTEGER NOT NULL DEFAULT 0, "
+            "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (harness, model))"
+        )
         conn.commit()
         return conn
 
@@ -101,6 +106,11 @@ def test_dispatch_agent_fence_uses_prompt_estimate_with_context(monkeypatch, tmp
         conn.execute(
             "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, story_id TEXT, status TEXT, priority INTEGER, depends_on TEXT, pid INTEGER, enqueued_at TEXT, started_at TEXT, log_path TEXT, dispatch_context TEXT)"
         )
+        conn.execute(
+            "CREATE TABLE quota_burn_rate_weights (harness TEXT NOT NULL, model TEXT NOT NULL, "
+            "multiplier REAL NOT NULL DEFAULT 1.0, sample_count INTEGER NOT NULL DEFAULT 0, "
+            "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (harness, model))"
+        )
         conn.commit()
         return conn
 
@@ -145,6 +155,11 @@ def test_dispatch_agent_fence_uses_fallback_without_context(monkeypatch, tmp_pat
         )
         conn.execute(
             "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, story_id TEXT, status TEXT, priority INTEGER, depends_on TEXT, pid INTEGER, enqueued_at TEXT, started_at TEXT, log_path TEXT, dispatch_context TEXT)"
+        )
+        conn.execute(
+            "CREATE TABLE quota_burn_rate_weights (harness TEXT NOT NULL, model TEXT NOT NULL, "
+            "multiplier REAL NOT NULL DEFAULT 1.0, sample_count INTEGER NOT NULL DEFAULT 0, "
+            "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (harness, model))"
         )
         conn.commit()
         return conn
