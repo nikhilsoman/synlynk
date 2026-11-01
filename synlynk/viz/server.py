@@ -826,7 +826,12 @@ def serve_daemon_stream(handler, repo_path=None) -> None:
     import json
     import socket
 
-    from synlynk.viz.data import load_workspace_sentinel_alerts
+    from synlynk.viz.constants import SENTINEL_ACKS_PATH
+    from synlynk.viz.data import (
+        group_workspace_sentinel_alerts,
+        load_sentinel_acks,
+        load_workspace_sentinel_alerts,
+    )
     from synlynk.viz.heartbeats import read_beat
     from synlynk import vizor_daemon
 
@@ -863,9 +868,10 @@ def serve_daemon_stream(handler, repo_path=None) -> None:
         emit("heartbeat", payload)
         if repo_path is not None:
             sentinel_path = os.path.join(str(repo_path), ".synlynk", "sentinel.md")
-            emit("sentinel", {
-                "alerts": load_workspace_sentinel_alerts(sentinel_path, active_only=True),
-            })
+            alerts = load_workspace_sentinel_alerts(sentinel_path, active_only=True)
+            acks_path = os.path.join(str(repo_path), SENTINEL_ACKS_PATH)
+            hud = group_workspace_sentinel_alerts(alerts, load_sentinel_acks(acks_path))
+            emit("sentinel", hud)
         send_frame(": ping\n\n")
         while True:
             if _stream_client_closed(handler, interval):

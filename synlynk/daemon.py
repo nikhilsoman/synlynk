@@ -1377,6 +1377,33 @@ class SynlynkDaemon(WatchDaemon):
             if conn is not None:
                 conn.close()
 
+    def _run_quota_calibration_tick(self, config: dict) -> None:
+        """Runs automatic quota calibration from the daemon cadence.
+
+        calibrate_and_update_quota previously had no scheduled caller (only
+        the manual `synlynk quota calibrate` CLI command) and so silently
+        never ran unless a human remembered to invoke it (v0.26.9). This
+        mirrors _run_capability_watch_tick's structure: staleness gating
+        lives in the called function/module, not here.
+        """
+        conn = None
+        try:
+            from synlynk.quota import is_quota_calibration_stale, maybe_calibrate_quota
+
+            conn = _pkg("_get_db")()
+            if is_quota_calibration_stale(conn, threshold_hours=24):
+                maybe_calibrate_quota(conn=conn)
+        except Exception as exc:
+            _write_sentinel_alert(
+                "ERROR",
+                "QUOTA_CALIBRATION_TICK_FAILED",
+                f"Daemon quota calibration tick failed: {exc}. Check daemon.log and state.db.",
+                self.sentinel_path,
+            )
+        finally:
+            if conn is not None:
+                conn.close()
+
     def _maybe_run_autonomy_pass(self, launched: int) -> None:
         """Hybrid interval+idle trigger for the backlog/scheduling autonomy pass.
 
@@ -1711,6 +1738,7 @@ class SynlynkDaemon(WatchDaemon):
                 self._autonomous_tick()
                 self._last_autonomous_run = time.time()
             self._run_capability_watch_tick(config)
+            self._run_quota_calibration_tick(config)
             try:
                 _reconcile_daemon_jobs()
                 launched = _dispatch_ready_jobs(max_parallel=max_parallel)
@@ -1740,6 +1768,9 @@ class SynlynkDaemon(WatchDaemon):
                 except Exception:
                     _traceback.print_exc()
                 last_quota_poll = time.time()
+
+
+Daemon = SynlynkDaemon
 
 
 def _synlynk_daemon_child_main(*, blocking_lock: bool = True) -> None:

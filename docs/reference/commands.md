@@ -84,6 +84,10 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `type seed` (secondary) — execute
 - `type relabel` (secondary) — execute
 - `connector add` (secondary) — execute
+- `governs start` (primary) — goal
+- `governs audit` (secondary) — visualize
+- `governs rephase` (secondary) — sustain
+- `governs reconcile-unplaced` (secondary) — sustain
 - `fleet list` (secondary) — open
 - `fleet apply` (secondary) — open
 
@@ -145,6 +149,8 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `cost audit import` (secondary) — sustain
 - `cost audit report` (secondary) — sustain
 - `cost audit correct` (secondary) — sustain
+- `context checkpoint` (secondary) — sustain
+- `context pack` (secondary) — sustain
 - `credit grant` (secondary) — sustain
 - `quota` (secondary) — sustain
 - `quota advisory` (secondary) — sustain

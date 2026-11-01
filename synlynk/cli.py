@@ -326,7 +326,7 @@ _TOP_LEVEL_COMMANDS = (
     "roadmap", "policy", "credit", "backlog", "quota", "schedule", "pr", "capability",
     "instructions", "marketing", "roles", "release", "viz", "provenance",
     "backfill-capability-ratings",
-    "board", "concierge", "addon", "autonomy",
+    "board", "concierge", "addon", "autonomy", "context",
     "gateway",
 )
 
@@ -626,6 +626,29 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     governs_parser = subparsers.add_parser("governs", help="Manage GOVERNS lifecycle and reconciliation")
     governs_parser.add_argument("--full", action="store_true", help="Show full 7-stage internal GOVERNS FSM breakdown")
     governs_sub = governs_parser.add_subparsers(dest="governs_action")
+    governs_start_parser = governs_sub.add_parser(
+        "start", help="Create a GOVERNS goal and roadmap phase atomically"
+    )
+    governs_start_parser.add_argument("--outcome", required=True)
+    governs_start_parser.add_argument("--criterion", required=True)
+    governs_start_parser.add_argument("--version", default=None)
+    governs_start_parser.add_argument("--phase-title", default=None, dest="phase_title")
+    governs_start_parser.add_argument("--deadline", default=None)
+    governs_start_parser.add_argument("--role", default="pm")
+    governs_start_parser.add_argument("--kind", default="feature", choices=["feature", "loop"])
+    governs_start_parser.add_argument("--unplaced", action="store_true")
+    governs_start_parser.add_argument("--reason", default=None, dest="placement_reason")
+    governs_audit_parser = governs_sub.add_parser(
+        "audit", help="Audit explicit goal and roadmap phase coverage"
+    )
+    governs_audit_parser.add_argument("--strict", action="store_true")
+    governs_rephase_parser = governs_sub.add_parser("rephase", help="Move a goal to a roadmap phase with an audit reason")
+    governs_rephase_parser.add_argument("goal_id")
+    governs_rephase_parser.add_argument("--phase-id", type=int, required=True, dest="phase_id")
+    governs_rephase_parser.add_argument("--reason", required=True)
+    governs_rephase_parser.add_argument("--role", default="pm")
+    governs_reconcile_parser = governs_sub.add_parser("reconcile-unplaced", help="Annotate legacy unplaced goals without guessing phases")
+    governs_reconcile_parser.add_argument("--role", default="pm")
     governs_sweep_parser = governs_sub.add_parser("sweep", help="Reconcile and backfill 100%% GOVERNS goal linkages and stages across workspace")
     governs_sweep_parser.add_argument("--dry-run", action="store_true", help="Calculate linkages and stage transitions without writing to state.db")
     governs_sweep_parser.add_argument("--strict", action="store_true", help="Fail with non-zero exit if any unlinked stories remain")
@@ -2169,6 +2192,18 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     addon_install_parser = addon_sub.add_parser("install", help="Install an add-on bundle")
     addon_install_parser.add_argument("bundle", choices=_list_available_addons())
 
+    context_parser = subparsers.add_parser("context", help="Context compaction commands")
+    context_subparsers = context_parser.add_subparsers(dest="context_action")
+
+    checkpoint_parser = context_subparsers.add_parser("checkpoint", help="Write a resumption-ledger checkpoint")
+    checkpoint_parser.add_argument("--story-id", required=True)
+
+    pack_parser = context_subparsers.add_parser("pack", help="Build and print a task-boundary context pack")
+    pack_parser.add_argument("--story-id", required=True)
+    pack_parser.add_argument("--task-description", required=True)
+    pack_parser.add_argument("--auto-checkpoint", action="store_true")
+
+
     def format_root_help() -> str:
         return (
             "synlynk: The Universal Context Switchboard for AI Devs\n\n"
@@ -3539,9 +3574,31 @@ def main(argv=None) -> None:
         else:
             help_parsers.get("goal", parser).print_help()
     elif args.command == "governs":
-        from synlynk.governs_cli import cmd_governs_sweep, cmd_governs
+        from synlynk.governs_cli import cmd_governs_sweep, cmd_governs, cmd_governs_start, cmd_governs_audit, cmd_governs_rephase, cmd_governs_reconcile_unplaced
         action = getattr(args, "governs_action", None)
-        if action == "sweep":
+        if action == "start":
+            goal_id, phase_id = cmd_governs_start(
+                outcome=args.outcome,
+                criterion=args.criterion,
+                version=args.version,
+                phase_title=args.phase_title,
+                deadline=args.deadline,
+                role=args.role,
+                kind=args.kind,
+                unplaced=args.unplaced,
+                placement_reason=args.placement_reason,
+            )
+            print(f"GOVERNS started: {goal_id} phase={phase_id or 'unplaced'}")
+        elif action == "audit":
+            result = cmd_governs_audit(strict=getattr(args, "strict", False))
+            print(json.dumps(result, indent=2, sort_keys=True))
+        elif action == "rephase":
+            cmd_governs_rephase(args.goal_id, args.phase_id, args.reason, role=args.role)
+            print(f"GOVERNS rephased: {args.goal_id} -> phase {args.phase_id}")
+        elif action == "reconcile-unplaced":
+            count = cmd_governs_reconcile_unplaced(role=args.role)
+            print(f"GOVERNS annotated {count} legacy unplaced goals")
+        elif action == "sweep":
             cmd_governs_sweep(dry_run=getattr(args, "dry_run", False), strict=getattr(args, "strict", False), verbose=getattr(args, "verbose", False))
         else:
             cmd_governs(full=getattr(args, "full", False))
@@ -3910,6 +3967,23 @@ def main(argv=None) -> None:
         else:
             for name in list_available_addons():
                 print(f"  - {name}")
+    elif args.command == "context":
+        from synlynk.context_compaction import checkpoint, pack, inject
+        import getpass
+
+        if args.context_action == "checkpoint":
+            username = getpass.getuser()
+            wrote = checkpoint(story_id=args.story_id, username=username)
+            print("checkpoint written" if wrote else "checkpoint already current (no-op)")
+        elif args.context_action == "pack":
+            username = getpass.getuser() if args.auto_checkpoint else None
+            content_pack = pack(
+                story_id=args.story_id,
+                task_description=args.task_description,
+                username=username,
+                auto_checkpoint=args.auto_checkpoint,
+            )
+            print(inject(content_pack))
     else:
         parser.print_help()
 

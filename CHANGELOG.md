@@ -16,6 +16,38 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
 
+## [v0.26.8] - 2026-11-01
+### Added
+- feat: Harness Context Compaction Protocol — tasks 7-11 (CLI, cost instrumentation, pack/inject) (#5018)
+- feat(governs): enforce phase 115 story invariants
+- feat: enforce governed goal and phase lifecycle (#5006)
+- feat: quota model burn-rate weighting and estimate drift tracking (v0.26.9) (#4999)
+- feat: serve slim logical community JSON on expand (#4993)
+- feat: add Vizor sentinel write actions (#4991)
+- feat: group Vizor sentinel alerts on Overview and SSE (#4989)
+### Changed
+- docs: devlog + cost housekeeping for v0.26.9/PR #4999 session (#5003)
+- docs(spec): Wave D Vizor sentinel HUD (#2672) (#4985)
+- chore(website): fix npm audit alerts (#4987)
+
+---
+
+## [v0.26.8] - 2026-11-01
+### Added
+- Harness Context Compaction Protocol: `synlynk context checkpoint`, an AST-grounded
+  resumption-ledger devlog writer keyed by `(story_id, head_sha[, dirty_hash])`, idempotent
+  on unchanged state (PR #5018).
+- `synlynk context pack`/`inject`: a 5-part context-pack content model with
+  `pack_token_budget` truncation, independently triggered (no implicit 75%-threshold
+  monitor) (PR #5018).
+- `cost_entries.compaction_event_type` column (`"checkpoint" | "pack" | NULL`) enabling
+  before/after token-spend comparison for compaction events, written through the
+  canonical `_insert_cost_row` write path (PR #5018).
+### Changed
+- Ships unconditionally in this Dev Preview — not gated behind the Configurability
+  Framework, which (along with Companion v2 and Herdr Customizations) is deferred to a
+  separate "Expansion Capabilities" goal/release.
+
 ## [v0.26.7] - 2026-10-31
 ### Added
 - Vizor skinny, view-scoped payloads (PR #4963).

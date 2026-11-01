@@ -7336,6 +7336,10 @@ def test_dispatch_ready_jobs_launches_queued_job(project_dir, monkeypatch):
         "INSERT INTO goals (goal_id, outcome, criterion) VALUES (?, ?, ?)",
         ("goal-dispatch-queued", "Launch queued dispatch jobs", "Queued jobs launch"),
     )
+    conn.execute("INSERT INTO roadmap_arcs (version, title) VALUES ('v-test-queued', 'Queued')")
+    conn.execute("INSERT INTO roadmap_phases (arc_version, phase_title) VALUES ('v-test-queued', 'Queued phase')")
+    queued_phase = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute("UPDATE goals SET phase_id=?, placement_status='placed' WHERE goal_id='goal-dispatch-queued'", (queued_phase,))
     conn.execute(
         "INSERT INTO stories (story_id, title, goal_id) VALUES (?, ?, ?)",
         ("story-dispatch-queued", "Launch queued dispatch job", "goal-dispatch-queued"),
@@ -7503,6 +7507,10 @@ def test_dispatch_ready_jobs_commits_per_job(project_dir, monkeypatch):
         def close(self):
             self._real.close()
 
+        @property
+        def in_transaction(self):
+            return self._real.in_transaction
+
     conn = synlynk._get_db()
     baseline = synlynk.HARNESS_CAPABILITY_BASELINES["claude"]
     conn.execute(
@@ -7525,6 +7533,10 @@ def test_dispatch_ready_jobs_commits_per_job(project_dir, monkeypatch):
         "INSERT INTO goals (goal_id, outcome, criterion) VALUES (?, ?, ?)",
         ("goal-dispatch-commits", "Commit queued dispatch jobs", "Jobs commit"),
     )
+    conn.execute("INSERT INTO roadmap_arcs (version, title) VALUES ('v-test-commits', 'Commits')")
+    conn.execute("INSERT INTO roadmap_phases (arc_version, phase_title) VALUES ('v-test-commits', 'Commit phase')")
+    commit_phase = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute("UPDATE goals SET phase_id=?, placement_status='placed' WHERE goal_id='goal-dispatch-commits'", (commit_phase,))
     for i in range(2):
         conn.execute(
             "INSERT INTO stories (story_id, title, goal_id) VALUES (?, ?, ?)",

@@ -342,6 +342,49 @@ containerized execution — is the next queued item per the blog post's stated g
   PM/research time with no dispatched job attached.
 [@claude]
 
+## 2026-11-01 — v0.26.9 (quota burn-rate weighting + estimate drift tracking) merged, PR #4999
+
+- Finished the subagent-driven execution of the 8-task plan
+  (`docs/superpowers/plans/2026-10-31-quota-model-burn-rate-and-drift-tracking.md`) that had run
+  through most of this session already. Hit two Claude Code auto-mode classifier denials this
+  segment on dispatches that touched merge language ("Merge Without Review", then "Auto-Mode
+  Bypass" on a retry with the merge instruction stripped) — stopped and surfaced to Nikhil both
+  times rather than retrying unprompted; both unblocked cleanly once Nikhil gave a fresh explicit
+  instruction to proceed. Consistent with the Hardened PR Review Policy's RCA on why the merge
+  must run inside the reviewer's own dispatched job, not an interactive session.
+  - Cross-harness review via Codex: first pass (`job-2ca2ab32`) filed a false-positive
+    `UnboundLocalError` finding against `synlynk/db.py::_insert_cost_row`; a second dispatch
+    (`job-781492ba`) verified `api_equivalent_usd` is bound at function entry (it's a parameter),
+    retracted the finding, and approved. Merge ran inside a third dispatch (`job-43c9412c`,
+    role `qa`), which re-ran the full 372-test suite and confirmed merge authority before
+    `gh pr merge --squash`. Merge commit `a24d61c44a3a8ac601c93b606eaae4a262baad0e`.
+  - Worktree Hygiene cleanup completed same-turn: removed the 3 nested dispatch worktrees then
+    the parent integration worktree, pruned, force-deleted the 3 `dispatch/codex/job-*` branches
+    (expected — squash merges break literal `git branch -d` ancestry) and the clean-deleted
+    `feat/claude/quota-burn-rate-weighting`. No stale remote branches found.
+  - **Cost-capture/GOVERNS follow-up (explicitly requested afterward):** cross-referenced the
+    squashed PR's 9 commits against `cost_entries`/`stories`/`goals` in the canonical
+    `~/.synlynk/workspaces/synlynk/state.db`. GOVERNS linkage is 100% intact — every job behind
+    this PR has a `story_id` resolving to an active `goal_id`. **Found a real cost-capture gap:**
+    Task 3 ("wire burn-rate multiplier into dispatch gate", `story-3271d873`, `job-7882ac00`)
+    has zero rows anywhere — no `cost_entries`, no `job_evidence` beyond a bare terminal-status
+    marker. `daemon_jobs` shows it exited `unpushed_branch`/exit_code 3, yet its commit
+    (`fcc9c68c`) is in the merged branch — meaning it was manually integrated after the dispatch
+    itself failed to push, and cost/tokens were never captured through any path. No real token
+    count is recoverable (logs gone, no evidence payload), so declined to fabricate a backfill —
+    flagged to Nikhil as a tracked-issue candidate rather than guessing numbers into the ledger.
+    Also noted but not yet resolved: `pr_number` is NULL on every cost_entries row tied to this
+    PR (looks like a general dispatch→cost_entries pipeline gap, not PR-specific), and
+    `job-43c9412c`'s own cost row ($0.045, 5000in/2000out) looks like a stale placeholder given
+    the job's actual work (full suite run, 20+ min runtime) — possibly a live instance of the
+    exact estimate-vs-actual drift this feature was built to catch.
+  - Attached both PR #4999 and tracking issue #4998 to the `v0.26.9` GitHub milestone (#19) at
+    Nikhil's request — milestone existed but neither was actually linked to it, only referenced
+    in title text.
+
+Next session: decide whether to file the Task 3 cost-capture gap as its own issue (declined to
+act unilaterally — needs Nikhil's call since no real numbers can be backfilled), and whether to
+chase the `pr_number`-NULL pattern as a broader dispatch pipeline bug.
 ## 2026-10-31 — PR #2655 CI fix + two-pass cross-harness review, gh:#2653 closed
 
 - Fixed `tests/test_four_point_attribution.py` failures on PR #2655 (the gh:#2653 design
