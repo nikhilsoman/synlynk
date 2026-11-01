@@ -22,6 +22,7 @@ CONTEXT_COMPACTION_SETTINGS_SCHEMA = {
     },
 }
 
+import hashlib
 import subprocess
 
 
@@ -39,7 +40,15 @@ def _git_is_dirty() -> bool:
     return bool(result.stdout.strip())
 
 
+def compute_dirty_hash() -> str:
+    result = subprocess.run(
+        ["git", "diff", "HEAD"], capture_output=True, text=True, check=True,
+    )
+    return hashlib.sha256(result.stdout.encode()).hexdigest()[:12]
+
+
 def _gather_snapshot(story_id: str) -> dict:
+
     return {
         "story_id": story_id,
         "head_sha": _git_head_sha(),
