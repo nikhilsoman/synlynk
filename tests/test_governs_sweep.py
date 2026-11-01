@@ -59,3 +59,39 @@ def test_sweep_reports_existing_scoped_coverage_without_relinking(tmp_path):
     assert conn.execute(
         "SELECT governs_stage FROM stories WHERE story_id='story-linked'"
     ).fetchone()[0] == "open"
+
+
+def test_audit_reports_active_story_invariants(tmp_path):
+    from synlynk.governs_cli import cmd_governs_audit
+
+    conn = _db(tmp_path)
+    conn.execute(
+        "INSERT INTO stories (story_id, title, status, gh_issue) "
+        "VALUES ('story-a', 'A', 'open', '42')"
+    )
+    conn.execute(
+        "INSERT INTO stories (story_id, title, status, gh_issue) "
+        "VALUES ('story-b', 'B', 'in_progress', '42')"
+    )
+    conn.commit()
+
+    result = cmd_governs_audit(conn=conn)
+
+    assert result["active_stories_without_goal"] == 2
+    assert result["active_stories_without_phase"] == 2
+    assert result["duplicate_active_issue_stories"] == 1
+    assert result["passed"] is False
+
+
+def test_audit_strict_fails_on_active_story_without_goal(tmp_path):
+    import pytest
+    from synlynk.governs_cli import cmd_governs_audit
+
+    conn = _db(tmp_path)
+    conn.execute(
+        "INSERT INTO stories (story_id, title, status) VALUES ('story-ghost', 'Ghost', 'open')"
+    )
+    conn.commit()
+
+    with pytest.raises(RuntimeError, match="active stories lack a goal"):
+        cmd_governs_audit(conn=conn, strict=True)

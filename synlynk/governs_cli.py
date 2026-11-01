@@ -111,6 +111,30 @@ def cmd_governs_audit(
         phases_without_story = conn.execute(
             "SELECT COUNT(*) FROM roadmap_phases WHERE story_id IS NULL"
         ).fetchone()[0]
+        active_without_goal = conn.execute(
+            "SELECT COUNT(*) FROM stories "
+            "WHERE status IN ('open','in_progress') "
+            "AND (goal_id IS NULL OR TRIM(goal_id)='') "
+            "AND (superseded_by IS NULL OR TRIM(superseded_by)='') "
+            "AND COALESCE(source_type,'') != 'execution_artifact'"
+        ).fetchone()[0]
+        active_without_phase = conn.execute(
+            "SELECT COUNT(*) FROM stories s LEFT JOIN goals g ON g.goal_id=s.goal_id "
+            "WHERE s.status IN ('open','in_progress') "
+            "AND (s.superseded_by IS NULL OR TRIM(s.superseded_by)='') "
+            "AND COALESCE(s.source_type,'') != 'execution_artifact' "
+            "AND (g.phase_id IS NULL OR g.placement_status != 'placed')"
+        ).fetchone()[0]
+        duplicate_active_issue_stories = conn.execute(
+            "SELECT COUNT(*) FROM ("
+            "SELECT gh_issue FROM stories "
+            "WHERE status IN ('open','in_progress') "
+            "AND gh_issue IS NOT NULL AND TRIM(gh_issue)!='' "
+            "AND (superseded_by IS NULL OR TRIM(superseded_by)='') "
+            "AND COALESCE(source_type,'') != 'execution_artifact' "
+            "GROUP BY gh_issue HAVING COUNT(*) > 1"
+            ")"
+        ).fetchone()[0]
         placed_goals = len(goals) - unplaced_goals
         shadow_state_db = os.path.join(os.getcwd(), ".synlynk", "state.db")
         shadow_state_db_present = os.path.exists(shadow_state_db)
@@ -121,8 +145,11 @@ def cmd_governs_audit(
             "unplaced_goals": unplaced_goals,
             "missing_placement_reasons": missing_reasons,
             "phases_without_story": phases_without_story,
+            "active_stories_without_goal": active_without_goal,
+            "active_stories_without_phase": active_without_phase,
+            "duplicate_active_issue_stories": duplicate_active_issue_stories,
             "shadow_state_db_present": shadow_state_db_present,
-            "passed": passed,
+            "passed": passed and not any((active_without_goal, active_without_phase, duplicate_active_issue_stories)),
         }
         if strict and missing_reasons:
             raise RuntimeError(
@@ -130,6 +157,12 @@ def cmd_governs_audit(
             )
         if strict and shadow_state_db_present:
             raise RuntimeError(f"GOVERNS audit failed: shadow state.db exists at {shadow_state_db}")
+        if strict and active_without_goal:
+            raise RuntimeError(f"GOVERNS audit failed: {active_without_goal} active stories lack a goal")
+        if strict and active_without_phase:
+            raise RuntimeError(f"GOVERNS audit failed: {active_without_phase} active stories lack a reachable roadmap phase")
+        if strict and duplicate_active_issue_stories:
+            raise RuntimeError(f"GOVERNS audit failed: {duplicate_active_issue_stories} active issue identities have multiple canonical stories")
         return result
     finally:
         if owns_conn:
