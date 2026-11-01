@@ -629,6 +629,8 @@ def _open_reservation(
     scope: str = None,
     scope_id: Optional[str] = None,
     job_id: Optional[str] = None,
+    model: Optional[str] = None,
+    track: Optional[str] = None,
 ) -> int:
     """Opens an harness_reservations row. Returns the new reservation id.
 
@@ -641,15 +643,18 @@ def _open_reservation(
         raise ValueError("tokens must be a positive integer")
     if not scope:
         raise ValueError("scope is required")
+    model = str(model or "unknown").strip() or "unknown"
+    track = str(track or "default").strip() or "default"
 
     own_conn = conn is None
     if own_conn:
         conn = _pkg("_get_db")()
     try:
         cur = conn.execute(
-            "INSERT INTO harness_reservations (harness, tokens, scope, scope_id, job_id, status) "
-            "VALUES (?, ?, ?, ?, ?, 'open')",
-            (harness, int(tokens), scope, scope_id, job_id),
+            "INSERT INTO harness_reservations "
+            "(harness, model, track, tokens, scope, scope_id, job_id, status) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, 'open')",
+            (harness, model, track, int(tokens), scope, scope_id, job_id),
         )
         conn.commit()
         return cur.lastrowid
@@ -669,7 +674,9 @@ def _release_reservation(conn, reservation_id: int) -> None:
     conn.commit()
 
 
-def _open_reservations_sum(conn, harness: str) -> int:
+def _open_reservations_sum(
+    conn, harness: str, model: Optional[str] = None, track: Optional[str] = None
+) -> int:
     """Sums tokens from open, non-expired reservations for one harness.
 
     Lazy expiry: a reservation older than _RESERVATION_EXPIRY_SECONDS is
@@ -678,10 +685,18 @@ def _open_reservations_sum(conn, harness: str) -> int:
     """
     cutoff = datetime.now(UTC).timestamp() - _RESERVATION_EXPIRY_SECONDS
     cutoff_iso = datetime.fromtimestamp(cutoff, UTC).strftime("%Y-%m-%d %H:%M:%S")
+    clauses = ["harness=?", "status='open'", "created_at >= ?"]
+    params = [harness, cutoff_iso]
+    if model is not None:
+        clauses.append("model=?")
+        params.append(str(model).strip() or "unknown")
+    if track is not None:
+        clauses.append("track=?")
+        params.append(str(track).strip() or "default")
     row = conn.execute(
-        "SELECT COALESCE(SUM(tokens), 0) FROM harness_reservations "
-        "WHERE harness=? AND status='open' AND created_at >= ?",
-        (harness, cutoff_iso),
+        "SELECT COALESCE(SUM(tokens), 0) FROM harness_reservations WHERE "
+        + " AND ".join(clauses),
+        tuple(params),
     ).fetchone()
     return int(row[0] or 0)
 
