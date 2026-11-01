@@ -202,6 +202,33 @@ def test_pack_with_auto_checkpoint_disabled_does_not_call_checkpoint(tmp_path, m
     assert "SYNLYNK_CONTEXT_COMPACTION_RESUME" not in content
 
 
+def test_apply_token_budget_truncates_longest_fields_first():
+    from synlynk.context_compaction import apply_token_budget
+    content_pack = {
+        "story_summary": "a" * 100,
+        "recent_decisions": "b" * 500,
+        "open_threads": "c" * 50,
+        "relevant_files": "d" * 300,
+        "task_description": "e" * 20,
+    }
+    # budget in characters for this test's purposes (real token counting is
+    # an estimation detail; the truncation *order* is what's under test)
+    truncated = apply_token_budget(content_pack, budget_chars=600)
+
+    total_len = sum(len(v) for v in truncated.values())
+    assert total_len <= 600
+    assert truncated["task_description"] == "e" * 20  # smallest/highest-priority field untouched
+    assert len(truncated["recent_decisions"]) < 500  # longest field truncated first
+
+
+def test_apply_token_budget_noop_when_under_budget():
+    from synlynk.context_compaction import apply_token_budget
+    content_pack = {"story_summary": "short", "task_description": "x"}
+    result = apply_token_budget(content_pack, budget_chars=10000)
+    assert result == content_pack
+
+
+
 
 
 

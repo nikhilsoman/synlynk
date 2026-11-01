@@ -145,4 +145,24 @@ def _read_relevant_files(story_id: str) -> list:
     return []
 
 
+def apply_token_budget(content_pack: dict, budget_chars: int) -> dict:
+    result = dict(content_pack)
+    total = sum(len(str(v)) for v in result.values())
+    if total <= budget_chars:
+        return result
+
+    # Truncate longest fields first until under budget.
+    while total > budget_chars:
+        longest_key = max(result, key=lambda k: len(str(result[k])))
+        current_len = len(str(result[longest_key]))
+        if current_len <= 1:
+            break
+        overage = total - budget_chars
+        cut = min(current_len - 1, overage)
+        result[longest_key] = str(result[longest_key])[:current_len - cut]
+        total -= cut
+    return result
+
+
+
 
