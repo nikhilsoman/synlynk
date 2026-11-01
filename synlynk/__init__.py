@@ -457,6 +457,18 @@ def _migrate_db_with_schema_retry(conn: _sqlite3.Connection) -> None:
                 pass
 
 
+def migrate_cost_entries_for_compaction(db_path: str) -> None:
+    conn = _sqlite3.connect(db_path)
+    try:
+        existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+        if "compaction_event_type" not in existing_cols:
+            conn.execute("ALTER TABLE cost_entries ADD COLUMN compaction_event_type TEXT")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+
 def _get_db(
     db_path: str = None,
     read_only: bool = False,
