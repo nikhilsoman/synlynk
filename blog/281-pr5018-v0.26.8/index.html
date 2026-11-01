@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #5018 — v0.26.8: Harness Context Compaction Protocol | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Nov 01, 2026</span>
+        
+          <span class="blog-post-pr">PR #5018</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #5018 — v0.26.8: Harness Context Compaction Protocol</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Coming out of v0.26.7 (Vizor Interactive write-path), the stated direction for the next
+cluster of work was the Harness Context Compaction Protocol: give every harness a way to
+survive <code>/clear</code>/<code>/compact</code> without losing session state, and give the project a way to
+measure whether compaction actually saves tokens rather than just assuming it does. The
+design spec (<code>docs/superpowers/specs/2026-10-31-harness-context-compaction-protocol-design.md</code>)
+and implementation plan were both landed as their own docs-only PRs first, per the
+Design → Plan → Build sequence.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>The original plan scoped <code>context_compaction</code> to register against the Configurability
+Framework — a <code>FeatureSpec</code> that would let the feature be toggled per-project once that
+framework shipped. On 2026-11-01, scope was explicitly reduced: this feature ships
+<strong>unconditionally</strong> in v0.26.8/Dev Preview, with the Configurability Framework (along
+with Companion v2 and Herdr Customizations) deferred to a separate &quot;Expansion
+Capabilities&quot; goal/release. <code>CONTEXT_COMPACTION_SETTINGS_SCHEMA</code> is kept as a plain
+module constant so a later backfill has a ready shape to register against, but nothing
+in this PR imports or calls <code>synlynk.features.registry</code>. This was a deliberate
+de-scoping to get the core mechanism shipped without waiting on an unrelated framework.</p>
+<h2>What This PR Shipped</h2>
+<p>The plan's 11 tasks were split into two dispatched phases sharing one branch lineage:</p>
+<ul>
+<li><strong>Phase 1 (Tasks 1–6, <code>dispatch/agy/job-f9bfb0ff</code>):</strong> the <code>synlynk/context_compaction.py</code>
+module skeleton; a shared <code>_gather_snapshot()</code> helper collecting story/goal state, git
+HEAD/dirty-status, and recent telemetry once per call site; <code>compute_dirty_hash()</code> for
+dirty-tree marker keying; identity-keyed marker build/parse
+(<code>SYNLYNK_CONTEXT_COMPACTION_RESUME</code>, keyed by <code>(story_id, head_sha)</code> or
+<code>(story_id, head_sha, dirty_hash)</code> when dirty); the idempotent <code>checkpoint()</code> devlog
+writer; and the 5-part context-pack content model plus <code>pack()</code>.</li>
+<li><strong>Phase 2 (Tasks 7–11, <code>dispatch/agy/job-7c3f3b0a</code>, stacked on Phase 1):</strong> the
+<code>synlynk context checkpoint</code>/<code>pack</code>/<code>inject</code> CLI subcommand group; the
+<code>cost_entries.compaction_event_type</code> schema column (<code>&quot;checkpoint&quot; | &quot;pack&quot; | NULL</code>)
+for before/after token-spend comparison; and <code>pack_token_budget</code> truncation on
+<code>inject()</code>.</li>
+</ul>
+<p>Two real regressions surfaced during Phase 2 verification and were fixed before merge:
+<code>log_cost_entry()</code> had been written against raw SQL and the wrong column names
+(<code>tokens_in</code>/<code>tokens_out</code> instead of the production schema's <code>input_tokens</code>/
+<code>output_tokens</code>), violating the single-sanctioned-write-path rule (<code>_insert_cost_row</code> is
+the only function allowed to write <code>cost_entries</code>); and the two new CLI commands were
+missing <code>COMMAND_TAXONOMY</code> entries, which <code>test_docs_sync.py</code> catches by diffing the
+generated <code>docs/reference/commands.md</code> against the taxonomy. Both were fixed, the
+generated docs regenerated, and the full suite re-run clean (5169 passed at merge time,
+now 5381 collected post-release-ceremony) before opening the PR.</p>
+<p>Because Phase 2's branch was stacked directly on Phase 1's, merging PR #5018 landed both
+phases' work on <code>main</code> in a single squash commit (<code>44cfd324</code> → <code>1fd2552d</code>) — no separate
+PR was needed for Phase 1.</p>
+<p>The PR's own review-and-merge cycle was itself a useful exercise of the Hardened PR
+Review Policy: Codex posted a genuine cross-harness QA approval (verified independently
+via <code>gh pr view --json reviews</code>, not trusted from the job status label alone), a first
+merge attempt was correctly blocked by GitHub when CI failed on a test later confirmed
+to be a pre-existing flake on <code>main</code>'s own tip commit (same SHA, both pass and fail CI
+runs — unrelated to this branch's diff), and a <code>pr update-branch</code> cycle followed by a
+second merge dispatch cleared it.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this work proceeded directly from the committed design spec and plan without a
+separate brainstorm session.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This PR is instrumentation for the dispatch loop itself, not a user-facing feature: the
+<code>compaction_event_type</code> column exists specifically so a future <code>synlynk capability report</code> (gh:#1993) can measure whether checkpoint/pack compaction actually reduces token
+spend per session, rather than assuming it does. It also doubled as a live test of the
+Hardened PR Review Policy's reviewer-performs-merge rule under a real CI flake — the
+policy held (two bounded update-branch cycles, no bypass, no silent retry past a denial)
+and surfaced two process findings (gh:#5011 capability-probe reroute, gh:#5012 Agy
+credit exhaustion) now tracked separately rather than lost in dispatch noise.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>v0.26.8 ships the compaction mechanism unconditionally; the next goalpost is the
+deferred &quot;Expansion Capabilities&quot; cluster (Configurability Framework, Companion v2,
+Herdr Customizations), plus closing out gh:#5011 and gh:#5012's dispatch-process
+findings before they're folded into the next harness-capability reassessment pull.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
