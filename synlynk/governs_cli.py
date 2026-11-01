@@ -91,6 +91,41 @@ def cmd_governs_start(
     return goal_id, phase_id
 
 
+def cmd_governs_audit(
+    *, conn: Optional[sqlite3.Connection] = None, strict: bool = False
+) -> dict[str, int | bool]:
+    """Read-only audit of goal/phase coverage and orphaned roadmap state."""
+    owns_conn = conn is None
+    if conn is None:
+        from synlynk import _get_db
+        conn = _get_db()
+    try:
+        goals = conn.execute(
+            "SELECT placement_status, phase_id FROM goals"
+        ).fetchall()
+        unplaced_goals = sum(1 for status, phase_id in goals if status != "placed" or not phase_id)
+        phases_without_story = conn.execute(
+            "SELECT COUNT(*) FROM roadmap_phases WHERE story_id IS NULL"
+        ).fetchone()[0]
+        placed_goals = len(goals) - unplaced_goals
+        passed = unplaced_goals == 0
+        result = {
+            "goals": len(goals),
+            "placed_goals": placed_goals,
+            "unplaced_goals": unplaced_goals,
+            "phases_without_story": phases_without_story,
+            "passed": passed,
+        }
+        if strict and not passed:
+            raise RuntimeError(
+                f"GOVERNS audit failed: {unplaced_goals} goals lack an explicit placed phase"
+            )
+        return result
+    finally:
+        if owns_conn:
+            conn.close()
+
+
 def cmd_governs_sweep(
     repo_root: Optional[str] = None,
     dry_run: bool = False,

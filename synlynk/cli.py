@@ -638,6 +638,10 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     governs_start_parser.add_argument("--kind", default="feature", choices=["feature", "loop"])
     governs_start_parser.add_argument("--unplaced", action="store_true")
     governs_start_parser.add_argument("--reason", default=None, dest="placement_reason")
+    governs_audit_parser = governs_sub.add_parser(
+        "audit", help="Audit explicit goal and roadmap phase coverage"
+    )
+    governs_audit_parser.add_argument("--strict", action="store_true")
     governs_sweep_parser = governs_sub.add_parser("sweep", help="Reconcile and backfill 100%% GOVERNS goal linkages and stages across workspace")
     governs_sweep_parser.add_argument("--dry-run", action="store_true", help="Calculate linkages and stage transitions without writing to state.db")
     governs_sweep_parser.add_argument("--strict", action="store_true", help="Fail with non-zero exit if any unlinked stories remain")
@@ -3551,7 +3555,7 @@ def main(argv=None) -> None:
         else:
             help_parsers.get("goal", parser).print_help()
     elif args.command == "governs":
-        from synlynk.governs_cli import cmd_governs_sweep, cmd_governs, cmd_governs_start
+        from synlynk.governs_cli import cmd_governs_sweep, cmd_governs, cmd_governs_start, cmd_governs_audit
         action = getattr(args, "governs_action", None)
         if action == "start":
             goal_id, phase_id = cmd_governs_start(
@@ -3566,6 +3570,9 @@ def main(argv=None) -> None:
                 placement_reason=args.placement_reason,
             )
             print(f"GOVERNS started: {goal_id} phase={phase_id or 'unplaced'}")
+        elif action == "audit":
+            result = cmd_governs_audit(strict=getattr(args, "strict", False))
+            print(json.dumps(result, indent=2, sort_keys=True))
         elif action == "sweep":
             cmd_governs_sweep(dry_run=getattr(args, "dry_run", False), strict=getattr(args, "strict", False), verbose=getattr(args, "verbose", False))
         else:
