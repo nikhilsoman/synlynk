@@ -159,13 +159,17 @@ def cmd_governs_reconcile_unplaced(*, role: str = "pm", conn: Optional[sqlite3.C
         for goal_id, status, story_count, artifact_count in rows:
             if artifact_count and artifact_count == story_count:
                 reason = f"classified execution-artifact lineage ({story_count} linked artifact stories); no roadmap phase inferred"
+                classification = "unresolved"
             elif story_count:
                 reason = f"classified legacy delivery goal ({story_count} linked stories); phase evidence requires explicit reconciliation"
+                classification = "unresolved"
             else:
-                reason = "classified strategic or speculative goal with no linked delivery story; remains intentionally unplaced"
+                reason = "unresolved historical goal with no linked delivery story; requires explicit evidence before placement"
+                classification = "unresolved"
             if status in ("done", "superseded"):
                 reason = f"classified historical {status} goal; no active roadmap phase inferred"
-            conn.execute("UPDATE goals SET placement_status='unplaced', placement_reason=? WHERE goal_id=?", (reason, goal_id))
+                classification = "unplaced"
+            conn.execute("UPDATE goals SET placement_status=?, placement_reason=? WHERE goal_id=?", (classification, reason, goal_id))
         conn.commit()
         return len(rows)
     except Exception:
