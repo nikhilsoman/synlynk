@@ -2339,6 +2339,10 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
     _add_column_if_missing(conn, table="cost_entries", column="estimated_output_tokens", definition="INTEGER")
     _add_column_if_missing(conn, table="cost_entries", column="estimated_cost_usd", definition="REAL")
 
+    # Harness Context Compaction Protocol: tags a cost_entries row with the
+    # compaction event (e.g. "checkpoint", "pack") that produced it, if any.
+    _add_column_if_missing(conn, table="cost_entries", column="compaction_event_type", definition="TEXT")
+
     # Keep this repair outside the schema-version gate.  A database can have
     # already reached the current version while a prior migration stopped
     # before adding this column (or while the schema was bootstrapped by an
@@ -2490,6 +2494,8 @@ def _insert_cost_row(
     agent_role: str = None,
     decision_revision: int = None,
     turn_breakdown=None,
+    compaction_event_type: str = None,
+    db_path: str = None,
 ) -> None:
     """Insert or update a cost_entries row through the single sanctioned path."""
     from synlynk import _get_db
@@ -2503,7 +2509,7 @@ def _insert_cost_row(
     if dispatch_context is None:
         dispatch_context = "unknown"
 
-    conn = _get_db()
+    conn = _get_db(db_path) if db_path is not None else _get_db()
     try:
         harness_val = harness or agent
         agent_val = agent or harness
@@ -2640,6 +2646,7 @@ def _insert_cost_row(
                         ,estimated_input_tokens=COALESCE(estimated_input_tokens, ?)
                         ,estimated_output_tokens=COALESCE(estimated_output_tokens, ?)
                         ,estimated_cost_usd=COALESCE(estimated_cost_usd, ?)
+                        ,compaction_event_type=COALESCE(?, compaction_event_type)
                     WHERE job_id=?""",
                     (
                         session_date,
@@ -2669,6 +2676,7 @@ def _insert_cost_row(
                         estimated_input_tokens,
                         estimated_output_tokens,
                         estimated_cost_usd,
+                        compaction_event_type,
                         job_id,
                     ),
                 )
@@ -2683,8 +2691,8 @@ def _insert_cost_row(
             """INSERT INTO cost_entries
                 (session_date, agent, harness, agent_role, model, input_tokens, output_tokens, cache_read_tokens,
                  cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, pr_number, decision_revision, turn_usage_json,
-                 estimated_input_tokens, estimated_output_tokens, estimated_cost_usd)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 estimated_input_tokens, estimated_output_tokens, estimated_cost_usd, compaction_event_type)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session_date,
                 agent_val,
@@ -2714,6 +2722,7 @@ def _insert_cost_row(
                 estimated_input_tokens,
                 estimated_output_tokens,
                 estimated_cost_usd,
+                compaction_event_type,
             ),
         )
         conn.commit()
