@@ -4750,5 +4750,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #5006 \u2014 enforce governed goal and phase lifecycle (PR #5006, v0.26.7)\n\n\u2022 Merged improvements and fixes for PR #5006.\n\n#posts",
     "changelog": "### v0.26.7 (2026-11-01) - PR #5006\n- Merged improvements and fixes for PR #5006."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/544-pr5013-enforce-phase-115-story-invariants.md",
+    "title": "PR #5013 \u2014 enforce phase 115 story invariants",
+    "author": "nikhilsoman",
+    "date": "2026-11-01",
+    "pr": "#5013",
+    "version": "0.26.7",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #5013."
+    ],
+    "tweet": "\ud83d\ude80 PR #5013 \u2014 enforce phase 115 story invariants (PR #5013, v0.26.7)\n\n\u2022 Merged improvements and fixes for PR #5013.\n\n#posts",
+    "changelog": "### v0.26.7 (2026-11-01) - PR #5013\n- Merged improvements and fixes for PR #5013."
   }
 ]
