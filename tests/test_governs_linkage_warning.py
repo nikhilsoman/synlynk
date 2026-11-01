@@ -50,6 +50,19 @@ def test_dispatch_with_linked_governs_story_is_unchanged(project_dir, monkeypatc
         ("goal-1", "ship the warning", "warning is live"),
     )
     conn.execute(
+        "INSERT INTO roadmap_arcs (version, title) VALUES (?, ?)",
+        ("v-test", "Test release"),
+    )
+    conn.execute(
+        "INSERT INTO roadmap_phases (arc_version, phase_title) VALUES (?, ?)",
+        ("v-test", "Test phase"),
+    )
+    phase_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute(
+        "UPDATE goals SET phase_id=?, placement_status='placed' WHERE goal_id='goal-1'",
+        (phase_id,),
+    )
+    conn.execute(
         "INSERT INTO stories (story_id, title, goal_id) VALUES (?, ?, ?)",
         ("story-linked", "linked story", "goal-1"),
     )

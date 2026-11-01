@@ -439,6 +439,9 @@ CREATE TABLE IF NOT EXISTS goals (
     deadline    TEXT,
     status      TEXT NOT NULL DEFAULT 'active',
     kind        TEXT NOT NULL DEFAULT 'feature',
+    phase_id    INTEGER REFERENCES roadmap_phases(id),
+    placement_status TEXT NOT NULL DEFAULT 'unplaced',
+    placement_reason TEXT,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

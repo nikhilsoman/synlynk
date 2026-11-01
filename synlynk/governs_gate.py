@@ -25,7 +25,20 @@ def story_governs_linkage(conn, story_id: str | None) -> dict[str, Any]:
         return {"linked": False, "story_id": story_id, "goal_id": None, "reason": "story not found"}
     goal_id = row[0]
     if goal_id and goal_id != "none":
-        return {"linked": True, "story_id": story_id, "goal_id": goal_id, "reason": None}
+        goal_cols = _table_columns(conn, "goals")
+        if {"phase_id", "placement_status"}.issubset(goal_cols):
+            placement = conn.execute(
+                "SELECT phase_id, placement_status FROM goals WHERE goal_id=?", (goal_id,)
+            ).fetchone()
+            phase_placed = bool(placement and placement[0] and placement[1] == "placed")
+            return {
+                "linked": True,
+                "phase_placed": phase_placed,
+                "story_id": story_id,
+                "goal_id": goal_id,
+                "reason": None if phase_placed else "goal has no placed roadmap phase",
+            }
+        return {"linked": True, "phase_placed": False, "story_id": story_id, "goal_id": goal_id, "reason": "goal placement schema unavailable"}
     try:
         contribution = conn.execute(
             "SELECT goal_id FROM goal_contributions "
@@ -35,15 +48,33 @@ def story_governs_linkage(conn, story_id: str | None) -> dict[str, Any]:
     except Exception:
         contribution = None
     if contribution:
-        return {"linked": True, "story_id": story_id, "goal_id": contribution[0], "reason": None}
+        goal_id = contribution[0]
+        placement = conn.execute(
+            "SELECT phase_id, placement_status FROM goals WHERE goal_id=?", (goal_id,)
+        ).fetchone()
+        phase_placed = bool(placement and placement[0] and placement[1] == "placed")
+        return {
+            "linked": True,
+            "phase_placed": phase_placed,
+            "story_id": story_id,
+            "goal_id": goal_id,
+            "reason": None if phase_placed else "goal has no placed roadmap phase",
+        }
     return {"linked": False, "story_id": story_id, "goal_id": None, "reason": "no linked GOVERNS goal"}
 
 
 def dispatch_governs_linkage(conn, story_id: str | None) -> dict[str, Any]:
     """Preflight contract for a dispatch: a story and goal are mandatory."""
     result = story_governs_linkage(conn, story_id)
-    if result["linked"]:
+    if result["linked"] and result.get("phase_placed", False):
         return {"passed": True, **result}
+    if result["linked"]:
+        return {
+            "passed": False,
+            "sentinel": "GOVERNS_PHASE_MISSING",
+            "reason": f"Dispatch requires a placed roadmap phase ({result.get('reason')}; story={story_id or 'none'})",
+            **result,
+        }
     return {
         "passed": False,
         "sentinel": "GOVERNS_LINKAGE_MISSING",

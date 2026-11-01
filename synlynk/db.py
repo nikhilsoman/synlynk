@@ -2362,6 +2362,28 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
         definition="INTEGER",
     )
 
+    # GOVERNS goal placement is explicit.  Existing goals are intentionally
+    # preserved as unplaced legacy records until a human-led reconciliation
+    # assigns them to a roadmap phase.
+    _add_column_if_missing(
+        conn,
+        table="goals",
+        column="phase_id",
+        definition="INTEGER REFERENCES roadmap_phases(id)",
+    )
+    _add_column_if_missing(
+        conn,
+        table="goals",
+        column="placement_status",
+        definition="TEXT NOT NULL DEFAULT 'unplaced'",
+    )
+    _add_column_if_missing(
+        conn,
+        table="goals",
+        column="placement_reason",
+        definition="TEXT",
+    )
+
     _migrate_onboarding_sessions(conn)
     conn.commit()
 

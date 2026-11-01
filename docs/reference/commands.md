@@ -84,6 +84,10 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `type seed` (secondary) — execute
 - `type relabel` (secondary) — execute
 - `connector add` (secondary) — execute
+- `governs start` (primary) — goal
+- `governs audit` (secondary) — visualize
+- `governs rephase` (secondary) — sustain
+- `governs reconcile-unplaced` (secondary) — sustain
 - `fleet list` (secondary) — open
 - `fleet apply` (secondary) — open
 
