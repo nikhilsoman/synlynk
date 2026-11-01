@@ -2213,6 +2213,26 @@ def test_cli_dispatch_as_agent_without_explicit_harness(project_dir, monkeypatch
     assert "agent" in captured
 
 
+def test_cli_dispatch_without_explicit_harness_preserves_auto_routing(
+    project_dir, monkeypatch
+):
+    from synlynk.cli import main
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+
+    def fake_dispatch_agent(agent, task, **kwargs):
+        captured["agent"] = agent
+        return {"id": "job-auto", "pid": 1, "agent": "codex"}
+
+    monkeypatch.setattr(dispatch_mod, "dispatch_agent", fake_dispatch_agent)
+    monkeypatch.setattr("synlynk.dispatch_agent", fake_dispatch_agent)
+
+    main(["dispatch", "--task", "implement CLI plumbing", "--role", "dev"])
+
+    assert captured["agent"] == "auto"
+
+
 def test_cli_dispatch_infers_review_task_type_for_gh_write(project_dir, monkeypatch, capsys):
     from synlynk.cli import main
     import synlynk.dispatch as dispatch_mod

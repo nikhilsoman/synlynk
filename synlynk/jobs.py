@@ -491,23 +491,34 @@ def _provider_quota_failure_reason(log_text: str, exit_code: Optional[int] = Non
     """Classify provider capacity failures without conflating task failure."""
     if exit_code == 0:
         return None
-    lines = (log_text or "").splitlines()[-40:]
-    lines = [
-        line for line in lines
-        if not re.search(r"\bpytest\b.*\bfailed\b|\btests?\b.*\bfailed\b", line, re.IGNORECASE)
-    ]
-    text = "\n".join(lines).lower()
-    if not text:
-        return None
-    provider_429 = (
-        re.search(r"(?:error|exception|failed).*429", text)
-        or re.search(r"429.*(?:too many requests|resource[_ ]exhausted|credit|quota)", text)
-        or re.search(r"resource[_ ]exhausted.*(?:credit|balance|quota)", text)
-    )
-    if provider_429:
-        return "provider_quota_429"
-    if re.search(r"(?:error|exception|failed).*?(?:quota exceeded|insufficient_quota|credits balance is too low)", text):
-        return "provider_quota_exhausted"
+    provider_prefix = r"(?:agy|gemini|grok|codex|openai|claude|anthropic|openrouter)\s*:"
+    for raw_line in (log_text or "").splitlines():
+        line = raw_line.strip()
+        lowered = line.lower()
+        if not line or re.match(r"^(?:FAILED|ERROR)\s+tests?/", line):
+            continue
+        if lowered.startswith(("assertionerror:", "traceback (most recent call last):")):
+            continue
+        structured_429 = (
+            line.startswith("{")
+            and re.search(r'"(?:code|status)"\s*:\s*(?:429|"RESOURCE_EXHAUSTED")', line)
+            and re.search(r"quota|credit|rate|resource_exhausted", lowered)
+        )
+        provider_framed_429 = re.match(provider_prefix, line, re.IGNORECASE) and (
+            "429" in line
+            and re.search(r"rate limit|resource[_ ]exhausted|credit|quota", lowered)
+        )
+        standard_http_429 = re.match(r"^(?:error:\s*)?HTTP\s+429\b", line, re.IGNORECASE)
+        resource_exhausted = re.match(r"^RESOURCE_EXHAUSTED\b", line, re.IGNORECASE) and (
+            "429" in line and re.search(r"credit|balance|quota", lowered)
+        )
+        if structured_429 or provider_framed_429 or standard_http_429 or resource_exhausted:
+            return "provider_quota_429"
+        provider_credit = re.match(provider_prefix, line, re.IGNORECASE) and re.search(
+            r"quota exceeded|insufficient_quota|credits balance is too low", lowered
+        )
+        if provider_credit:
+            return "provider_quota_exhausted"
     return None
 
 

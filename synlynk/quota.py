@@ -911,7 +911,7 @@ def _quota_status_for_agent(
         }
 
     now = datetime.now(UTC)
-    for row in rows:
+    for index, row in enumerate(rows):
         try:
             updated = datetime.fromisoformat(str(row.get("updated_at")).replace("Z", "+00:00"))
             if updated.tzinfo is None:
@@ -933,6 +933,7 @@ def _quota_status_for_agent(
             row = dict(row)
             row["used_tokens"] = 0
             row["headroom"] = row.get("limit_tokens")
+            rows[index] = row
     if not rows:
         # No per-harness signal. Optionally fold in project request budget so
         # limit_requests is not an orphan field relative to the quota matrix.

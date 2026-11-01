@@ -418,7 +418,7 @@ def test_elapsed_subscription_window_is_not_stale(project_dir):
     conn = sl._get_db()
     past_reset = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - 60))
     sl._upsert_agent_quota(
-        "codex", "5h", limit_tokens=100_000, used_tokens=0,
+        "codex", "5h", limit_tokens=100_000, used_tokens=100_000,
         model="gpt-5", track="default", reset_at=past_reset, conn=conn,
     )
     result = sl._check_and_reserve_quota(
@@ -427,6 +427,7 @@ def test_elapsed_subscription_window_is_not_stale(project_dir):
         scope="session", job_id="job-rollover",
     )
     assert result["accepted"] is True
+    assert result["quota"]["headroom"] == 100_000
 
 
 def test_stale_subscription_harness_does_not_block_dispatch(project_dir):

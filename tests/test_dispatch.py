@@ -1102,8 +1102,17 @@ def test_pilot_intent_refuses_local_after_downstream_capability_reroute(
 
 
 def test_dispatch_agent_defers_when_quota_exhausted(project_dir, monkeypatch):
-    """Even with --force-agent, dispatch_agent must not bypass the quota gate."""
+    """Skipping environment probes must never bypass quota admission."""
     import synlynk as sl
+
+    monkeypatch.setattr(
+        "synlynk.dispatch._dispatch_capability_preflight",
+        lambda *_args, **_kwargs: pytest.fail("capability probe must be skipped"),
+    )
+    monkeypatch.setattr(
+        "synlynk.dispatch._preflight_dispatch",
+        lambda *_args, **_kwargs: pytest.fail("environment probe must be skipped"),
+    )
 
     conn = sl._get_db()
     sl._upsert_agent_quota(

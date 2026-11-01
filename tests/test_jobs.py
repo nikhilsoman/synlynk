@@ -4706,6 +4706,34 @@ def test_provider_quota_classifier_ignores_429_in_ordinary_failure_prose():
     ) is None
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "FAILED tests/test_jobs.py::test_provider_quota_classifier_recognizes_standard_http_429",
+        "ERROR tests/test_quota.py::test_429_handling - AssertionError",
+        "Traceback (most recent call last):\nAssertionError: expected 429 but got 200",
+    ],
+)
+def test_provider_quota_classifier_ignores_429_in_pytest_failures(text):
+    from synlynk.jobs import _provider_quota_failure_reason
+
+    assert _provider_quota_failure_reason(text, exit_code=1) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        'agy: RESOURCE_EXHAUSTED (code 429): Your AI credits balance is too low to continue.',
+        'grok: rate limited (429)',
+        '{"error":{"code":429,"status":"RESOURCE_EXHAUSTED","message":"quota exceeded"}}',
+    ],
+)
+def test_provider_quota_classifier_accepts_provider_framed_capacity_errors(text):
+    from synlynk.jobs import _provider_quota_failure_reason
+
+    assert _provider_quota_failure_reason(text, exit_code=1) == "provider_quota_429"
+
+
 def test_zombie_reap_skips_worktree_when_terminal_cas_loses(
     tmp_path, project_dir, monkeypatch
 ):
