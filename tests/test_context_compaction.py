@@ -160,5 +160,48 @@ def test_checkpoint_writes_new_entry_after_head_changes(tmp_path, monkeypatch):
     assert second_marker_count == first_marker_count + 1
 
 
+def test_pack_builds_five_part_content_model(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _init_git_repo(tmp_path)
+
+    from synlynk.context_compaction import pack
+    content_pack = pack(story_id="story-abc", task_description="implement widget")
+
+    assert set(content_pack.keys()) == {
+        "story_summary", "recent_decisions", "open_threads",
+        "relevant_files", "task_description",
+    }
+    assert content_pack["task_description"] == "implement widget"
+
+
+def test_pack_with_auto_checkpoint_enabled_calls_checkpoint(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _init_git_repo(tmp_path)
+    import os
+    os.makedirs("project-docs/devlogs", exist_ok=True)
+    (tmp_path / "project-docs/devlogs/testuser.md").write_text("# Devlog\n")
+
+    from synlynk.context_compaction import pack
+    pack(story_id="story-abc", task_description="t", username="testuser", auto_checkpoint=True)
+
+    content = (tmp_path / "project-docs/devlogs/testuser.md").read_text()
+    assert "SYNLYNK_CONTEXT_COMPACTION_RESUME" in content
+
+
+def test_pack_with_auto_checkpoint_disabled_does_not_call_checkpoint(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _init_git_repo(tmp_path)
+    import os
+    os.makedirs("project-docs/devlogs", exist_ok=True)
+    (tmp_path / "project-docs/devlogs/testuser.md").write_text("# Devlog\n")
+
+    from synlynk.context_compaction import pack
+    pack(story_id="story-abc", task_description="t", username="testuser", auto_checkpoint=False)
+
+    content = (tmp_path / "project-docs/devlogs/testuser.md").read_text()
+    assert "SYNLYNK_CONTEXT_COMPACTION_RESUME" not in content
+
+
+
 
 

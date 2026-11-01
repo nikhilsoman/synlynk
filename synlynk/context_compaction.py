@@ -109,3 +109,40 @@ def checkpoint(story_id: str, username: str) -> bool:
     return True
 
 
+def pack(story_id: str, task_description: str, username: str = None, auto_checkpoint: bool = False) -> dict:
+    """Builds the 5-part context-pack content model for task-boundary
+    injection. Proactive and independently triggered from checkpoint() --
+    auto_checkpoint only controls whether this call also checkpoints as a
+    side effect; there is no implicit automatic firing of either.
+    """
+    if auto_checkpoint:
+        if username is None:
+            raise ValueError("username is required when auto_checkpoint=True")
+        checkpoint(story_id=story_id, username=username)
+
+    return {
+        "story_summary": _read_story_summary(story_id),
+        "recent_decisions": _read_recent_decisions(story_id),
+        "open_threads": _read_open_threads(story_id),
+        "relevant_files": _read_relevant_files(story_id),
+        "task_description": task_description,
+    }
+
+
+def _read_story_summary(story_id: str) -> str:
+    return f"Story {story_id}"
+
+
+def _read_recent_decisions(story_id: str) -> list:
+    return []
+
+
+def _read_open_threads(story_id: str) -> list:
+    return []
+
+
+def _read_relevant_files(story_id: str) -> list:
+    return []
+
+
+
