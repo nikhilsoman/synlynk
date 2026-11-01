@@ -468,6 +468,22 @@ def migrate_cost_entries_for_compaction(db_path: str) -> None:
         conn.close()
 
 
+def log_cost_entry(db_path: str, harness: str, tokens_in: int, tokens_out: int,
+                    total_cost_usd: float, compaction_event_type=None) -> None:
+    conn = _sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO cost_entries
+               (harness, tokens_in, tokens_out, total_cost_usd, compaction_event_type)
+               VALUES (?, ?, ?, ?, ?)""",
+            (harness, tokens_in, tokens_out, total_cost_usd, compaction_event_type),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+
 
 def _get_db(
     db_path: str = None,
