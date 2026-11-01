@@ -624,6 +624,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [544](./544-pr5013-enforce-phase-115-story-invariants.md) | PR #5013 — enforce phase 115 story invariants | [#5013](https://github.com/nikhilsoman/synlynk/pull/5013) | 2026-11-01 |
 | [545](./545-pr5018-harness-context-compaction-protocol-task.md) | PR #5018 — Harness Context Compaction Protocol — tasks 7-11 (CLI, cost instrumentation, pack/inject) | [#5018](https://github.com/nikhilsoman/synlynk/pull/5018) | 2026-11-01 |
 | [546](./546-pr5019-release-v0-26-8-harness-context-compacti.md) | PR #5019 — release: v0.26.8 — Harness Context Compaction Protocol | [#5019](https://github.com/nikhilsoman/synlynk/pull/5019) | 2026-11-01 |
+| [547](./547-pr5022-quota-burn-rate-design-plan-v0-26-8-scop.md) | PR #5022 — quota burn-rate design/plan + v0.26.8 scope decoupling | [#5022](https://github.com/nikhilsoman/synlynk/pull/5022) | 2026-11-01 |
 
 ## Per-PR Post Template
 
