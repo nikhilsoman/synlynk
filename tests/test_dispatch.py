@@ -4281,3 +4281,34 @@ def test_job_purpose_is_fixed_and_requires_explicit_task_type():
     assert _job_purpose("dev", None) == "other"
     assert _job_purpose("qa", "implement") == "other"
     assert _job_purpose("qa", "review", explicit=False) == "other"
+
+
+def test_dispatch_gate_applies_burn_rate_multiplier(tmp_path, monkeypatch):
+    import synlynk as sl
+    from synlynk.quota import refresh_burn_rate_weights
+
+    db_file = tmp_path / "state.db"
+    conn = sl._get_db(str(db_file))
+    try:
+        # Seed a heavy-model history so its cached multiplier is > 1.0.
+        for i in range(6):
+            conn.execute(
+                "INSERT INTO cost_entries (session_date, agent, harness, model, "
+                "input_tokens, output_tokens, cache_read_tokens, cost_source, job_id) "
+                "VALUES ('2026-10-31', 'claude', 'claude', 'claude-opus-4-7', 40000, 8000, 0, 'actual', ?)",
+                (f"seed-heavy-{i}",),
+            )
+            conn.execute(
+                "INSERT INTO cost_entries (session_date, agent, harness, model, "
+                "input_tokens, output_tokens, cache_read_tokens, cost_source, job_id) "
+                "VALUES ('2026-10-31', 'claude', 'claude', 'claude-haiku-5-5', 4000, 800, 0, 'actual', ?)",
+                (f"seed-light-{i}",),
+            )
+        conn.commit()
+        refresh_burn_rate_weights(conn=conn)
+
+        from synlynk.quota import cached_burn_rate_multiplier
+        multiplier = cached_burn_rate_multiplier("claude", "claude-opus-4-7", conn)
+        assert multiplier > 1.0
+    finally:
+        conn.close()

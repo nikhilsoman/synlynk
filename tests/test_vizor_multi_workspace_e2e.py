@@ -5,12 +5,16 @@ import os
 from pathlib import Path
 import sqlite3
 import threading
+from urllib.error import HTTPError
 from urllib.request import urlopen, Request
 import pytest
 from synlynk.vizor_daemon import build_workspace_routing_handler
 
 
 def test_concurrent_multi_workspace_and_root_cwd(tmp_path, monkeypatch):
+    from synlynk.local_http_auth import TOKEN_HEADER, ensure_local_token
+
+    auth_token = ensure_local_token()
     cache_dir = tmp_path / "cache"
     cache_dir.mkdir()
     monkeypatch.setattr("synlynk.vizor_daemon.CACHE_ROOT", cache_dir)
@@ -70,11 +74,23 @@ def test_concurrent_multi_workspace_and_root_cwd(tmp_path, monkeypatch):
         assert res_beta["identity_slug"] == "beta"
         assert res_beta["cards"][0]["story_id"] == "beta-1"
 
-        # Mutate alpha stage to execute
+        # A locked stage mutation is rejected and leaves the workspace unchanged.
         req = Request(
             f"http://127.0.0.1:{port}/w/alpha/api/board/stage",
             data=json.dumps({"story_id": "alpha-1", "stage": "execute"}).encode(),
-            headers={"Content-Type": "application/json"}
+            headers={"Content-Type": "application/json", TOKEN_HEADER: auth_token},
+        )
+        with pytest.raises(HTTPError) as exc_info:
+            urlopen(req)
+        assert exc_info.value.code == 400
+
+        assert fetch_board("alpha")["cards"][0]["governs_stage"] == "open"
+
+        # An explicit unlock can mutate alpha without affecting beta.
+        req = Request(
+            f"http://127.0.0.1:{port}/w/alpha/api/board/stage",
+            data=json.dumps({"story_id": "alpha-1", "stage": "execute", "unlocked": True}).encode(),
+            headers={"Content-Type": "application/json", TOKEN_HEADER: auth_token},
         )
         with urlopen(req) as r:
             assert r.status == 200

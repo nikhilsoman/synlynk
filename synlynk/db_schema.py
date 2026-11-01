@@ -439,6 +439,9 @@ CREATE TABLE IF NOT EXISTS goals (
     deadline    TEXT,
     status      TEXT NOT NULL DEFAULT 'active',
     kind        TEXT NOT NULL DEFAULT 'feature',
+    phase_id    INTEGER REFERENCES roadmap_phases(id),
+    placement_status TEXT NOT NULL DEFAULT 'unplaced',
+    placement_reason TEXT,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -543,6 +546,15 @@ CREATE TABLE IF NOT EXISTS harness_reservations (
     released_at    TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_harness_reservations_harness ON harness_reservations(harness, status);
+
+CREATE TABLE IF NOT EXISTS quota_burn_rate_weights (
+    harness       TEXT NOT NULL,
+    model         TEXT NOT NULL,
+    multiplier    REAL NOT NULL DEFAULT 1.0,
+    sample_count  INTEGER NOT NULL DEFAULT 0,
+    updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (harness, model)
+);
 
 CREATE TABLE IF NOT EXISTS credit_grants (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,

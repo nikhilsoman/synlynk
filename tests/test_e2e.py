@@ -91,6 +91,10 @@ def _seed_governs_story(project_dir: Path, story_id: str) -> None:
         "INSERT INTO goals (goal_id, outcome, criterion) VALUES (?, ?, ?)",
         ("goal-dispatch-e2e", "Exercise dispatch", "Dispatch creates a job"),
     )
+    conn.execute("INSERT INTO roadmap_arcs (version, title) VALUES ('v-test-e2e', 'E2E')")
+    conn.execute("INSERT INTO roadmap_phases (arc_version, phase_title) VALUES ('v-test-e2e', 'E2E phase')")
+    e2e_phase = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute("UPDATE goals SET phase_id=?, placement_status='placed' WHERE goal_id='goal-dispatch-e2e'", (e2e_phase,))
     conn.execute(
         "INSERT INTO stories (story_id, title, goal_id) VALUES (?, ?, ?)",
         (story_id, "Dispatch creates a job", "goal-dispatch-e2e"),
@@ -361,7 +365,7 @@ def test_dispatch_creates_job(cli):
     _seed_governs_story(cli.dir, story_id)
     r = cli.run(
         "dispatch", "claude", "--task", "test task", "--story", story_id,
-        "--force-agent", env=env,
+        "--force-harness", env=env,
     )
     assert r.returncode == 0, r.stderr
     jobs_file = cli.dir / ".synlynk" / "jobs.json"

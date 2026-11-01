@@ -321,6 +321,12 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [237](./237-decide-panel-roadmap.md) | Convening the Panel on Our Own Review | [#1919](https://github.com/nikhilsoman/synlynk/pull/1919) | 2026-10-02 |
 | [238](./238-decide-panel-roadmap-fidelity-fix.md) | The Synthesis Lost Detail the Panel Actually Gave Us | [#1920](https://github.com/nikhilsoman/synlynk/pull/1920) | 2026-10-03 |
 | [239](./239-pr1934-version-single-source.md) | PR #1934 — CI release gate and version single source | 1934 | 2026-10-03 |
+| [268](./268-prTBD-pm-tpm-durable-wake-cycle-charters.md) | Durable PM/TPM charters get a real wake cycle and CLI surface | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-10-13 |
+| [272](./272-prTBD-charter-superpowers-binding.md) | PR #TBD — Charters Learn to Bind Skills, Not Just Roles | 2306 | 2026-10-14 |
+| [273](./273-prTBD-onboarding-engine-wiring.md) | PR #TBD — Five Modules, Zero Callers: Finding the Other Dead Charter Bug | 2310 | 2026-10-14 |
+| [275](./275-prTBD-first-win-loop-wiring.md) | PR #TBD — Making the First Win Reach S10 | TBD | 2026-10-15 |
+| [280](./280-prTBD-v0.25.3.md) | v0.25.3 — Muse Readiness and Capacity-Routing Evidence | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-10-24 |
+| [281](./281-pr5018-v0.26.8.md) | PR #5018 — v0.26.8: Harness Context Compaction Protocol | [#5018](https://github.com/nikhilsoman/synlynk/pull/5018) | 2026-11-01 |
 
 ## Per-PR Post Template
 

@@ -217,6 +217,17 @@ def is_durable_hub_entry(slug: str, entry: dict) -> bool:
     return workspace_kind(entry, slug) != "ephemeral"
 
 
+def stamp_workspace_kind(slug: str, entry: dict) -> dict:
+    """Persist the derived workspace classification during a refresh write path."""
+    kind = workspace_kind(entry, slug)
+    path_root = str(entry.get("path_root") or entry.get("repo_path") or "")
+    if entry.get("kind") == kind and entry.get("path_root") == path_root:
+        return entry
+    from synlynk.state_registry import update_registered_product
+
+    return update_registered_product(slug, kind=kind, path_root=path_root)
+
+
 def _registered_workspaces() -> dict:
     """Return {slug: entry} for every registered product, or {} if no registry yet."""
     from synlynk.state_registry import _read_unlocked, registry_path
@@ -257,6 +268,7 @@ def refresh_workspace(slug: str, entry: dict, port: int) -> None:
     """Render one workspace's views into CACHE_ROOT/<slug>/. Raises on failure."""
     import synlynk.viz as viz_module
 
+    entry = stamp_workspace_kind(slug, entry)
     repo_path = entry.get("repo_path")
     db_path = entry.get("canonical_path")
     if not repo_path or not db_path:
@@ -910,6 +922,193 @@ def build_workspace_routing_handler():
                             self.wfile.write(body)
                         return False
 
+                    if api_route == "logical" and self.command == "GET":
+                        from synlynk.viz.logical_expand import (
+                            load_logical_graph,
+                            logical_community_payload,
+                        )
+
+                        filters = parse_qs(parsed.query)
+                        raw_community = (filters.get("community") or [None])[0]
+                        if raw_community is None or str(raw_community).strip() == "":
+                            body = json.dumps({"error": "community required"}).encode("utf-8")
+                            self.send_response(400)
+                            self.send_header("Content-Type", "application/json; charset=utf-8")
+                            self.send_header("Content-Length", str(len(body)))
+                            self.end_headers()
+                            self.wfile.write(body)
+                            return False
+                        nodes, edges = load_logical_graph(ctx.repo_path, ctx.db_path)
+                        payload = logical_community_payload(
+                            nodes, edges, str(raw_community).strip()
+                        )
+                        body = json.dumps(payload).encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.send_header("Content-Length", str(len(body)))
+                        self.end_headers()
+                        self.wfile.write(body)
+                        return False
+
+                    if api_route == "sentinel" and self.command == "GET":
+                        from synlynk.viz.constants import SENTINEL_ACKS_PATH
+                        from synlynk.viz.data import (
+                            group_workspace_sentinel_alerts,
+                            load_sentinel_acks,
+                            load_workspace_sentinel_alerts,
+                        )
+
+                        sentinel_path = os.path.join(str(ctx.repo_path), ".synlynk", "sentinel.md")
+                        acks_path = os.path.join(str(ctx.repo_path), SENTINEL_ACKS_PATH)
+                        hud = group_workspace_sentinel_alerts(
+                            load_workspace_sentinel_alerts(sentinel_path, active_only=True),
+                            load_sentinel_acks(acks_path),
+                        )
+                        body = json.dumps(hud).encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.send_header("Content-Length", str(len(body)))
+                        self.end_headers()
+                        self.wfile.write(body)
+                        return False
+
+                    if api_route in ("sentinel/ack", "sentinel/issue") and self.command == "POST":
+                        from datetime import datetime, timezone
+                        from synlynk.sentinel import _alert_identity
+                        from synlynk.viz.constants import SENTINEL_ACKS_PATH
+                        from synlynk.viz.data import (
+                            group_workspace_sentinel_alerts,
+                            load_sentinel_acks,
+                            load_workspace_sentinel_alerts,
+                            raise_sentinel_issue,
+                            save_sentinel_ack,
+                        )
+
+                        length = int(self.headers.get("Content-Length", 0) or 0)
+                        try:
+                            payload = json.loads(self.rfile.read(length) or b"{}")
+                            scope = str(payload.get("scope") or "")
+                            code = str(payload.get("code") or "").strip().upper()
+                            identity = payload.get("identity")
+                            if scope not in ("occurrence", "pattern") or not code:
+                                raise ValueError("invalid sentinel scope or code")
+                            if scope == "occurrence" and not isinstance(identity, list):
+                                raise ValueError("occurrence scope requires identity")
+                        except (ValueError, json.JSONDecodeError) as exc:
+                            body = json.dumps({"ok": False, "error": str(exc)}).encode("utf-8")
+                            self.send_response(400)
+                            self.send_header("Content-Type", "application/json")
+                            self.end_headers()
+                            self.wfile.write(body)
+                            return False
+
+                        sentinel_path = os.path.join(
+                            str(ctx.repo_path), ".synlynk", "sentinel.md"
+                        )
+                        acks_path = os.path.join(
+                            str(ctx.repo_path), SENTINEL_ACKS_PATH
+                        )
+                        alerts = load_workspace_sentinel_alerts(
+                            sentinel_path, active_only=True
+                        )
+                        hud = group_workspace_sentinel_alerts(
+                            alerts, {}, member_cap=max(50, len(alerts))
+                        )
+                        groups = list(hud.get("groups") or []) + list(hud.get("acked") or [])
+                        group = next((item for item in groups if item.get("code") == code), None)
+                        if group is None:
+                            body = json.dumps({"ok": False, "error": "sentinel_not_found"}).encode("utf-8")
+                            self.send_response(404)
+                            self.send_header("Content-Type", "application/json")
+                            self.end_headers()
+                            self.wfile.write(body)
+                            return False
+
+                        member = None
+                        if scope == "occurrence":
+                            member = next((item for item in group.get("members") or [] if list(_alert_identity({
+                                "severity": item.get("severity"),
+                                "code": "" if code == "UNPARSED" else code,
+                                "message": item.get("message") or "",
+                            })) == identity), None)
+                            if member is None:
+                                body = json.dumps({"ok": False, "error": "sentinel_not_found"}).encode("utf-8")
+                                self.send_response(404)
+                                self.send_header("Content-Type", "application/json")
+                                self.end_headers()
+                                self.wfile.write(body)
+                                return False
+
+                        issue_url = None
+                        if api_route == "sentinel/issue":
+                            issue_group = group
+                            if member is not None:
+                                issue_group = {
+                                    "code": code,
+                                    "severity": member.get("severity"),
+                                    "count": 1,
+                                    "first_seen": member.get("first_seen") or member.get("ts"),
+                                    "last_seen": member.get("last_seen") or member.get("ts"),
+                                    "members": [member],
+                                }
+                            try:
+                                issue_url = raise_sentinel_issue(
+                                    slug, str(ctx.repo_path), issue_group
+                                )
+                            except Exception:
+                                body = json.dumps({"ok": False, "error": "gh_failed"}).encode("utf-8")
+                                self.send_response(502)
+                                self.send_header("Content-Type", "application/json")
+                                self.end_headers()
+                                self.wfile.write(body)
+                                return False
+
+                        last_seen = (
+                            (member or {}).get("last_seen")
+                            or (member or {}).get("ts")
+                            or group.get("last_seen")
+                            or ""
+                        )
+                        row = {
+                            "kind": scope,
+                            "code": code,
+                            "identity": identity if scope == "occurrence" else None,
+                            "acked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                            "last_seen_at_ack": str(last_seen),
+                            "issue_url": issue_url,
+                        }
+                        save_sentinel_ack(acks_path, row, slug=slug)
+                        result = {"ok": True}
+                        if issue_url:
+                            result["issue_url"] = issue_url
+                        body = json.dumps(result).encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json")
+                        self.end_headers()
+                        self.wfile.write(body)
+                        return False
+
+                    if api_route == "note" and self.command == "POST":
+                        from synlynk.viz.server import save_viz_note, _pkg
+
+                        length = int(self.headers.get("Content-Length", 0) or 0)
+                        payload = json.loads(self.rfile.read(length) or b"{}")
+                        try:
+                            result = save_viz_note(_pkg().VIZ_NOTES_PATH, payload)
+                        except ValueError as exc:
+                            body = json.dumps({"ok": False, "error": str(exc)}).encode("utf-8")
+                            self.send_response(400)
+                            self.send_header("Content-Type", "application/json")
+                            self.end_headers()
+                            self.wfile.write(body)
+                            return False
+                        body = json.dumps(result).encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json")
+                        self.end_headers()
+                        self.wfile.write(body)
+                        return False
+
                     if api_route == "daemon/stream" and self.command == "GET":
                         from synlynk.viz.server import serve_daemon_stream
 
@@ -933,7 +1132,10 @@ def build_workspace_routing_handler():
 
                         length = int(self.headers.get("Content-Length", 0))
                         payload = json.loads(self.rfile.read(length))
-                        ok = update_stage_for_context(ctx, payload["story_id"], payload["stage"])
+                        ok = update_stage_for_context(
+                            ctx, payload["story_id"], payload["stage"],
+                            unlocked=bool(payload.get("unlocked")),
+                        )
                         res = json.dumps({"ok": ok}).encode("utf-8")
                         self.send_response(200 if ok else 400)
                         self.send_header("Content-Type", "application/json")
@@ -975,6 +1177,12 @@ def build_workspace_routing_handler():
                 super().do_HEAD()
 
         def do_POST(self):
+            from synlynk.local_http_auth import authorize_local_request
+
+            ok, code, message = authorize_local_request(self.headers)
+            if not ok:
+                self.send_error(code, message)
+                return
             if self._route_path():
                 super().do_POST()
 

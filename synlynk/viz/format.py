@@ -10,6 +10,8 @@ GANTT_EMBED_KEYS = (
     "spec_verifications",
     "product_id",
     "notes",
+    "costs",
+    "agents",
 )
 EFFORT_EMBED_KEYS = ("costs", "dreams")
 EFFICIENCY_EMBED_KEYS = ("agents", "telemetry", "ecosystem")

@@ -43,7 +43,7 @@ def test_board_data_for_context_reads_explicit_db(sample_workspace):
     assert res["filters"]["goals"] == ["goal-123"]
 
 def test_update_stage_for_context_mutates_explicit_db(sample_workspace):
-    ok = update_stage_for_context(sample_workspace, "story-001", "visualize")
+    ok = update_stage_for_context(sample_workspace, "story-001", "visualize", unlocked=True)
     assert ok is True
     res = board_data_for_context(sample_workspace)
     assert res["cards"][0]["governs_stage"] == "visualize"
@@ -64,13 +64,13 @@ def test_board_data_for_context_filters(sample_workspace):
 
 def test_update_stage_invalid_value(sample_workspace):
     with pytest.raises(ValueError, match="invalid stage"):
-        update_stage_for_context(sample_workspace, "story-001", "invalid-stage")
+        update_stage_for_context(sample_workspace, "story-001", "invalid-stage", unlocked=True)
 
 def test_update_status_invalid_value(sample_workspace):
     with pytest.raises(ValueError, match="invalid status"):
         update_status_for_context(sample_workspace, "story-001", "invalid-status")
 
 def test_update_nonexistent_story_returns_false(sample_workspace):
-    assert update_stage_for_context(sample_workspace, "ghost-story", "visualize") is False
+    assert update_stage_for_context(sample_workspace, "ghost-story", "visualize", unlocked=True) is False
     assert update_status_for_context(sample_workspace, "ghost-story", "done") is False
 

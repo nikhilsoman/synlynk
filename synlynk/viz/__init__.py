@@ -17,6 +17,7 @@ from synlynk.viz.constants import (
     MEMORABLE_VIZOR_PORTS,
     VIZ_CACHE_DIR,
     VIZ_META_PATH,
+    SENTINEL_ACKS_PATH,
     VIZ_NOTES_PATH,
     VIZ_WORKSPACE_MAP_PATH,
     _KNOWN_AGENTS,

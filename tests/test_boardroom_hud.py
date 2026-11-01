@@ -121,6 +121,7 @@ def test_board_proposals_api_returns_pending(running_board_server):
 
 def test_board_proposals_sign_api_signs_proposal(running_board_server, genesis_key):
     from urllib.request import urlopen, Request
+    from synlynk.local_http_auth import TOKEN_HEADER, ensure_local_token
 
     port, repo1 = running_board_server
     key_path, _pub_path = genesis_key
@@ -147,7 +148,7 @@ def test_board_proposals_sign_api_signs_proposal(running_board_server, genesis_k
     req = Request(
         f"http://127.0.0.1:{port}/w/board-ws/api/board/proposals/sign",
         data=json.dumps({"proposal_id": "prop-bbb22222", "key_path": key_path}).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", TOKEN_HEADER: ensure_local_token()},
         method="POST",
     )
     with urlopen(req) as resp:

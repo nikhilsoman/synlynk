@@ -59,3 +59,68 @@ def test_sweep_reports_existing_scoped_coverage_without_relinking(tmp_path):
     assert conn.execute(
         "SELECT governs_stage FROM stories WHERE story_id='story-linked'"
     ).fetchone()[0] == "open"
+
+
+def test_audit_reports_active_story_invariants(tmp_path):
+    from synlynk.governs_cli import cmd_governs_audit
+
+    conn = _db(tmp_path)
+    conn.execute(
+        "INSERT INTO stories (story_id, title, status, gh_issue) "
+        "VALUES ('story-a', 'A', 'open', '42')"
+    )
+    conn.execute(
+        "INSERT INTO stories (story_id, title, status, gh_issue) "
+        "VALUES ('story-b', 'B', 'in_progress', '42')"
+    )
+    conn.commit()
+
+    result = cmd_governs_audit(conn=conn)
+
+    assert result["active_stories_without_goal"] == 2
+    assert result["active_stories_without_phase"] == 2
+    assert result["duplicate_active_issue_stories"] == 1
+    assert result["passed"] is False
+
+
+def test_audit_strict_fails_on_active_story_without_goal(tmp_path):
+    import pytest
+    from synlynk.governs_cli import cmd_governs_audit
+
+    conn = _db(tmp_path)
+    conn.execute(
+        "INSERT INTO stories (story_id, title, status) VALUES ('story-ghost', 'Ghost', 'open')"
+    )
+    conn.commit()
+
+    with pytest.raises(RuntimeError, match="active stories lack a goal"):
+        cmd_governs_audit(conn=conn, strict=True)
+
+
+def test_audit_normalizes_prefixed_issue_identity(tmp_path):
+    from synlynk.governs_cli import cmd_governs_audit
+
+    conn = _db(tmp_path)
+    conn.execute(
+        "INSERT INTO roadmap_arcs (version, title, status) VALUES ('v-test', 'Test', 'planned')"
+    )
+    conn.execute(
+        "INSERT INTO roadmap_phases (arc_version, phase_title, status) VALUES ('v-test', 'Test phase', 'planned')"
+    )
+    conn.execute(
+        "INSERT INTO goals (goal_id, outcome, criterion, product_id, phase_id, placement_status) "
+        "VALUES ('goal-local', 'Local Goal', 'Criteria', 'prod-test', 1, 'placed')"
+    )
+    conn.execute(
+        "INSERT INTO stories (story_id, title, status, gh_issue, goal_id) "
+        "VALUES ('story-a', 'A', 'open', '42', 'goal-local')"
+    )
+    conn.execute(
+        "INSERT INTO stories (story_id, title, status, gh_issue, goal_id) "
+        "VALUES ('story-b', 'B', 'in_progress', '#42', 'goal-local')"
+    )
+    conn.commit()
+
+    result = cmd_governs_audit(conn=conn)
+
+    assert result["duplicate_active_issue_stories"] == 1

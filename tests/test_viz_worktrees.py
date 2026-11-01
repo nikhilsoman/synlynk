@@ -11,7 +11,7 @@ def test_observatory_renders_worktree_lifecycle_section():
     rendered = generate_observatory_html(obs_snapshot)
     assert "Worktree Lifecycle &amp; Fleet Health" in rendered
     assert "SAFE" in rendered
-    assert "Clean Safe Worktrees" in rendered
+    assert "Clean Safe Worktrees" not in rendered
 
 
 def test_handler_handle_worktree_clean(monkeypatch):
