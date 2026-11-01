@@ -769,7 +769,9 @@ def _project_request_quota_from_config() -> Optional[dict]:
     }
 
 
-def _read_agent_quota_rows(conn, agent: str, track: Optional[str] = None) -> Optional[list]:
+def _read_agent_quota_rows(
+    conn, agent: str, track: Optional[str] = None, model: Optional[str] = None
+) -> Optional[list]:
     """Read harness_quotas rows for a harness.
 
     Returns:
@@ -783,7 +785,17 @@ def _read_agent_quota_rows(conn, agent: str, track: Optional[str] = None) -> Opt
     try:
         cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_quotas)")}
         has_track = "track" in cols
-        if has_track and track is not None:
+        if has_track and track is not None and model is not None:
+            rows = conn.execute(
+                """
+                SELECT harness, model, quota_type, unit, limit_tokens, used_tokens,
+                       reset_at, updated_at, track
+                FROM harness_quotas
+                WHERE harness = ? AND track = ? AND model = ?
+                """,
+                (agent, track, model),
+            ).fetchall()
+        elif has_track and track is not None:
             rows = conn.execute(
                 """
                 SELECT harness, model, quota_type, unit, limit_tokens, used_tokens,
@@ -842,6 +854,7 @@ def _quota_status_for_agent(
     estimated_tokens: Optional[int] = None,
     estimated_requests: int = 1,
     track: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> dict:
     """Stage-2 quota gate for one harness.
 
@@ -858,7 +871,7 @@ def _quota_status_for_agent(
     """
     read_fn = _pkg("_read_agent_quota_rows") or _read_agent_quota_rows
     try:
-        rows = read_fn(conn, agent, track=track)
+        rows = read_fn(conn, agent, track=track, model=model)
     except TypeError:
         rows = read_fn(conn, agent)
     if rows is None:
@@ -901,7 +914,9 @@ def _quota_status_for_agent(
 
     need_tokens = int(estimated_tokens) if estimated_tokens else 0
     need_requests = max(1, int(estimated_requests or 1))
-    reserved = _pkg("_open_reservations_sum")(conn, agent)
+    reserved = _pkg("_open_reservations_sum")(
+        conn, agent, model=model, track=track
+    )
     min_token_headroom = None
     min_request_headroom = None
 
@@ -968,6 +983,98 @@ def _quota_status_for_agent(
         "degraded": True,
         "reason": "empty_after_filter",
     }
+
+
+def _check_and_reserve_quota(
+    conn,
+    *,
+    harness: str,
+    model: str,
+    track: str,
+    estimated_tokens: int,
+    estimated_cost_usd: float,
+    payment_mode: str,
+    scope: str,
+    job_id: str,
+    scope_id: Optional[str] = None,
+) -> dict:
+    """Atomically validate one provider pool and open its reservation."""
+    model = str(model or "unknown").strip() or "unknown"
+    track = str(track or "default").strip() or "default"
+    estimated_tokens = int(estimated_tokens or 0)
+    if estimated_tokens <= 0:
+        raise ValueError("estimated_tokens must be a positive integer")
+
+    if conn.in_transaction:
+        conn.commit()
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        quota = _quota_status_for_agent(
+            conn,
+            harness,
+            estimated_tokens=estimated_tokens,
+            track=track,
+            model=model,
+        )
+        if harness != "agy" and quota.get("reason") != "harness_quotas":
+            quota = _quota_status_for_agent(
+                conn,
+                harness,
+                estimated_tokens=estimated_tokens,
+            )
+        if quota.get("status") == "exhausted":
+            conn.rollback()
+            return {"accepted": False, "reason": "quota_exhausted", "quota": quota}
+        if harness == "agy" and (
+            quota.get("status") == "unknown"
+            or quota.get("reason") != "harness_quotas"
+        ):
+            conn.rollback()
+            return {"accepted": False, "reason": "quota_unknown", "quota": quota}
+
+        if payment_mode == "credit_grant":
+            credit_row = conn.execute(
+                "SELECT COALESCE(SUM(remaining_usd), 0) FROM credit_grants "
+                "WHERE agent=? AND remaining_usd > 0 "
+                "AND (expires_at IS NULL OR expires_at > datetime('now'))",
+                (harness,),
+            ).fetchone()
+            available_credit = float(credit_row[0] or 0.0)
+            reserved_tokens = _open_reservations_sum(
+                conn, harness, model=model, track=track
+            )
+            per_token_cost = (
+                float(estimated_cost_usd) / estimated_tokens
+                if estimated_cost_usd > 0 else 0.0
+            )
+            projected_cost = float(estimated_cost_usd) + reserved_tokens * per_token_cost
+            if available_credit < projected_cost:
+                conn.rollback()
+                return {
+                    "accepted": False,
+                    "reason": "credit_exhausted",
+                    "credit_remaining_usd": available_credit,
+                }
+
+        cur = conn.execute(
+            "INSERT INTO harness_reservations "
+            "(harness, model, track, tokens, scope, scope_id, job_id, status) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, 'open')",
+            (harness, model, track, estimated_tokens, scope, scope_id, job_id),
+        )
+        conn.commit()
+        return {
+            "accepted": True,
+            "reason": "reserved",
+            "reservation_id": cur.lastrowid,
+            "harness": harness,
+            "model": model,
+            "track": track,
+            "quota": quota,
+        }
+    except Exception:
+        conn.rollback()
+        raise
 
 
 def _estimate_story_cost_usd(

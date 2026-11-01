@@ -7,6 +7,8 @@ spawned.
 """
 
 import time
+import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 
 
 def _fake_dispatch_success(monkeypatch, sl):
@@ -144,3 +146,167 @@ def test_deferred_job_survives_reset_and_resumes_without_redispatch(project_dir,
         "SELECT status FROM daemon_jobs WHERE job_id='job-already-done1'"
     ).fetchone()[0]
     assert already_done_status == "done"
+
+
+def test_agy_unknown_selected_pool_is_rejected_without_reservation(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    result = sl._check_and_reserve_quota(
+        conn,
+        harness="agy",
+        model="gemini-3.8-flash-low",
+        track="gemini",
+        estimated_tokens=1000,
+        estimated_cost_usd=0.01,
+        payment_mode="credit_grant",
+        scope="session",
+        job_id="job-unknown-pool",
+    )
+
+    assert result["accepted"] is False
+    assert result["reason"] == "quota_unknown"
+    assert conn.execute(
+        "SELECT COUNT(*) FROM harness_reservations WHERE job_id='job-unknown-pool'"
+    ).fetchone()[0] == 0
+
+
+def test_agy_unknown_pool_blocks_before_worktree_or_process(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch_pipeline as pipeline
+    import synlynk.dispatch as dispatch_mod
+
+    monkeypatch.setattr(
+        pipeline,
+        "prepare_worktree",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("worktree creation must not run")
+        ),
+    )
+    monkeypatch.setattr(
+        dispatch_mod.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("process spawn must not run")
+        ),
+    )
+
+    result = sl.dispatch_agent(
+        "agy",
+        "implement the requested change",
+        model="gemini-3.8-flash-low",
+        force_agent=True,
+        skip_preflight=True,
+        job_id="job-agy-preflight-block",
+    )
+
+    assert result["deferred"] is True
+    assert result["reason"] == "quota_unknown"
+    assert result["preflight"] == {
+        "harness": "agy",
+        "model": "gemini-3.8-flash-low",
+        "track": "gemini",
+        "result": "quota_unknown",
+    }
+
+
+def test_agy_exhausted_credit_is_rejected_without_reservation(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    sl._upsert_agent_quota(
+        "agy", "5h", limit_tokens=100_000, used_tokens=0,
+        track="gemini", model="gemini-3.7-flash", conn=conn,
+    )
+    result = sl._check_and_reserve_quota(
+        conn,
+        harness="agy",
+        model="gemini-3.7-flash",
+        track="gemini",
+        estimated_tokens=1000,
+        estimated_cost_usd=0.01,
+        payment_mode="credit_grant",
+        scope="session",
+        job_id="job-no-credit",
+    )
+
+    assert result["accepted"] is False
+    assert result["reason"] == "credit_exhausted"
+    assert conn.execute(
+        "SELECT COUNT(*) FROM harness_reservations WHERE job_id='job-no-credit'"
+    ).fetchone()[0] == 0
+
+
+def test_selected_pool_ignores_exhausted_other_track(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    sl._upsert_agent_quota(
+        "agy", "5h", limit_tokens=10_000, used_tokens=10_000,
+        track="claude_proxy", model="claude-sonnet-5", conn=conn,
+    )
+    sl._upsert_agent_quota(
+        "agy", "5h", limit_tokens=10_000, used_tokens=0,
+        track="gemini", model="gemini-3.7-flash", conn=conn,
+    )
+    conn.execute(
+        "INSERT INTO credit_grants (agent, face_value_usd, remaining_usd, granted_at) "
+        "VALUES ('agy', 10.0, 10.0, '2026-11-01')"
+    )
+    conn.commit()
+
+    result = sl._check_and_reserve_quota(
+        conn,
+        harness="agy",
+        model="gemini-3.7-flash",
+        track="gemini",
+        estimated_tokens=1000,
+        estimated_cost_usd=0.01,
+        payment_mode="credit_grant",
+        scope="session",
+        job_id="job-healthy-gemini",
+    )
+
+    assert result["accepted"] is True
+    assert conn.execute(
+        "SELECT model, track FROM harness_reservations WHERE job_id='job-healthy-gemini'"
+    ).fetchone() == ("gemini-3.7-flash", "gemini")
+
+
+def test_parallel_same_pool_reservations_do_not_oversubscribe(tmp_path):
+    import synlynk as sl
+
+    db_path = tmp_path / "atomic-reservations.db"
+    seed = sl._get_db(str(db_path))
+    sl._upsert_agent_quota(
+        "agy", "5h", limit_tokens=1500, used_tokens=0,
+        track="gemini", model="gemini-3.7-flash", conn=seed,
+    )
+    seed.close()
+
+    def reserve(job_id):
+        conn = sqlite3.connect(db_path, timeout=5)
+        try:
+            return sl._check_and_reserve_quota(
+                conn,
+                harness="agy",
+                model="gemini-3.7-flash",
+                track="gemini",
+                estimated_tokens=1000,
+                estimated_cost_usd=0.0,
+                payment_mode="subscription",
+                scope="session",
+                job_id=job_id,
+            )
+        finally:
+            conn.close()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(reserve, ("job-atomic-a", "job-atomic-b")))
+
+    assert sorted(result["accepted"] for result in results) == [False, True]
+    conn = sqlite3.connect(db_path)
+    assert conn.execute(
+        "SELECT COUNT(*) FROM harness_reservations WHERE status='open'"
+    ).fetchone()[0] == 1
+    conn.close()

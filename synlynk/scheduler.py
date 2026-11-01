@@ -175,6 +175,7 @@ def _enqueue_plan(plan: list) -> list:
     import time
 
     from synlynk import _get_db, _open_reservation
+    from synlynk.quota import resolve_harness_track
 
     conn = _get_db()
     job_ids = []
@@ -201,6 +202,8 @@ def _enqueue_plan(plan: list) -> list:
                 _open_reservation(
                     conn, agent, int(estimated_tokens),
                     scope="plan", scope_id=run_id, job_id=job_id,
+                    model=item.get("model") or "unknown",
+                    track=resolve_harness_track(agent, item.get("model")),
                 )
             job_ids.append(job_id)
         conn.commit()

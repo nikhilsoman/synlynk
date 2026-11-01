@@ -10,6 +10,25 @@ import synlynk as sl
 from synlynk.dispatch import _ensure_daemon_job_columns, _format_job_summary
 
 
+def _seed_agy_capacity():
+    conn = sl._get_db()
+    for model in (
+        "gemini-3.8-flash-low",
+        "gemini-3.8-flash-medium",
+        "gemini-3.8-flash-high",
+    ):
+        sl._upsert_agent_quota(
+            "agy", "5h", limit_tokens=1_000_000, used_tokens=0,
+            track="gemini", model=model, conn=conn,
+        )
+    conn.execute(
+        "INSERT INTO credit_grants (agent, face_value_usd, remaining_usd, granted_at) "
+        "VALUES ('agy', 100.0, 100.0, '2026-11-01')"
+    )
+    conn.commit()
+    conn.close()
+
+
 def test_ensure_daemon_job_columns_reads_schema_once_and_adds_missing_columns():
     conn = sqlite3.connect(":memory:")
     conn.execute("CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY)")
@@ -1232,6 +1251,7 @@ def test_dispatch_agent_requires_gh_write_false_is_noop(project_dir, monkeypatch
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    _seed_agy_capacity()
 
     job = sl.dispatch_agent("agy", "write docs", story_id="story-manual-1", context_mode="none")
 
@@ -2540,6 +2560,7 @@ def test_dispatch_does_not_auto_enable_skip_permissions_agy(project_dir, monkeyp
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(dispatch_mod, "_preflight_dispatch", lambda *a, **kw: {"passed": True})
+    _seed_agy_capacity()
 
     dispatch_mod.dispatch_agent(
         agent="agy",
@@ -2715,6 +2736,7 @@ def test_agy_dispatch_flags_includes_print_timeout(project_dir, monkeypatch):
         return type("DummyProc", (), {"pid": 9999})()
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    _seed_agy_capacity()
 
     dispatch_mod.dispatch_agent(
         agent="agy",
@@ -2739,6 +2761,7 @@ def test_prompt_wrapper_uses_non_reserved_shell_variable(project_dir, monkeypatc
         return type("DummyProc", (), {"pid": 9999})()
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    _seed_agy_capacity()
     dispatch_mod.dispatch_agent(
         agent="agy",
         task="run tests",
@@ -2763,6 +2786,7 @@ def test_dispatch_emits_model_and_effort_flags(project_dir, monkeypatch):
         return type("DummyProc", (), {"pid": 9999})()
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    _seed_agy_capacity()
 
     dispatch_mod.dispatch_agent(
         agent="agy",
@@ -2844,6 +2868,7 @@ def test_agy_dispatch_flags_does_not_duplicate_print_timeout_if_already_present(
         "_load_harness_overrides",
         lambda agent: {"dispatch_flags": {"print-timeout": "10m0s"}},
     )
+    _seed_agy_capacity()
 
     dispatch_mod.dispatch_agent(
         agent="agy",
@@ -3817,6 +3842,7 @@ def test_dispatch_persists_context_mode_and_bytes(project_dir, monkeypatch):
     # Fake Popen
     proc = MagicMock()
     proc.pid = 424242
+    proc.poll.return_value = None
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **k: proc)
 
     # Avoid heavy preflight
@@ -3924,9 +3950,10 @@ def test_dispatch_agent_id_auto_selects_harness_by_mapped_role(project_dir, monk
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
 
     agent_id = agent_cli.cmd_agent_init("qa")  # qa -> "verifier" -> agy
+    _seed_agy_capacity()
 
     job = sl.dispatch_agent(
-        "claude", "run the test suite", agent_id=agent_id,
+        "auto", "run the test suite", agent_id=agent_id,
         force_agent=False, context_mode="none",
     )
 
@@ -3993,7 +4020,7 @@ def test_dispatch_agent_story_id_wins_over_agent_id_role_for_harness_selection(p
     monkeypatch.setattr(sl, "_best_agent_for_story", lambda story_id: "grok")
 
     job = sl.dispatch_agent(
-        "claude", "implement the feature", agent_id=agent_id,
+        "auto", "implement the feature", agent_id=agent_id,
         story_id="story-with-capability-match", force_agent=False,
         context_mode="none", skip_permissions=True,
     )
