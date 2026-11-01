@@ -321,7 +321,8 @@ def _federated_preflight(conn, harness: str) -> dict:
     """Summarize current state.db provider pools without another registry."""
     try:
         quota_rows = conn.execute(
-            "SELECT model, track, quota_type, limit_tokens, used_tokens "
+            "SELECT model, track, quota_type, limit_tokens, used_tokens, "
+            "reset_at, updated_at "
             "FROM harness_quotas WHERE harness=? AND unit='tokens' "
             "ORDER BY track, model, quota_type",
             (harness,),
@@ -330,7 +331,9 @@ def _federated_preflight(conn, harness: str) -> dict:
         quota_rows = []
 
     pools_by_key = {}
-    for model, track, window, limit_tokens, used_tokens in quota_rows:
+    stale_pool = False
+    now = datetime.now(timezone.utc)
+    for model, track, window, limit_tokens, used_tokens, reset_at, updated_at in quota_rows:
         key = (model or "unknown", track or "default")
         pool = pools_by_key.setdefault(
             key,
@@ -348,11 +351,24 @@ def _federated_preflight(conn, harness: str) -> dict:
             else min(pool["headroom_tokens"], headroom)
         )
         pool["windows"].append(window)
+        try:
+            observed = datetime.fromisoformat(str(updated_at).replace("Z", "+00:00"))
+            if observed.tzinfo is None:
+                observed = observed.replace(tzinfo=timezone.utc)
+            reset = datetime.fromisoformat(str(reset_at).replace("Z", "+00:00")) if reset_at else None
+            if reset is not None and reset.tzinfo is None:
+                reset = reset.replace(tzinfo=timezone.utc)
+        except (TypeError, ValueError):
+            observed, reset = None, None
+        if observed is None or now - observed > timedelta(hours=24) or (reset and reset <= now):
+            stale_pool = True
 
     try:
         reservation_rows = conn.execute(
-            "SELECT model, track, COALESCE(SUM(tokens), 0) "
+            "SELECT model, track, COALESCE(SUM(tokens), 0), "
+            "COALESCE(SUM(estimated_cost_usd), 0) "
             "FROM harness_reservations WHERE harness=? AND status='open' "
+            "AND created_at >= datetime('now', '-24 hours') "
             "GROUP BY model, track",
             (harness,),
         ).fetchall()
@@ -360,8 +376,9 @@ def _federated_preflight(conn, harness: str) -> dict:
         reservation_rows = []
     reserved_by_key = {
         (model or "unknown", track or "default"): int(tokens or 0)
-        for model, track, tokens in reservation_rows
+        for model, track, tokens, _cost in reservation_rows
     }
+    reserved_cost = sum(float(cost or 0.0) for *_identity, cost in reservation_rows)
     for key, pool in pools_by_key.items():
         pool["reserved_tokens"] = reserved_by_key.get(key, 0)
         pool["available_tokens"] = max(
@@ -383,8 +400,12 @@ def _federated_preflight(conn, harness: str) -> dict:
     reserved_tokens = sum(reserved_by_key.values())
     if not pools:
         state = "unknown"
+    elif stale_pool:
+        state = "stale"
     elif any(pool["available_tokens"] <= 0 for pool in pools):
         state = "exhausted"
+    elif harness == "agy" and credit_remaining <= reserved_cost:
+        state = "credit_exhausted"
     elif reserved_tokens > 0:
         state = "reserved"
     else:
@@ -394,6 +415,7 @@ def _federated_preflight(conn, harness: str) -> dict:
         "pools": pools,
         "reserved_tokens": reserved_tokens,
         "credit_remaining_usd": credit_remaining,
+        "reserved_cost_usd": reserved_cost,
     }
 
 

@@ -403,6 +403,11 @@ def test_federated_rows_distinguish_exhausted_and_reserved_agy_pools(tmp_path):
         reserved, "agy", 1000, scope="session", job_id="job-reserved",
         track="gemini", model="gemini-3.8-flash-low",
     )
+    reserved.execute(
+        "INSERT INTO credit_grants (agent, face_value_usd, remaining_usd, granted_at) "
+        "VALUES ('agy', 10, 10, '2026-11-01')"
+    )
+    reserved.commit()
     reserved_rows = federated_rows(
         reserved,
         now=datetime(2026, 11, 1, tzinfo=timezone.utc),
@@ -411,6 +416,31 @@ def test_federated_rows_distinguish_exhausted_and_reserved_agy_pools(tmp_path):
     assert reserved_rows[0]["preflight"]["state"] == "reserved"
     assert reserved_rows[0]["preflight"]["reserved_tokens"] == 1000
     reserved.close()
+
+
+def test_federated_preflight_reports_stale_pool_and_ignores_expired_reservation(tmp_path):
+    import synlynk as sl
+    from synlynk.quota_capture import federated_rows
+
+    conn = sl._get_db(str(tmp_path / "stale.db"))
+    sl._upsert_agent_quota(
+        "agy", "5h", limit_tokens=10_000, used_tokens=0,
+        track="gemini", model="gemini-3.8-flash-low", conn=conn,
+    )
+    conn.execute("UPDATE harness_quotas SET updated_at='2000-01-01 00:00:00'")
+    rid = sl._open_reservation(
+        conn, "agy", 1000, scope="session", track="gemini",
+        model="gemini-3.8-flash-low",
+    )
+    conn.execute(
+        "UPDATE harness_reservations SET created_at='2000-01-01 00:00:00' WHERE id=?",
+        (rid,),
+    )
+    conn.commit()
+    rows = federated_rows(conn, registry={"agy": {"has_5h_window": True}})
+    assert rows[0]["preflight"]["state"] == "stale"
+    assert rows[0]["preflight"]["reserved_tokens"] == 0
+    conn.close()
 
 
 def test_boundary_capture_returns_before_the_slow_write(monkeypatch):
