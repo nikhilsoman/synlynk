@@ -108,19 +108,64 @@ def cmd_governs_audit(
             "SELECT COUNT(*) FROM roadmap_phases WHERE story_id IS NULL"
         ).fetchone()[0]
         placed_goals = len(goals) - unplaced_goals
-        passed = unplaced_goals == 0
+        shadow_state_db = os.path.join(os.getcwd(), ".synlynk", "state.db")
+        shadow_state_db_present = os.path.exists(shadow_state_db)
+        passed = unplaced_goals == 0 and not shadow_state_db_present
         result = {
             "goals": len(goals),
             "placed_goals": placed_goals,
             "unplaced_goals": unplaced_goals,
             "phases_without_story": phases_without_story,
+            "shadow_state_db_present": shadow_state_db_present,
             "passed": passed,
         }
-        if strict and not passed:
+        if strict and unplaced_goals:
             raise RuntimeError(
                 f"GOVERNS audit failed: {unplaced_goals} goals lack an explicit placed phase"
             )
+        if strict and shadow_state_db_present:
+            raise RuntimeError(f"GOVERNS audit failed: shadow state.db exists at {shadow_state_db}")
         return result
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def cmd_governs_rephase(
+    goal_id: str, phase_id: int, reason: str, *, role: str = "pm",
+    conn: Optional[sqlite3.Connection] = None,
+) -> None:
+    """Move a goal to a phase transactionally and record the audit reason."""
+    from synlynk.policy import check_authority
+    if not reason or not reason.strip():
+        raise ValueError("re-phasing requires an audit reason")
+    authority = check_authority("roadmap_edit", role=role, repo_path=os.getcwd())
+    if not authority.allowed:
+        raise RuntimeError(f"Re-phase refused: role {role!r} is not authorized per policy.json.")
+    owns_conn = conn is None
+    if conn is None:
+        from synlynk import _get_db
+        conn = _get_db()
+    try:
+        if not conn.execute("SELECT 1 FROM goals WHERE goal_id=?", (goal_id,)).fetchone():
+            raise ValueError(f"unknown goal {goal_id!r}")
+        if not conn.execute("SELECT 1 FROM roadmap_phases WHERE id=?", (phase_id,)).fetchone():
+            raise ValueError(f"unknown roadmap phase {phase_id!r}")
+        conn.execute("BEGIN")
+        conn.execute(
+            "UPDATE goals SET phase_id=?, placement_status='placed', placement_reason=? WHERE goal_id=?",
+            (phase_id, f"rephased: {reason.strip()}", goal_id),
+        )
+        import json
+        import time
+        conn.execute(
+            "INSERT INTO events (event_type, payload_json, created_at, emitted_by, authority_scope) VALUES (?, ?, ?, ?, ?)",
+            ("GOVERNS_REPHASE", json.dumps({"goal_id": goal_id, "phase_id": phase_id, "reason": reason.strip()}), time.strftime("%Y-%m-%dT%H:%M:%S"), role, "roadmap_edit"),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         if owns_conn:
             conn.close()
