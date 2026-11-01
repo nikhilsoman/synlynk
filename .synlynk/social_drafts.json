@@ -4766,5 +4766,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #5013 \u2014 enforce phase 115 story invariants (PR #5013, v0.26.7)\n\n\u2022 Merged improvements and fixes for PR #5013.\n\n#posts",
     "changelog": "### v0.26.7 (2026-11-01) - PR #5013\n- Merged improvements and fixes for PR #5013."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/545-pr5018-harness-context-compaction-protocol-task.md",
+    "title": "PR #5018 \u2014 Harness Context Compaction Protocol \u2014 tasks 7-11 (CLI, cost instrumentation, pack/inject)",
+    "author": "synlynk-pm agent",
+    "date": "2026-11-01",
+    "pr": "#5018",
+    "version": "0.26.7",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #5018."
+    ],
+    "tweet": "\ud83d\ude80 PR #5018 \u2014 Harness Context Compaction Protocol \u2014 tasks 7-11 (CLI, cost instrumentation, pack/inject) (PR #5018, v0.26.7)\n\n\u2022 Merged improvements and fixes for PR #5018.\n\n#posts",
+    "changelog": "### v0.26.7 (2026-11-01) - PR #5018\n- Merged improvements and fixes for PR #5018."
   }
 ]

@@ -623,6 +623,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [542](./542-pr5003-devlog-cost-housekeeping-for-v0-26-9-pr-.md) | PR #5003 — devlog + cost housekeeping for v0.26.9/PR #4999 session | [#5003](https://github.com/nikhilsoman/synlynk/pull/5003) | 2026-11-01 |
 | [543](./543-pr5006-enforce-governed-goal-and-phase-lifecycl.md) | PR #5006 — enforce governed goal and phase lifecycle | [#5006](https://github.com/nikhilsoman/synlynk/pull/5006) | 2026-11-01 |
 | [544](./544-pr5013-enforce-phase-115-story-invariants.md) | PR #5013 — enforce phase 115 story invariants | [#5013](https://github.com/nikhilsoman/synlynk/pull/5013) | 2026-11-01 |
+| [545](./545-pr5018-harness-context-compaction-protocol-task.md) | PR #5018 — Harness Context Compaction Protocol — tasks 7-11 (CLI, cost instrumentation, pack/inject) | [#5018](https://github.com/nikhilsoman/synlynk/pull/5018) | 2026-11-01 |
 
 ## Per-PR Post Template
 
