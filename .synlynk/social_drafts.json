@@ -4782,5 +4782,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #5018 \u2014 Harness Context Compaction Protocol \u2014 tasks 7-11 (CLI, cost instrumentation, pack/inject) (PR #5018, v0.26.7)\n\n\u2022 Merged improvements and fixes for PR #5018.\n\n#posts",
     "changelog": "### v0.26.7 (2026-11-01) - PR #5018\n- Merged improvements and fixes for PR #5018."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/546-pr5019-release-v0-26-8-harness-context-compacti.md",
+    "title": "PR #5019 \u2014 release: v0.26.8 \u2014 Harness Context Compaction Protocol",
+    "author": "synlynk-pm agent",
+    "date": "2026-11-01",
+    "pr": "#5019",
+    "version": "0.26.8",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #5019."
+    ],
+    "tweet": "\ud83d\ude80 PR #5019 \u2014 release: v0.26.8 \u2014 Harness Context Compaction Protocol (PR #5019, v0.26.8)\n\n\u2022 Merged improvements and fixes for PR #5019.\n\n#posts",
+    "changelog": "### v0.26.8 (2026-11-01) - PR #5019\n- Merged improvements and fixes for PR #5019."
   }
 ]
