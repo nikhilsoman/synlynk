@@ -647,6 +647,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     governs_rephase_parser.add_argument("--phase-id", type=int, required=True, dest="phase_id")
     governs_rephase_parser.add_argument("--reason", required=True)
     governs_rephase_parser.add_argument("--role", default="pm")
+    governs_reconcile_parser = governs_sub.add_parser("reconcile-unplaced", help="Annotate legacy unplaced goals without guessing phases")
+    governs_reconcile_parser.add_argument("--role", default="pm")
     governs_sweep_parser = governs_sub.add_parser("sweep", help="Reconcile and backfill 100%% GOVERNS goal linkages and stages across workspace")
     governs_sweep_parser.add_argument("--dry-run", action="store_true", help="Calculate linkages and stage transitions without writing to state.db")
     governs_sweep_parser.add_argument("--strict", action="store_true", help="Fail with non-zero exit if any unlinked stories remain")
@@ -3560,7 +3562,7 @@ def main(argv=None) -> None:
         else:
             help_parsers.get("goal", parser).print_help()
     elif args.command == "governs":
-        from synlynk.governs_cli import cmd_governs_sweep, cmd_governs, cmd_governs_start, cmd_governs_audit, cmd_governs_rephase
+        from synlynk.governs_cli import cmd_governs_sweep, cmd_governs, cmd_governs_start, cmd_governs_audit, cmd_governs_rephase, cmd_governs_reconcile_unplaced
         action = getattr(args, "governs_action", None)
         if action == "start":
             goal_id, phase_id = cmd_governs_start(
@@ -3581,6 +3583,9 @@ def main(argv=None) -> None:
         elif action == "rephase":
             cmd_governs_rephase(args.goal_id, args.phase_id, args.reason, role=args.role)
             print(f"GOVERNS rephased: {args.goal_id} -> phase {args.phase_id}")
+        elif action == "reconcile-unplaced":
+            count = cmd_governs_reconcile_unplaced(role=args.role)
+            print(f"GOVERNS annotated {count} legacy unplaced goals")
         elif action == "sweep":
             cmd_governs_sweep(dry_run=getattr(args, "dry_run", False), strict=getattr(args, "strict", False), verbose=getattr(args, "verbose", False))
         else:

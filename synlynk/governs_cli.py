@@ -104,28 +104,65 @@ def cmd_governs_audit(
             "SELECT placement_status, phase_id FROM goals"
         ).fetchall()
         unplaced_goals = sum(1 for status, phase_id in goals if status != "placed" or not phase_id)
+        missing_reasons = conn.execute(
+            "SELECT COUNT(*) FROM goals WHERE (placement_status!='placed' OR phase_id IS NULL) "
+            "AND (placement_reason IS NULL OR TRIM(placement_reason)='')"
+        ).fetchone()[0]
         phases_without_story = conn.execute(
             "SELECT COUNT(*) FROM roadmap_phases WHERE story_id IS NULL"
         ).fetchone()[0]
         placed_goals = len(goals) - unplaced_goals
         shadow_state_db = os.path.join(os.getcwd(), ".synlynk", "state.db")
         shadow_state_db_present = os.path.exists(shadow_state_db)
-        passed = unplaced_goals == 0 and not shadow_state_db_present
+        passed = missing_reasons == 0 and not shadow_state_db_present
         result = {
             "goals": len(goals),
             "placed_goals": placed_goals,
             "unplaced_goals": unplaced_goals,
+            "missing_placement_reasons": missing_reasons,
             "phases_without_story": phases_without_story,
             "shadow_state_db_present": shadow_state_db_present,
             "passed": passed,
         }
-        if strict and unplaced_goals:
+        if strict and missing_reasons:
             raise RuntimeError(
-                f"GOVERNS audit failed: {unplaced_goals} goals lack an explicit placed phase"
+                f"GOVERNS audit failed: {missing_reasons} goals lack an explicit placement reason"
             )
         if strict and shadow_state_db_present:
             raise RuntimeError(f"GOVERNS audit failed: shadow state.db exists at {shadow_state_db}")
         return result
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def cmd_governs_reconcile_unplaced(*, role: str = "pm", conn: Optional[sqlite3.Connection] = None) -> int:
+    """Annotate legacy unplaced goals without guessing a roadmap phase."""
+    from synlynk.policy import check_authority
+    authority = check_authority("goal_create", role=role, repo_path=os.getcwd())
+    if not authority.allowed:
+        raise RuntimeError(f"Goal reconciliation refused: role {role!r} is not authorized per policy.json.")
+    owns_conn = conn is None
+    if conn is None:
+        from synlynk import _get_db
+        conn = _get_db()
+    try:
+        rows = conn.execute(
+            "SELECT goal_id, status FROM goals WHERE (placement_status!='placed' OR phase_id IS NULL) "
+            "AND (placement_reason IS NULL OR TRIM(placement_reason)='')"
+        ).fetchall()
+        conn.execute("BEGIN")
+        for goal_id, status in rows:
+            reason = ("historical goal retained as intentionally unplaced; "
+                      "requires explicit roadmap phase decision before implementation dispatch")
+            if status in ("done", "superseded"):
+                reason = "historical completed or superseded goal; no active roadmap phase inferred"
+            conn.execute("UPDATE goals SET placement_status='unplaced', placement_reason=? WHERE goal_id=?", (reason, goal_id))
+        conn.commit()
+        return len(rows)
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         if owns_conn:
             conn.close()
