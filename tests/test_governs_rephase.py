@@ -1,3 +1,4 @@
+import json
 import sqlite3
 
 from synlynk.governs_cli import cmd_governs_rephase
@@ -14,4 +15,7 @@ def test_rephase_is_atomic_and_audited():
     """)
     cmd_governs_rephase('goal-1', 2, 'align with release phase', conn=conn)
     assert conn.execute("SELECT phase_id, placement_reason FROM goals").fetchone() == (2, 'rephased: align with release phase')
-    assert conn.execute("SELECT event_type FROM events").fetchone()[0] == 'GOVERNS_REPHASE'
+    event = conn.execute("SELECT event_type, payload_json FROM events").fetchone()
+    assert event[0] == 'GOVERNS_REPHASE'
+    assert json.loads(event[1])["old_phase_id"] == 1
+    assert json.loads(event[1])["new_phase_id"] == 2

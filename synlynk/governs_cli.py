@@ -148,15 +148,23 @@ def cmd_governs_reconcile_unplaced(*, role: str = "pm", conn: Optional[sqlite3.C
         conn = _get_db()
     try:
         rows = conn.execute(
-            "SELECT goal_id, status FROM goals WHERE (placement_status!='placed' OR phase_id IS NULL) "
-            "AND (placement_reason IS NULL OR TRIM(placement_reason)='')"
+            "SELECT g.goal_id, g.status, COUNT(s.story_id), "
+            "SUM(CASE WHEN s.source_type='execution_artifact' THEN 1 ELSE 0 END) "
+            "FROM goals g LEFT JOIN stories s ON s.goal_id=g.goal_id "
+            "WHERE (g.placement_status!='placed' OR g.phase_id IS NULL) "
+            "AND (g.placement_reason IS NULL OR TRIM(g.placement_reason)='') "
+            "GROUP BY g.goal_id, g.status"
         ).fetchall()
         conn.execute("BEGIN")
-        for goal_id, status in rows:
-            reason = ("historical goal retained as intentionally unplaced; "
-                      "requires explicit roadmap phase decision before implementation dispatch")
+        for goal_id, status, story_count, artifact_count in rows:
+            if artifact_count and artifact_count == story_count:
+                reason = f"classified execution-artifact lineage ({story_count} linked artifact stories); no roadmap phase inferred"
+            elif story_count:
+                reason = f"classified legacy delivery goal ({story_count} linked stories); phase evidence requires explicit reconciliation"
+            else:
+                reason = "classified strategic or speculative goal with no linked delivery story; remains intentionally unplaced"
             if status in ("done", "superseded"):
-                reason = "historical completed or superseded goal; no active roadmap phase inferred"
+                reason = f"classified historical {status} goal; no active roadmap phase inferred"
             conn.execute("UPDATE goals SET placement_status='unplaced', placement_reason=? WHERE goal_id=?", (reason, goal_id))
         conn.commit()
         return len(rows)
@@ -184,11 +192,13 @@ def cmd_governs_rephase(
         from synlynk import _get_db
         conn = _get_db()
     try:
-        if not conn.execute("SELECT 1 FROM goals WHERE goal_id=?", (goal_id,)).fetchone():
+        goal = conn.execute("SELECT phase_id FROM goals WHERE goal_id=?", (goal_id,)).fetchone()
+        if not goal:
             raise ValueError(f"unknown goal {goal_id!r}")
         if not conn.execute("SELECT 1 FROM roadmap_phases WHERE id=?", (phase_id,)).fetchone():
             raise ValueError(f"unknown roadmap phase {phase_id!r}")
         conn.execute("BEGIN")
+        old_phase_id = goal[0]
         conn.execute(
             "UPDATE goals SET phase_id=?, placement_status='placed', placement_reason=? WHERE goal_id=?",
             (phase_id, f"rephased: {reason.strip()}", goal_id),
@@ -197,7 +207,7 @@ def cmd_governs_rephase(
         import time
         conn.execute(
             "INSERT INTO events (event_type, payload_json, created_at, emitted_by, authority_scope) VALUES (?, ?, ?, ?, ?)",
-            ("GOVERNS_REPHASE", json.dumps({"goal_id": goal_id, "phase_id": phase_id, "reason": reason.strip()}), time.strftime("%Y-%m-%dT%H:%M:%S"), role, "roadmap_edit"),
+            ("GOVERNS_REPHASE", json.dumps({"goal_id": goal_id, "old_phase_id": old_phase_id, "new_phase_id": phase_id, "reason": reason.strip()}), time.strftime("%Y-%m-%dT%H:%M:%S"), role, "roadmap_edit"),
         )
         conn.commit()
     except Exception:
