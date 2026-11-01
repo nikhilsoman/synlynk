@@ -23,7 +23,31 @@ CONTEXT_COMPACTION_SETTINGS_SCHEMA = {
 }
 
 import hashlib
+import re
 import subprocess
+
+_MARKER_PREFIX = "<!-- SYNLYNK_CONTEXT_COMPACTION_RESUME"
+_MARKER_PATTERN = re.compile(
+    r"<!-- SYNLYNK_CONTEXT_COMPACTION_RESUME story_id=(\S+) head_sha=(\S+?)(?: dirty_hash=(\S+))? -->"
+)
+
+
+def build_marker(story_id: str, head_sha: str, dirty_hash) -> str:
+    if dirty_hash is None:
+        return f"{_MARKER_PREFIX} story_id={story_id} head_sha={head_sha} -->"
+    return f"{_MARKER_PREFIX} story_id={story_id} head_sha={head_sha} dirty_hash={dirty_hash} -->"
+
+
+def parse_marker(line: str):
+    match = _MARKER_PATTERN.match(line.strip())
+    if match is None:
+        return None
+    story_id, head_sha, dirty_hash = match.groups()
+    result = {"story_id": story_id, "head_sha": head_sha}
+    if dirty_hash is not None:
+        result["dirty_hash"] = dirty_hash
+    return result
+
 
 
 def _git_head_sha() -> str:

@@ -68,3 +68,35 @@ def test_compute_dirty_hash_changes_with_diff(tmp_path, monkeypatch):
     assert h1 != h2
 
 
+def test_build_marker_clean_tree():
+    from synlynk.context_compaction import build_marker
+    marker = build_marker(story_id="story-abc", head_sha="a" * 40, dirty_hash=None)
+    assert marker == "<!-- SYNLYNK_CONTEXT_COMPACTION_RESUME story_id=story-abc head_sha=" + "a" * 40 + " -->"
+
+
+def test_build_marker_dirty_tree_includes_dirty_hash():
+    from synlynk.context_compaction import build_marker
+    marker = build_marker(story_id="story-abc", head_sha="a" * 40, dirty_hash="deadbeef1234")
+    assert "dirty_hash=deadbeef1234" in marker
+
+
+def test_parse_marker_round_trip():
+    from synlynk.context_compaction import build_marker, parse_marker
+    marker = build_marker(story_id="story-abc", head_sha="a" * 40, dirty_hash="deadbeef1234")
+    parsed = parse_marker(marker)
+    assert parsed == {"story_id": "story-abc", "head_sha": "a" * 40, "dirty_hash": "deadbeef1234"}
+
+
+def test_parse_marker_clean_tree_has_no_dirty_hash_key():
+    from synlynk.context_compaction import build_marker, parse_marker
+    marker = build_marker(story_id="story-abc", head_sha="a" * 40, dirty_hash=None)
+    parsed = parse_marker(marker)
+    assert "dirty_hash" not in parsed
+
+
+def test_parse_marker_rejects_non_marker_line():
+    from synlynk.context_compaction import parse_marker
+    assert parse_marker("not a marker") is None
+
+
+
