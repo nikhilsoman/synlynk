@@ -99,4 +99,66 @@ def test_parse_marker_rejects_non_marker_line():
     assert parse_marker("not a marker") is None
 
 
+def _init_git_repo(tmp_path):
+    import subprocess
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path)
+    (tmp_path / "f.txt").write_text("x")
+    subprocess.run(["git", "add", "f.txt"], cwd=tmp_path)
+    subprocess.run(["git", "-c", "user.email=t@t.com", "-c", "user.name=t", "commit", "-q", "-m", "init"], cwd=tmp_path)
+
+
+def test_checkpoint_writes_marker_and_ledger_to_devlog(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _init_git_repo(tmp_path)
+    import os
+    os.makedirs("project-docs/devlogs", exist_ok=True)
+    devlog_path = tmp_path / "project-docs/devlogs/testuser.md"
+    devlog_path.write_text("# Devlog\n")
+
+    from synlynk.context_compaction import checkpoint
+    checkpoint(story_id="story-abc", username="testuser")
+
+    content = devlog_path.read_text()
+    assert "SYNLYNK_CONTEXT_COMPACTION_RESUME story_id=story-abc" in content
+
+
+def test_checkpoint_idempotent_on_unchanged_state(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _init_git_repo(tmp_path)
+    import os
+    os.makedirs("project-docs/devlogs", exist_ok=True)
+    devlog_path = tmp_path / "project-docs/devlogs/testuser.md"
+    devlog_path.write_text("# Devlog\n")
+
+    from synlynk.context_compaction import checkpoint
+    checkpoint(story_id="story-abc", username="testuser")
+    first_content = devlog_path.read_text()
+    checkpoint(story_id="story-abc", username="testuser")  # same head_sha, same dirty state
+    second_content = devlog_path.read_text()
+
+    assert first_content == second_content  # no duplicate entry appended
+
+
+def test_checkpoint_writes_new_entry_after_head_changes(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _init_git_repo(tmp_path)
+    import os, subprocess
+    os.makedirs("project-docs/devlogs", exist_ok=True)
+    devlog_path = tmp_path / "project-docs/devlogs/testuser.md"
+    devlog_path.write_text("# Devlog\n")
+
+    from synlynk.context_compaction import checkpoint
+    checkpoint(story_id="story-abc", username="testuser")
+    first_marker_count = devlog_path.read_text().count("SYNLYNK_CONTEXT_COMPACTION_RESUME")
+
+    (tmp_path / "f2.txt").write_text("y")
+    subprocess.run(["git", "add", "f2.txt"], cwd=tmp_path)
+    subprocess.run(["git", "-c", "user.email=t@t.com", "-c", "user.name=t", "commit", "-q", "-m", "second"], cwd=tmp_path)
+
+    checkpoint(story_id="story-abc", username="testuser")
+    second_marker_count = devlog_path.read_text().count("SYNLYNK_CONTEXT_COMPACTION_RESUME")
+    assert second_marker_count == first_marker_count + 1
+
+
+
 
