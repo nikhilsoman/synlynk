@@ -621,6 +621,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [540](./540-pr4993-slim-logical-community-json-on-expand.md) | PR #4993 — slim logical community JSON on expand | [#4993](https://github.com/nikhilsoman/synlynk/pull/4993) | 2026-10-31 |
 | [541](./541-pr4999-quota-model-burn-rate-weighting-and-esti.md) | PR #4999 — quota model burn-rate weighting and estimate drift tracking (v0.26.9) | [#4999](https://github.com/nikhilsoman/synlynk/pull/4999) | 2026-11-01 |
 | [542](./542-pr5003-devlog-cost-housekeeping-for-v0-26-9-pr-.md) | PR #5003 — devlog + cost housekeeping for v0.26.9/PR #4999 session | [#5003](https://github.com/nikhilsoman/synlynk/pull/5003) | 2026-11-01 |
+| [543](./543-pr5006-enforce-governed-goal-and-phase-lifecycl.md) | PR #5006 — enforce governed goal and phase lifecycle | [#5006](https://github.com/nikhilsoman/synlynk/pull/5006) | 2026-11-01 |
 
 ## Per-PR Post Template
 
