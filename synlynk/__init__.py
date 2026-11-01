@@ -470,17 +470,21 @@ def migrate_cost_entries_for_compaction(db_path: str) -> None:
 
 def log_cost_entry(db_path: str, harness: str, tokens_in: int, tokens_out: int,
                     total_cost_usd: float, compaction_event_type=None) -> None:
-    conn = _sqlite3.connect(db_path)
-    try:
-        conn.execute(
-            """INSERT INTO cost_entries
-               (harness, tokens_in, tokens_out, total_cost_usd, compaction_event_type)
-               VALUES (?, ?, ?, ?, ?)""",
-            (harness, tokens_in, tokens_out, total_cost_usd, compaction_event_type),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    """Record a compaction-related cost row through the single sanctioned
+    cost_entries write path (db.py's _insert_cost_row), not raw SQL here."""
+    import datetime
+    from synlynk.db import _insert_cost_row
+
+    _insert_cost_row(
+        session_date=datetime.date.today().isoformat(),
+        agent=harness,
+        harness=harness,
+        input_tokens=tokens_in,
+        output_tokens=tokens_out,
+        total_cost_usd=total_cost_usd,
+        compaction_event_type=compaction_event_type,
+        db_path=db_path,
+    )
 
 
 

@@ -149,6 +149,8 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `cost audit import` (secondary) — sustain
 - `cost audit report` (secondary) — sustain
 - `cost audit correct` (secondary) — sustain
+- `context checkpoint` (secondary) — sustain
+- `context pack` (secondary) — sustain
 - `credit grant` (secondary) — sustain
 - `quota` (secondary) — sustain
 - `quota advisory` (secondary) — sustain

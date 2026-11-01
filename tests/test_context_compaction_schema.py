@@ -46,21 +46,23 @@ def test_migration_idempotent(tmp_path):
     conn.close()
 
 
-def test_log_cost_entry_writes_compaction_event_type(tmp_path):
+def test_log_cost_entry_writes_compaction_event_type(tmp_path, monkeypatch):
     db_path = tmp_path / "state.db"
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+    monkeypatch.setenv("SYNLYNK_ALLOW_STATE_DB_FALLBACK", "1")
+
+    # Build the real production schema (via the normal migrated connection),
+    # not a hand-rolled subset, since log_cost_entry now writes through the
+    # same _insert_cost_row() path every other caller uses.
+    from synlynk import _get_db
+    _get_db(str(db_path)).close()
+
     import sqlite3
     conn = sqlite3.connect(db_path)
-    conn.execute("""
-        CREATE TABLE cost_entries (
-            id INTEGER PRIMARY KEY,
-            harness TEXT,
-            tokens_in INTEGER,
-            tokens_out INTEGER,
-            total_cost_usd REAL,
-            compaction_event_type TEXT
-        )
-    """)
-    conn.commit()
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+    if "compaction_event_type" not in cols:
+        conn.execute("ALTER TABLE cost_entries ADD COLUMN compaction_event_type TEXT")
+        conn.commit()
     conn.close()
 
     from synlynk import log_cost_entry
@@ -69,7 +71,9 @@ def test_log_cost_entry_writes_compaction_event_type(tmp_path):
                    compaction_event_type="checkpoint")
 
     conn = sqlite3.connect(db_path)
-    rows = conn.execute("SELECT compaction_event_type FROM cost_entries ORDER BY id").fetchall()
+    rows = conn.execute(
+        "SELECT compaction_event_type FROM cost_entries ORDER BY id"
+    ).fetchall()
     assert rows[0][0] is None       # ordinary row, not a compaction event
     assert rows[1][0] == "checkpoint"
     conn.close()
