@@ -359,6 +359,60 @@ def test_format_federated_text_names_unknown_grok():
     assert "100%" not in text
 
 
+def test_federated_rows_expose_agy_unknown_preflight_state(tmp_path):
+    import synlynk as sl
+    from synlynk.quota_capture import federated_rows
+
+    conn = sl._get_db(str(tmp_path / "unknown.db"))
+    rows = federated_rows(
+        conn,
+        now=datetime(2026, 11, 1, tzinfo=timezone.utc),
+        registry={"agy": {"has_5h_window": True}},
+    )
+
+    assert {row["preflight"]["state"] for row in rows} == {"unknown"}
+    assert rows[0]["preflight"]["pools"] == []
+    assert rows[0]["preflight"]["credit_remaining_usd"] == 0.0
+    conn.close()
+
+
+def test_federated_rows_distinguish_exhausted_and_reserved_agy_pools(tmp_path):
+    import synlynk as sl
+    from synlynk.quota_capture import federated_rows
+
+    exhausted = sl._get_db(str(tmp_path / "exhausted.db"))
+    sl._upsert_agent_quota(
+        "agy", "5h", limit_tokens=1000, used_tokens=1000,
+        track="gemini", model="gemini-3.8-flash-low", conn=exhausted,
+    )
+    exhausted_rows = federated_rows(
+        exhausted,
+        now=datetime(2026, 11, 1, tzinfo=timezone.utc),
+        registry={"agy": {"has_5h_window": True}},
+    )
+    assert exhausted_rows[0]["preflight"]["state"] == "exhausted"
+    assert exhausted_rows[0]["preflight"]["pools"][0]["model"] == "gemini-3.8-flash-low"
+    exhausted.close()
+
+    reserved = sl._get_db(str(tmp_path / "reserved.db"))
+    sl._upsert_agent_quota(
+        "agy", "5h", limit_tokens=10_000, used_tokens=0,
+        track="gemini", model="gemini-3.8-flash-low", conn=reserved,
+    )
+    sl._open_reservation(
+        reserved, "agy", 1000, scope="session", job_id="job-reserved",
+        track="gemini", model="gemini-3.8-flash-low",
+    )
+    reserved_rows = federated_rows(
+        reserved,
+        now=datetime(2026, 11, 1, tzinfo=timezone.utc),
+        registry={"agy": {"has_5h_window": True}},
+    )
+    assert reserved_rows[0]["preflight"]["state"] == "reserved"
+    assert reserved_rows[0]["preflight"]["reserved_tokens"] == 1000
+    reserved.close()
+
+
 def test_boundary_capture_returns_before_the_slow_write(monkeypatch):
     from synlynk.quota_capture import schedule_boundary_capture
 

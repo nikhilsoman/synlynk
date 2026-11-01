@@ -317,12 +317,93 @@ def weekly_cost_usd(conn, harness: str, *, now: datetime) -> float:
     return float(row[0])
 
 
+def _federated_preflight(conn, harness: str) -> dict:
+    """Summarize current state.db provider pools without another registry."""
+    try:
+        quota_rows = conn.execute(
+            "SELECT model, track, quota_type, limit_tokens, used_tokens "
+            "FROM harness_quotas WHERE harness=? AND unit='tokens' "
+            "ORDER BY track, model, quota_type",
+            (harness,),
+        ).fetchall()
+    except Exception:
+        quota_rows = []
+
+    pools_by_key = {}
+    for model, track, window, limit_tokens, used_tokens in quota_rows:
+        key = (model or "unknown", track or "default")
+        pool = pools_by_key.setdefault(
+            key,
+            {
+                "model": key[0],
+                "track": key[1],
+                "headroom_tokens": None,
+                "windows": [],
+            },
+        )
+        headroom = max(0, int(limit_tokens or 0) - int(used_tokens or 0))
+        pool["headroom_tokens"] = (
+            headroom
+            if pool["headroom_tokens"] is None
+            else min(pool["headroom_tokens"], headroom)
+        )
+        pool["windows"].append(window)
+
+    try:
+        reservation_rows = conn.execute(
+            "SELECT model, track, COALESCE(SUM(tokens), 0) "
+            "FROM harness_reservations WHERE harness=? AND status='open' "
+            "GROUP BY model, track",
+            (harness,),
+        ).fetchall()
+    except Exception:
+        reservation_rows = []
+    reserved_by_key = {
+        (model or "unknown", track or "default"): int(tokens or 0)
+        for model, track, tokens in reservation_rows
+    }
+    for key, pool in pools_by_key.items():
+        pool["reserved_tokens"] = reserved_by_key.get(key, 0)
+        pool["available_tokens"] = max(
+            0, int(pool["headroom_tokens"] or 0) - pool["reserved_tokens"]
+        )
+
+    try:
+        credit_row = conn.execute(
+            "SELECT COALESCE(SUM(remaining_usd), 0) FROM credit_grants "
+            "WHERE agent=? AND remaining_usd > 0 "
+            "AND (expires_at IS NULL OR expires_at > datetime('now'))",
+            (harness,),
+        ).fetchone()
+        credit_remaining = float(credit_row[0] or 0.0)
+    except Exception:
+        credit_remaining = 0.0
+
+    pools = list(pools_by_key.values())
+    reserved_tokens = sum(reserved_by_key.values())
+    if not pools:
+        state = "unknown"
+    elif any(pool["available_tokens"] <= 0 for pool in pools):
+        state = "exhausted"
+    elif reserved_tokens > 0:
+        state = "reserved"
+    else:
+        state = "known"
+    return {
+        "state": state,
+        "pools": pools,
+        "reserved_tokens": reserved_tokens,
+        "credit_remaining_usd": credit_remaining,
+    }
+
+
 def federated_rows(conn, *, now: datetime | None = None, registry: dict | None = None) -> list[dict]:
     now = now or datetime.now(timezone.utc)
     registry = registry if registry is not None else load_registry()
     rows = []
     for harness in registry:
         cost = weekly_cost_usd(conn, harness, now=now)
+        preflight = _federated_preflight(conn, harness)
         for window in ("weekly", "5h"):
             status = window_status(conn, harness, window, now=now, registry=registry)
             rows.append({
@@ -335,18 +416,24 @@ def federated_rows(conn, *, now: datetime | None = None, registry: dict | None =
                 "captured_at": status["captured_at"],
                 "cost_7d_usd": cost,
                 "reason": status["reason"],
+                "preflight": preflight,
             })
     return rows
 
 
 def format_federated_text(rows: list[dict]) -> str:
-    lines = ["harness  window  status   used_percent  source  cost_7d_usd  captured_at"]
+    lines = ["harness  window  status   preflight  reserved  credit_usd  used_percent  source  cost_7d_usd  captured_at"]
     for row in rows:
         used = "—" if row["used_percent"] is None else f"{row['used_percent']:.1f}"
         source = row["source"] or "—"
         captured = row["captured_at"] or "—"
+        preflight = row.get("preflight") or {}
+        preflight_state = preflight.get("state", "unknown")
+        reserved = int(preflight.get("reserved_tokens") or 0)
+        credit = float(preflight.get("credit_remaining_usd") or 0.0)
         lines.append(
-            f"{row['harness']:<8} {row['window']:<7} {row['state']:<8} {used:<13} {source:<7} "
+            f"{row['harness']:<8} {row['window']:<7} {row['state']:<8} "
+            f"{preflight_state:<9} {reserved:<8} {credit:<10.2f} {used:<13} {source:<7} "
             f"{row['cost_7d_usd']:<11.2f} {captured}"
         )
     return "\n".join(lines)
