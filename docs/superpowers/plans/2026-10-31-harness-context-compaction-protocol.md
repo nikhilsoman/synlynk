@@ -2,11 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build `synlynk/context_compaction.py` — two intentionally distinct artifacts sharing a snapshot helper: an AST-grounded resumption-ledger checkpointer (`synlynk context checkpoint`) and task-boundary context-pack injection (`synlynk context pack`/`inject`) — registered as the `context_compaction` feature against the Configurability Framework, with dedicated cost-instrumentation columns enabling a before/after token-spend comparison.
+**Goal:** Build `synlynk/context_compaction.py` — two intentionally distinct artifacts sharing a snapshot helper: an AST-grounded resumption-ledger checkpointer (`synlynk context checkpoint`) and task-boundary context-pack injection (`synlynk context pack`/`inject`) — with dedicated cost-instrumentation columns enabling a before/after token-spend comparison.
 
-**Architecture:** A shared `_gather_snapshot()` helper collects story/goal state, git HEAD/dirty-status, and recent telemetry once per call site. `checkpoint()` writes an identity-keyed `SYNLYNK_CONTEXT_COMPACTION_RESUME` marker comment into the current story's devlog entry, keyed by `(story_id, head_sha)` or `(story_id, head_sha, dirty_hash)` when the tree is dirty, so re-running checkpoint on unchanged state is a no-op rather than a duplicate entry. `pack()`/`inject()` build and consume a 5-part context-pack content model, independently triggered — there is no reactive 75%-threshold monitor (no such signal exists anywhere in synlynk's data) and no implicit automatic firing; `auto_checkpoint_on_pack` only controls whether `pack()` calls `checkpoint()` as an internal side effect. `cost_entries` gains `compaction_event_type` (`"checkpoint" | "pack" | NULL`) and `feature_enabled` (boolean, stamped on every interactive session row, not just compaction rows) for before/after comparison.
+**Architecture:** A shared `_gather_snapshot()` helper collects story/goal state, git HEAD/dirty-status, and recent telemetry once per call site. `checkpoint()` writes an identity-keyed `SYNLYNK_CONTEXT_COMPACTION_RESUME` marker comment into the current story's devlog entry, keyed by `(story_id, head_sha)` or `(story_id, head_sha, dirty_hash)` when the tree is dirty, so re-running checkpoint on unchanged state is a no-op rather than a duplicate entry. `pack()`/`inject()` build and consume a 5-part context-pack content model, independently triggered — there is no reactive 75%-threshold monitor (no such signal exists anywhere in synlynk's data) and no implicit automatic firing; `auto_checkpoint_on_pack` only controls whether `pack()` calls `checkpoint()` as an internal side effect. `cost_entries` gains `compaction_event_type` (`"checkpoint" | "pack" | NULL`) for before/after comparison.
 
-**Tech Stack:** Python 3 stdlib only (`ast`, `hashlib`, `subprocess` for git, `sqlite3` for `cost_entries`). No new dependency (`extra_name=None`). Depends on `docs/superpowers/plans/2026-10-31-configurability-framework.md` being implemented first.
+**Scope note (2026-11-01):** This feature ships unconditionally in v0.26.8/Dev Preview — it is **not** gated behind the Configurability Framework. That framework (along with Companion v2 and Herdr Customizations) has been deferred to a separate "Expansion Capabilities" goal/release after the Dev Preview ships. When the framework lands later, `context_compaction` can register a `FeatureSpec` retroactively as a backfill step; this plan does not build or depend on that registration now.
+
+**Tech Stack:** Python 3 stdlib only (`ast`, `hashlib`, `subprocess` for git, `sqlite3` for `cost_entries`). No new dependency. No dependency on the Configurability Framework.
 
 ---
 
@@ -14,49 +16,32 @@
 
 | File | Responsibility |
 | --- | --- |
-| `synlynk/context_compaction.py` | New. `FeatureSpec` registration, `CONTEXT_COMPACTION_SETTINGS_SCHEMA`, `_gather_snapshot()`, `compute_dirty_hash()`, marker read/write, `checkpoint()`, 5-part context-pack builder, `pack_token_budget` truncation, `pack()`/`inject()`. |
-| `synlynk/features/__init__.py` | Modified: add `"synlynk.context_compaction"` to `_FEATURE_MODULES`. |
+| `synlynk/context_compaction.py` | New. `CONTEXT_COMPACTION_SETTINGS_SCHEMA` (reserved for future Configurability Framework registration, unused for now), `_gather_snapshot()`, `compute_dirty_hash()`, marker read/write, `checkpoint()`, 5-part context-pack builder, `pack_token_budget` truncation, `pack()`/`inject()`. |
 | `synlynk/cli.py` | Modified: add `synlynk context checkpoint`/`pack`/`inject` subcommand group. |
-| `synlynk/__init__.py` | Modified: `cost_entries` schema migration adds `compaction_event_type` and `feature_enabled` columns; existing cost-log write path stamps `feature_enabled`. |
+| `synlynk/__init__.py` | Modified: `cost_entries` schema migration adds `compaction_event_type` column; existing cost-log write path writes `compaction_event_type`. |
 | `tests/test_context_compaction.py` | New. Snapshot gathering, dirty-hash computation, marker identity/idempotency, checkpoint devlog write, context-pack 5-part model, token-budget truncation, trigger-table behavior (manual-always-available, `auto_checkpoint_on_pack` gating). |
-| `tests/test_context_compaction_schema.py` | New. `cost_entries` migration adds the two new columns without breaking existing rows; `feature_enabled` stamped on ordinary (non-compaction) rows too. |
+| `tests/test_context_compaction_schema.py` | New. `cost_entries` migration adds the new column without breaking existing rows. |
 | `tests/test_cli_context_commands.py` | New. `synlynk context checkpoint`/`pack`/`inject` CLI round-trip. |
 
 ---
 
-### Task 1: `FeatureSpec` registration
+### Task 1: Module skeleton
+
+**Scope note:** No `FeatureSpec` registration here — this feature ships unconditionally (see the Scope note above the Architecture section). `CONTEXT_COMPACTION_SETTINGS_SCHEMA` is kept as a plain module-level constant so a later Configurability Framework backfill has a ready shape to register, but nothing in this plan imports or calls `synlynk.features.registry`.
 
 **Files:**
 - Create: `synlynk/context_compaction.py`
-- Modify: `synlynk/features/__init__.py`
 - Test: `tests/test_context_compaction.py`
 
 - [ ] **Step 1: Write the failing test**
 
 ```python
 # tests/test_context_compaction.py
-import pytest
-
-
-@pytest.fixture(autouse=True)
-def clear_registry():
-    from synlynk.features.registry import FEATURE_MANIFEST
-    FEATURE_MANIFEST.clear()
-    yield
-    FEATURE_MANIFEST.clear()
-
-
-def test_context_compaction_module_registers_feature():
-    import importlib
+def test_context_compaction_module_importable():
     import synlynk.context_compaction as cc_module
-    importlib.reload(cc_module)
 
-    from synlynk.features.registry import FEATURE_MANIFEST
-    assert "context_compaction" in FEATURE_MANIFEST
-    spec = FEATURE_MANIFEST["context_compaction"]
-    assert spec.extra_name is None
-    assert spec.default_enabled is False
-    assert spec.supports_packs is False
+    assert hasattr(cc_module, "CONTEXT_COMPACTION_SETTINGS_SCHEMA")
+    assert "auto_checkpoint_on_pack" in cc_module.CONTEXT_COMPACTION_SETTINGS_SCHEMA["fields"]
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -78,8 +63,12 @@ Two distinct artifacts sharing only _gather_snapshot():
 
 There is no 75%-threshold reactive monitor -- no cross-harness context-usage
 signal exists anywhere in synlynk's own data, confirmed during brainstorming.
+
+Ships unconditionally in v0.26.8/Dev Preview -- not registered against the
+Configurability Framework, which is deferred to the "Expansion Capabilities"
+goal. CONTEXT_COMPACTION_SETTINGS_SCHEMA is kept here so that framework can
+register this feature retroactively once it exists.
 """
-from synlynk.features.registry import FeatureSpec, register_feature
 
 CONTEXT_COMPACTION_SETTINGS_SCHEMA = {
     "fields": {
@@ -87,26 +76,6 @@ CONTEXT_COMPACTION_SETTINGS_SCHEMA = {
         "pack_token_budget": {"type": "integer", "required": False},
     },
 }
-
-register_feature(FeatureSpec(
-    name="context_compaction",
-    extra_name=None,
-    import_probe=lambda: True,
-    settings_schema=CONTEXT_COMPACTION_SETTINGS_SCHEMA,
-    default_enabled=False,
-    supports_packs=False,
-    pack_loader=None,
-))
-```
-
-Add `"synlynk.context_compaction"` to `_FEATURE_MODULES` in `synlynk/features/__init__.py`:
-
-```python
-# synlynk/features/__init__.py
-_FEATURE_MODULES: tuple[str, ...] = (
-    "synlynk.companion",
-    "synlynk.context_compaction",
-)
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -117,8 +86,8 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add synlynk/context_compaction.py synlynk/features/__init__.py tests/test_context_compaction.py
-git commit -m "feat: register context_compaction FeatureSpec
+git add synlynk/context_compaction.py tests/test_context_compaction.py
+git commit -m "feat: add context_compaction module skeleton
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01AEEUKUxhneCr5htf6Nwk68"
@@ -787,7 +756,9 @@ Claude-Session: https://claude.ai/code/session_01AEEUKUxhneCr5htf6Nwk68"
 
 ---
 
-### Task 9: `cost_entries` schema migration — `compaction_event_type` + `feature_enabled`
+### Task 9: `cost_entries` schema migration — `compaction_event_type`
+
+**Scope note:** No `feature_enabled` column here — there's no Configurability Framework yet to answer "is this feature enabled" (see the Scope note above the Architecture section). When that framework lands, it can add `feature_enabled` in its own migration.
 
 **Files:**
 - Modify: `synlynk/__init__.py`
@@ -822,9 +793,8 @@ def test_migration_adds_compaction_columns(tmp_path, monkeypatch):
     conn = sqlite3.connect(db_path)
     cols = [row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")]
     assert "compaction_event_type" in cols
-    assert "feature_enabled" in cols
 
-    row = conn.execute("SELECT compaction_event_type, feature_enabled FROM cost_entries").fetchone()
+    row = conn.execute("SELECT compaction_event_type FROM cost_entries").fetchone()
     assert row[0] is None  # existing rows get NULL event type, not retroactively guessed
     conn.close()
 
@@ -866,8 +836,6 @@ def migrate_cost_entries_for_compaction(db_path: str) -> None:
         existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
         if "compaction_event_type" not in existing_cols:
             conn.execute("ALTER TABLE cost_entries ADD COLUMN compaction_event_type TEXT")
-        if "feature_enabled" not in existing_cols:
-            conn.execute("ALTER TABLE cost_entries ADD COLUMN feature_enabled INTEGER")
         conn.commit()
     finally:
         conn.close()
@@ -890,7 +858,9 @@ Claude-Session: https://claude.ai/code/session_01AEEUKUxhneCr5htf6Nwk68"
 
 ---
 
-### Task 10: Stamp `feature_enabled` on every interactive-session cost-log write
+### Task 10: `log_cost_entry()` helper writes `compaction_event_type`
+
+**Scope note:** No `feature_enabled` stamping — dropped along with Task 9's column (see that task's Scope note). `log_cost_entry()` does not import `synlynk.features.registry` at all.
 
 **Files:**
 - Modify: `synlynk/__init__.py`
@@ -900,7 +870,7 @@ Claude-Session: https://claude.ai/code/session_01AEEUKUxhneCr5htf6Nwk68"
 
 ```python
 # tests/test_context_compaction_schema.py (append)
-def test_log_cost_entry_stamps_feature_enabled_on_ordinary_rows(tmp_path, monkeypatch):
+def test_log_cost_entry_writes_compaction_event_type(tmp_path):
     db_path = tmp_path / "state.db"
     import sqlite3
     conn = sqlite3.connect(db_path)
@@ -911,34 +881,27 @@ def test_log_cost_entry_stamps_feature_enabled_on_ordinary_rows(tmp_path, monkey
             tokens_in INTEGER,
             tokens_out INTEGER,
             total_cost_usd REAL,
-            compaction_event_type TEXT,
-            feature_enabled INTEGER
+            compaction_event_type TEXT
         )
     """)
     conn.commit()
     conn.close()
 
-    from synlynk.features.registry import FEATURE_MANIFEST
-    FEATURE_MANIFEST.clear()
-    import importlib
-    import synlynk.context_compaction as cc_module
-    importlib.reload(cc_module)
-    from synlynk.features.registry import set_feature_enabled
-    set_feature_enabled("context_compaction", True)
-
     from synlynk import log_cost_entry
     log_cost_entry(str(db_path), harness="claude", tokens_in=10, tokens_out=5, total_cost_usd=0.001)
+    log_cost_entry(str(db_path), harness="claude", tokens_in=1, tokens_out=1, total_cost_usd=0.0001,
+                   compaction_event_type="checkpoint")
 
     conn = sqlite3.connect(db_path)
-    row = conn.execute("SELECT compaction_event_type, feature_enabled FROM cost_entries").fetchone()
-    assert row[0] is None  # ordinary row, not a compaction event
-    assert row[1] == 1     # but still stamped with the feature's current enabled state
+    rows = conn.execute("SELECT compaction_event_type FROM cost_entries ORDER BY id").fetchall()
+    assert rows[0][0] is None       # ordinary row, not a compaction event
+    assert rows[1][0] == "checkpoint"
     conn.close()
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pytest tests/test_context_compaction_schema.py::test_log_cost_entry_stamps_feature_enabled_on_ordinary_rows -v`
+Run: `pytest tests/test_context_compaction_schema.py::test_log_cost_entry_writes_compaction_event_type -v`
 Expected: FAIL with `ImportError: cannot import name 'log_cost_entry'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -947,15 +910,13 @@ Expected: FAIL with `ImportError: cannot import name 'log_cost_entry'`
 # synlynk/__init__.py (add)
 def log_cost_entry(db_path: str, harness: str, tokens_in: int, tokens_out: int,
                     total_cost_usd: float, compaction_event_type=None) -> None:
-    from synlynk.features.registry import is_feature_enabled
     conn = sqlite3.connect(db_path)
     try:
         conn.execute(
             """INSERT INTO cost_entries
-               (harness, tokens_in, tokens_out, total_cost_usd, compaction_event_type, feature_enabled)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (harness, tokens_in, tokens_out, total_cost_usd, compaction_event_type,
-             int(is_feature_enabled("context_compaction"))),
+               (harness, tokens_in, tokens_out, total_cost_usd, compaction_event_type)
+               VALUES (?, ?, ?, ?, ?)""",
+            (harness, tokens_in, tokens_out, total_cost_usd, compaction_event_type),
         )
         conn.commit()
     finally:
@@ -971,7 +932,7 @@ Expected: PASS (3 passed)
 
 ```bash
 git add synlynk/__init__.py tests/test_context_compaction_schema.py
-git commit -m "feat: stamp feature_enabled on every cost_entries row
+git commit -m "feat: log_cost_entry() records compaction_event_type
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01AEEUKUxhneCr5htf6Nwk68"
@@ -1108,8 +1069,8 @@ Claude-Session: https://claude.ai/code/session_01AEEUKUxhneCr5htf6Nwk68"
 - Reconciliation decision (drop 75%-threshold reactive monitor) — reflected in the module docstring and architecture section; no monitor/sentinel code was written anywhere in this plan, matching the spec's explicit removal. ✅
 - AST-grounded checkpointer — **gap found.** The spec's title calls this "AST-grounded," but Task 5's `checkpoint()` never touches `ast`. Checking the full spec text: the AST-grounding is in what `_gather_snapshot()`'s story-summary/decision data draws from (existing AST-context-minimization machinery used elsewhere in synlynk), not something `checkpoint()` itself parses freshly. Task 2's `_gather_snapshot()` as implemented only gathers git state, not story/AST content. Fixing inline below.
 - Marker identity/dirty-tree key fix (DECIDE panel) — Task 3, Task 4, Task 5. ✅
-- Trigger truth table (manual always available, `auto_checkpoint_on_pack` gating only, no implicit auto-fire) — Task 6's `pack()` tests (`auto_checkpoint` True/False) directly assert this; Task 11's CLI exposes manual `checkpoint`/`pack` unconditionally (not gated behind `is_feature_enabled` in the CLI dispatch itself). **Second gap found:** the CLI dispatch in Task 11 doesn't check `is_feature_enabled("context_compaction")` at all — per the truth table, manual CLI invocation should be "always available regardless of enabled state." Confirming this is correct as written (no gate needed) rather than a bug: re-reading the spec's trigger table, manual invocation being unconditional is the intended behavior, so Task 11 is correct and no fix is needed here.
-- `cost_entries.compaction_event_type`/`feature_enabled` schema (DECIDE panel) — Task 9, Task 10. ✅ Note: Task 10's `log_cost_entry()` always passes `compaction_event_type=None` in the test and example; the real call sites that log an actual checkpoint/pack event (not yet wired to any existing cost-log call site in this plan, since that integration point lives in whichever existing telemetry/cost module calls cost-logging today) must pass `compaction_event_type="checkpoint"` or `"pack"` explicitly — flagged here for the executing engineer as an integration-wiring step, not a new function to design.
+- Trigger truth table (manual always available, `auto_checkpoint_on_pack` gating only, no implicit auto-fire) — Task 6's `pack()` tests (`auto_checkpoint` True/False) directly assert this; Task 11's CLI exposes manual `checkpoint`/`pack` unconditionally. There's no `is_feature_enabled` gate to check at all now (2026-11-01 scope decision dropped the Configurability Framework dependency entirely — see Scope note under Architecture), so this is moot rather than confirmed-correct: the feature always ships on, full stop.
+- `cost_entries.compaction_event_type` schema (DECIDE panel) — Task 9, Task 10. The `feature_enabled` column from the original DECIDE panel is dropped (2026-11-01 scope decision; no Configurability Framework to answer that question yet). ✅ Note: Task 10's `log_cost_entry()` always passes `compaction_event_type=None` in the schema-migration test and example; the real call sites that log an actual checkpoint/pack event (not yet wired to any existing cost-log call site in this plan, since that integration point lives in whichever existing telemetry/cost module calls cost-logging today) must pass `compaction_event_type="checkpoint"` or `"pack"` explicitly — flagged here for the executing engineer as an integration-wiring step, not a new function to design.
 - CLI surface — Task 11. ✅
 
 **Fixing the AST-grounding gap** — add to Task 2:
@@ -1193,4 +1154,4 @@ Plan complete and saved to `docs/superpowers/plans/2026-10-31-harness-context-co
 1. **Subagent-Driven (recommended)** — dispatch a fresh subagent per task, review between tasks, fast iteration
 2. **Inline Execution** — execute tasks in this session using executing-plans, batch execution with checkpoints
 
-Depends on `docs/superpowers/plans/2026-10-31-configurability-framework.md` being implemented first.
+No dependency on `docs/superpowers/plans/2026-10-31-configurability-framework.md` (2026-11-01 scope decision: Configurability Framework is deferred to the "Expansion Capabilities" goal/release; this plan ships standalone — see the Scope note under Architecture).
