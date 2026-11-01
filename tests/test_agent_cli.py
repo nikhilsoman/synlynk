@@ -17,12 +17,13 @@ def _governs_gate_db():
     db = sqlite3.connect(":memory:")
     db.executescript(
         """
-        CREATE TABLE goals (goal_id TEXT PRIMARY KEY);
+        CREATE TABLE goals (goal_id TEXT PRIMARY KEY, phase_id INTEGER, placement_status TEXT);
         CREATE TABLE stories (story_id TEXT PRIMARY KEY, goal_id TEXT);
         CREATE TABLE goal_contributions (story_id TEXT, goal_id TEXT, link_status TEXT);
         CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, story_id TEXT, gh_write_target TEXT);
         CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
         CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
+        CREATE TABLE roadmap_phases (id INTEGER PRIMARY KEY);
         """
     )
     return db
@@ -32,7 +33,9 @@ def test_governs_dispatch_preflight_passes_for_linked_story_goal():
     from synlynk.dispatch import _preflight_dispatch
 
     db = _governs_gate_db()
-    db.execute("INSERT INTO goals VALUES ('goal-1')")
+    db.execute("INSERT INTO goals VALUES ('goal-1', NULL, 'unplaced')")
+    db.execute("INSERT INTO roadmap_phases VALUES (1)")
+    db.execute("UPDATE goals SET phase_id=1, placement_status='placed' WHERE goal_id='goal-1'")
     db.execute("INSERT INTO stories VALUES ('story-1', 'goal-1')")
     db.commit()
     result = _preflight_dispatch("unknown", [], db_conn=db, story_id="story-1")
