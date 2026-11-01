@@ -4814,5 +4814,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #5022 \u2014 quota burn-rate design/plan + v0.26.8 scope decoupling (PR #5022, v0.26.8)\n\n\u2022 Merged improvements and fixes for PR #5022.\n\n#posts",
     "changelog": "### v0.26.8 (2026-11-01) - PR #5022\n- Merged improvements and fixes for PR #5022."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/548-pr5023-archive-superseded-context-compaction-wi.md",
+    "title": "PR #5023 \u2014 archive superseded context-compaction WIP",
+    "author": "synlynk-pm agent",
+    "date": "2026-11-01",
+    "pr": "#5023",
+    "version": "0.26.8",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #5023."
+    ],
+    "tweet": "\ud83d\ude80 PR #5023 \u2014 archive superseded context-compaction WIP (PR #5023, v0.26.8)\n\n\u2022 Merged improvements and fixes for PR #5023.\n\n#posts",
+    "changelog": "### v0.26.8 (2026-11-01) - PR #5023\n- Merged improvements and fixes for PR #5023."
   }
 ]
