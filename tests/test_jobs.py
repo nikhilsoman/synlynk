@@ -4682,6 +4682,21 @@ def test_provider_429_preserves_partial_work_and_quota_terminal_reason(
     assert (wt / "partial.py").read_text() == "print('partial work')\n"
 
 
+def test_provider_quota_classifier_ignores_successful_task_prose():
+    from synlynk.jobs import _provider_quota_failure_reason
+
+    text = "Implemented handling for RESOURCE_EXHAUSTED (429); all tests passed."
+    assert _provider_quota_failure_reason(text, exit_code=0) is None
+
+
+def test_provider_quota_classifier_recognizes_standard_http_429():
+    from synlynk.jobs import _provider_quota_failure_reason
+
+    assert _provider_quota_failure_reason(
+        "Error: HTTP 429 Too Many Requests", exit_code=1
+    ) == "provider_quota_429"
+
+
 def test_zombie_reap_skips_worktree_when_terminal_cas_loses(
     tmp_path, project_dir, monkeypatch
 ):

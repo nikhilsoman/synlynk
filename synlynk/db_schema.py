@@ -542,6 +542,8 @@ CREATE TABLE IF NOT EXISTS harness_reservations (
     model          TEXT NOT NULL DEFAULT 'unknown',
     track          TEXT NOT NULL DEFAULT 'default',
     tokens         INTEGER NOT NULL,
+    requests       INTEGER NOT NULL DEFAULT 0,
+    estimated_cost_usd REAL NOT NULL DEFAULT 0,
     scope          TEXT NOT NULL,
     scope_id       TEXT,
     job_id         TEXT,

@@ -4,7 +4,7 @@ import json
 import os
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from synlynk._lazy import pkg as _pkg
@@ -631,6 +631,8 @@ def _open_reservation(
     job_id: Optional[str] = None,
     model: Optional[str] = None,
     track: Optional[str] = None,
+    requests: int = 0,
+    estimated_cost_usd: float = 0.0,
 ) -> int:
     """Opens an harness_reservations row. Returns the new reservation id.
 
@@ -652,9 +654,11 @@ def _open_reservation(
     try:
         cur = conn.execute(
             "INSERT INTO harness_reservations "
-            "(harness, model, track, tokens, scope, scope_id, job_id, status) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, 'open')",
-            (harness, model, track, int(tokens), scope, scope_id, job_id),
+            "(harness, model, track, tokens, requests, estimated_cost_usd, "
+            "scope, scope_id, job_id, status) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')",
+            (harness, model, track, int(tokens), int(requests),
+             float(estimated_cost_usd), scope, scope_id, job_id),
         )
         conn.commit()
         return cur.lastrowid
@@ -699,6 +703,29 @@ def _open_reservations_sum(
         tuple(params),
     ).fetchone()
     return int(row[0] or 0)
+
+
+def _open_reservations_demand(conn, harness: str, column: str,
+                              model: Optional[str] = None,
+                              track: Optional[str] = None) -> float:
+    """Return non-expired open demand for an allow-listed reservation measure."""
+    if column not in {"tokens", "requests", "estimated_cost_usd"}:
+        raise ValueError("unsupported reservation measure")
+    cutoff = datetime.now(UTC).timestamp() - _RESERVATION_EXPIRY_SECONDS
+    cutoff_iso = datetime.fromtimestamp(cutoff, UTC).strftime("%Y-%m-%d %H:%M:%S")
+    clauses = ["harness=?", "status='open'", "created_at >= ?"]
+    params = [harness, cutoff_iso]
+    if model is not None:
+        clauses.append("model=?")
+        params.append(str(model).strip() or "unknown")
+    if track is not None:
+        clauses.append("track=?")
+        params.append(str(track).strip() or "default")
+    row = conn.execute(
+        f"SELECT COALESCE(SUM({column}), 0) FROM harness_reservations WHERE "
+        + " AND ".join(clauses), tuple(params)
+    ).fetchone()
+    return float(row[0] or 0)
 
 
 def _force_exhaust_quota(conn, harness: str, window: str) -> None:
@@ -882,6 +909,24 @@ def _quota_status_for_agent(
             "degraded": True,
             "reason": "quota_unreadable",
         }
+
+    now = datetime.now(UTC)
+    for row in rows:
+        try:
+            updated = datetime.fromisoformat(str(row.get("updated_at")).replace("Z", "+00:00"))
+            if updated.tzinfo is None:
+                updated = updated.replace(tzinfo=UTC)
+            reset_raw = row.get("reset_at")
+            reset = datetime.fromisoformat(str(reset_raw).replace("Z", "+00:00")) if reset_raw else None
+            if reset is not None and reset.tzinfo is None:
+                reset = reset.replace(tzinfo=UTC)
+        except (TypeError, ValueError):
+            updated, reset = None, None
+        if updated is None or now - updated > timedelta(hours=24) or (reset is not None and reset <= now):
+            return {
+                "status": "unknown", "headroom": None, "unit": None,
+                "degraded": True, "reason": "quota_stale",
+            }
     if not rows:
         # No per-harness signal. Optionally fold in project request budget so
         # limit_requests is not an orphan field relative to the quota matrix.
@@ -917,6 +962,9 @@ def _quota_status_for_agent(
     reserved = _pkg("_open_reservations_sum")(
         conn, agent, model=model, track=track
     )
+    reserved_requests = int(_open_reservations_demand(
+        conn, agent, "requests", model=model, track=track
+    ))
     min_token_headroom = None
     min_request_headroom = None
 
@@ -946,6 +994,7 @@ def _quota_status_for_agent(
                     "reason": f"{row['quota_type']}_tokens_zero",
                 }
         elif unit == "requests":
+            headroom = max(0, headroom - reserved_requests)
             min_request_headroom = (
                 headroom if min_request_headroom is None
                 else min(min_request_headroom, headroom)
@@ -997,6 +1046,7 @@ def _check_and_reserve_quota(
     scope: str,
     job_id: str,
     scope_id: Optional[str] = None,
+    existing_reservation_id: Optional[int] = None,
 ) -> dict:
     """Atomically validate one provider pool and open its reservation."""
     model = str(model or "unknown").strip() or "unknown"
@@ -1009,6 +1059,12 @@ def _check_and_reserve_quota(
         conn.commit()
     conn.execute("BEGIN IMMEDIATE")
     try:
+        if existing_reservation_id is not None:
+            conn.execute(
+                "UPDATE harness_reservations SET status='released', "
+                "released_at=CURRENT_TIMESTAMP WHERE id=? AND status='open'",
+                (existing_reservation_id,),
+            )
         quota = _quota_status_for_agent(
             conn,
             harness,
@@ -1023,13 +1079,16 @@ def _check_and_reserve_quota(
                 estimated_tokens=estimated_tokens,
             )
         if quota.get("status") == "exhausted":
-            conn.rollback()
+            conn.commit() if existing_reservation_id is not None else conn.rollback()
             return {"accepted": False, "reason": "quota_exhausted", "quota": quota}
+        if quota.get("reason") == "quota_stale":
+            conn.commit()
+            return {"accepted": False, "reason": "quota_stale", "quota": quota}
         if harness == "agy" and (
             quota.get("status") == "unknown"
             or quota.get("reason") != "harness_quotas"
         ):
-            conn.rollback()
+            conn.commit() if existing_reservation_id is not None else conn.rollback()
             return {"accepted": False, "reason": "quota_unknown", "quota": quota}
 
         if payment_mode == "credit_grant":
@@ -1040,16 +1099,12 @@ def _check_and_reserve_quota(
                 (harness,),
             ).fetchone()
             available_credit = float(credit_row[0] or 0.0)
-            reserved_tokens = _open_reservations_sum(
-                conn, harness, model=model, track=track
+            reserved_cost = _open_reservations_demand(
+                conn, harness, "estimated_cost_usd"
             )
-            per_token_cost = (
-                float(estimated_cost_usd) / estimated_tokens
-                if estimated_cost_usd > 0 else 0.0
-            )
-            projected_cost = float(estimated_cost_usd) + reserved_tokens * per_token_cost
+            projected_cost = float(estimated_cost_usd) + reserved_cost
             if available_credit < projected_cost:
-                conn.rollback()
+                conn.commit() if existing_reservation_id is not None else conn.rollback()
                 return {
                     "accepted": False,
                     "reason": "credit_exhausted",
@@ -1058,9 +1113,11 @@ def _check_and_reserve_quota(
 
         cur = conn.execute(
             "INSERT INTO harness_reservations "
-            "(harness, model, track, tokens, scope, scope_id, job_id, status) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, 'open')",
-            (harness, model, track, estimated_tokens, scope, scope_id, job_id),
+            "(harness, model, track, tokens, requests, estimated_cost_usd, "
+            "scope, scope_id, job_id, status) "
+            "VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, 'open')",
+            (harness, model, track, estimated_tokens, float(estimated_cost_usd),
+             scope, scope_id, job_id),
         )
         conn.commit()
         return {

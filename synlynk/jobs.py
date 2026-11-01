@@ -487,14 +487,16 @@ def _log_has_permission_denied_signature(log_text: str) -> bool:
     return bool(detector(log_text)) if detector else False
 
 
-def _provider_quota_failure_reason(log_text: str) -> Optional[str]:
+def _provider_quota_failure_reason(log_text: str, exit_code: Optional[int] = None) -> Optional[str]:
     """Classify provider capacity failures without conflating task failure."""
+    if exit_code == 0:
+        return None
     text = (log_text or "").lower()
     if not text:
         return None
     if "429" in text and any(
         marker in text
-        for marker in ("resource_exhausted", "resource exhausted", "quota", "credit")
+        for marker in ("resource_exhausted", "resource exhausted", "quota", "credit", "too many requests")
     ):
         return "provider_quota_429"
     if any(
@@ -6131,7 +6133,7 @@ def _reconcile_daemon_jobs() -> None:
                         summary_status = noop_label
                         summary_note = noop_note
 
-                provider_quota_reason = _provider_quota_failure_reason(log_text)
+                provider_quota_reason = _provider_quota_failure_reason(log_text, exit_code)
                 partial_work_evidence = None
                 if provider_quota_reason:
                     status = STATUS_PROVIDER_QUOTA_EXHAUSTED
@@ -6270,6 +6272,8 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
     ensure_worktree_columns(conn, {
         "worktree_path": "TEXT",
         "worktree_branch": "TEXT",
+        "requested_model": "TEXT",
+        "resolved_model": "TEXT",
     })
     try:
         running_count = conn.execute(
@@ -6280,7 +6284,8 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
 
         slots = max_parallel - running_count
         candidates = conn.execute(
-            "SELECT job_id, agent, task, story_id, depends_on, log_path "
+            "SELECT job_id, agent, task, story_id, depends_on, log_path, "
+            "requested_model, resolved_model "
             "FROM daemon_jobs WHERE status='queued' "
             "ORDER BY priority ASC, enqueued_at ASC"
         ).fetchall()
@@ -6293,7 +6298,8 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
         ).fetchone()[0]
         from synlynk.dispatch import _local_max_concurrent
         local_max = _local_max_concurrent()
-        for job_id, agent, task, story_id, depends_on_json, log_path in candidates:
+        for (job_id, agent, task, story_id, depends_on_json, log_path,
+             requested_model, resolved_model) in candidates:
             if launched >= slots:
                 break
             deps = _json.loads(depends_on_json or "[]")
@@ -6340,8 +6346,12 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                     ).fetchone()
                     if story_row:
                         estimated_tokens = story_row[0]
+                selected_model = resolved_model or requested_model
+                from synlynk.quota import resolve_harness_track
                 qstatus = quota_status_fn(
-                    conn, agent, estimated_tokens=estimated_tokens
+                    conn, agent, estimated_tokens=estimated_tokens,
+                    model=selected_model,
+                    track=resolve_harness_track(agent, selected_model),
                 )
                 if qstatus.get("status") == "exhausted":
                     continue
@@ -6352,6 +6362,7 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                     story_id=story_id,
                     force_agent=True,
                     job_id=job_id,
+                    model=requested_model or resolved_model,
                 )
             except (RuntimeError, ValueError):
                 # Preflight/worktree/unknown-harness failures: fail the queue row so

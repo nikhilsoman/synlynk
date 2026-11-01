@@ -89,7 +89,8 @@ def test_agent_reservations_table_exists(project_dir):
     conn = sl._get_db()
     cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_reservations)")}
     assert cols == {
-        "id", "harness", "model", "track", "tokens", "scope", "scope_id", "job_id",
+        "id", "harness", "model", "track", "tokens", "requests",
+        "estimated_cost_usd", "scope", "scope_id", "job_id",
         "status", "created_at", "released_at",
     }
     daemon_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}

@@ -192,10 +192,12 @@ def _enqueue_plan(plan: list) -> list:
             dispatch_context = "headless"
             conn.execute(
                 "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, "
-                "priority, depends_on, enqueued_at, dispatch_context) VALUES (?,?,?,?,?,?,?,?,?)",
+                "priority, depends_on, enqueued_at, dispatch_context, "
+                "requested_model, resolved_model) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (job_id, agent, task, story_id, "queued",
                  item.get("priority", 5), "[]",
-                 time.strftime("%Y-%m-%dT%H:%M:%S"), dispatch_context),
+                 time.strftime("%Y-%m-%dT%H:%M:%S"), dispatch_context,
+                 item.get("model"), item.get("model")),
             )
             estimated_tokens = item.get("estimated_tokens")
             if estimated_tokens is not None and int(estimated_tokens) > 0:

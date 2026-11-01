@@ -4243,7 +4243,7 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
             candidate_harness=candidate,
             task=task or "",
             requires=requires,
-            force_agent=force_agent,
+            force_agent=force_agent or not auto_selection,
             grants=grants,
             revokes=revokes,
             task_type=task_type,
@@ -4829,11 +4829,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 "WHERE status='open' AND job_id=? AND harness=?",
                 (job_id, agent),
             ).fetchone()
-        reserve_result = {"accepted": True, "reason": "existing_reservation"}
+        reserve_result = {"accepted": True, "reason": "quota_check_unavailable"}
         check_and_reserve_fn = _pkg("_check_and_reserve_quota")
         if (
-            not existing_reservation
-            and check_and_reserve_fn
+            check_and_reserve_fn
             and has_reservations_table
         ):
             reserve_result = check_and_reserve_fn(
@@ -4847,6 +4846,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 scope=_scope,
                 scope_id=os.environ.get("SYNLYNK_SCHEDULE_RUN_ID"),
                 job_id=job_id,
+                existing_reservation_id=(existing_reservation[0] if existing_reservation else None),
             )
 
         if not reserve_result.get("accepted", False):
@@ -4863,17 +4863,20 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             ).fetchone()
             if existing_job:
                 dconn.execute(
-                    "UPDATE daemon_jobs SET status='queued', "
-                    "blocked_reason=? WHERE job_id=?",
-                    (reserve_result.get("reason", "quota_exhausted"), job_id),
+                    "UPDATE daemon_jobs SET status='queued', blocked_reason=?, "
+                    "requested_model=?, resolved_model=? WHERE job_id=?",
+                    (reserve_result.get("reason", "quota_exhausted"),
+                     requested_model_input, model, job_id),
                 )
             else:
                 dconn.execute(
                     "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, "
-                    "priority, depends_on, enqueued_at, blocked_reason) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "priority, depends_on, enqueued_at, blocked_reason, "
+                    "requested_model, resolved_model) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (job_id, agent, task, story_id, "queued", 5, "[]", now_iso,
-                     reserve_result.get("reason", "quota_exhausted")),
+                     reserve_result.get("reason", "quota_exhausted"),
+                     requested_model_input, model),
                 )
             dconn.commit()
             if owns_dconn and dconn is not None:
@@ -5660,7 +5663,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         except OSError:
             startup_log_text = ""
         startup_quota_failure = (
-            quota_failure_fn(startup_log_text) if quota_failure_fn else None
+            quota_failure_fn(startup_log_text, startup_exit) if quota_failure_fn else None
         )
         if secondary and not touched and not startup_quota_failure:
             if local_slot_claimed:

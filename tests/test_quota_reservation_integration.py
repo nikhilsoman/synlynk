@@ -148,6 +148,32 @@ def test_deferred_job_survives_reset_and_resumes_without_redispatch(project_dir,
     assert already_done_status == "done"
 
 
+def test_deferred_job_replays_selected_model(project_dir, monkeypatch):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    sl._upsert_agent_quota(
+        "agy", "5h", limit_tokens=100_000, used_tokens=0,
+        model="claude-sonnet-5", track="claude_proxy", conn=conn,
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, depends_on, "
+        "enqueued_at, requested_model, resolved_model) VALUES "
+        "('job-model-replay', 'agy', 'task', 'queued', 5, '[]', "
+        "'2026-11-01T00:00:00', 'claude-sonnet-5', 'claude-sonnet-5')"
+    )
+    conn.commit()
+    seen = {}
+
+    def fake_dispatch(agent, task, **kwargs):
+        seen.update(kwargs)
+        return {"job_id": kwargs["job_id"], "pid": 123}
+
+    monkeypatch.setattr(sl, "dispatch_agent", fake_dispatch)
+    assert sl._dispatch_ready_jobs(max_parallel=1) == 1
+    assert seen["model"] == "claude-sonnet-5"
+
+
 def test_agy_unknown_selected_pool_is_rejected_without_reservation(project_dir):
     import synlynk as sl
 
@@ -310,3 +336,102 @@ def test_parallel_same_pool_reservations_do_not_oversubscribe(tmp_path):
         "SELECT COUNT(*) FROM harness_reservations WHERE status='open'"
     ).fetchone()[0] == 1
     conn.close()
+
+
+def test_shared_credit_is_not_oversubscribed_across_models(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    for model, track in (("gemini-3.7-flash", "gemini"), ("claude-sonnet-5", "claude_proxy")):
+        sl._upsert_agent_quota(
+            "agy", "5h", limit_tokens=100_000, used_tokens=0,
+            model=model, track=track, conn=conn,
+        )
+    conn.execute(
+        "INSERT INTO credit_grants (agent, face_value_usd, remaining_usd, granted_at) "
+        "VALUES ('agy', 1.0, 1.0, '2026-11-01')"
+    )
+    conn.commit()
+
+    first = sl._check_and_reserve_quota(
+        conn, harness="agy", model="gemini-3.7-flash", track="gemini",
+        estimated_tokens=1000, estimated_cost_usd=0.75, payment_mode="credit_grant",
+        scope="session", job_id="job-credit-a",
+    )
+    second = sl._check_and_reserve_quota(
+        conn, harness="agy", model="claude-sonnet-5", track="claude_proxy",
+        estimated_tokens=1000, estimated_cost_usd=0.75, payment_mode="credit_grant",
+        scope="session", job_id="job-credit-b",
+    )
+    assert first["accepted"] is True
+    assert second == {"accepted": False, "reason": "credit_exhausted", "credit_remaining_usd": 1.0}
+
+
+def test_request_quota_is_reserved_atomically(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    sl._upsert_agent_quota(
+        "agy", "5h", limit_tokens=1, used_tokens=0, unit="requests",
+        model="gemini-3.7-flash", track="gemini", conn=conn,
+    )
+    first = sl._check_and_reserve_quota(
+        conn, harness="agy", model="gemini-3.7-flash", track="gemini",
+        estimated_tokens=1000, estimated_cost_usd=0, payment_mode="subscription",
+        scope="session", job_id="job-request-a",
+    )
+    second = sl._check_and_reserve_quota(
+        conn, harness="agy", model="gemini-3.7-flash", track="gemini",
+        estimated_tokens=1000, estimated_cost_usd=0, payment_mode="subscription",
+        scope="session", job_id="job-request-b",
+    )
+    assert first["accepted"] is True
+    assert second["accepted"] is False
+    assert second["reason"] == "quota_exhausted"
+
+
+def test_stale_selected_pool_is_unknown(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    sl._upsert_agent_quota(
+        "agy", "5h", limit_tokens=100_000, used_tokens=0,
+        model="gemini-3.7-flash", track="gemini", conn=conn,
+    )
+    conn.execute(
+        "UPDATE harness_quotas SET updated_at='2000-01-01 00:00:00', "
+        "reset_at='2000-01-01 05:00:00' WHERE harness='agy'"
+    )
+    conn.commit()
+    result = sl._check_and_reserve_quota(
+        conn, harness="agy", model="gemini-3.7-flash", track="gemini",
+        estimated_tokens=1000, estimated_cost_usd=0, payment_mode="subscription",
+        scope="session", job_id="job-stale",
+    )
+    assert result["accepted"] is False
+    assert result["reason"] == "quota_stale"
+
+
+def test_unchecked_existing_reservation_is_revalidated(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    sl._upsert_agent_quota(
+        "agy", "5h", limit_tokens=100_000, used_tokens=0,
+        model="gemini-3.7-flash", track="gemini", conn=conn,
+    )
+    existing = sl._open_reservation(
+        conn, "agy", 1000, scope="plan", job_id="job-unchecked",
+        model="gemini-3.7-flash", track="gemini",
+    )
+    result = sl._check_and_reserve_quota(
+        conn, harness="agy", model="gemini-3.7-flash", track="gemini",
+        estimated_tokens=1000, estimated_cost_usd=0.25,
+        payment_mode="credit_grant", scope="plan", job_id="job-unchecked",
+        existing_reservation_id=existing,
+    )
+    assert result["accepted"] is False
+    assert result["reason"] == "credit_exhausted"
+    assert conn.execute(
+        "SELECT status FROM harness_reservations WHERE id=?", (existing,)
+    ).fetchone()[0] == "released"

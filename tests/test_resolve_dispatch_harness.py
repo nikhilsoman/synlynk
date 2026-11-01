@@ -39,6 +39,23 @@ def test_explicit_harness_is_binding_before_capability_probe(monkeypatch):
     assert probed == ["codex"]
 
 
+def test_explicit_harness_is_binding_through_real_capability_probe(monkeypatch):
+    from synlynk.capability_probe import IncompatibleHarnessCapabilityError
+    from synlynk.capability_probe import CapabilityEvaluationResult
+    from synlynk.dispatch import resolve_dispatch_harness
+
+    monkeypatch.setattr(
+        "synlynk.capability_probe.evaluate_harness_capabilities",
+        lambda harness, _required, **_kwargs: CapabilityEvaluationResult(
+            allowed=harness == "agy",
+            missing_capabilities=[] if harness == "agy" else ["browser"],
+        ),
+    )
+
+    with __import__("pytest").raises(IncompatibleHarnessCapabilityError):
+        resolve_dispatch_harness("codex", task="browser automation", requires=["browser"])
+
+
 def test_auto_harness_uses_learned_route_before_capability_probe(monkeypatch):
     import synlynk as sl
     import synlynk.capability_probe as probe_mod
@@ -181,9 +198,9 @@ def test_review_dispatch_excludes_branch_daemon_implementer(tmp_path, monkeypatc
     conn.close()
 
     # 1. Review task names PR #2272, head branch dispatch/codex/job-63a4b857, daemon job harness codex, purpose implementation, no cost row.
-    # resolve_dispatch_harness("codex", task=..., task_type="review", requires_gh_write=True) returns agy, not codex.
-    res1 = resolve_dispatch_harness("codex", task="review PR #2272", task_type="review", requires_gh_write=True)
-    assert res1 == "agy"
+    # An explicit excluded harness fails closed instead of silently becoming Agy.
+    with pytest.raises(IncompatibleHarnessCapabilityError):
+        resolve_dispatch_harness("codex", task="review PR #2272", task_type="review", requires_gh_write=True)
 
     # 2. Same rows, requested harness agy, returns agy.
     res2 = resolve_dispatch_harness("agy", task="review PR #2272", task_type="review", requires_gh_write=True)
@@ -214,8 +231,8 @@ def test_review_dispatch_excludes_branch_daemon_implementer(tmp_path, monkeypatc
     conn.commit()
     conn.close()
 
-    res5 = resolve_dispatch_harness("codex", task="review PR #2272", task_type="review", requires_gh_write=True)
-    assert res5 == "agy"
+    with pytest.raises(IncompatibleHarnessCapabilityError):
+        resolve_dispatch_harness("codex", task="review PR #2272", task_type="review", requires_gh_write=True)
 
     # 6. .synlynk/policy.json in the repo still has cross_harness_review_required_mode == observe after your change. Assert that. Do not edit the file.
     repo_policy_path = os.path.join(os.path.dirname(__file__), "..", ".synlynk", "policy.json")
