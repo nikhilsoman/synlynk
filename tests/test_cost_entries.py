@@ -26,7 +26,8 @@ def _create_cost_test_db(db_path):
             cost_source TEXT, estimate_basis TEXT, job_id TEXT,
             decision_revision INTEGER, recorded_at TEXT, dispatch_context TEXT,
             context_mode TEXT, turn_usage_json TEXT, session_id TEXT, pr_number INTEGER,
-            estimated_input_tokens INTEGER, estimated_output_tokens INTEGER, estimated_cost_usd REAL
+            estimated_input_tokens INTEGER, estimated_output_tokens INTEGER, estimated_cost_usd REAL,
+            compaction_event_type TEXT
         )"""
     )
     conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, role TEXT)")

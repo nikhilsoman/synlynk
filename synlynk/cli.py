@@ -326,7 +326,7 @@ _TOP_LEVEL_COMMANDS = (
     "roadmap", "policy", "credit", "backlog", "quota", "schedule", "pr", "capability",
     "instructions", "marketing", "roles", "release", "viz", "provenance",
     "backfill-capability-ratings",
-    "board", "concierge", "addon", "autonomy",
+    "board", "concierge", "addon", "autonomy", "context",
     "gateway",
 )
 
@@ -2192,6 +2192,18 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     addon_install_parser = addon_sub.add_parser("install", help="Install an add-on bundle")
     addon_install_parser.add_argument("bundle", choices=_list_available_addons())
 
+    context_parser = subparsers.add_parser("context", help="Context compaction commands")
+    context_subparsers = context_parser.add_subparsers(dest="context_action")
+
+    checkpoint_parser = context_subparsers.add_parser("checkpoint", help="Write a resumption-ledger checkpoint")
+    checkpoint_parser.add_argument("--story-id", required=True)
+
+    pack_parser = context_subparsers.add_parser("pack", help="Build and print a task-boundary context pack")
+    pack_parser.add_argument("--story-id", required=True)
+    pack_parser.add_argument("--task-description", required=True)
+    pack_parser.add_argument("--auto-checkpoint", action="store_true")
+
+
     def format_root_help() -> str:
         return (
             "synlynk: The Universal Context Switchboard for AI Devs\n\n"
@@ -3955,6 +3967,23 @@ def main(argv=None) -> None:
         else:
             for name in list_available_addons():
                 print(f"  - {name}")
+    elif args.command == "context":
+        from synlynk.context_compaction import checkpoint, pack, inject
+        import getpass
+
+        if args.context_action == "checkpoint":
+            username = getpass.getuser()
+            wrote = checkpoint(story_id=args.story_id, username=username)
+            print("checkpoint written" if wrote else "checkpoint already current (no-op)")
+        elif args.context_action == "pack":
+            username = getpass.getuser() if args.auto_checkpoint else None
+            content_pack = pack(
+                story_id=args.story_id,
+                task_description=args.task_description,
+                username=username,
+                auto_checkpoint=args.auto_checkpoint,
+            )
+            print(inject(content_pack))
     else:
         parser.print_help()
 
