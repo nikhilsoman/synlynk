@@ -164,5 +164,26 @@ def apply_token_budget(content_pack: dict, budget_chars: int) -> dict:
     return result
 
 
+def inject(content_pack: dict) -> str:
+    lines = ["## Context Pack", ""]
+    lines.append(f"**Story summary:** {content_pack.get('story_summary', '')}")
+    lines.append("")
+    lines.append("**Recent decisions:**")
+    for item in content_pack.get("recent_decisions", []):
+        lines.append(f"- {item}")
+    lines.append("")
+    lines.append("**Open threads:**")
+    for item in content_pack.get("open_threads", []):
+        lines.append(f"- {item}")
+    lines.append("")
+    lines.append("**Relevant files:**")
+    for item in content_pack.get("relevant_files", []):
+        lines.append(f"- {item}")
+    lines.append("")
+    lines.append(f"**Task:** {content_pack.get('task_description', '')}")
+    return "\n".join(lines)
+
+
+
 
 

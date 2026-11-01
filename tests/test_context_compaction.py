@@ -228,6 +228,25 @@ def test_apply_token_budget_noop_when_under_budget():
     assert result == content_pack
 
 
+def test_inject_renders_content_pack_as_markdown():
+    from synlynk.context_compaction import inject
+    content_pack = {
+        "story_summary": "Build widget",
+        "recent_decisions": ["Use SQLite"],
+        "open_threads": ["Need review"],
+        "relevant_files": ["synlynk/widget.py"],
+        "task_description": "implement widget",
+    }
+    rendered = inject(content_pack)
+
+    assert "Build widget" in rendered
+    assert "Use SQLite" in rendered
+    assert "Need review" in rendered
+    assert "synlynk/widget.py" in rendered
+    assert "implement widget" in rendered
+
+
+
 
 
 
