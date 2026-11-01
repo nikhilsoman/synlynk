@@ -4718,5 +4718,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #4999 \u2014 quota model burn-rate weighting and estimate drift tracking (v0.26.9) (PR #4999, v0.26.7)\n\n\u2022 Merged improvements and fixes for PR #4999.\n\n#posts",
     "changelog": "### v0.26.7 (2026-11-01) - PR #4999\n- Merged improvements and fixes for PR #4999."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/542-pr5003-devlog-cost-housekeeping-for-v0-26-9-pr-.md",
+    "title": "PR #5003 \u2014 devlog + cost housekeeping for v0.26.9/PR #4999 session",
+    "author": "nikhilsoman",
+    "date": "2026-11-01",
+    "pr": "#5003",
+    "version": "0.26.7",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #5003."
+    ],
+    "tweet": "\ud83d\ude80 PR #5003 \u2014 devlog + cost housekeeping for v0.26.9/PR #4999 session (PR #5003, v0.26.7)\n\n\u2022 Merged improvements and fixes for PR #5003.\n\n#posts",
+    "changelog": "### v0.26.7 (2026-11-01) - PR #5003\n- Merged improvements and fixes for PR #5003."
   }
 ]
