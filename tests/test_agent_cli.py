@@ -74,7 +74,8 @@ def test_governs_pr_check_linkage_passes_for_all_dispatched_jobs():
     from synlynk.governs_gate import pr_governs_linkage_violations
 
     db = _governs_gate_db()
-    db.execute("INSERT INTO goals VALUES ('goal-1')")
+    db.execute("INSERT INTO goals VALUES ('goal-1', 1, 'placed')")
+    db.execute("INSERT INTO roadmap_phases VALUES (1)")
     db.execute("INSERT INTO stories VALUES ('story-1', 'goal-1')")
     db.execute("INSERT INTO capability_ratings VALUES (1, 'story-1', 1990)")
     db.execute("INSERT INTO daemon_jobs VALUES ('job-1', 'story-1', 'pr:1990')")
