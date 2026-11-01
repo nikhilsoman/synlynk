@@ -10,11 +10,12 @@ from synlynk.maintainer import (
 
 def test_triage_sentinel_alerts_groups_and_ranks_by_severity_and_frequency(tmp_path):
     path = tmp_path / "sentinel.md"
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     path.write_text(
         "# Sentinel Alerts\n"
-        "- [CRITICAL] [2026-10-25 10:00:00 UTC] SEV1_FAULT: Crash during fork [occurrences: 2; first seen: 2026-10-25 10:00:00 UTC; last seen: 2026-10-25 10:00:00 UTC]\n"
-        "- [WARN] [2026-10-25 12:00:00 UTC] TOKEN_BLOAT: High tokens [occurrences: 5; first seen: 2026-10-25 12:00:00 UTC; last seen: 2026-10-25 12:00:00 UTC]\n"
-        "- [INFO] [2026-10-25 14:00:00 UTC] NOTICE: Routine pulse [occurrences: 1; first seen: 2026-10-25 14:00:00 UTC; last seen: 2026-10-25 14:00:00 UTC]\n"
+        f"- [CRITICAL] [{now}] SEV1_FAULT: Crash during fork [occurrences: 2; first seen: {now}; last seen: {now}]\n"
+        f"- [WARN] [{now}] TOKEN_BLOAT: High tokens [occurrences: 5; first seen: {now}; last seen: {now}]\n"
+        f"- [INFO] [{now}] NOTICE: Routine pulse [occurrences: 1; first seen: {now}; last seen: {now}]\n"
     )
 
     groups = triage_sentinel_alerts(path=str(path), max_age_days=7)
