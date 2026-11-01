@@ -21,3 +21,28 @@ CONTEXT_COMPACTION_SETTINGS_SCHEMA = {
         "pack_token_budget": {"type": "integer", "required": False},
     },
 }
+
+import subprocess
+
+
+def _git_head_sha() -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True,
+    )
+    return result.stdout.strip()
+
+
+def _git_is_dirty() -> bool:
+    result = subprocess.run(
+        ["git", "status", "--porcelain"], capture_output=True, text=True, check=True,
+    )
+    return bool(result.stdout.strip())
+
+
+def _gather_snapshot(story_id: str) -> dict:
+    return {
+        "story_id": story_id,
+        "head_sha": _git_head_sha(),
+        "is_dirty": _git_is_dirty(),
+    }
+
