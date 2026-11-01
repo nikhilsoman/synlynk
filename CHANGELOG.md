@@ -16,6 +16,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
 
+## [v0.26.7] - 2026-10-31
+### Added
+- Vizor skinny, view-scoped payloads (PR #4963).
+- Workspace-relative navigation and durable-only Hub cards (PR #4975).
+- GOVERNS row Gantt (PR #4976).
+- Daemon-proxied `/w/<slug>/api/*` notes and authorized POST write path (PR #4983).
+### Changed
+- Vizor Interactive write-path defaults GOVERNS stages to locked; Jantt remains a benchmark only.
+
+---
+
 ## [v0.26.6] - 2026-10-29
 ### Added
 - feat(vizor): the Vizor daemon records one heartbeat in its daemon home (`harness=vizor`, running/stale/stopped) and does not write workspace `state.db` (#2642)

@@ -123,8 +123,7 @@ def generate_observatory_html(snapshot: dict) -> str:
         )
     worktree_html = f'''<!-- Worktree Lifecycle & Fleet Health -->
     <section class="wt-panel" id="worktree-lifecycle">
-      <header class="wt-header"><div><div class="wt-kicker">Fleet health</div><h2>Worktree Lifecycle &amp; Fleet Health</h2></div>
-        <button class="wt-clean" id="wt-clean">Clean Safe Worktrees</button></header>
+      <header class="wt-header"><div><div class="wt-kicker">Fleet health</div><h2>Worktree Lifecycle &amp; Fleet Health</h2></div></header>
       <div class="wt-metrics">
         <div class="wt-metric"><span>Active Working</span><strong>{worktree_counts["active"]}</strong></div>
         <div class="wt-metric wt-safe"><span>Safe to Prune</span><strong>{worktree_counts["safe"]}</strong></div>
@@ -133,7 +132,6 @@ def generate_observatory_html(snapshot: dict) -> str:
       </div>
       <div class="wt-table-wrap"><table class="wt-table"><thead><tr><th>Branch</th><th>Path</th><th>Status</th><th>Reason</th><th></th></tr></thead>
         <tbody>{''.join(worktree_rows) or '<tr><td colspan="5" class="obs-empty">No auxiliary worktrees found.</td></tr>'}</tbody></table></div>
-      <div class="wt-result" id="wt-result" aria-live="polite"></div>
     </section>'''
 
     repos = snapshot.get("repos") or []
@@ -340,15 +338,6 @@ body {{ padding: 24px; }}
     const lifecycle = document.getElementById('worktree-lifecycle');
     snapshotEl.innerHTML = (lifecycle ? lifecycle.outerHTML : '') + (repos.length ? repos.map(renderRepo).join('') : '<div class="obs-empty-state">No live jobs in this workspace.</div>');
     renderStats(snapshot);
-    const clean = document.getElementById('wt-clean');
-    const result = document.getElementById('wt-result');
-    if (clean && !clean.dataset.bound) {{
-      clean.dataset.bound = '1';
-      clean.addEventListener('click', async () => {{
-        result.textContent = 'Cleaning safe worktrees…';
-        try {{ const response = await fetch('/worktrees/clean', {{ method: 'POST', headers: Object.assign({{'Content-Type':'application/json'}}, window.vizorAuthHeaders ? window.vizorAuthHeaders() : {{}}), body: JSON.stringify({{apply:true}}) }}); const out = await response.json(); result.textContent = out.ok ? `Cleaned ${{out.cleaned_count}} safe worktree(s).` : (out.error || 'Cleanup failed.'); if (out.ok) setTimeout(refresh, 500); }} catch (err) {{ result.textContent = 'Cleanup failed: ' + err.message; }}
-      }});
-    }}
   }}
 
   async function refresh() {{

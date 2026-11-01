@@ -145,11 +145,6 @@ function setArchitectView(view) {
     renderTree();
     window._treeRendered = true;
   }
-  fetch('/architect-map/view-pref', {
-    method: 'POST',
-    headers: window.vizorAuthHeaders ? window.vizorAuthHeaders({ 'Content-Type': 'application/json' }) : { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ view: view }),
-  }).catch(() => {});
 }
 
 let currentDrawerNode = null;
@@ -179,18 +174,6 @@ function closeDrawer() {
   document.getElementById('am-drawer').classList.remove('open');
   document.getElementById('am-ov').classList.remove('open');
   currentDrawerNode = null;
-}
-
-async function drawerDispatch() {
-  if (!currentDrawerNode) return;
-  const task = prompt('Task to dispatch in ' + currentDrawerNode.label + ':');
-  if (!task) return;
-  await fetch('/dispatch', {
-    method: 'POST',
-    headers: window.vizorAuthHeaders ? window.vizorAuthHeaders({ 'Content-Type': 'application/json' }) : { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ repo_path: currentDrawerNode.path, task: task }),
-  });
-  closeDrawer();
 }
 
 function drawerJumpGantt() {
@@ -346,81 +329,6 @@ if (svgEl) {
   });
   window.addEventListener('mouseup', function() {
     isDragging = false;
-  });
-}
-
-function triggerAmKgRefresh(btn) {
-  if (!btn) btn = document.getElementById('am-kg-refresh-btn');
-  const chip = document.getElementById('am-kg-status-chip') || document.querySelector('.am-kg-chip');
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = '🔄 Refreshing...';
-  }
-  if (chip) chip.textContent = '⏳ Extracting AST Knowledge Graph...';
-
-  const pathParts = window.location.pathname.split('/');
-  let refreshUrl = '/api/graph/refresh';
-  if (pathParts[1] === 'w' && pathParts[2]) {
-    refreshUrl = '/w/' + encodeURIComponent(pathParts[2]) + '/api/graph/refresh';
-  }
-
-  fetch(refreshUrl, {
-    method: 'POST',
-    headers: window.vizorAuthHeaders ? window.vizorAuthHeaders({ 'Content-Type': 'application/json' }) : { 'Content-Type': 'application/json' },
-    body: JSON.stringify({})
-  })
-  .then(res => {
-    if (!res.ok) throw new Error('Refresh failed with status ' + res.status);
-    return res.json();
-  })
-  .then(data => {
-    if (btn) {
-      btn.textContent = '✓ Refreshed';
-      setTimeout(() => { btn.textContent = '🔄 Refresh Graph'; btn.disabled = false; }, 2000);
-    }
-    if (chip) chip.textContent = '✓ Graph Refreshed';
-    const iframe = document.getElementById('am-graphify-frame') || document.querySelector('iframe');
-    const hud = document.getElementById('am-empty-hud');
-    if (iframe) {
-      if (iframe.dataset && iframe.dataset.src) iframe.src = iframe.dataset.src;
-      else iframe.src = iframe.src;
-      iframe.style.display = 'block';
-    }
-    if (hud) hud.style.display = 'none';
-  })
-  .catch(err => {
-    console.error(err);
-    if (btn) {
-      btn.textContent = '✗ Failed';
-      setTimeout(() => { btn.textContent = '🔄 Refresh Graph'; btn.disabled = false; }, 2500);
-    }
-    if (chip) chip.textContent = '✗ Extraction Failed';
-  });
-}
-
-function triggerGraphRefresh(el) {
-  if (el) el.textContent = '[Refreshing...]';
-  const pathParts = window.location.pathname.split('/');
-  let refreshUrl = '/api/graph/refresh';
-  if (pathParts[1] === 'w' && pathParts[2]) {
-    refreshUrl = '/w/' + encodeURIComponent(pathParts[2]) + '/api/graph/refresh';
-  }
-  fetch(refreshUrl, {
-    method: 'POST',
-    headers: window.vizorAuthHeaders ? window.vizorAuthHeaders({ 'Content-Type': 'application/json' }) : { 'Content-Type': 'application/json' },
-    body: JSON.stringify({})
-  })
-  .then(res => {
-    if (!res.ok) throw new Error('Refresh failed with status ' + res.status);
-    return res.json();
-  })
-  .then(data => {
-    if (el) el.textContent = '[Refreshed ✓]';
-    setTimeout(() => { location.reload(); }, 600);
-  })
-  .catch(err => {
-    if (el) el.textContent = '[Refresh Failed ✗]';
-    console.error(err);
   });
 }
 
@@ -666,8 +574,7 @@ def generate_architect_map_html(data: dict, port: int) -> str:
     if is_stale:
         staleness_banner_html = (
             '<div class="am-stale-banner" id="graph-stale-banner">'
-            '<span>⚠️ Graph Stale (differs from HEAD commit) — '
-            '<a href="#" onclick="triggerGraphRefresh(this); return false;" style="color:#b45309;text-decoration:underline;">[Refresh Index]</a></span>'
+            '<span>⚠️ Graph Stale (differs from HEAD commit)</span>'
             '</div>'
         )
 
@@ -720,9 +627,6 @@ def generate_architect_map_html(data: dict, port: int) -> str:
       <p style="color: #94a3b8; font-size: 13px; max-width: 480px; line-height: 1.5; margin: 0 auto 20px auto;">
         The physical AST symbols, call hierarchies, and community clusters have not yet been extracted for workspace <span style="color:#60a5fa; font-weight:600;">{html.escape(workspace_name)}</span>. Run the deep scanner to index symbols and topology.
       </p>
-      <div style="display:flex; justify-content:center; align-items:center; gap:12px; margin-bottom:14px;">
-        <button type="button" class="am-btn-action" style="padding: 8px 18px; background: #2563eb; color: #fff; border-radius: 6px; font-weight: 500; cursor: pointer; border: none;" onclick="triggerAmKgRefresh(this)">⚡ Run AST Code Scan</button>
-      </div>
       <div style="font-size: 11px; color: #64748b;">
         or run in terminal: <code style="background: rgba(255,255,255,0.06); padding: 3px 8px; border-radius: 4px; color: #cbd5e1;">synlynk scan --deep</code>
       </div>
@@ -760,7 +664,6 @@ def generate_architect_map_html(data: dict, port: int) -> str:
         <label class="am-kind-chip"><input type="checkbox" value="Test Suite" onchange="toggleAmKindFilter(this)"> Tests</label>
       </div>
       <span class="am-kg-chip" id="am-kg-status-chip">{num_clusters} Clusters · {total_symbols} AST Symbols</span>
-      <button type="button" id="am-kg-refresh-btn" class="am-btn-action" onclick="triggerAmKgRefresh(this)" title="Re-extract AST Knowledge Graph">🔄 Refresh Graph</button>
     </div>
   </div>
   <div class="am-kg-canvas-full">
@@ -813,7 +716,6 @@ __VIEWS_HTML__
   </div>
   <div class="am-drawer-body" id="am-drawer-body"></div>
   <div class="am-drawer-actions">
-    <button class="btn" onclick="drawerDispatch()">Dispatch to this repo</button>
     <button class="btn" onclick="drawerJumpGantt()">Jump to Gantt view</button>
     <a class="btn" id="am-drawer-github" href="#" target="_blank" rel="noopener">Open on GitHub</a>
   </div>
