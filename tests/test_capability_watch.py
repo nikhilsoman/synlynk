@@ -50,6 +50,7 @@ def test_capability_watch_table_exists(conn):
     assert cols == {
         "id", "last_probe_at", "last_green_probe_at", "last_smoke_test_at",
         "last_green_smoke_at", "last_sweep_at", "sweep_job_count",
+        "last_quota_calibration_at",
     }
 
 
