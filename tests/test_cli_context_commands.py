@@ -15,12 +15,6 @@ def test_cli_context_checkpoint(tmp_path, monkeypatch):
     os.makedirs("project-docs/devlogs", exist_ok=True)
     monkeypatch.setattr("subprocess.run", subprocess.run)  # real git calls
 
-    from synlynk.features.registry import FEATURE_MANIFEST
-    FEATURE_MANIFEST.clear()
-    import importlib
-    import synlynk.context_compaction as cc_module
-    importlib.reload(cc_module)
-
     import getpass
     monkeypatch.setattr(getpass, "getuser", lambda: "testuser")
     (tmp_path / "project-docs/devlogs/testuser.md").write_text("# Devlog\n")
@@ -35,12 +29,6 @@ def test_cli_context_checkpoint(tmp_path, monkeypatch):
 def test_cli_context_pack_and_inject(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     _init_git_repo(tmp_path)
-
-    from synlynk.features.registry import FEATURE_MANIFEST
-    FEATURE_MANIFEST.clear()
-    import importlib
-    import synlynk.context_compaction as cc_module
-    importlib.reload(cc_module)
 
     from synlynk.cli import main
     main(["context", "pack", "--story-id", "story-abc", "--task-description", "implement widget"])
