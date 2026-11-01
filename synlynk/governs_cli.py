@@ -127,12 +127,12 @@ def cmd_governs_audit(
         ).fetchone()[0]
         duplicate_active_issue_stories = conn.execute(
             "SELECT COUNT(*) FROM ("
-            "SELECT gh_issue FROM stories "
+            "SELECT LTRIM(TRIM(gh_issue), '#') AS issue_identity FROM stories "
             "WHERE status IN ('open','in_progress') "
             "AND gh_issue IS NOT NULL AND TRIM(gh_issue)!='' "
             "AND (superseded_by IS NULL OR TRIM(superseded_by)='') "
             "AND COALESCE(source_type,'') != 'execution_artifact' "
-            "GROUP BY gh_issue HAVING COUNT(*) > 1"
+            "GROUP BY issue_identity HAVING COUNT(*) > 1"
             ")"
         ).fetchone()[0]
         placed_goals = len(goals) - unplaced_goals
