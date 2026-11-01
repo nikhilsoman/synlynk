@@ -4834,6 +4834,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         if (
             check_and_reserve_fn
             and has_reservations_table
+            and not skip_preflight
         ):
             reserve_result = check_and_reserve_fn(
                 dconn,
