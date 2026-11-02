@@ -631,6 +631,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [551](./551-pr5030-record-dec-3d240c05-decide-panel-on-auto.md) | PR #5030 — record dec-3d240c05 decide panel on autonomous GOVERNS charters | [#5030](https://github.com/nikhilsoman/synlynk/pull/5030) | 2026-11-02 |
 | [552](./552-pr5031-record-cost-telemetry-entry-for-story-61.md) | PR #5031 — record cost telemetry entry for story-61bd64fc | [#5031](https://github.com/nikhilsoman/synlynk/pull/5031) | 2026-11-02 |
 | [553](./553-pr5039-v0-27-x-developer-preview-milestone-oper.md) | PR #5039 — v0.27.x Developer Preview milestone operationalization and verification plan | [#5039](https://github.com/nikhilsoman/synlynk/pull/5039) | 2026-11-02 |
+| [554](./554-pr5040-align-extension-version-to-0-27-0-and-ve.md) | PR #5040 — align extension version to 0.27.0 and verify packaging distribution (#5032) | [#5040](https://github.com/nikhilsoman/synlynk/pull/5040) | 2026-11-02 |
 
 ## Per-PR Post Template
 
