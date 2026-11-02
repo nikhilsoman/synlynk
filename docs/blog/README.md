@@ -627,6 +627,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [547](./547-pr5022-quota-burn-rate-design-plan-v0-26-8-scop.md) | PR #5022 — quota burn-rate design/plan + v0.26.8 scope decoupling | [#5022](https://github.com/nikhilsoman/synlynk/pull/5022) | 2026-11-01 |
 | [548](./548-pr5023-archive-superseded-context-compaction-wi.md) | PR #5023 — archive superseded context-compaction WIP | [#5023](https://github.com/nikhilsoman/synlynk/pull/5023) | 2026-11-01 |
 | [549](./549-pr5024-append-missed-telemetry-rows-to-cost-arc.md) | PR #5024 — append missed telemetry rows to cost archive | [#5024](https://github.com/nikhilsoman/synlynk/pull/5024) | 2026-11-02 |
+| [550](./550-pr5028-autonomous-governs-wake-cycle-sops-githu.md) | PR #5028 — autonomous GOVERNS wake-cycle SOPs, GitHub-centric approval state machine, and policy inheritance (#5027) | [#5028](https://github.com/nikhilsoman/synlynk/pull/5028) | 2026-11-02 |
 
 ## Per-PR Post Template
 
