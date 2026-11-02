@@ -5813,6 +5813,13 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 "cleanup_deadline_at": "TEXT",
                 "process_state": "TEXT NOT NULL DEFAULT 'unknown'",
             })
+            if session_id and dconn is not None:
+                try:
+                    s_exists = dconn.execute("SELECT 1 FROM sessions WHERE session_id=?", (session_id,)).fetchone()
+                    if not s_exists:
+                        session_id = None
+                except Exception:
+                    session_id = None
             existing = dconn.execute(
                 "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
             ).fetchone()
