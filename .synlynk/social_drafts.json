@@ -4894,5 +4894,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #5031 \u2014 record cost telemetry entry for story-61bd64fc (PR #5031, v0.26.8)\n\n\u2022 Merged improvements and fixes for PR #5031.\n\n#posts",
     "changelog": "### v0.26.8 (2026-11-02) - PR #5031\n- Merged improvements and fixes for PR #5031."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/553-pr5039-v0-27-x-developer-preview-milestone-oper.md",
+    "title": "PR #5039 \u2014 v0.27.x Developer Preview milestone operationalization and verification plan",
+    "author": "nikhilsoman",
+    "date": "2026-11-02",
+    "pr": "#5039",
+    "version": "0.26.8",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #5039."
+    ],
+    "tweet": "\ud83d\ude80 PR #5039 \u2014 v0.27.x Developer Preview milestone operationalization and verification plan (PR #5039, v0.26.8)\n\n\u2022 Merged improvements and fixes for PR #5039.\n\n#posts",
+    "changelog": "### v0.26.8 (2026-11-02) - PR #5039\n- Merged improvements and fixes for PR #5039."
   }
 ]
