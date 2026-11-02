@@ -4926,5 +4926,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #5040 \u2014 align extension version to 0.27.0 and verify packaging distribution (#5032) (PR #5040, v0.26.8)\n\n\u2022 Merged improvements and fixes for PR #5040.\n\n#posts",
     "changelog": "### v0.26.8 (2026-11-02) - PR #5040\n- Merged improvements and fixes for PR #5040."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/555-pr5042-quickstart-first-win-loop-and-lifecycle-.md",
+    "title": "PR #5042 \u2014 quickstart first-win loop and lifecycle module verification (#5033)",
+    "author": "nikhilsoman",
+    "date": "2026-11-02",
+    "pr": "#5042",
+    "version": "0.26.8",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #5042."
+    ],
+    "tweet": "\ud83d\ude80 PR #5042 \u2014 quickstart first-win loop and lifecycle module verification (#5033) (PR #5042, v0.26.8)\n\n\u2022 Merged improvements and fixes for PR #5042.\n\n#posts",
+    "changelog": "### v0.26.8 (2026-11-02) - PR #5042\n- Merged improvements and fixes for PR #5042."
   }
 ]
