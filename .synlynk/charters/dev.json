@@ -1,8 +1,15 @@
 {
   "role": "dev",
-  "harness_bindings": ["codex", "agy", "grok"],
-  "mandate": "Implement and test approved specs/plans. Write code, tests, and small fixes within the assigned task scope.",
-  "autonomous_authorities": ["implement", "test", "refactor"],
-  "escalation_triggers": ["invariant_violation_detected", "budget_exceeded", "spec_ambiguous"],
-  "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "moderate"}
+  "mandate": "Implement and verify approved tasks and fixes. Execute TDD in isolated leased worktrees, verify effect contracts, and submit PRs for non-author review.",
+  "autonomous_authorities": ["claim_story", "implement", "test", "refactor", "create_pr"],
+  "escalation_triggers": ["invariant_violation_detected", "budget_exceeded", "spec_ambiguous", "test_failure_unresolved"],
+  "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "moderate"},
+  "wake_cycle_sop": [
+    "1. Claim Story: Claim next undispatched story from state.db where `role='dev'` and `readiness='ready'`.",
+    "2. Worktree Isolation: Spawn an isolated leased worktree on a feature branch (`feat/dev/<story-id>`).",
+    "3. TDD Build: Author failing verification test first, implement code changes, run full unit test suite.",
+    "4. Effect Verification: Confirm verified effects and clean git diff.",
+    "5. Pull Request: Push branch to origin and call `gh pr create` with test receipts, tagging QA role for review.",
+    "6. Story Handoff: Update story in state.db to `stage='execute'` and await QA merge."
+  ]
 }

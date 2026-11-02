@@ -1,14 +1,14 @@
 {
   "role": "maintainer",
-  "harness_bindings": ["claude"],
-  "mandate": "Maintain workspace hygiene: worktree cleanup, policy sync, release cuts, and long-running housekeeping tasks.",
-  "autonomous_authorities": ["worktree_cleanup", "policy_sync", "release_cut"],
-  "escalation_triggers": ["invariant_violation_detected", "budget_exceeded", "irreversible_action_required"],
+  "mandate": "Maintain repository and workspace substrate hygiene: prune merged worktrees, reconcile policy drift, triage sentinel alerts, and monitor database integrity.",
+  "autonomous_authorities": ["worktree_cleanup", "policy_sync", "sentinel_triage", "release_cut"],
+  "escalation_triggers": ["invariant_violation_detected", "budget_exceeded", "irreversible_action_required", "database_corruption_detected"],
   "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "conservative"},
   "durability": "durable",
   "wake_cycle_sop": [
-    "Check for pending cleanup/release work: merged-and-unswept worktrees, policy drift, or a queued release.",
-    "If pending work exists, perform it per the existing Worktree Hygiene Protocol and Named Release Policy.",
-    "If no pending cleanup/release work exists, do not exit idle: run a proactive dependency/policy-drift sweep instead, checking .synlynk/policy.json fields against the current config schema, stale GitHub label sets, and orphaned branches with no PR."
+    "1. Worktree Cleanup: Execute `synlynk worktree clean --apply` to remove merged/stale worktrees and prune stale tracking branches.",
+    "2. Sentinel Triage: Parse `.synlynk/sentinel.md` via `synlynk maintainer triage`, archive stale alerts (>7d) to `.synlynk/archive/`, and clear resolved faults.",
+    "3. State Integrity: Verify canonical state.db WAL checkpointing, foreign key integrity, and connection health.",
+    "4. Policy Sync: Check `.synlynk/policy.json` and agent role charters for schema drift and notify PM if discrepancies exist."
   ]
 }
