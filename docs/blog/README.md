@@ -633,6 +633,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [553](./553-pr5039-v0-27-x-developer-preview-milestone-oper.md) | PR #5039 — v0.27.x Developer Preview milestone operationalization and verification plan | [#5039](https://github.com/nikhilsoman/synlynk/pull/5039) | 2026-11-02 |
 | [554](./554-pr5040-align-extension-version-to-0-27-0-and-ve.md) | PR #5040 — align extension version to 0.27.0 and verify packaging distribution (#5032) | [#5040](https://github.com/nikhilsoman/synlynk/pull/5040) | 2026-11-02 |
 | [555](./555-pr5042-quickstart-first-win-loop-and-lifecycle-.md) | PR #5042 — quickstart first-win loop and lifecycle module verification (#5033) | [#5042](https://github.com/nikhilsoman/synlynk/pull/5042) | 2026-11-02 |
+| [556](./556-pr5044-comprehensive-onboarding-troubleshooting.md) | PR #5044 — comprehensive onboarding troubleshooting and self-healing guide (#5034) | [#5044](https://github.com/nikhilsoman/synlynk/pull/5044) | 2026-11-02 |
 
 ## Per-PR Post Template
 
