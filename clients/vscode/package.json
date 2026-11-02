@@ -2,7 +2,7 @@
   "name": "synlynk-vscode",
   "displayName": "Synlynk Multi-Agent Engineering",
   "description": "Multi-agent orchestration, leased worktree isolation, adversarial verification, and goal tracking for Synlynk.",
-  "version": "0.1.0",
+  "version": "0.27.0",
   "publisher": "synlynk",
   "repository": {
     "type": "git",

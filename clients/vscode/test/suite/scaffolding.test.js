@@ -19,7 +19,7 @@ describe("Scaffolding & Manifest Validation", () => {
 
     assert.equal(pkg.name, "synlynk-vscode");
     assert.equal(pkg.publisher, "synlynk");
-    assert.equal(pkg.version, "0.1.0");
+    assert.equal(pkg.version, "0.27.0");
     assert.equal(pkg.main, "./extension.js");
     assert.equal(pkg.engines.vscode, "^1.85.0");
     assert.ok(pkg.scripts.test);
