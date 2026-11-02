@@ -131,6 +131,20 @@ DEFAULT_WORKSPACE_POLICY: Dict[str, Any] = {
             "per_pr_blog_convention": "retired",
             "milestone_blog_focus": ["intent", "context", "pathway", "outcome"],
         },
+        "policy_inheritance": {
+            "mode": "standalone",
+            "parent_policy_uri": None,
+            "immutable_enterprise_rules": [
+                "merge_authority.can_merge",
+                "merge_authority.require_non_authoring_review",
+                "governs_authority.require_linked_goal",
+            ],
+            "workspace_configurable_rules": [
+                "dev_authority.task_allocation",
+                "conductor_authority",
+                "ceremony_policy",
+            ],
+        },
     },
 }
 
@@ -175,6 +189,8 @@ def load_policy(repo_path: str, workspace_name: str = None) -> Dict[str, Any]:
 
     repo_raw = _read_json(_repo_policy_path(repo_path))
     if repo_raw:
+        if "policy_inheritance" in repo_raw:
+            merged["policy_inheritance"] = repo_raw["policy_inheritance"]
         for key, value in repo_raw.get("overrides", {}).items():
             if key in {"merge_authority", "connector_authority"}:
                 continue

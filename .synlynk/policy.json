@@ -1,6 +1,20 @@
 {
   "schema_version": 1,
   "repo_id": "synlynk",
+  "policy_inheritance": {
+    "mode": "standalone",
+    "parent_policy_uri": null,
+    "immutable_enterprise_rules": [
+      "merge_authority.can_merge",
+      "merge_authority.require_non_authoring_review",
+      "governs_authority.require_linked_goal"
+    ],
+    "workspace_configurable_rules": [
+      "dev_authority.task_allocation",
+      "conductor_authority",
+      "ceremony_policy"
+    ]
+  },
   "capability_policy": {
     "mode": "empirical",
     "min_sample_size": 5,
