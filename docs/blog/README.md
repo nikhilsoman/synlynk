@@ -628,6 +628,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [548](./548-pr5023-archive-superseded-context-compaction-wi.md) | PR #5023 — archive superseded context-compaction WIP | [#5023](https://github.com/nikhilsoman/synlynk/pull/5023) | 2026-11-01 |
 | [549](./549-pr5024-append-missed-telemetry-rows-to-cost-arc.md) | PR #5024 — append missed telemetry rows to cost archive | [#5024](https://github.com/nikhilsoman/synlynk/pull/5024) | 2026-11-02 |
 | [550](./550-pr5028-autonomous-governs-wake-cycle-sops-githu.md) | PR #5028 — autonomous GOVERNS wake-cycle SOPs, GitHub-centric approval state machine, and policy inheritance (#5027) | [#5028](https://github.com/nikhilsoman/synlynk/pull/5028) | 2026-11-02 |
+| [551](./551-pr5030-record-dec-3d240c05-decide-panel-on-auto.md) | PR #5030 — record dec-3d240c05 decide panel on autonomous GOVERNS charters | [#5030](https://github.com/nikhilsoman/synlynk/pull/5030) | 2026-11-02 |
 
 ## Per-PR Post Template
 
