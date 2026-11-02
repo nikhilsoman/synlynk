@@ -324,7 +324,7 @@ def test_synlynk_init_wizard_dry_run_subprocess(tmp_path, monkeypatch):
         filter(None, [repo_root, env.get('PYTHONPATH', '')])
     )
     result = sp.run(
-        ['python', '-m', 'synlynk', 'init', '--wizard', '--dry-run'],
+        [sys.executable, '-m', 'synlynk', 'init', '--wizard', '--dry-run'],
         input=stdin_seq, cwd=str(tmp_path),
         capture_output=True, text=True, env=env, timeout=60,
     )
