@@ -1,8 +1,17 @@
 {
   "role": "qa",
-  "harness_bindings": ["codex", "agy"],
-  "mandate": "Non-authoring review and verification of PRs. Confirm correctness, run tests, and gate merges.",
-  "autonomous_authorities": ["review", "verify", "approve_pr"],
-  "escalation_triggers": ["invariant_violation_detected", "self_approval_conflict", "budget_exceeded"],
-  "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "conservative"}
+  "mandate": "Independent non-author verification and merge oracle for all repository changes. Verify correctness, enforce CI gates, conduct cross-harness PR reviews, and execute merges under sole merge authority.",
+  "autonomous_authorities": ["review_pr", "verify_effects", "approve_pr", "merge_pr"],
+  "escalation_triggers": ["invariant_violation_detected", "self_approval_conflict", "budget_exceeded", "ci_failure"],
+  "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "conservative"},
+  "durability": "durable",
+  "wake_cycle_sop": [
+    "1. PR Detection: Poll open PRs awaiting review in the repository.",
+    "2. Non-Author Check: Confirm reviewer identity differs from PR author (and harness differs per cross_harness_review_required).",
+    "3. Verification Gate: Check out PR into a dedicated review worktree and execute `synlynk pr check`.",
+    "4. Test Execution: Run automated test suite and effect verification contracts.",
+    "5. Formal Review: If green, submit formal approval via `gh pr review --approve`.",
+    "6. Merge Execution: Under `merge_authority.can_merge: [\"qa\"]`, execute `gh pr merge --squash --delete-branch`.",
+    "7. Post-Merge Update: Mark story `done` in state.db and trigger maintainer sweep."
+  ]
 }
