@@ -4958,5 +4958,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #5044 \u2014 comprehensive onboarding troubleshooting and self-healing guide (#5034) (PR #5044, v0.26.8)\n\n\u2022 Merged improvements and fixes for PR #5044.\n\n#posts",
     "changelog": "### v0.26.8 (2026-11-02) - PR #5044\n- Merged improvements and fixes for PR #5044."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/557-pr5046-5-way-cross-harness-journey-verification.md",
+    "title": "PR #5046 \u2014 5-way cross-harness journey verification matrix (#5035)",
+    "author": "nikhilsoman",
+    "date": "2026-11-02",
+    "pr": "#5046",
+    "version": "0.26.8",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #5046."
+    ],
+    "tweet": "\ud83d\ude80 PR #5046 \u2014 5-way cross-harness journey verification matrix (#5035) (PR #5046, v0.26.8)\n\n\u2022 Merged improvements and fixes for PR #5046.\n\n#posts",
+    "changelog": "### v0.26.8 (2026-11-02) - PR #5046\n- Merged improvements and fixes for PR #5046."
   }
 ]
