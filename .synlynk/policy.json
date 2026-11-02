@@ -233,6 +233,82 @@
         "prohibited": [
           "network"
         ]
+      },
+      "architect": {
+        "allowed_tools": [
+          "read_file",
+          "write_file",
+          "replace_file_content",
+          "run_command:pytest",
+          "run_command:python",
+          "run_command:git status",
+          "run_command:git diff"
+        ],
+        "prohibited": [
+          "network",
+          "modify_git_config"
+        ]
+      },
+      "tpm": {
+        "allowed_tools": [
+          "read_file",
+          "write_file",
+          "replace_file_content",
+          "run_command:git status",
+          "run_command:git diff",
+          "run_command:synlynk story",
+          "run_command:synlynk goal"
+        ],
+        "prohibited": [
+          "network",
+          "modify_git_config"
+        ]
+      },
+      "maintainer": {
+        "allowed_tools": [
+          "read_file",
+          "write_file",
+          "replace_file_content",
+          "run_command:pytest",
+          "run_command:python",
+          "run_command:git status",
+          "run_command:git diff",
+          "run_command:git branch",
+          "run_command:git worktree",
+          "run_command:synlynk worktree",
+          "run_command:synlynk policy",
+          "run_command:synlynk sentinel"
+        ],
+        "prohibited": [
+          "network",
+          "modify_git_config"
+        ]
+      },
+      "designer": {
+        "allowed_tools": [
+          "read_file",
+          "write_file",
+          "replace_file_content",
+          "run_command:git status",
+          "run_command:git diff"
+        ],
+        "prohibited": [
+          "network",
+          "modify_git_config"
+        ]
+      },
+      "marketing": {
+        "allowed_tools": [
+          "read_file",
+          "write_file",
+          "replace_file_content",
+          "run_command:git status",
+          "run_command:git diff"
+        ],
+        "prohibited": [
+          "network",
+          "modify_git_config"
+        ]
       }
     },
     "ceremony_policy": {

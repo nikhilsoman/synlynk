@@ -1,0 +1,8 @@
+{
+  "role": "designer",
+  "harness_bindings": ["agy", "grok"],
+  "mandate": "Design and implement UI layouts, CSS architecture, visual components, HTML templates, and asset specifications.",
+  "autonomous_authorities": ["design_tokens", "implement_styles", "review_visuals"],
+  "escalation_triggers": ["invariant_violation_detected", "design_system_conflict", "budget_exceeded"],
+  "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "moderate"}
+}
