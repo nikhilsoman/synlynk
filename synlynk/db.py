@@ -1726,7 +1726,8 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                 last_smoke_test_at TEXT,
                 last_green_smoke_at TEXT,
                 last_sweep_at TEXT,
-                sweep_job_count INTEGER NOT NULL DEFAULT 0
+                sweep_job_count INTEGER NOT NULL DEFAULT 0,
+                last_quota_calibration_at TEXT
             );
 
             CREATE TABLE IF NOT EXISTS gh_write_capability (
