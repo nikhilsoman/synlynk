@@ -4974,5 +4974,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #5046 \u2014 5-way cross-harness journey verification matrix (#5035) (PR #5046, v0.26.8)\n\n\u2022 Merged improvements and fixes for PR #5046.\n\n#posts",
     "changelog": "### v0.26.8 (2026-11-02) - PR #5046\n- Merged improvements and fixes for PR #5046."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/558-pr5047-full-developer-preview-acceptance-matrix.md",
+    "title": "PR #5047 \u2014 Full Developer Preview acceptance matrix and GOVERNS audit (#5036)",
+    "author": "nikhilsoman",
+    "date": "2026-11-02",
+    "pr": "#5047",
+    "version": "0.26.8",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #5047."
+    ],
+    "tweet": "\ud83d\ude80 PR #5047 \u2014 Full Developer Preview acceptance matrix and GOVERNS audit (#5036) (PR #5047, v0.26.8)\n\n\u2022 Merged improvements and fixes for PR #5047.\n\n#posts",
+    "changelog": "### v0.26.8 (2026-11-02) - PR #5047\n- Merged improvements and fixes for PR #5047."
   }
 ]

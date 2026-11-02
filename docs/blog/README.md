@@ -635,6 +635,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [555](./555-pr5042-quickstart-first-win-loop-and-lifecycle-.md) | PR #5042 — quickstart first-win loop and lifecycle module verification (#5033) | [#5042](https://github.com/nikhilsoman/synlynk/pull/5042) | 2026-11-02 |
 | [556](./556-pr5044-comprehensive-onboarding-troubleshooting.md) | PR #5044 — comprehensive onboarding troubleshooting and self-healing guide (#5034) | [#5044](https://github.com/nikhilsoman/synlynk/pull/5044) | 2026-11-02 |
 | [557](./557-pr5046-5-way-cross-harness-journey-verification.md) | PR #5046 — 5-way cross-harness journey verification matrix (#5035) | [#5046](https://github.com/nikhilsoman/synlynk/pull/5046) | 2026-11-02 |
+| [558](./558-pr5047-full-developer-preview-acceptance-matrix.md) | PR #5047 — Full Developer Preview acceptance matrix and GOVERNS audit (#5036) | [#5047](https://github.com/nikhilsoman/synlynk/pull/5047) | 2026-11-02 |
 
 ## Per-PR Post Template
 
