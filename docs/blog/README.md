@@ -626,6 +626,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [546](./546-pr5019-release-v0-26-8-harness-context-compacti.md) | PR #5019 — release: v0.26.8 — Harness Context Compaction Protocol | [#5019](https://github.com/nikhilsoman/synlynk/pull/5019) | 2026-11-01 |
 | [547](./547-pr5022-quota-burn-rate-design-plan-v0-26-8-scop.md) | PR #5022 — quota burn-rate design/plan + v0.26.8 scope decoupling | [#5022](https://github.com/nikhilsoman/synlynk/pull/5022) | 2026-11-01 |
 | [548](./548-pr5023-archive-superseded-context-compaction-wi.md) | PR #5023 — archive superseded context-compaction WIP | [#5023](https://github.com/nikhilsoman/synlynk/pull/5023) | 2026-11-01 |
+| [549](./549-pr5024-append-missed-telemetry-rows-to-cost-arc.md) | PR #5024 — append missed telemetry rows to cost archive | [#5024](https://github.com/nikhilsoman/synlynk/pull/5024) | 2026-11-02 |
 
 ## Per-PR Post Template
 

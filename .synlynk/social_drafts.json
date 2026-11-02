@@ -4830,5 +4830,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #5023 \u2014 archive superseded context-compaction WIP (PR #5023, v0.26.8)\n\n\u2022 Merged improvements and fixes for PR #5023.\n\n#posts",
     "changelog": "### v0.26.8 (2026-11-01) - PR #5023\n- Merged improvements and fixes for PR #5023."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/549-pr5024-append-missed-telemetry-rows-to-cost-arc.md",
+    "title": "PR #5024 \u2014 append missed telemetry rows to cost archive",
+    "author": "synlynk-pm agent",
+    "date": "2026-11-02",
+    "pr": "#5024",
+    "version": "0.26.8",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #5024."
+    ],
+    "tweet": "\ud83d\ude80 PR #5024 \u2014 append missed telemetry rows to cost archive (PR #5024, v0.26.8)\n\n\u2022 Merged improvements and fixes for PR #5024.\n\n#posts",
+    "changelog": "### v0.26.8 (2026-11-02) - PR #5024\n- Merged improvements and fixes for PR #5024."
   }
 ]
