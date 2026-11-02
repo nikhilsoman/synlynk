@@ -8,13 +8,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ---
 
 ## [Unreleased]
-- Add an opt-in personal NATS relay with scoped device credentials, durable
-  JetStream replay, retention-gap events, subscription filters, and safe document
-  previews. See [self-hosted setup](docs/personal-hosted-relay.md). The `hub` extra
-  is optional; the core CLI remains stdlib-only. Managed service provisioning,
-  entitlement checks, and reconnect/status hardening remain follow-up work.
-- Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.
-- Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
+
+## [v0.27.5] - 2026-11-03
+### Added
+- feat(surfaces): VS Code and OpenVSX extension listing, distribution packaging, and dispatch smoke verification (v0.27.0, PR #5040)
+- feat(onboarding): Quickstart engine & sub-15-minute verified first win onboarding loop (v0.27.1, PR #5042)
+- feat(diagnostics): Onboarding diagnostics, prerequisite auditing, and doctor self-healing remediation paths (v0.27.2, PR #5044)
+- feat(journeys): 5-way cross-harness fresh-project journey verification matrix for Claude, Codex, Agy, Grok, and Muse (v0.27.3, PR #5046)
+- feat(acceptance): Developer Preview full acceptance test matrix, GOVERNS truth audit, and sentinel health sweep (v0.27.4, PR #5047)
+- feat(release): Developer Preview stable release gate, package wheel verification, and human authority sign-off (v0.27.5)
+
+---
 
 ## [v0.26.8] - 2026-11-01
 ### Added
