@@ -4878,5 +4878,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #5030 \u2014 record dec-3d240c05 decide panel on autonomous GOVERNS charters (PR #5030, v0.26.8)\n\n\u2022 Merged improvements and fixes for PR #5030.\n\n#posts",
     "changelog": "### v0.26.8 (2026-11-02) - PR #5030\n- Merged improvements and fixes for PR #5030."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/552-pr5031-record-cost-telemetry-entry-for-story-61.md",
+    "title": "PR #5031 \u2014 record cost telemetry entry for story-61bd64fc",
+    "author": "nikhilsoman",
+    "date": "2026-11-02",
+    "pr": "#5031",
+    "version": "0.26.8",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #5031."
+    ],
+    "tweet": "\ud83d\ude80 PR #5031 \u2014 record cost telemetry entry for story-61bd64fc (PR #5031, v0.26.8)\n\n\u2022 Merged improvements and fixes for PR #5031.\n\n#posts",
+    "changelog": "### v0.26.8 (2026-11-02) - PR #5031\n- Merged improvements and fixes for PR #5031."
   }
 ]
