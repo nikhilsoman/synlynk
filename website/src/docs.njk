@@ -95,9 +95,9 @@ synlynk rollback --last</code></pre>
 
 <div class="docs-quick-ref">
   <h3>Upgrading?</h3>
-  <p>Upgrading to v0.13.1? Here's what's new: automatic mutation checkpointing and auto-restore on failure for <code>synlynk init</code> and <code>synlynk upgrade</code>, <code>synlynk rollback [--last|&lt;op-id&gt;|--clear]</code> for manual rollback, <code>--dry-run</code> preview flags, DB-canonical write-through project docs (State Engine PR1), GOVERNS event bus extensions (<code>job_terminal</code>, <code>review_submitted</code>) via <code>synlynk events tail</code>, and doctor TC-6 GitHub auth verification.</p>
-  <pre><code>synlynk upgrade --dry-run
-synlynk upgrade
-synlynk rollback --last
-synlynk doctor</code></pre>
+  <p>Upgrading to the v0.27.5 Developer Preview? Here's what's new: 5-way cross-harness journey matrix (Claude, Codex, Agy, Grok, Muse), sub-15-minute quickstart onboarding loop (<code>synlynk quickstart</code>), self-healing doctor diagnostics (<code>synlynk doctor --fix</code>), autonomous workspace agent role charters and wake-cycle SOPs, Harness Context Compaction Protocol, and quota burn-rate weighting.</p>
+  <pre><code>pipx install --upgrade git+https://github.com/nikhilsoman/synlynk
+synlynk doctor
+synlynk selftest
+synlynk status</code></pre>
 </div>
