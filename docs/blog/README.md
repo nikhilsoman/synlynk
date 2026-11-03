@@ -637,6 +637,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [557](./557-pr5046-5-way-cross-harness-journey-verification.md) | PR #5046 — 5-way cross-harness journey verification matrix (#5035) | [#5046](https://github.com/nikhilsoman/synlynk/pull/5046) | 2026-11-02 |
 | [558](./558-pr5047-full-developer-preview-acceptance-matrix.md) | PR #5047 — Full Developer Preview acceptance matrix and GOVERNS audit (#5036) | [#5047](https://github.com/nikhilsoman/synlynk/pull/5047) | 2026-11-02 |
 | [559](./559-pr5048-release-gate-v0-27-5-developer-preview-s.md) | PR #5048 — release(gate): v0.27.5 Developer Preview stable release gate and packaging (#5037) | [#5048](https://github.com/nikhilsoman/synlynk/pull/5048) | 2026-11-02 |
+| [560](./560-pr5050-batten-down-hatches-synchronize-external.md) | PR #5050 — batten down hatches — synchronize external surfaces and docs for v0.27.5 (#5049) | [#5050](https://github.com/nikhilsoman/synlynk/pull/5050) | 2026-11-03 |
 
 ## Per-PR Post Template
 

@@ -5006,5 +5006,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #5048 \u2014 release(gate): v0.27.5 Developer Preview stable release gate and packaging (#5037) (PR #5048, v0.27.5)\n\n\u2022 Merged improvements and fixes for PR #5048.\n\n#posts",
     "changelog": "### v0.27.5 (2026-11-02) - PR #5048\n- Merged improvements and fixes for PR #5048."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/560-pr5050-batten-down-hatches-synchronize-external.md",
+    "title": "PR #5050 \u2014 batten down hatches \u2014 synchronize external surfaces and docs for v0.27.5 (#5049)",
+    "author": "nikhilsoman",
+    "date": "2026-11-03",
+    "pr": "#5050",
+    "version": "0.27.5",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #5050."
+    ],
+    "tweet": "\ud83d\ude80 PR #5050 \u2014 batten down hatches \u2014 synchronize external surfaces and docs for v0.27.5 (#5049) (PR #5050, v0.27.5)\n\n\u2022 Merged improvements and fixes for PR #5050.\n\n#posts",
+    "changelog": "### v0.27.5 (2026-11-03) - PR #5050\n- Merged improvements and fixes for PR #5050."
   }
 ]
