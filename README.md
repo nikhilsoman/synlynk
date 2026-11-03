@@ -6,15 +6,15 @@
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
 <p align="center">
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5381%20collected-brightgreen" alt="Tests"</a>
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.26.8-blue" alt="Version"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5399%20collected-brightgreen" alt="Tests"</a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.27.5-blue" alt="Version"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
 </p>
 
 Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. The Python CLI injects scoped project context into every dispatch, uses empirical harness allocation only after a harness has at least five completed, merged jobs for the relevant task type, and follows the documented interim policy until then. See the [empirical capability policy](docs/blog/244-chore-empirical-capability-policy.md) and [routing policy](.synlynk/policy.json). Synlynk also tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
-**v0.26.8:** Harness Context Compaction Protocol — `synlynk context checkpoint` (AST-grounded resumption-ledger devlog writer, idempotent on unchanged state) and `synlynk context pack`/`inject` (5-part context-pack builder with token-budget truncation), plus a `cost_entries.compaction_event_type` column for before/after token-spend comparison. Ships unconditionally in this Dev Preview — not gated behind the (deferred) Configurability Framework. 5381 tests collected.
+**v0.27.5:** Developer Preview Stable Release — Full 6-gate operationalization milestone including VS Code / OpenVSX extension listing & distribution (v0.27.0), verified sub-15-minute quickstart onboarding loop (v0.27.1), prerequisite auditing & doctor self-healing remediation (v0.27.2), 5-way cross-harness journey matrix for Claude, Codex, Agy, Grok, and Muse (v0.27.3), comprehensive acceptance matrix and GOVERNS audit (v0.27.4), and stable distribution packaging (v0.27.5). 5399 tests collected.
 
 ## Documentation
 

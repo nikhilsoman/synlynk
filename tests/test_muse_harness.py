@@ -98,15 +98,26 @@ def test_muse_dispatch_flags_and_command_construction(tmp_path, monkeypatch):
 
     captured_cmds = []
 
+    orig_popen = dispatch_mod.subprocess.Popen
+
     class FakeProc:
         pid = 99999
         returncode = 0
         def poll(self):
             return 0
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            pass
+        def communicate(self, *a, **kw):
+            return ("", "")
 
     def fake_popen(cmd, **kwargs):
         captured_cmds.append((cmd, kwargs))
-        return FakeProc()
+        cmd_str = " ".join(cmd) if isinstance(cmd, (list, tuple)) else str(cmd)
+        if "muse" in cmd_str:
+            return FakeProc()
+        return orig_popen(cmd, **kwargs)
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(dispatch_mod, "_create_job_worktree", lambda *a, **kw: {
@@ -156,15 +167,26 @@ def test_muse_dispatch_with_skip_permissions(tmp_path, monkeypatch):
     worktree_dir = str(tmp_path / "mock_worktree_skip")
     captured_cmds = []
 
+    orig_popen = dispatch_mod.subprocess.Popen
+
     class FakeProc:
         pid = 99998
         returncode = 0
         def poll(self):
             return 0
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            pass
+        def communicate(self, *a, **kw):
+            return ("", "")
 
     def fake_popen(cmd, **kwargs):
         captured_cmds.append((cmd, kwargs))
-        return FakeProc()
+        cmd_str = " ".join(cmd) if isinstance(cmd, (list, tuple)) else str(cmd)
+        if "muse" in cmd_str:
+            return FakeProc()
+        return orig_popen(cmd, **kwargs)
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(dispatch_mod, "_create_job_worktree", lambda *a, **kw: {
