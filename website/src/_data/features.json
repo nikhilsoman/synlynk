@@ -1,30 +1,30 @@
 {
   "versions": [
     {
-      "label": "v0.20.0",
+      "label": "v0.27.5",
       "isCurrent": true,
       "installUrl": "https://github.com/nikhilsoman/synlynk",
-      "changelogUrl": "/changelog/#v0.20"
+      "changelogUrl": "/changelog/#v0.27.5"
     },
     {
-      "label": "v0.19.0",
+      "label": "v0.26.10",
       "isCurrent": false,
-      "changelogUrl": "/changelog/#v0.19"
+      "changelogUrl": "/changelog/#v0.26.10"
     },
     {
-      "label": "v0.18.0",
+      "label": "v0.26.8",
       "isCurrent": false,
-      "changelogUrl": "/changelog/#v0.18"
+      "changelogUrl": "/changelog/#v0.26.8"
     },
     {
-      "label": "v0.17.0",
+      "label": "v0.26.7",
       "isCurrent": false,
-      "changelogUrl": "/changelog/#v0.17"
+      "changelogUrl": "/changelog/#v0.26.7"
     },
     {
-      "label": "v0.16.0",
+      "label": "v0.26.0",
       "isCurrent": false,
-      "changelogUrl": "/changelog/#v0.16"
+      "changelogUrl": "/changelog/#v0.26.0"
     }
   ],
   "layerGroups": [
