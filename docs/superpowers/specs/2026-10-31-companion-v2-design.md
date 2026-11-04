@@ -71,25 +71,25 @@ Companion communicates across four discrete operational topics. Regardless of th
 - **`[Signal]`**: `[GOV:GATE:REVIEW_REQUIRED]` (Severity: Warning)
 - **`[Context]`**: `PR #5050 touches protected core packaging without non-author qa signoff.`
 - **`[Nudge]`**: `Dispatch review to qa role before attempting merge.`
-- **`[Deep Links]`**: `[PR #5050](https://github.com/nikhilsoman/synlynk/pull/5050) · [Vizor Governance](http://localhost:4200/governs#dec-f34a2f5f)`
+- **`[Deep Links]`**: `[PR #5050](https://github.com/nikhilsoman/synlynk/pull/5050) · [Vizor Governance](http://localhost:33333/governs#dec-f34a2f5f)`
 
 #### Topic 2: Cost, Quota & Budget Awareness
 - **`[Signal]`**: `[COST:DRIFT:EXCEEDS_ESTIMATE]` (Severity: Notice)
 - **`[Context]`**: `Task job-836e13a4 consumed $0.42 (estimate was $0.15; +180% drift via Claude-3.5-Sonnet).`
 - **`[Nudge]`**: `Consider routing verification-only followups to Grok or Agy.`
-- **`[Deep Links]`**: `[Cost Log](http://localhost:4200/observatory#costs) · [Harness Benchmark](http://localhost:4200/observatory#capability-ratings)`
+- **`[Deep Links]`**: `[Cost Log](http://localhost:33333/observatory#costs) · [Harness Benchmark](http://localhost:33333/observatory#capability-ratings)`
 
 #### Topic 3: Agent Orchestration & Dispatch Health
 - **`[Signal]`**: `[DISPATCH:SANDBOX:FALLBACK]` (Severity: Warning)
 - **`[Context]`**: `Codex task blocked by git index lock in sandboxed worktree.`
 - **`[Nudge]`**: `Re-dispatch with BypassSandbox: true or prune dead lockfiles.`
-- **`[Deep Links]`**: `[Failed Task #2180](http://localhost:4200/inbox#task-2180) · [GitHub Issue #5049](https://github.com/nikhilsoman/synlynk/issues/5049)`
+- **`[Deep Links]`**: `[Failed Task #2180](http://localhost:33333/inbox#task-2180) · [GitHub Issue #5049](https://github.com/nikhilsoman/synlynk/issues/5049)`
 
 #### Topic 4: Workflow Acceleration & DevEx Nudges
 - **`[Signal]`**: `[DEVEX:CLEANUP:STALE_WORKTREE]` (Severity: Info)
 - **`[Context]`**: `Worktree .worktrees/feat-legacy-auth has had no commits for 14 days.`
 - **`[Nudge]`**: `Run synlynk worktree prune to reclaim 1.2 GB disk space.`
-- **`[Deep Links]`**: `[Active Worktrees](http://localhost:4200/observatory#worktrees)`
+- **`[Deep Links]`**: `[Active Worktrees](http://localhost:33333/observatory#worktrees)`
 
 ---
 
@@ -126,7 +126,7 @@ class CompanionLink:
    - Resolves Commits: `https://github.com/{owner}/{repo}/commit/{sha}`
 
 2. **Vizor Link Resolver (`resolve_vizor_link`)**:
-   - Detects local Vizor server (`http://localhost:4200` or configured port) or Hosted Vizor URL (W9).
+   - Detects local Vizor server (`http://localhost:33333` or configured port) or Hosted Vizor URL (W9).
    - Resolves top-level views: `/overview`, `/observatory`, `/governs`, `/inbox`.
    - Resolves deep anchor fragments:
      - Decisions: `/governs#{decision_id}` (e.g. `/governs#dec-f34a2f5f`)
