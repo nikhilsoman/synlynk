@@ -1344,6 +1344,22 @@ _ENV_ALLOWLIST_BASE = [
 ]
 
 
+def _worktree_pythonpath(worktree_path: str | None) -> str | None:
+    """Return the worktree root when it contains the synlynk package.
+
+    The global launcher imports ``synlynk`` from whatever editable install
+    last rewrote user site-packages. That install can point at a deleted job
+    worktree (gh:#2442, gh:#2483). A dispatched job must import the checkout
+    it is reviewing, and it must not inherit the operator's PYTHONPATH.
+    """
+    if not worktree_path:
+        return None
+    init = os.path.join(worktree_path, "synlynk", "__init__.py")
+    if os.path.isfile(init):
+        return os.path.abspath(worktree_path)
+    return None
+
+
 def get_worktree_epoch(worktree_path: str) -> str:
     """Returns the Unix timestamp of HEAD commit in the worktree for reproducible builds (#1349)."""
     if worktree_path and os.path.exists(worktree_path):
@@ -1558,6 +1574,9 @@ def _build_subprocess_env(
     resolved_role = agent_role or _role_for_story(story_id)
     if resolved_role:
         proc_env["SYNLYNK_GH_ROLE"] = resolved_role
+    pythonpath = _worktree_pythonpath(worktree_path)
+    if pythonpath:
+        proc_env["PYTHONPATH"] = pythonpath
     return proc_env, shim_dir
 
 
@@ -5449,6 +5468,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         requires_gh_write,
         story_id,
         agent_role=resolved_agent_role,
+        worktree_path=worktree_path,
     )
     parent_job_id = (
         os.environ.get("SYNLYNK_JOB_ID")
