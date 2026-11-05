@@ -42,6 +42,63 @@ def test_governs_dispatch_preflight_passes_for_linked_story_goal():
     assert result["passed"] is True
 
 
+def _write_governs_mode(tmp_path, mode):
+    policy_dir = tmp_path / ".synlynk"
+    policy_dir.mkdir(parents=True)
+    (policy_dir / "policy.json").write_text(json.dumps({
+        "overrides": {
+            "governs_authority": {
+                "require_linked_goal": True,
+                "require_linked_goal_mode": mode,
+            }
+        }
+    }))
+
+
+def test_governs_dispatch_preflight_observe_does_not_block_unplaced_phase(tmp_path, monkeypatch, capsys):
+    """gh:#5020 — observe mode records the missing phase without blocking dispatch."""
+    from synlynk.dispatch import _preflight_dispatch
+
+    _write_governs_mode(tmp_path, "observe")
+    monkeypatch.chdir(tmp_path)
+    db = _governs_gate_db()
+    db.execute("INSERT INTO goals VALUES ('goal-1', NULL, 'unplaced')")
+    db.execute("INSERT INTO stories VALUES ('story-1', 'goal-1')")
+    db.commit()
+    result = _preflight_dispatch("unknown", [], db_conn=db, story_id="story-1")
+    output = capsys.readouterr().out
+    assert result["passed"] is True
+    assert "OBSERVE MODE — not blocking" in output
+    assert "goal has no placed roadmap phase" in output
+
+
+def test_governs_dispatch_preflight_enforce_blocks_unplaced_phase(tmp_path, monkeypatch):
+    from synlynk.dispatch import _preflight_dispatch
+
+    _write_governs_mode(tmp_path, "enforce")
+    monkeypatch.chdir(tmp_path)
+    db = _governs_gate_db()
+    db.execute("INSERT INTO goals VALUES ('goal-1', NULL, 'unplaced')")
+    db.execute("INSERT INTO stories VALUES ('story-1', 'goal-1')")
+    db.commit()
+    result = _preflight_dispatch("unknown", [], db_conn=db, story_id="story-1")
+    assert result["passed"] is False
+    assert result["sentinel"] == "GOVERNS_PHASE_MISSING"
+
+
+def test_governs_dispatch_preflight_observe_still_blocks_a_missing_goal(tmp_path, monkeypatch):
+    from synlynk.dispatch import _preflight_dispatch
+
+    _write_governs_mode(tmp_path, "observe")
+    monkeypatch.chdir(tmp_path)
+    db = _governs_gate_db()
+    db.execute("INSERT INTO stories VALUES ('story-1', NULL)")
+    db.commit()
+    result = _preflight_dispatch("unknown", [], db_conn=db, story_id="story-1")
+    assert result["passed"] is False
+    assert result["sentinel"] == "GOVERNS_LINKAGE_MISSING"
+
+
 def test_governs_dispatch_preflight_hard_fails_without_story_goal():
     from synlynk.dispatch import _preflight_dispatch
 

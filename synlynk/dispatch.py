@@ -4167,10 +4167,22 @@ def _preflight_dispatch(
         _emit_missing_governs_linkage_warning()
     elif story_id is not None or _task_hint or harness_name not in HARNESS_CAPABILITY_BASELINES:
         from synlynk.governs_gate import dispatch_governs_linkage
+        from synlynk.policy_gates import gate_mode
 
         governs_gate = dispatch_governs_linkage(db_conn, story_id)
         if not governs_gate["passed"]:
-            return governs_gate
+            # gh:#5020 — an unplaced phase follows require_linked_goal_mode.
+            # A missing story or goal still fails closed.
+            if (
+                governs_gate.get("sentinel") == "GOVERNS_PHASE_MISSING"
+                and gate_mode("governs_authority", "require_linked_goal_mode") == "observe"
+            ):
+                print(
+                    "  ⚠ [OBSERVE MODE — not blocking] "
+                    f"{governs_gate.get('reason')}"
+                )
+            else:
+                return governs_gate
 
     return {"passed": True, "sentinel": None, "reason": None}
 
