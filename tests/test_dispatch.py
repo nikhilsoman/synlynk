@@ -1971,6 +1971,46 @@ def test_cli_dispatch_passes_base_flag(project_dir, monkeypatch):
     assert captured["base"] == "feat/example"
 
 
+def test_build_subprocess_env_points_pythonpath_at_the_worktree(tmp_path, monkeypatch):
+    """gh:#2442 — the job imports its checkout, not a stale editable install."""
+    from synlynk.dispatch import _build_subprocess_env
+
+    package = tmp_path / "synlynk"
+    package.mkdir()
+    (package / "__init__.py").write_text("VERSION = 'worktree'\n", encoding="utf-8")
+    monkeypatch.setenv("PYTHONPATH", "/operator/other/checkout")
+
+    env, shim_dir = _build_subprocess_env(
+        "codex",
+        {},
+        requires_gh_write=False,
+        story_id="story-1",
+        worktree_path=str(tmp_path),
+    )
+    try:
+        assert env["PYTHONPATH"] == os.path.abspath(str(tmp_path))
+        assert "/operator/other/checkout" not in env["PYTHONPATH"]
+    finally:
+        shim_dir.cleanup()
+
+
+def test_build_subprocess_env_omits_pythonpath_without_a_package(tmp_path, monkeypatch):
+    from synlynk.dispatch import _build_subprocess_env
+
+    monkeypatch.setenv("PYTHONPATH", "/operator/other/checkout")
+    env, shim_dir = _build_subprocess_env(
+        "codex",
+        {},
+        requires_gh_write=False,
+        story_id="story-1",
+        worktree_path=str(tmp_path),
+    )
+    try:
+        assert "PYTHONPATH" not in env
+    finally:
+        shim_dir.cleanup()
+
+
 def test_build_subprocess_env_allowlists_base_vars_only(monkeypatch):
     from synlynk.dispatch import _build_subprocess_env
 
