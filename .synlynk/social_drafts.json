@@ -5022,5 +5022,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #5050 \u2014 batten down hatches \u2014 synchronize external surfaces and docs for v0.27.5 (#5049) (PR #5050, v0.27.5)\n\n\u2022 Merged improvements and fixes for PR #5050.\n\n#posts",
     "changelog": "### v0.27.5 (2026-11-03) - PR #5050\n- Merged improvements and fixes for PR #5050."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/561-pr5124-use-story-summaries-as-github-issue-titl.md",
+    "title": "PR #5124 \u2014 use story summaries as GitHub issue titles",
+    "author": "nikhilsoman",
+    "date": "2026-11-05",
+    "pr": "#5124",
+    "version": "0.27.5",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #5124."
+    ],
+    "tweet": "\ud83d\ude80 PR #5124 \u2014 use story summaries as GitHub issue titles (PR #5124, v0.27.5)\n\n\u2022 Merged improvements and fixes for PR #5124.\n\n#posts",
+    "changelog": "### v0.27.5 (2026-11-05) - PR #5124\n- Merged improvements and fixes for PR #5124."
   }
 ]

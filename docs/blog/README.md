@@ -638,6 +638,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [558](./558-pr5047-full-developer-preview-acceptance-matrix.md) | PR #5047 — Full Developer Preview acceptance matrix and GOVERNS audit (#5036) | [#5047](https://github.com/nikhilsoman/synlynk/pull/5047) | 2026-11-02 |
 | [559](./559-pr5048-release-gate-v0-27-5-developer-preview-s.md) | PR #5048 — release(gate): v0.27.5 Developer Preview stable release gate and packaging (#5037) | [#5048](https://github.com/nikhilsoman/synlynk/pull/5048) | 2026-11-02 |
 | [560](./560-pr5050-batten-down-hatches-synchronize-external.md) | PR #5050 — batten down hatches — synchronize external surfaces and docs for v0.27.5 (#5049) | [#5050](https://github.com/nikhilsoman/synlynk/pull/5050) | 2026-11-03 |
+| [561](./561-pr5124-use-story-summaries-as-github-issue-titl.md) | PR #5124 — use story summaries as GitHub issue titles | [#5124](https://github.com/nikhilsoman/synlynk/pull/5124) | 2026-11-05 |
 
 ## Per-PR Post Template
 
