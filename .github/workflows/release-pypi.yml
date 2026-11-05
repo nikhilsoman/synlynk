@@ -1,5 +1,9 @@
 name: Publish to PyPI
 
+# The build always runs. Upload runs only after a PyPI pending publisher
+# exists for this workflow and the repository variable PYPI_PUBLISH is true.
+# Without that publisher, PyPI returns invalid-publisher and the tag goes red
+# (gh:#2647). The project name "synlynk" is not on PyPI yet.
 on:
   release:
     types: [published]
@@ -39,6 +43,16 @@ jobs:
           twine check dist/*
 
       - name: Publish to PyPI
+        if: vars.PYPI_PUBLISH == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           skip-existing: true
+
+      - name: Skip PyPI publish until the trusted publisher exists
+        if: vars.PYPI_PUBLISH != 'true'
+        run: |
+          echo "PyPI trusted publisher is not enabled (gh:#2647)."
+          echo "The package was built and twine check passed. It was not uploaded."
+          echo "Create a pending publisher on PyPI for nikhilsoman/synlynk,"
+          echo "workflow .github/workflows/release-pypi.yml, with no environment."
+          echo "Then set the repository variable PYPI_PUBLISH to true."
