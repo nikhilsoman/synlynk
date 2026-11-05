@@ -24,6 +24,12 @@ def test_example_and_calibration_prompts_are_named():
     ).startswith("Review calibration: Requirements")
 
 
+def test_emdash_title_keeps_the_name_before_the_dash():
+    assert derive_story_summary(
+        "BS-8: synlynk story split — observatory-driven auto-decomposition for context-window-crossing stories"
+    ) == "BS-8: synlynk story split"
+
+
 def test_long_prompt_stops_on_a_word():
     summary = derive_story_summary("Fix the " + "registry " * 40)
     assert not summary.endswith(" ")

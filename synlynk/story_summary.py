@@ -44,6 +44,13 @@ def derive_story_summary(title: str) -> str:
     if pull and re.match(r"Review\b", line, re.IGNORECASE):
         return f"Review PR #{pull.group(1)}"
 
+    if " — " in line:
+        left, right = (part.strip() for part in line.split(" — ", 1))
+        if left.lower().endswith("brainstorm") and right:
+            topic = re.split(r"[:,(]", right, maxsplit=1)[0].strip()
+            return _fit(f"{left}: {topic}")
+        if 12 <= len(left) <= _SUMMARY_MAX:
+            return left
     if len(line) <= _SUMMARY_MAX:
         return line
 
