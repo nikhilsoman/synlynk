@@ -107,6 +107,60 @@ def _git_dirty() -> bool:
     return bool(result.stdout.strip())
 
 
+def _operation_owned(path: str, outputs: list) -> bool:
+    """Return whether ``path`` is an operation output or the rollback backup."""
+    norm = os.path.normpath(path)
+    rollback_dir = os.path.normpath(os.path.join(".synlynk", "rollback"))
+    if norm == rollback_dir or norm.startswith(rollback_dir + os.sep):
+        return True
+    return any(norm == output or norm.startswith(output + os.sep) for output in outputs)
+
+
+def _dir_contains_owned(path: str, outputs: list) -> bool:
+    """Return whether a collapsed status directory holds an owned path."""
+    norm = os.path.normpath(path)
+    if _operation_owned(norm, outputs):
+        return True
+    rollback_dir = os.path.normpath(os.path.join(".synlynk", "rollback"))
+    if (
+        (rollback_dir == norm or rollback_dir.startswith(norm + os.sep))
+        and os.path.isdir(rollback_dir)
+    ):
+        return True
+    return any(
+        output == norm or output.startswith(norm + os.sep)
+        for output in outputs
+    )
+
+
+def _expand_owned_directory(path: str, outputs: list) -> list:
+    """List stashable children of a directory that also holds owned paths.
+
+    ``git status`` reports an untracked directory as one line, for example
+    ``?? .synlynk/``. Stashing that directory also stashes the operation's
+    outputs and the rollback backup created inside it. Those files are
+    recreated during the operation, and ``git stash pop`` then refuses to
+    restore them.
+    """
+    kept = []
+    for dirpath, dirnames, filenames in os.walk(path):
+        dirnames[:] = [
+            name for name in dirnames
+            if not _operation_owned(os.path.join(dirpath, name), outputs)
+        ]
+        for name in filenames:
+            full = os.path.normpath(os.path.join(dirpath, name))
+            if _operation_owned(full, outputs):
+                continue
+            if full.endswith(("-shm", "-wal")):
+                continue
+            if os.path.basename(full).startswith(".sentinel-"):
+                continue
+            if os.path.exists(full):
+                kept.append(full)
+    return kept
+
+
 def _stash_paths(untracked_paths: list) -> list:
     """Return dirty paths except files owned by the operation.
 
@@ -128,7 +182,7 @@ def _stash_paths(untracked_paths: list) -> list:
         if " -> " in path:
             path = path.rsplit(" -> ", 1)[-1]
         path = os.path.normpath(path)
-        if any(path == output or path.startswith(output + os.sep) for output in outputs):
+        if _operation_owned(path, outputs):
             continue
         # SQLite creates these transient sidecars while a database is open.
         # They can disappear between `git status` and `git stash`, which makes
@@ -145,8 +199,12 @@ def _stash_paths(untracked_paths: list) -> list:
         # pathspec so the stash can preserve them across a rollback.
         if not os.path.exists(path) and status == "??":
             continue
-        if path not in paths:
-            paths.append(path)
+        entries = [path]
+        if os.path.isdir(path) and _dir_contains_owned(path, outputs):
+            entries = _expand_owned_directory(path, outputs)
+        for entry in entries:
+            if entry not in paths:
+                paths.append(entry)
     return paths
 
 
@@ -171,17 +229,19 @@ def _stash_dirty_paths(stash_ref: str, untracked_paths: list) -> None:
 
 def _pop_stash(stash_ref: str) -> None:
     listing = subprocess.run(["git", "stash", "list"], capture_output=True, text=True)
-    if listing is None:
+    if listing is None or listing.returncode != 0:
         return
     for line in listing.stdout.splitlines():
         if stash_ref in line:
             stash_id = line.split(":", 1)[0]
-            popped = subprocess.run(["git", "stash", "pop", stash_id])
-            if popped is not None and popped.returncode != 0:
-                print(
-                    f"  ⚠ git stash pop failed for {stash_id} — resolve conflicts "
-                    f"manually, then run: git stash drop {stash_id}"
-                )
+            popped = subprocess.run(
+                ["git", "stash", "pop", stash_id],
+                capture_output=True,
+                text=True,
+            )
+            if popped.returncode != 0:
+                detail = (popped.stderr or popped.stdout or "").strip()
+                raise RuntimeError(f"git stash pop failed for {stash_id}: {detail}")
             break
 
 
@@ -189,12 +249,18 @@ def restore_leg1(manifest: dict) -> None:
     sha = manifest.get("checkpoint_sha")
     if sha:
         subprocess.run(["git", "reset", "--hard", sha], check=True)
+    pop_error = None
     stash_ref = manifest.get("stash_ref")
     if stash_ref:
-        _pop_stash(stash_ref)
+        try:
+            _pop_stash(stash_ref)
+        except RuntimeError as exc:
+            pop_error = exc
     if manifest.get("backup_dir"):
         _restore_paths(manifest["backup_dir"], manifest.get("untracked_paths", []))
     _archive_manifest(manifest)
+    if pop_error is not None:
+        raise pop_error
 
 
 @contextlib.contextmanager
@@ -245,8 +311,11 @@ def rollback_checkpoint(op_type: str, untracked_paths: Optional[list] = None):
     _write_manifest(manifest)
     try:
         yield manifest
-    except BaseException:
-        restore_leg1(manifest)
+    except BaseException as exc:
+        try:
+            restore_leg1(manifest)
+        except Exception as restore_exc:
+            raise restore_exc from exc
         raise
     else:
         if stash_ref:

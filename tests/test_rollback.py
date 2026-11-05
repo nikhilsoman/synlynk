@@ -249,6 +249,45 @@ def test_rollback_checkpoint_stash_excludes_gitignored_untracked_path(tmp_path, 
     assert tracked.read_text() == "uncommitted local edit\n"
 
 
+def test_rollback_checkpoint_restores_untracked_db_when_status_collapses_directory(tmp_path, monkeypatch):
+    """Regression for gh:#561.
+
+    ``git status`` reports an untracked ``.synlynk/`` as one directory. The
+    rollback stash must not include the database or the backup written inside
+    that directory, or ``git stash pop`` fails with "could not restore
+    untracked files from stash" and leaves the stash behind.
+    """
+    monkeypatch.chdir(tmp_path)
+    _init_git_repo(tmp_path)
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("v1\n")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "initial", "-q"], cwd=tmp_path, check=True)
+
+    db = tmp_path / ".synlynk" / "state.db"
+    db.parent.mkdir()
+    db.write_text("original-db\n")
+    note = tmp_path / "notes.txt"
+    note.write_text("local untracked note\n")
+
+    with pytest.raises(RuntimeError, match="injected failure"):
+        with rollback.rollback_checkpoint(
+            "migrate",
+            untracked_paths=[".synlynk/state.db", ".synlynk/.synlynk_migrated"],
+        ):
+            db.write_text("partial-migrate-db\n")
+            (tmp_path / ".synlynk" / ".synlynk_migrated").write_text("sentinel\n")
+            raise RuntimeError("injected failure")
+
+    assert db.read_text() == "original-db\n"
+    assert note.read_text() == "local untracked note\n"
+    assert not (tmp_path / ".synlynk" / ".synlynk_migrated").exists()
+    stash = subprocess.run(
+        ["git", "stash", "list"], cwd=tmp_path, capture_output=True, text=True, check=True
+    )
+    assert stash.stdout.strip() == ""
+
+
 def test_stash_paths_excludes_sqlite_sidecars(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "project-docs").mkdir()
