@@ -74,6 +74,7 @@ def extract_transcript_gh_evidence(log_text: Optional[str]) -> Dict[str, Any]:
         res["issue_number"] = issue_comment_url.group(1)
         res["comment_id"] = issue_comment_url.group(2)
         res["comment_url"] = issue_comment_url.group(0)
+        res["comment_kind"] = "pr" if "/pull/" in issue_comment_url.group(0) else "issue"
 
     issue_comment_match = re.search(
         r"(?:commented on (?:issue|pull request) #(\d+)|gh (?:issue|pr) comment\s+(\d+))",
@@ -85,17 +86,25 @@ def extract_transcript_gh_evidence(log_text: Optional[str]) -> Dict[str, Any]:
         issue_num = issue_comment_match.group(1) or issue_comment_match.group(2)
         if issue_num and "issue_number" not in res:
             res["issue_number"] = issue_num
+        snippet = issue_comment_match.group(0).lower()
+        res.setdefault(
+            "comment_kind",
+            "pr" if "pull" in snippet or snippet.startswith("gh pr") else "issue",
+        )
 
     close_match = re.search(
-        r"(?:Closed pull request #(\d+)|Closed issue #(\d+)|gh (?:pr|issue) close\s+(\d+))",
+        r"Closed pull request #(\d+)|Closed issue #(\d+)|gh pr close\s+(\d+)|gh issue close\s+(\d+)",
         log_text,
         re.IGNORECASE,
     )
     if close_match:
         res["closed"] = True
-        close_num = close_match.group(1) or close_match.group(2) or close_match.group(3)
-        if close_num:
-            res["closed_number"] = close_num
+        if close_match.group(1) or close_match.group(3):
+            res["closed_number"] = close_match.group(1) or close_match.group(3)
+            res["closed_kind"] = "pr"
+        else:
+            res["closed_number"] = close_match.group(2) or close_match.group(4)
+            res["closed_kind"] = "issue"
 
     return res
 

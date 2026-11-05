@@ -2216,21 +2216,42 @@ def _resolve_gh_write_target(
     issue: Optional[int],
     kind: Optional[str],
     requires_gh_write: bool,
+    expect: Optional[str] = None,
 ) -> tuple[Optional[str], str, Optional[str]]:
     """Resolve ``(gh_write_target, kind, cross_branch_pr)``.
 
     ``--issue`` associates the dispatch (GOVERNS). When the task names a
-    different pull request, that PR is the verification target. ``cross_branch_pr``
-    is set when the named PR is an existing PR rather than a PR this job's own
-    branch is about to open, so the completion oracle can read that PR instead
-    of the local worktree diff.
+    different pull request, that PR is the verification target for a review or
+    merge. A comment or close stays on the object named by that verb.
+    ``cross_branch_pr`` is set when the named PR is an existing PR rather than
+    a PR this job's own branch is about to open, so the completion oracle can
+    read that PR instead of the local worktree diff.
     """
     resolved_kind = kind or "issue"
     if not requires_gh_write:
         return None, resolved_kind, None
 
-    pr_numbers = _explicit_pr_numbers(task)
     issue_number = int(issue) if issue is not None else None
+    # A comment or close must not inherit a PR that the prompt only mentions
+    # as context (gh:#2309, job-965cb726 / job-e9ec7d3e).
+    if _has_unnegated(_CLOSE_TASK_RE, task or ""):
+        anchored = _anchored_effect_target(task, "closed", issue_number, resolved_kind)
+        if anchored is not None:
+            prefix, number = anchored
+            return f"{prefix}:{number}", prefix, None
+        if issue_number is not None:
+            prefix = "pr" if resolved_kind == "pr" else "issue"
+            return f"{prefix}:{issue_number}", prefix, None
+    elif (expect or _gh_write_expectation(task)) == "comment_posted":
+        anchored = _anchored_effect_target(task, "comment_posted", issue_number, resolved_kind)
+        if anchored is not None:
+            prefix, number = anchored
+            return f"{prefix}:{number}", prefix, None
+        if issue_number is not None:
+            prefix = "pr" if resolved_kind == "pr" else "issue"
+            return f"{prefix}:{issue_number}", prefix, None
+
+    pr_numbers = _explicit_pr_numbers(task)
     distinct = [number for number in pr_numbers if issue_number is None or number != issue_number]
     number: Optional[int] = None
     if distinct:
@@ -2273,6 +2294,76 @@ _CLOSE_TASK_RE = re.compile(
     r"\b(?:gh\s+)?(?:pr|issue)\s+(?:close|reopen)\b|\bclose\s+(?:issue|ticket|pr|#\d+)\b",
     re.IGNORECASE,
 )
+_COMMENT_TARGET_RE = re.compile(
+    r"\bcomment\s+on\s+(?:the\s+|parent\s+)?"
+    r"(?:(?P<kind>issue|pr|pull\s+request)\s+)?#(?P<num>\d+)\b",
+    re.IGNORECASE,
+)
+_CLOSE_TARGET_RE = re.compile(
+    r"\b(?:gh\s+)?(?P<cli>pr|issue)\s+close\s+#?(?P<cli_num>\d+)\b"
+    r"|\bclose\s+(?:(?P<kind>issue|ticket|pr|pull\s+request)\s+)?#(?P<num>\d+)\b",
+    re.IGNORECASE,
+)
+
+
+def _phrase_is_negated(text: str, start: int) -> bool:
+    """True when the phrase at *start* is preceded by "not" or "don't"."""
+    window = (text or "")[max(0, start - 16):start]
+    return bool(re.search(r"\b(?:not|don't|dont)\s+$", window, re.IGNORECASE))
+
+
+def _has_unnegated(pattern: re.Pattern, text: str) -> bool:
+    for match in pattern.finditer(text or ""):
+        if not _phrase_is_negated(text or "", match.start()):
+            return True
+    return False
+
+
+def _ref_prefix(
+    number: int,
+    kind_word: Optional[str],
+    issue_number: Optional[int],
+    passed_kind: str,
+    task: str,
+) -> str:
+    word = (kind_word or "").lower()
+    if word in ("pr", "pull request"):
+        return "pr"
+    if word in ("issue", "ticket"):
+        return "issue"
+    if issue_number is not None and int(number) == int(issue_number):
+        return "pr" if passed_kind == "pr" else "issue"
+    if re.search(rf"\b(?:pull\s+request|pr)\s*#?\s*{int(number)}\b", task or "", re.IGNORECASE):
+        return "pr"
+    return "issue"
+
+
+def _anchored_effect_target(
+    task: str,
+    effect: str,
+    issue_number: Optional[int],
+    passed_kind: str,
+) -> Optional[tuple[str, int]]:
+    """Return ``(prefix, number)`` for the object a comment or close verb names."""
+    text = task or ""
+    if effect == "comment_posted":
+        for match in _COMMENT_TARGET_RE.finditer(text):
+            if _phrase_is_negated(text, match.start()):
+                continue
+            number = int(match.group("num"))
+            return _ref_prefix(number, match.group("kind"), issue_number, passed_kind, text), number
+        return None
+    for match in _CLOSE_TARGET_RE.finditer(text):
+        if _phrase_is_negated(text, match.start()):
+            continue
+        if match.group("cli_num"):
+            number = int(match.group("cli_num"))
+            kind_word = match.group("cli")
+        else:
+            number = int(match.group("num"))
+            kind_word = match.group("kind")
+        return _ref_prefix(number, kind_word, issue_number, passed_kind, text), number
+    return None
 
 
 def _gh_write_expectation(task: str, task_type: str = None, target: Optional[str] = None) -> str:
@@ -2286,10 +2377,12 @@ def _gh_write_expectation(task: str, task_type: str = None, target: Optional[str
         return "merged"
     if _task_opens_pr(text):
         return "pr_open"
+    # Close wins over a comment posted in the same instruction. "Do not close"
+    # does not count, and "closed #N" narrative does not match this verb.
+    if _has_unnegated(_CLOSE_TASK_RE, text):
+        return "closed"
     if _COMMENT_TASK_RE.search(text):
         return "comment_posted"
-    if _CLOSE_TASK_RE.search(text):
-        return "closed"
     if target and target.startswith("issue:"):
         return "comment_posted"
     # Preserve the historical contract for explicitly targeted legacy writes.
@@ -5363,13 +5456,16 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     gh_write_author_value = None
     gh_write_expect_value = None
     cross_branch_pr_value = None
+    expect_hint = gh_write_expect or _gh_write_expectation(task, task_type)
     gh_write_target_value, _resolved_kind, cross_branch_pr_value = _resolve_gh_write_target(
-        task, issue, gh_write_target_kind, requires_gh_write,
+        task, issue, gh_write_target_kind, requires_gh_write, expect=expect_hint,
     )
     if requires_gh_write and gh_write_target_value is not None:
         gh_write_role = resolved_agent_role or _role_for_story(story_id)
         gh_write_author_value = _resolve_dispatch_gh_bot_login(gh_write_role)
-        gh_write_expect_value = gh_write_expect or _gh_write_expectation(task, task_type, target=gh_write_target_value)
+        gh_write_expect_value = gh_write_expect or _gh_write_expectation(
+            task, task_type, target=gh_write_target_value,
+        )
     gh_write_expect_for_job = gh_write_expect or gh_write_expect_value or "closed"
 
     local_slot_claimed = False
