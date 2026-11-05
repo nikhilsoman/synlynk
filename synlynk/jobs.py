@@ -5324,6 +5324,46 @@ def _record_cross_branch_oracle(conn, job_id: str, evidence: dict) -> None:
         conn.rollback()
 
 
+def _confirmed_transcript_target(
+    log_text: Optional[str],
+    expect: Optional[str],
+    stored_target: Optional[str],
+    since: Optional[str],
+    expect_author: Optional[str],
+) -> Optional[str]:
+    """Return a GitHub object the transcript names when GitHub confirms the effect.
+
+    Used when the stored target is a different PR that the prompt only mentioned
+    as context. A transcript line alone is not confirmation.
+    """
+    if not log_text or expect not in ("comment_posted", "closed"):
+        return None
+    from synlynk.verify_effects import extract_transcript_gh_evidence
+
+    evidence = extract_transcript_gh_evidence(log_text)
+    if expect == "comment_posted" and evidence.get("comment_posted"):
+        number = str(evidence.get("issue_number") or "").strip()
+        kind = evidence.get("comment_kind") or "issue"
+    elif expect == "closed" and evidence.get("closed"):
+        number = str(evidence.get("closed_number") or "").strip()
+        kind = evidence.get("closed_kind") or "issue"
+    else:
+        return None
+    if not number or kind not in ("issue", "pr"):
+        return None
+    stored_number = ""
+    if stored_target and ":" in stored_target:
+        stored_number = stored_target.split(":", 1)[1]
+    if number == stored_number:
+        return None
+    candidate = f"{kind}:{number}"
+    if gh_write_verified(
+        candidate, expect, since=since, expect_author=expect_author,
+    ) is True:
+        return candidate
+    return None
+
+
 def _verify_daemon_terminal_status(
     conn,
     job_id: str,
@@ -5368,7 +5408,9 @@ def _verify_daemon_terminal_status(
         if (
             cross is False
             and not evidence.get("same_branch")
-            and (gh_write_expect or "") not in ("merged", "pr_open", "created")
+            and (gh_write_expect or "") not in (
+                "merged", "pr_open", "created", "comment_posted", "closed",
+            )
         ):
             transcript_ok = False
             if log_text is None and conn is not None and job_id:
@@ -5414,6 +5456,34 @@ def _verify_daemon_terminal_status(
             if status in ("done", "failed_unverified"):
                 status = "succeeded_gh_write_failed"
             return status, verified_str
+        if cross is False and (gh_write_expect or "") in ("comment_posted", "closed"):
+            # No new commit on the context PR. Confirm the comment or close
+            # on the object the transcript actually wrote (gh:#2309).
+            redirected = _confirmed_transcript_target(
+                log_text, gh_write_expect, gh_write_target, started_at, gh_write_author,
+            )
+            if redirected is None and log_text is None and conn is not None and job_id:
+                try:
+                    row = conn.execute(
+                        "SELECT log_path FROM daemon_jobs WHERE job_id=?", (job_id,),
+                    ).fetchone()
+                    if row and row[0] and os.path.exists(row[0]):
+                        with open(row[0], "r", errors="replace") as handle:
+                            log_text = handle.read()
+                except OSError:
+                    log_text = None
+                redirected = _confirmed_transcript_target(
+                    log_text, gh_write_expect, gh_write_target, started_at, gh_write_author,
+                )
+            if redirected:
+                gh_write_target = redirected
+                try:
+                    conn.execute(
+                        "UPDATE daemon_jobs SET gh_write_target=? WHERE job_id=?",
+                        (redirected, job_id),
+                    )
+                except sqlite3.OperationalError:
+                    pass
     if status == STATUS_UNPUSHED_BRANCH and worktree_branch:
         branch_evidence = {}
         branch_verified = github_branch_effect_verified(
