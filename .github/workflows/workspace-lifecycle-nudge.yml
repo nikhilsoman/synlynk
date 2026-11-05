@@ -26,6 +26,10 @@ jobs:
         run: pip install pytest
 
       - name: Run workspace-lifecycle-nudge agent
-        run: python3 bin/synlynk.py harness run workspace-lifecycle-nudge
+        # The runner has no canonical ledger. An explicit path keeps a
+        # transient disk I/O error off ~/.synlynk, and the script retries
+        # only that error (gh:#2649).
+        run: bash .github/scripts/workspace-lifecycle-nudge.sh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SYNLYNK_STATE_DB_PATH: ${{ runner.temp }}/synlynk-nudge/state.db
