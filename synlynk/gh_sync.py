@@ -229,18 +229,47 @@ def _cost_rollup_for_arc(conn, arc_id: int) -> dict:
 
 
 def _story_sync_fields(conn, story_id: str) -> dict:
+    """Issue title is ``stories.summary``. The prompt stays in the body.
+
+    GitHub issue numbers are identities, not a sequence or a priority.
+    """
     row = conn.execute(
-        "SELECT title, status FROM stories WHERE story_id=?", (story_id,)
+        "SELECT title, status, summary FROM stories WHERE story_id=?", (story_id,)
     ).fetchone()
-    title, status = row
+    if row is None:
+        raise ValueError(f"story {story_id} does not exist")
+    title, status, summary = row
+    summary = (summary or "").strip()
+    if not summary:
+        raise ValueError(
+            f"story {story_id} has no summary. Set stories.summary before sync. "
+            "The GitHub title is that summary, not a slice of the task prompt."
+        )
     body = f"{title or story_id}\n\n<!-- synlynk:story_id={story_id} -->"
-    short_title = (title or story_id).splitlines()[0].strip()
-    if len(short_title) > 120:
-        short_title = short_title[:117] + "..."
     return {
-        "title": short_title,
+        "title": summary,
         "state": "closed" if status == "done" else "open",
         "body": body,
+    }
+
+
+def goal_issue_fields(goal_id: str, outcome: str, status: str, criterion: str = "") -> dict:
+    """Epic title is a short name of the goal. The outcome stays in the body.
+
+    A goal epic is the parent of its stories. The GitHub issue number is not
+    a priority or a sequence.
+    """
+    from synlynk.story_summary import derive_story_summary
+
+    title = derive_story_summary(outcome or goal_id)
+    body_parts = [outcome or goal_id]
+    if (criterion or "").strip():
+        body_parts.append(f"**Done when:** {criterion.strip()}")
+    body_parts.append(f"<!-- synlynk:goal_id={goal_id} -->")
+    return {
+        "title": title,
+        "state": "closed" if status in {"done", "superseded"} else "open",
+        "body": "\n\n".join(body_parts),
     }
 
 
@@ -263,9 +292,9 @@ def sync_story(
     if mapped and mapped[1] == new_hash:
         return
 
+    # Create ignores `state`. Close with a follow-up PATCH, then record the hash.
     payload = {
         "title": fields["title"],
-        "state": fields["state"],
         "body": fields["body"],
     }
     if milestone_number is not None:
@@ -275,7 +304,8 @@ def sync_story(
         github_number = mapped[0]
         result = _gh_api_json(
             [f"repos/{owner}/{repo}/issues/{github_number}", "--method", "PATCH"]
-            + [f"-f{k}={v}" for k, v in payload.items()],
+            + [f"-f{k}={v}" for k, v in payload.items()]
+            + [f"-fstate={fields['state']}"],
             role=role,
         )
         node_id = result.get("node_id") if result else None
@@ -291,6 +321,16 @@ def sync_story(
             "UPDATE stories SET gh_issue=? WHERE story_id=?",
             (str(github_number), story_id),
         )
+        if fields["state"] == "closed":
+            _gh_api_json(
+                [
+                    f"repos/{owner}/{repo}/issues/{github_number}",
+                    "--method",
+                    "PATCH",
+                    "-fstate=closed",
+                ],
+                role=role,
+            )
 
     conn.execute(
         "INSERT INTO github_sync_map (entity_type, entity_id, github_number, github_node_id, content_hash, last_synced_at) "
