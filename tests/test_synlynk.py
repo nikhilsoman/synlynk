@@ -717,8 +717,9 @@ def test_dispatch_agent_gh_write_resolves_explicit_role_flag(tmp_path, isolated_
 
     captured = {}
 
-    def fake_build_env(agent, overrides, requires_gh_write, story_id, agent_role=None):
+    def fake_build_env(agent, overrides, requires_gh_write, story_id, agent_role=None, worktree_path=None):
         captured["agent_role"] = agent_role
+        captured["worktree_path"] = worktree_path
         return {}, None
 
     monkeypatch.setattr(dispatch_mod, "_build_subprocess_env", fake_build_env)
