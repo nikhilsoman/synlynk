@@ -509,14 +509,17 @@ def test_sync_story_creates_issue_with_footer(tmp_path, monkeypatch):
 
     conn = sqlite3.connect(tmp_path / "state.db")
     conn.execute(
-        "CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, status TEXT, gh_issue TEXT)"
+        "CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, status TEXT, "
+        "gh_issue TEXT, summary TEXT)"
     )
     conn.execute(
         "CREATE TABLE github_sync_map (entity_type TEXT, entity_id TEXT, github_number INTEGER, "
         "github_node_id TEXT, content_hash TEXT, last_synced_at TEXT, "
         "PRIMARY KEY (entity_type, entity_id))"
     )
-    conn.execute("INSERT INTO stories VALUES ('story-abc', 'Core cluster', 'open', NULL)")
+    conn.execute(
+        "INSERT INTO stories VALUES ('story-abc', 'Core cluster', 'open', NULL, 'Core cluster')"
+    )
     conn.commit()
 
     created = {}
@@ -547,8 +550,12 @@ def test_story_sync_fields_preserves_short_title_and_full_body(tmp_path):
     from synlynk.gh_sync import _story_sync_fields
 
     conn = sqlite3.connect(tmp_path / "state.db")
-    conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, status TEXT)")
-    conn.execute("INSERT INTO stories VALUES ('story-short', 'Short title', 'open')")
+    conn.execute(
+        "CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, status TEXT, summary TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO stories VALUES ('story-short', 'Short title', 'open', 'Short title')"
+    )
 
     fields = _story_sync_fields(conn, "story-short")
 
@@ -564,8 +571,13 @@ def test_story_sync_fields_uses_only_stripped_first_line_for_issue_title(tmp_pat
 
     raw_title = "  First line  \nSecond line\n\nFourth line"
     conn = sqlite3.connect(tmp_path / "state.db")
-    conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, status TEXT)")
-    conn.execute("INSERT INTO stories VALUES ('story-multiline', ?, 'open')", (raw_title,))
+    conn.execute(
+        "CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, status TEXT, summary TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO stories VALUES ('story-multiline', ?, 'open', 'First line')",
+        (raw_title,),
+    )
 
     fields = _story_sync_fields(conn, "story-multiline")
 
@@ -576,22 +588,80 @@ def test_story_sync_fields_uses_only_stripped_first_line_for_issue_title(tmp_pat
     conn.close()
 
 
-def test_story_sync_fields_truncates_long_issue_title_but_not_body(tmp_path):
+def test_story_sync_fields_uses_summary_and_keeps_the_prompt_in_the_body(tmp_path):
     import sqlite3
 
     from synlynk.gh_sync import _story_sync_fields
 
-    raw_title = "x" * 121
+    raw_title = "Implement Task 9. " + ("x" * 200)
     conn = sqlite3.connect(tmp_path / "state.db")
-    conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, status TEXT)")
-    conn.execute("INSERT INTO stories VALUES ('story-long', ?, 'done')", (raw_title,))
+    conn.execute(
+        "CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, status TEXT, summary TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO stories VALUES ('story-long', ?, 'done', 'Task 9: rollback dry run')",
+        (raw_title,),
+    )
 
     fields = _story_sync_fields(conn, "story-long")
 
-    assert fields["title"] == "x" * 117 + "..."
-    assert len(fields["title"]) == 120
+    assert fields["title"] == "Task 9: rollback dry run"
+    assert "..." not in fields["title"]
     assert fields["state"] == "closed"
     assert fields["body"] == f"{raw_title}\n\n<!-- synlynk:story_id=story-long -->"
+    conn.close()
+
+
+def test_story_sync_fields_refuses_a_missing_summary(tmp_path):
+    import sqlite3
+
+    import pytest
+
+    from synlynk.gh_sync import _story_sync_fields
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        "CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, status TEXT, summary TEXT)"
+    )
+    conn.execute("INSERT INTO stories VALUES ('story-nosum', 'A long prompt', 'open', '')")
+
+    with pytest.raises(ValueError, match="no summary"):
+        _story_sync_fields(conn, "story-nosum")
+    conn.close()
+
+
+def test_sync_story_closes_a_done_story_with_a_follow_up_patch(tmp_path, monkeypatch):
+    import sqlite3
+
+    from synlynk import gh_sync
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        "CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, status TEXT, "
+        "gh_issue TEXT, summary TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE github_sync_map (entity_type TEXT, entity_id TEXT, github_number INTEGER, "
+        "github_node_id TEXT, content_hash TEXT, last_synced_at TEXT, "
+        "PRIMARY KEY (entity_type, entity_id))"
+    )
+    conn.execute(
+        "INSERT INTO stories VALUES ('story-done', 'full prompt', 'done', NULL, 'Ship the gate')"
+    )
+    calls = []
+
+    def fake_gh_api_json(args, **kwargs):
+        calls.append(args)
+        if "POST" in args:
+            return {"number": 9, "node_id": "I_9"}
+        return {"node_id": "I_9"}
+
+    monkeypatch.setattr(gh_sync, "_gh_api_json", fake_gh_api_json)
+    gh_sync.sync_story(conn, story_id="story-done", owner="o", repo="r", milestone_number=None)
+
+    create = calls[0]
+    assert not any(part.startswith("-fstate=") for part in create)
+    assert any(part == "-fstate=closed" for part in calls[1])
     conn.close()
 
 
