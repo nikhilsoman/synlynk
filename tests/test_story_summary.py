@@ -37,6 +37,21 @@ def test_long_prompt_stops_on_a_word():
     assert len(summary) <= 80
 
 
+def test_goal_epic_title_is_the_short_name():
+    from synlynk.gh_sync import goal_issue_fields
+
+    fields = goal_issue_fields(
+        "goal-1",
+        "BS-8: story split — a long explanation of the rest",
+        "done",
+        "the split exists",
+    )
+    assert fields["title"] == "BS-8: story split"
+    assert fields["state"] == "closed"
+    assert "<!-- synlynk:goal_id=goal-1 -->" in fields["body"]
+    assert "the split exists" in fields["body"]
+
+
 def test_empty_title():
     assert derive_story_summary("") == "Untitled story"
     assert derive_story_summary("\n\n") == "Untitled story"

@@ -253,6 +253,26 @@ def _story_sync_fields(conn, story_id: str) -> dict:
     }
 
 
+def goal_issue_fields(goal_id: str, outcome: str, status: str, criterion: str = "") -> dict:
+    """Epic title is a short name of the goal. The outcome stays in the body.
+
+    A goal epic is the parent of its stories. The GitHub issue number is not
+    a priority or a sequence.
+    """
+    from synlynk.story_summary import derive_story_summary
+
+    title = derive_story_summary(outcome or goal_id)
+    body_parts = [outcome or goal_id]
+    if (criterion or "").strip():
+        body_parts.append(f"**Done when:** {criterion.strip()}")
+    body_parts.append(f"<!-- synlynk:goal_id={goal_id} -->")
+    return {
+        "title": title,
+        "state": "closed" if status in {"done", "superseded"} else "open",
+        "body": "\n\n".join(body_parts),
+    }
+
+
 def sync_story(
     conn,
     story_id: str,
