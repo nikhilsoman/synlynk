@@ -640,6 +640,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [560](./560-pr5050-batten-down-hatches-synchronize-external.md) | PR #5050 — batten down hatches — synchronize external surfaces and docs for v0.27.5 (#5049) | [#5050](https://github.com/nikhilsoman/synlynk/pull/5050) | 2026-11-03 |
 | [561](./561-pr5124-use-story-summaries-as-github-issue-titl.md) | PR #5124 — use story summaries as GitHub issue titles | [#5124](https://github.com/nikhilsoman/synlynk/pull/5124) | 2026-11-05 |
 | [562](./562-pr5125-verify-comment-and-close-on-the-object-t.md) | PR #5125 — verify comment and close on the object that was written | [#5125](https://github.com/nikhilsoman/synlynk/pull/5125) | 2026-11-05 |
+| [563](./563-pr5132-keep-rollback-stash-from-swallowing-synl.md) | PR #5132 — keep rollback stash from swallowing .synlynk outputs | [#5132](https://github.com/nikhilsoman/synlynk/pull/5132) | 2026-11-05 |
 
 ## Per-PR Post Template
 

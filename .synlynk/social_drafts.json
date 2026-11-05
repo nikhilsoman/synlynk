@@ -5054,5 +5054,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #5125 \u2014 verify comment and close on the object that was written (PR #5125, v0.27.5)\n\n\u2022 Merged improvements and fixes for PR #5125.\n\n#posts",
     "changelog": "### v0.27.5 (2026-11-05) - PR #5125\n- Merged improvements and fixes for PR #5125."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/563-pr5132-keep-rollback-stash-from-swallowing-synl.md",
+    "title": "PR #5132 \u2014 keep rollback stash from swallowing .synlynk outputs",
+    "author": "nikhilsoman",
+    "date": "2026-11-05",
+    "pr": "#5132",
+    "version": "0.27.5",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #5132."
+    ],
+    "tweet": "\ud83d\ude80 PR #5132 \u2014 keep rollback stash from swallowing .synlynk outputs (PR #5132, v0.27.5)\n\n\u2022 Merged improvements and fixes for PR #5132.\n\n#posts",
+    "changelog": "### v0.27.5 (2026-11-05) - PR #5132\n- Merged improvements and fixes for PR #5132."
   }
 ]
