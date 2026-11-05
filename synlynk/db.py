@@ -2152,6 +2152,19 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE stories ADD COLUMN gh_issue TEXT")
         except Exception:
             pass
+        try:
+            conn.execute("ALTER TABLE stories ADD COLUMN summary TEXT")
+        except Exception:
+            pass
+        from synlynk.story_summary import derive_story_summary
+        for story_id, title, summary in conn.execute(
+            "SELECT story_id, title, summary FROM stories "
+            "WHERE summary IS NULL OR trim(summary) = ''"
+        ):
+            conn.execute(
+                "UPDATE stories SET summary=? WHERE story_id=?",
+                (derive_story_summary(title or ""), story_id),
+            )
         conn.commit()
         # v0.9.2: token budget columns on stories
         for _col, _typedef in [("estimated_tokens", "INTEGER"), ("actual_tokens", "INTEGER")]:
