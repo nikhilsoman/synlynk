@@ -5476,6 +5476,51 @@ def cmd_audit_docs(json_output: bool = False, fix: bool = False) -> list:
 
     return findings
 
+def _pr_check_degraded(pr_number, exc: BaseException) -> None:
+    """Run the GitHub CI gate when the canonical ledger cannot be opened.
+
+    gh:#2573. A review sandbox may be denied the host ledger. That must not
+    open a fallback database. A red qa gate still blocks. Ledger-backed
+    gates are skipped and named, because they cannot be evaluated.
+    """
+    from synlynk import _GREEN, _RESET
+
+    print(
+        "\n  ⚠ [PR CHECK DEGRADED] canonical state DB unavailable; "
+        "ledger-backed gates were not evaluated. "
+        "No fallback ledger was opened."
+    )
+    print(f"  {exc}\n")
+    if not _is_github_remote():
+        print(
+            "  🚫 [PR CHECK BLOCKED] GitHub remote is not available, "
+            "so CI cannot be checked without the ledger.\n"
+        )
+        raise SystemExit(1)
+    resolved = _current_pr_number(pr_number=pr_number)
+    if resolved is None:
+        print(
+            "\n  🚫 [PR CHECK BLOCKED] no PR number, cannot verify CI "
+            "without the ledger.\n"
+            "  synlynk pr check --pr <number>\n"
+        )
+        raise SystemExit(1)
+    owner, repo = detect_remote_owner_repo()
+    if not owner or not repo:
+        print("  🚫 [PR CHECK BLOCKED] could not resolve the GitHub repo.\n")
+        raise SystemExit(1)
+    gate = qa_gate_verdict(owner, repo, pr_number=resolved)
+    if gate.get("verdict") == "red":
+        print(f"\n  🚫 [PR CHECK BLOCKED] qa gate is red: {gate.get('reason')}")
+        print("  This is qa's block-only merge gate (CI matrix + sentinel health)\n")
+        raise SystemExit(1)
+    print(f"  {_GREEN}✓{_RESET} qa gate green — {gate.get('reason')}")
+    print(
+        "  Ledger gates skipped: GOVERNS linkage, cross-harness review, "
+        "unknown model versions.\n"
+    )
+
+
 def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
     """Hard-blocks merge if any capability_ratings row has model_version='unknown'
     or if --impact-attested fails.
@@ -5499,7 +5544,13 @@ def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
             if warning is not None:
                 print(warning)
 
-    conn = _get_db()
+    try:
+        conn = _get_db()
+    except RuntimeError as exc:
+        if "canonical state DB unavailable" not in str(exc):
+            raise
+        _pr_check_degraded(pr_number, exc)
+        return
     if _is_github_remote():
         pr_number = _current_pr_number(pr_number=pr_number)
         if pr_number is None:
