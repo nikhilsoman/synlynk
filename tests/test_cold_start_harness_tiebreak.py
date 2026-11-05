@@ -59,6 +59,17 @@ def test_cold_start_returns_none_when_only_local_cannot_satisfy(tmp_path, monkey
     ) is None
 
 
+def test_reroute_message_does_not_blame_a_capable_cli_harness_when_routing_selected_another():
+    """gh:#5011 — story routing may replace Codex, but the probe did not reject it."""
+    from synlynk.dispatch import _capability_reroute_message
+
+    message = _capability_reroute_message("codex", "agy", "agy")
+    assert "rerouted 'codex' -> 'agy'" in message
+    assert "routing selected 'agy'" in message
+    assert "did not reject 'codex'" in message
+    assert "lacks required capability" not in message
+
+
 def test_reroute_message_blames_probed_harness_not_cli_argument():
     from synlynk.dispatch import _capability_reroute_message
 

@@ -4223,11 +4223,19 @@ def take_probed_dispatch_harness() -> Optional[str]:
 
 
 def _capability_reroute_message(initial_agent: str, resolved_agent: str, probed_agent: Optional[str]) -> str:
-    """Name the harness that failed the capability check, not the CLI argument.
+    """Name why the CLI harness was not the one that ran.
 
     Cold-start routing can substitute `local` before the gate runs (gh:#2048).
-    The reroute line must blame that substituted candidate.
+    That line must blame the substituted candidate when the probe rejects it.
+    Story routing can also select a different capable harness (gh:#5011).
+    That line must not claim the CLI harness failed the capability probe.
     """
+    if probed_agent and probed_agent != initial_agent and probed_agent == resolved_agent:
+        return (
+            f"  ↪ rerouted '{initial_agent}' -> '{resolved_agent}' "
+            f"(routing selected '{resolved_agent}'; the capability probe "
+            f"did not reject '{initial_agent}')"
+        )
     blamed = probed_agent or initial_agent
     if blamed == resolved_agent:
         blamed = initial_agent
