@@ -954,6 +954,13 @@ def _migrate_onboarding_sessions(conn: sqlite3.Connection) -> None:
     conn.executescript(ONBOARDING_SESSIONS_SCHEMA)
 
 
+def _migrate_greenfield_sessions(conn: sqlite3.Connection) -> None:
+    """Create the greenfield session ledger when it is missing (v0.28.5)."""
+    from synlynk.db_schema import GREENFIELD_SESSIONS_SCHEMA
+
+    conn.executescript(GREENFIELD_SESSIONS_SCHEMA)
+
+
 def _run_harness_rename_migration(conn) -> None:
     """Rename agent-named harness schema objects from Plan A of #786."""
     cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_records)")}
@@ -2411,6 +2418,7 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
     )
 
     _migrate_onboarding_sessions(conn)
+    _migrate_greenfield_sessions(conn)
     conn.commit()
 
 

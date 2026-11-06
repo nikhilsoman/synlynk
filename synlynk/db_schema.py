@@ -23,6 +23,25 @@ CREATE TABLE IF NOT EXISTS onboarding_sessions (
 CREATE INDEX IF NOT EXISTS idx_onboarding_product ON onboarding_sessions(product_id);
 """
 
+GREENFIELD_SESSIONS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS greenfield_sessions (
+    session_id TEXT PRIMARY KEY,
+    project_name TEXT NOT NULL,
+    raw_intent TEXT NOT NULL,
+    github_repo TEXT,
+    current_stage TEXT NOT NULL DEFAULT 'S0_FLEET',
+    fast_forwarded INTEGER DEFAULT 0,
+    dilemma_topic TEXT,
+    dilemma_decision_id TEXT,
+    daily_sync_channels TEXT,
+    daily_sync_hour INTEGER DEFAULT 9,
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL,
+    completed_at REAL
+);
+CREATE INDEX IF NOT EXISTS idx_greenfield_project ON greenfield_sessions(project_name);
+"""
+
 _DB_SCHEMA = """
 CREATE TABLE IF NOT EXISTS stories (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,

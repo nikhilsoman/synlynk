@@ -1,5 +1,30 @@
 # Agy Devlog
 
+## 2026-11-06 — Day 5 "Genesis Gate" (v0.28.5): Greenfield Guided Onboarding & Progressive Fleet Assembly
+
+### Shipped & Verified Across Fleet
+- **Trigger & Cadence Governance:**
+  - Cadence ticket #5160 approved and closed on GitHub by Nikhil.
+  - Dedicated Parent Tracking Issue #5161 filed: `[Epic] Day 5: "Genesis Gate" (v0.28.5) — Greenfield Guided Onboarding & Progressive Fleet Assembly`.
+- **Subsystem Implementation & Verification:**
+  - **Spec & Governance Alignment:** Spec `docs/superpowers/specs/2026-11-05-greenfield-guided-onboarding-design.md` integrated.
+  - **Persistence Schema:** Added `GREENFIELD_SESSIONS_SCHEMA` and `_migrate_greenfield_sessions` to `synlynk/db_schema.py` and `synlynk/db.py`, tracking stages S0 through S5, intent, and fast-forward state.
+  - **Greenfield Genesis Engine (`synlynk/greenfield/`):**
+    - Stage 0: Fleet Discovery probing local harnesses (`claude`, `codex`, `agy`, `grok`, `local/oMLX`) with domain specialization, non-author review, and cost routing guidelines.
+    - Stage 1: Product Definition awakening `role:pm` to synthesize `project-docs/brief.md`, `project-docs/roadmap.md`, and seed `Goal 1`.
+    - Stage 2: Technical Architecture awakening `role:architect` to draft design blueprints and isolate non-trivial engineering forks.
+    - Stage 3: The DECIDE Consensus Panel convening multi-harness debates and recording signed receipts in `project-docs/decisions/`.
+    - Stage 4: Execution Breakdown awakening `role:tpm` to draft implementation plans and seed atomic `todo.md` tasks.
+    - Stage 5: First-Win Micro-Cycle awakening `role:dev` and `role:qa` to generate verified code skeletons and test fixtures.
+  - **CLI Surface & Daily Sync:**
+    - Added `synlynk new` CLI command with fast-forward support (`-f/--fast-forward`), registered under Tier 0 FTUE in `synlynk/taxonomy.py`.
+    - Implemented Multi-Channel Daily Sync engine (`synlynk sync --daily`) delivering morning standup briefings across CLI, Vizor:33333, and Discord/Slack.
+    - Formatted Multi-Surface Genesis Rollup Card.
+- **Closeout & Rollup:**
+  - 5,467 collected tests passing clean with zero regressions.
+  - Dedicated test suites in `tests/test_greenfield_orchestrator.py`, `tests/test_greenfield_dilemma_engine.py`, `tests/test_greenfield_daily_sync.py`, and `tests/test_greenfield_cli.py`.
+[@agy, @nikhilsoman]
+
 ## 2026-11-06 — Day 4 "Truth Ledger" (v0.28.4): State DB Reconciliation & Shadow DB Elimination
 
 ### Shipped & Verified Across Fleet

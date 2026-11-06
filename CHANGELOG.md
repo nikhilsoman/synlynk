@@ -9,6 +9,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.28.5] - 2026-11-06
+### Added
+- feat(greenfield): implement Greenfield Genesis Engine and `synlynk new` CLI command for blank-canvas project onboarding (#5160) (#5161)
+- feat(lifecycle): implement 6-stage progressive fleet assembly (Stage 0 Fleet Discovery through Stage 5 Dev & QA Micro-Cycle) (#5160) (#5161)
+- feat(dilemma): introduce Genuine Dilemma Engine isolating non-trivial architectural forks and convening `synlynk decide` across harnesses (#5160) (#5161)
+- feat(sync): add Multi-Channel Daily Sync engine (`synlynk sync --daily`) delivering morning standup briefings across CLI, Vizor, and Discord/Slack (#5160) (#5161)
+- feat(rollup): deliver Multi-Surface Genesis Rollup Card integrating local workspace, Vizor:33333, and GitHub repositories (#5160) (#5161)
+### Changed
+- feat(schema): add `greenfield_sessions` SQLite schema and automated migration in `synlynk/db.py` (#5160) (#5161)
+- feat(taxonomy): register `new` under Tier 0 FTUE in `synlynk/taxonomy.py` and document in command reference (#5160) (#5161)
+
+---
+
 ## [v0.28.4] - 2026-11-06
 ### Added
 - feat(cli): add `synlynk roadmap render` and `synlynk story sync` CLI commands for on-demand generated view refresh (#4371) (#5157)
