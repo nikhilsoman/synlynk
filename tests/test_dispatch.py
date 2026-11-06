@@ -1107,6 +1107,34 @@ def test_dispatch_agent_defers_when_quota_exhausted(project_dir, monkeypatch):
     conn.close()
 
 
+def test_dispatch_agent_defers_when_credit_pool_is_empty(project_dir):
+    """An empty credit pool defers before spawn even when token headroom remains."""
+    import synlynk as sl
+
+    conn = sl._get_db()
+    sl._upsert_agent_quota(
+        "codex", "5h", limit_tokens=100_000, used_tokens=0, unit="tokens", conn=conn
+    )
+    conn.execute(
+        "INSERT INTO credit_grants (agent, face_value_usd, remaining_usd, granted_at) "
+        "VALUES ('codex', 10, 0, '2026-01-01')"
+    )
+    conn.commit()
+
+    result = sl.dispatch_agent(
+        "codex", "do a small task", force_agent=True, skip_preflight=True
+    )
+
+    assert result.get("deferred") is True
+    assert result["reason"] == "credit_pool_exhausted"
+    row = conn.execute(
+        "SELECT status, blocked_reason FROM daemon_jobs WHERE agent='codex' "
+        "ORDER BY enqueued_at DESC LIMIT 1"
+    ).fetchone()
+    assert row == ("queued", "credit_pool_exhausted")
+    conn.close()
+
+
 def test_dispatch_agent_existing_job_quota_exhaustion_updates_row(project_dir):
     import synlynk as sl
 

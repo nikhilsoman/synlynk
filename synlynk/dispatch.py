@@ -2476,6 +2476,55 @@ _GITHUB_MCP_CANCELLATION_MARKERS = (
 )
 
 
+def _log_is_provider_quota_exhausted(log_text: Optional[str]) -> bool:
+    """True when a harness log shows a provider credit or quota rejection.
+
+    A bare HTTP 429 is not enough: job logs mention that status for unrelated
+    retries. The Agy credit failure names RESOURCE_EXHAUSTED or the credit
+    balance sentence (gh:#5012).
+    """
+    lowered = (log_text or "").lower()
+    return (
+        "resource_exhausted" in lowered
+        or "credits balance is too low" in lowered
+        or "your ai credits balance" in lowered
+    )
+
+
+def _record_provider_quota_exhaustion(agent: str) -> None:
+    """Zero the 5h window after an observed provider rejection.
+
+    The next preflight then defers instead of starting another job against
+    the same empty pool. A ledger failure must not hide the job summary.
+    """
+    if not agent:
+        return
+    try:
+        from synlynk.quota import _force_exhaust_quota
+
+        get_db = _pkg("_get_db")
+        if not get_db:
+            return
+        conn = get_db()
+        try:
+            _force_exhaust_quota(conn, agent, "5h")
+        finally:
+            conn.close()
+    except Exception:
+        return
+
+
+def _begin_immediate(conn) -> bool:
+    """Take the write lock so the quota check and reservation commit together."""
+    try:
+        if conn.in_transaction:
+            conn.commit()
+        conn.execute("BEGIN IMMEDIATE")
+        return True
+    except sqlite3.OperationalError:
+        return False
+
+
 def _has_github_mcp_cancellation(log_text: Optional[str]) -> bool:
     """Return whether a job log records a cancelled GitHub MCP write.
 
@@ -2503,7 +2552,23 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
     """Formats the structured completion summary for a finished job."""
     files_touched = sorted(set(files_touched or []))
     story_label = story_id or "-"
+    provider_rejected = (
+        exit_code not in (0, None)
+        and _log_is_provider_quota_exhausted(log_text)
+    )
     exit_code = -1 if exit_code is None else exit_code
+    if status_label is None and provider_rejected:
+        if files_touched:
+            status_label = f"QUOTA_EXHAUSTED (partial work, {len(files_touched)} files)"
+            note = note or (
+                "provider credit or quota pool rejected the job; "
+                "touched files in the worktree are partial and unusable"
+            )
+        else:
+            status_label = "QUOTA_EXHAUSTED (no files written)"
+            note = note or (
+                "provider credit or quota pool rejected the job before any file was written"
+            )
     status_label = status_label or ("OK (exit 0)" if exit_code == 0 else f"FAILED (exit {exit_code})")
     if exit_code == 0 and _has_github_mcp_cancellation(log_text):
         status_label = f"{status_label} — GH WRITE CANCELLED"
@@ -2602,6 +2667,8 @@ def _write_job_summary(job_id: str, agent: str, story_id: Optional[str],
         suite_result=suite_result, task_sha256=task_sha256, task_preview=task_preview,
         log_text=log_text,
     )
+    if exit_code not in (None, 0) and _log_is_provider_quota_exhausted(log_text):
+        _record_provider_quota_exhaustion(agent)
     summary_path = _job_summary_path(job_id)
     existing_summary = None
     if os.path.exists(summary_path):
@@ -4922,12 +4989,20 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 _est_tokens * cached_multiplier_fn(agent, model, dconn)
             ))
 
-        quota_status_fn = _pkg("_quota_status_for_agent")
-        qstatus = (
-            quota_status_fn(dconn, agent, estimated_tokens=_weighted_est_tokens)
-            if quota_status_fn
-            else {"status": "unknown", "degraded": True}
-        )
+        from synlynk.quota import provider_pool_preflight
+
+        began_quota_txn = _begin_immediate(dconn)
+        try:
+            qstatus = provider_pool_preflight(
+                dconn, agent, model, _weighted_est_tokens
+            )
+        except Exception:
+            if began_quota_txn:
+                try:
+                    dconn.rollback()
+                except sqlite3.Error:
+                    pass
+            raise
 
         if qstatus.get("status") == "exhausted":
             reset_at = None
@@ -4938,14 +5013,19 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         reset_at = _r["reset_at"]
                         break
             now_iso = time.strftime("%Y-%m-%dT%H:%M:%S")
+            blocked_reason = (
+                "credit_pool_exhausted"
+                if qstatus.get("reason") == "credit_pool_exhausted"
+                else "quota_exhausted"
+            )
             existing_job = dconn.execute(
                 "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
             ).fetchone()
             if existing_job:
                 dconn.execute(
                     "UPDATE daemon_jobs SET status='queued', "
-                    "blocked_reason='quota_exhausted' WHERE job_id=?",
-                    (job_id,),
+                    "blocked_reason=? WHERE job_id=?",
+                    (blocked_reason, job_id),
                 )
             else:
                 dconn.execute(
@@ -4953,7 +5033,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     "priority, depends_on, enqueued_at, blocked_reason) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (job_id, agent, task, story_id, "queued", 5, "[]", now_iso,
-                     "quota_exhausted"),
+                     blocked_reason),
                 )
             dconn.commit()
             if owns_dconn and dconn is not None:
@@ -4980,14 +5060,27 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 (job_id,),
             ).fetchone()
             if not existing_reservation:
-                open_reservation_fn(
-                    dconn,
-                    agent,
-                    _weighted_est_tokens,
-                    scope=_scope,
-                    scope_id=os.environ.get("SYNLYNK_SCHEDULE_RUN_ID"),
-                    job_id=job_id,
-                )
+                try:
+                    open_reservation_fn(
+                        dconn,
+                        agent,
+                        _weighted_est_tokens,
+                        scope=_scope,
+                        scope_id=os.environ.get("SYNLYNK_SCHEDULE_RUN_ID"),
+                        job_id=job_id,
+                        track=qstatus.get("track"),
+                    )
+                except TypeError:
+                    open_reservation_fn(
+                        dconn,
+                        agent,
+                        _weighted_est_tokens,
+                        scope=_scope,
+                        scope_id=os.environ.get("SYNLYNK_SCHEDULE_RUN_ID"),
+                        job_id=job_id,
+                    )
+        if began_quota_txn and dconn.in_transaction:
+            dconn.commit()
 
     # Captured before ad-hoc story synthesis. story-adhoc-* is not GOVERNS linkage.
     caller_story_id = story_id

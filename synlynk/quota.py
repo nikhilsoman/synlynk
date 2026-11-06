@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import sqlite3
 import time
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -629,6 +630,7 @@ def _open_reservation(
     scope: str = None,
     scope_id: Optional[str] = None,
     job_id: Optional[str] = None,
+    track: Optional[str] = None,
 ) -> int:
     """Opens an harness_reservations row. Returns the new reservation id.
 
@@ -646,11 +648,20 @@ def _open_reservation(
     if own_conn:
         conn = _pkg("_get_db")()
     try:
-        cur = conn.execute(
-            "INSERT INTO harness_reservations (harness, tokens, scope, scope_id, job_id, status) "
-            "VALUES (?, ?, ?, ?, ?, 'open')",
-            (harness, int(tokens), scope, scope_id, job_id),
-        )
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_reservations)")}
+        if "track" in cols:
+            cur = conn.execute(
+                "INSERT INTO harness_reservations "
+                "(harness, tokens, scope, scope_id, job_id, status, track) "
+                "VALUES (?, ?, ?, ?, ?, 'open', ?)",
+                (harness, int(tokens), scope, scope_id, job_id, track),
+            )
+        else:
+            cur = conn.execute(
+                "INSERT INTO harness_reservations (harness, tokens, scope, scope_id, job_id, status) "
+                "VALUES (?, ?, ?, ?, ?, 'open')",
+                (harness, int(tokens), scope, scope_id, job_id),
+            )
         conn.commit()
         return cur.lastrowid
     finally:
@@ -669,7 +680,7 @@ def _release_reservation(conn, reservation_id: int) -> None:
     conn.commit()
 
 
-def _open_reservations_sum(conn, harness: str) -> int:
+def _open_reservations_sum(conn, harness: str, track: Optional[str] = None) -> int:
     """Sums tokens from open, non-expired reservations for one harness.
 
     Lazy expiry: a reservation older than _RESERVATION_EXPIRY_SECONDS is
@@ -678,11 +689,22 @@ def _open_reservations_sum(conn, harness: str) -> int:
     """
     cutoff = datetime.now(UTC).timestamp() - _RESERVATION_EXPIRY_SECONDS
     cutoff_iso = datetime.fromtimestamp(cutoff, UTC).strftime("%Y-%m-%d %H:%M:%S")
-    row = conn.execute(
-        "SELECT COALESCE(SUM(tokens), 0) FROM harness_reservations "
-        "WHERE harness=? AND status='open' AND created_at >= ?",
-        (harness, cutoff_iso),
-    ).fetchone()
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_reservations)")}
+    if track and "track" in cols:
+        # Older rows have no track and still commit the whole harness.
+        # A track-scoped row counts only against that provider pool.
+        row = conn.execute(
+            "SELECT COALESCE(SUM(tokens), 0) FROM harness_reservations "
+            "WHERE harness=? AND status='open' AND created_at >= ? "
+            "AND (track IS NULL OR track=?)",
+            (harness, cutoff_iso, track),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(tokens), 0) FROM harness_reservations "
+            "WHERE harness=? AND status='open' AND created_at >= ?",
+            (harness, cutoff_iso),
+        ).fetchone()
     return int(row[0] or 0)
 
 
@@ -886,7 +908,11 @@ def _quota_status_for_agent(
 
     need_tokens = int(estimated_tokens) if estimated_tokens else 0
     need_requests = max(1, int(estimated_requests or 1))
-    reserved = _pkg("_open_reservations_sum")(conn, agent)
+    sum_fn = _pkg("_open_reservations_sum") or _open_reservations_sum
+    try:
+        reserved = sum_fn(conn, agent, track)
+    except TypeError:
+        reserved = sum_fn(conn, agent)
     min_token_headroom = None
     min_request_headroom = None
 
@@ -953,6 +979,88 @@ def _quota_status_for_agent(
         "degraded": True,
         "reason": "empty_after_filter",
     }
+
+
+def _unexpired_credit_remaining(conn, agent: str) -> Optional[float]:
+    """Sum unexpired credit_grants for one harness.
+
+    None means no grant rows exist for the harness. Zero means a pool was
+    configured and nothing unexpired remains. A read failure is also None so
+    a missing table does not hard-block dispatch.
+    """
+    try:
+        table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='credit_grants'"
+        ).fetchone()
+        if not table:
+            return None
+        any_row = conn.execute(
+            "SELECT 1 FROM credit_grants WHERE agent=? LIMIT 1",
+            (agent,),
+        ).fetchone()
+        if not any_row:
+            return None
+        row = conn.execute(
+            "SELECT COALESCE(SUM(remaining_usd), 0) FROM credit_grants "
+            "WHERE agent=? AND remaining_usd > 0 "
+            "AND (expires_at IS NULL OR expires_at > datetime('now'))",
+            (agent,),
+        ).fetchone()
+        return float(row[0] or 0)
+    except sqlite3.Error:
+        return None
+
+
+def provider_pool_preflight(
+    conn,
+    harness: str,
+    model: Optional[str],
+    estimated_tokens: Optional[int],
+    estimated_requests: int = 1,
+) -> dict:
+    """Check the resolved model track, open reservations, and credit pool.
+
+    Subscription headroom is read for the harness track of ``model`` (gh:#5012).
+    An empty or expired credit pool blocks even when the token window still
+    has headroom. Unknown quota with no credit rows stays degraded.
+    """
+    track = resolve_harness_track(harness, model)
+    status_fn = _pkg("_quota_status_for_agent") or _quota_status_for_agent
+    try:
+        status = status_fn(
+            conn,
+            harness,
+            estimated_tokens=estimated_tokens,
+            estimated_requests=estimated_requests,
+            track=track,
+        )
+    except TypeError:
+        status = status_fn(conn, harness, estimated_tokens=estimated_tokens)
+    status = dict(status)
+    status["track"] = track
+    if status.get("status") == "exhausted":
+        return status
+
+    remaining = _unexpired_credit_remaining(conn, harness)
+    mode = "pay_as_you_go"
+    try:
+        from synlynk.costs import _payment_model_config_for_agent
+
+        mode = (_payment_model_config_for_agent(harness) or {}).get("mode") or mode
+    except Exception:
+        mode = "pay_as_you_go"
+    pool_empty = (mode == "credit_grant" and (remaining is None or remaining <= 0)) or (
+        remaining is not None and remaining <= 0
+    )
+    if pool_empty:
+        status["status"] = "exhausted"
+        status["degraded"] = False
+        status["reason"] = "credit_pool_exhausted"
+        status["unit"] = "usd"
+        status["credit_remaining_usd"] = 0.0 if remaining is None else remaining
+    else:
+        status["credit_remaining_usd"] = remaining
+    return status
 
 
 def _estimate_story_cost_usd(
