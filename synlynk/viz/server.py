@@ -78,6 +78,11 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         from urllib.parse import urlparse, parse_qs
+        from synlynk.local_http_auth import local_browser_origin_ok
+
+        if not local_browser_origin_ok(self.headers):
+            self.send_error(403, "forbidden origin")
+            return
 
         parsed = urlparse(self.path)
         path = parsed.path
@@ -952,5 +957,6 @@ def cmd_viz(args) -> None:
     port = vizor_daemon._read_port() or _pkg().DEFAULT_PORT
     url = f"http://localhost:{port}/w/{slug}/overview.html"
     _pkg().webbrowser.open(url)
-    print(f"  ✓ Opened {url}")
+    from synlynk.terminal import hyperlink
+    print(f"  ✓ Opened {hyperlink(url)}")
 

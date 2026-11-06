@@ -38,11 +38,32 @@ def test_format_message_uses_configured_vizor_port(tmp_path, monkeypatch):
     (config_dir / "config.json").write_text('{"vizor": {"port": 9001}}')
     event = uxcore.Event("local", "dispatch", {"job_id": "job-42"}, "t", {})
 
-    assert "https://localhost:9001/#job-job-42" in format_message(event)
+    assert "http://localhost:9001/#job-job-42" in format_message(event)
 
 
 def test_format_message_uses_default_vizor_port_without_config(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     event = uxcore.Event("local", "dispatch", {"job_id": "job-42"}, "t", {})
 
-    assert f"https://localhost:{slack.DEFAULT_PORT}/#job-job-42" in format_message(event)
+    assert f"http://localhost:{slack.DEFAULT_PORT}/#job-job-42" in format_message(event)
+
+
+def test_format_message_uses_daemon_port_if_available(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("synlynk.vizor_daemon._read_port", lambda: 33333)
+    event = uxcore.Event("local", "dispatch", {"job_id": "job-42"}, "t", {})
+
+    assert "http://localhost:33333/#job-job-42" in format_message(event)
+
+
+def test_format_message_handles_normalized_event_actions():
+    event = uxcore.Event(
+        actor_id="local",
+        action="job_killed",
+        params={"job_id": "job-99"},
+        timestamp="2026-08-08T00:00:00Z",
+        result={"job_id": "job-99"},
+    )
+    message = format_message(event)
+    assert "View live in Vizor" in message
+    assert "http://localhost" in message

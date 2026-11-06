@@ -10,24 +10,49 @@ import urllib.request
 from synlynk import uxcore
 from synlynk.viz import DEFAULT_PORT
 
-NOTIFY_EVENT_TYPES = ["dispatch", "approve_pr", "kill_job"]
+NOTIFY_EVENT_TYPES = [
+    "dispatch",
+    "approve_pr",
+    "pr_approve",
+    "pr_approved",
+    "kill_job",
+    "job_kill",
+    "job_killed",
+]
+
+
+def _normalize_action(action: str) -> str:
+    return (action or "").strip().lower().replace("-", "_")
 
 
 def _vizor_port() -> int:
     try:
         with open(".synlynk/config.json") as config_file:
             config = json.load(config_file)
-        return (config.get("vizor") or {}).get("port", DEFAULT_PORT)
+        configured = (config.get("vizor") or {}).get("port")
+        if configured:
+            return int(configured)
     except (AttributeError, OSError, TypeError, ValueError):
-        return DEFAULT_PORT
+        pass
+
+    try:
+        from synlynk import vizor_daemon
+        live_port = vizor_daemon._read_port()
+        if live_port:
+            return int(live_port)
+    except Exception:
+        pass
+
+    return DEFAULT_PORT
 
 
 def format_message(event: uxcore.Event) -> str:
     message = f"[{event.action}] {json.dumps(event.params)} -> {json.dumps(event.result)}"
-    if event.action in NOTIFY_EVENT_TYPES:
+    action = _normalize_action(event.action)
+    if action in NOTIFY_EVENT_TYPES:
         job_id = event.result.get("job_id") or event.params.get("job_id")
         if job_id:
-            message += f"\n<https://localhost:{_vizor_port()}/#job-{job_id}|View live in Vizor>"
+            message += f"\n<http://localhost:{_vizor_port()}/#job-{job_id}|View live in Vizor>"
     return message
 
 
