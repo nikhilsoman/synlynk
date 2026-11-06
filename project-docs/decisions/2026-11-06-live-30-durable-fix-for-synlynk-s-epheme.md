@@ -1,0 +1,62 @@
+<!-- generated - source of truth is state.db -->
+---
+decision_id: dec-5ad0d122
+topic: "LIVE-30: durable fix for synlynk's ephemeral-worktree import-path crash-loop (Vizor daemon + dispatch subprocess both hit ModuleNotFoundError when the worktree captured at install/dispatch-time is later deleted, per Worktree Hygiene Protocol). Candidate options: (1) stable non-editable install (pipx/venv from a tagged release) that daemon/dispatch resolve against instead of an ambient worktree; (2) dynamic re-resolution of the import root on every daemon launch/dispatch instead of a static install-time snapshot; (3) pre-delete guard in Worktree Hygiene Protocol that refuses/warns before removing a worktree something long-lived still points at. See docs/rca/2026-11-06-LIVE-30-vizor-daemon-crashloop-recurrence.md for full RCA. Recommend which option(s) to implement and in what order."
+date: 2026-11-06
+panel: [claude, codex, grok]
+status: approved
+---
+
+## Topic
+LIVE-30: durable fix for synlynk's ephemeral-worktree import-path crash-loop (Vizor daemon + dispatch subprocess both hit ModuleNotFoundError when the worktree captured at install/dispatch-time is later deleted, per Worktree Hygiene Protocol). Candidate options: (1) stable non-editable install (pipx/venv from a tagged release) that daemon/dispatch resolve against instead of an ambient worktree; (2) dynamic re-resolution of the import root on every daemon launch/dispatch instead of a static install-time snapshot; (3) pre-delete guard in Worktree Hygiene Protocol that refuses/warns before removing a worktree something long-lived still points at. See docs/rca/2026-11-06-LIVE-30-vizor-daemon-crashloop-recurrence.md for full RCA. Recommend which option(s) to implement and in what order.
+
+## Panel Inputs
+
+### claude
+[model=default; version=2.1.311 (Claude Code)]
+
+**Analysis**
+
+The root cause here is architectural: a long-lived process (daemon) or a dispatch subprocess is binding its import root to a path whose lifecycle (ephemeral worktree, deleted per Worktree Hygiene Protocol) is shorter than its own. Any fix that doesn't break that mismatch is a mitigation, not a cure.
+
+**Option 1 (stable install)** removes the dependency class entirely — if daemon/dispatch resolve against a pinned, tagged, non-editable install, the worktree's deletion is simply irrelevant to them. This is the only option that eliminates the failure mode rather than narrowing its window.
+
+**Option 2 (dynamic re-resolution)** only re-checks the path at launch time. It still leaves a long-running daemon process holding a reference into a worktree that can be deleted mid-run (the daemon doesn't re-launch itself just because the hygiene protocol fired), so the crash-loop can still recur — it just requires an extra step (a restart) to trigger. It also adds resolution logic and failure surface for a problem option 1 removes structurally. Lower priority.
+
+**Option 3 (pre-delete guard)** is a cheap, valuable second layer — process discipline will fail again eventually (humans and dispatch scripts both forget), so a guard that checks "does the daemon's active import root point here" before `git worktree remove` is good defense in depth. But it's reactive by nature: it depends on knowing all current pointers, and it does nothing for root cause.
+
+**Recommendation:** Implement (1) first — it's the durable, architectural fix and the other two become far less load-bearing once ambient worktrees aren't part of the import path at all. Implement (3) second, immediately after, as a cheap belt-and-suspenders safety net against any lingering or future paths that still point into ephemeral worktrees (e.g., mid-dev dispatches before a release is cut). Skip (2), or treat it as optional — it adds complexity to solve a problem (1) already solves more completely, and its per-launch check still leaves the daemon's live crash-loop window open.
+
+### codex
+[model=default; version=codex-cli 0.163.0]
+
+The RCA shows a systemic lifecycle mismatch: long-lived consumers (Vizor launchd and dispatch subprocesses) depend on an editable install whose source path belongs to short-lived worktrees. Because Worktree Hygiene Protocol intentionally deletes those worktrees, any install-time path snapshot is inherently temporary. The recurrence across two independent subsystems rules out another localized `PYTHONPATH` patch.
+
+Option 1 should be the primary fix. A stable, non-editable installation from a tagged release gives daemon and dispatch a durable import root independent of developer worktrees, current working directories, and cleanup activity. It also creates a clear deployment boundary: production-like services consume a versioned artifact, while worktrees remain for development. The main tradeoff is release/install operational work, including upgrade procedures and ensuring the installed version is intentionally refreshed.
+
+Option 2 is useful defense-in-depth but insufficient alone. Dynamic re-resolution can recover when a stale path disappears, but it still needs a valid source to resolve against. If the only available installation remains an editable worktree, re-resolution may simply select another ephemeral path or fail during an outage. It also adds launch-time complexity and could make behavior dependent on ambient interpreter state.
+
+Option 3 should be implemented as a guardrail after, or alongside, Option 1. Detecting references from plists and editable installs can prevent accidental deletion and improve diagnostics, but refusing worktree cleanup couples hygiene to every possible long-lived consumer and risks blocking normal workflows. It should warn or require explicit override rather than become the core availability mechanism.
+
+My recommendation is to implement **Option 1 first**, establishing a stable tagged-release installation and switching both Vizor and dispatch to it. Then implement **Option 2** as bounded recovery/validation, with clear failure messages and no ambient-worktree fallback. Finally add **Option 3** as defense-in-depth: warn before deleting referenced worktrees, while allowing deliberate cleanup once consumers are migrated. This ordering fixes the root cause first and reduces recurrence risk without making worktree hygiene responsible for service availability.
+
+### grok
+[model=default; version=grok 1.0.70 (f50904eaee6c) [stable]]
+
+I'll read the LIVE-30 RCA and the worktree hygiene rules so the recommendation matches how the crash actually happens.The crash-loop is a missing stable import root. Launchd starts at `/` and dispatch children start at `$HOME`. Both must `import synlynk` before any worktree is on their path. LIVE-16 wrote one worktree into the plist at `install()` time. Worktree Hygiene then deletes that tree when its PR merges, which is required. PR #5138 shows the same shape in dispatch: the launcher import dies on a deleted editable install even when the job worktree itself is valid. Retargeting the plist again only resets the clock.
+
+Option 1 is the durable fix, with one correction to the candidate as written. A pipx install frozen at the last tagged release leaves the daemon and the dispatcher behind the tree operators are actually running. This machine already shows that drift: pipx at `0.23.0.dev0`, an editable install at `0.25.1` inside `worktrees/job-b861e7ec`, and `VERSION` at `0.27.5`. What must be stable is the location, not a release pin. Install a non-editable wheel into a dedicated venv (pipx can manage it) built from the primary checkout — the clone hygiene never removes — and refresh that venv when the primary checkout moves. Point launchd `ProgramArguments` at that interpreter so the plist carries no worktree `PYTHONPATH`. Dispatch should bootstrap from the same interpreter, then prepend the job worktree so the code under test still wins. That keeps #5138's isolation and gives the parent a package that survives cleanup.
+
+Option 2 has no safe target until that venv exists. Re-reading `synlynk.__file__` on each start still follows whatever editable install pip last wrote, today another disposable job worktree. A disk search prefers the same class of path. The useful piece of (2) is a wrapper that lives outside any worktree, execs the venv interpreter, and fails once with an explicit error if that interpreter is absent.
+
+Option 3 belongs in the removal command, not as another paragraph in the hygiene protocol. Agents run `git worktree remove` from the protocol text; a warning in `CLAUDE.md` will not execute. Once the venv exists, refuse deletion while a plist, an editable install record, or the venv source still names that tree, and tell the caller to retarget. A guard shipped first only stalls hygiene, which is how the stale-worktree backlog formed. It is still worth having: a later `pip install -e` from a job worktree can re-poison resolution.
+
+Implement (1) first, with the stable wrapper from (2) in that same change. Add the mechanical removal guard (3) immediately after. Do not ship another plist retarget.
+
+## Synthesis
+Decision: Implement Option 1 first — a stable, non-editable install (pipx/venv built from a tagged release, or at minimum from the primary non-worktree checkout) that the Vizor daemon and dispatch subprocess both resolve against — with the launch wrapper that execs that interpreter shipped as part of the same change, bundled in a single PR. This is the only option that removes the lifecycle mismatch (long-lived consumer bound to a short-lived path) rather than narrowing its window, and all three panelists converge on it as primary. Follow immediately with Option 3 — a mechanical pre-delete guard in the `git worktree remove` path itself (not just protocol text) that refuses/warns when a plist, editable-install record, or venv source still names the worktree being removed — as cheap defense-in-depth against future drift (e.g., a stray `pip install -e` from a job worktree repoisoning resolution). Skip Option 2: dynamic re-resolution has no safe target to resolve against until the stable install exists, and once it exists it's largely redundant — it would only add launch-time complexity and failure surface to re-solve a problem Option 1 already eliminates structurally.
+
+## Decision
+Decision: Implement Option 1 first — a stable, non-editable install (pipx/venv built from a tagged release, or at minimum from the primary non-worktree checkout) that the Vizor daemon and dispatch subprocess both resolve against — with the launch wrapper that execs that interpreter shipped as part of the same change, bundled in a single PR. This is the only option that removes the lifecycle mismatch (long-lived consumer bound to a short-lived path) rather than narrowing its window, and all three panelists converge on it as primary. Follow immediately with Option 3 — a mechanical pre-delete guard in the `git worktree remove` path itself (not just protocol text) that refuses/warns when a plist, editable-install record, or venv source still names the worktree being removed — as cheap defense-in-depth against future drift (e.g., a stray `pip install -e` from a job worktree repoisoning resolution). Skip Option 2: dynamic re-resolution has no safe target to resolve against until the stable install exists, and once it exists it's largely redundant — it would only add launch-time complexity and failure surface to re-solve a problem Option 1 already eliminates structurally.
+
+> Signatures: see 2026-11-06-live-30-durable-fix-for-synlynk-s-epheme.json
