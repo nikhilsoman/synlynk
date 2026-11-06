@@ -1169,10 +1169,20 @@ def build_workspace_routing_handler():
             return True
 
         def do_GET(self):
+            from synlynk.local_http_auth import local_browser_origin_ok
+            headers = getattr(self, "headers", None)
+            if not local_browser_origin_ok(headers):
+                self.send_error(403, "forbidden origin")
+                return
             if self._route_path():
                 super().do_GET()
 
         def do_HEAD(self):
+            from synlynk.local_http_auth import local_browser_origin_ok
+            headers = getattr(self, "headers", None)
+            if not local_browser_origin_ok(headers):
+                self.send_error(403, "forbidden origin")
+                return
             if self._route_path():
                 super().do_HEAD()
 

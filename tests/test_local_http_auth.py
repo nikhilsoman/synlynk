@@ -41,6 +41,24 @@ def test_authorize_rejects_missing_and_wrong_token(tmp_path):
     assert code == 200
 
 
+def test_authorize_accepts_bearer_authorization_header(tmp_path):
+    path = str(tmp_path / "daemon.token")
+    expected = ensure_local_token(path)
+    ok, code, _ = authorize_local_request({"Authorization": f"Bearer {expected}"}, path=path)
+    assert ok is True
+    assert code == 200
+
+    # Case-insensitive header name and scheme
+    ok, code, _ = authorize_local_request({"authorization": f"bearer {expected}"}, path=path)
+    assert ok is True
+    assert code == 200
+
+    # Wrong bearer token rejected
+    ok, code, _ = authorize_local_request({"Authorization": "Bearer bad-token"}, path=path)
+    assert ok is False
+    assert code == 401
+
+
 def test_local_origin_allows_cli_and_localhost_rejects_foreign():
     assert local_browser_origin_ok({}) is True
     assert local_browser_origin_ok({"Origin": "http://localhost:8721"}) is True

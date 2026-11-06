@@ -1,5 +1,19 @@
 # Agy Devlog
 
+## 2026-11-06 — Day 3 "Port of Call" (v0.28.3): Port Normalization, Bearer Auth & Terminal Hyperlinks
+
+### Shipped & Verified Across Fleet
+- **Trigger & Cadence Governance:**
+  - Cadence ticket #5153 approved and closed on GitHub by Nikhil.
+  - Dedicated Parent Tracking Issue #5155 filed: `[Epic] Day 3: "Port of Call" (v0.28.3) — Execution & Live Progress Rollup`.
+- **Subsystem Implementation & Verification:**
+  - **Task 1 (gh:#4806):** In `synlynk/notifiers/slack.py`, corrected Vizor deep link protocol from `https://` to `http://`, integrated live daemon port lookup via `vizor_daemon._read_port()` falling back to canonical `DEFAULT_PORT = 33333`, and supported normalized action types (`job_killed`, `pr_approved`). Verified via `tests/test_slack_notifier.py` and `tests/test_notifier_slack.py`.
+  - **Task 2 (gh:#4716):** Enhanced `synlynk/local_http_auth.py` to support standard `Authorization: Bearer <token>` session authentication alongside `X-Synlynk-Token`. Added local origin checking to Vizor server and daemon GET/HEAD endpoints (`/api/source`, `/api/daemon/stream`) to guard against cross-origin data exfiltration. Verified via `tests/test_local_http_auth.py`, `tests/test_viz.py`, and `tests/test_vizor_daemon.py`.
+  - **Task 3:** Created `synlynk/terminal.py` providing `supports_hyperlinks()` and `hyperlink()` with OSC 8 virtual hyperlink escape sequences and graceful plain-text URL fallbacks. Wired into `synlynk viz` CLI output. Verified via `tests/test_terminal.py`.
+- **Closeout & Rollup:**
+  - Full 118-test suite covering slack notifiers, local auth, terminal hyperlinks, and Vizor daemon passing green.
+[@agy, @nikhilsoman]
+
 ## 2026-11-06 — Day 2 "Living Wire" (v0.28.2): Onboarding Engine Dead Code Elimination & Verification
 
 ### Shipped & Verified Across Fleet

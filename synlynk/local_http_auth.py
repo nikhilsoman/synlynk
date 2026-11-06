@@ -100,6 +100,10 @@ def authorize_local_request(
     if not expected:
         return False, 401, "unauthorized"
     provided = header_value(headers, TOKEN_HEADER)
+    if not provided:
+        auth_value = header_value(headers, "Authorization")
+        if auth_value.lower().startswith("bearer "):
+            provided = auth_value[7:].strip()
     if not provided or not secrets.compare_digest(provided, expected):
         return False, 401, "unauthorized"
     if not local_browser_origin_ok(headers):

@@ -9,6 +9,18 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.28.3] - 2026-11-06
+### Added
+- feat(terminal): introduce `synlynk.terminal` module with OSC 8 clickable hyperlink detection and graceful plain-text fallback (#5153) (#5155)
+### Changed
+- feat(viz): integrate terminal hyperlink formatting into `synlynk viz` CLI output (#5153) (#5155)
+- feat(auth): support standard `Authorization: Bearer <token>` session authentication alongside `X-Synlynk-Token` in `local_http_auth` (#4716) (#5153)
+- feat(security): enforce local origin verification on Vizor and daemon GET/HEAD endpoints to prevent cross-origin data exposure (#4716) (#5153)
+### Fixed
+- fix(slack): normalize Vizor deep link URL scheme to HTTP and live port resolution, and support normalized event actions (#4806) (#5153)
+
+---
+
 ## [v0.28.2] - 2026-11-06
 ### Added
 - feat(probe): wire probe_binding.py into synlynk probe --deps for verified system and harness dependency auditing (#3044) (#5117)
