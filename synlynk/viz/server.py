@@ -80,7 +80,8 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         from urllib.parse import urlparse, parse_qs
         from synlynk.local_http_auth import local_browser_origin_ok
 
-        if not local_browser_origin_ok(self.headers):
+        headers = getattr(self, "headers", None)
+        if not local_browser_origin_ok(headers):
             self.send_error(403, "forbidden origin")
             return
 
