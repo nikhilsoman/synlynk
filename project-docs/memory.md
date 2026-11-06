@@ -7,6 +7,11 @@
 - **Directories:** bin, docs, project-docs, synlynk, tests, website
 
 ## Decisions
+- **2026-11-06 [Day 1 "Clean Slate" (v0.28.1): LIVE-30 Durable Import Resolution & Uninitialized Vizor Directory Creation]:**
+  Resolved Sev1 issue #5142/#5144 (LIVE-30 daemon crash-loop) and #4819 (viz FTUE uninitialized directory crash):
+  (1) Durable Import Root: `_synlynk_import_root()` in `synlynk/vizor_daemon.py` now resolves the canonical repository root via `git rev-parse --path-format=absolute --git-common-dir` when running inside linked git worktrees. This prevents launchd plists from capturing ephemeral worktree paths that later get pruned, permanently stopping `ModuleNotFoundError: No module named 'synlynk'`.
+  (2) FTUE Lazy Directory Provisioning: `VizorHandler` in `synlynk/viz/server.py` lazily ensures `.synlynk/` and `VIZ_CACHE_DIR` exist before file operations, enabling clean first-run execution without prior setup.
+  (3) Substrate Hygiene: Pruned 12 safe merged worktrees via `synlynk worktree clean --apply` and confirmed local Vizor daemon healthy on canonical port 33333. [@agy, @nikhilsoman]
 - **2026-10-25 [v0.25.4 shipped; Agy nominated to run v0.25.5 as conductor, testing the Default Agent Role reassessment]:**
   v0.25.4 ("accurate job status and completion evidence") shipped via PR #2601 (tag) + PR #2602
   (roadmap shipped-flip). Nikhil then asked Claude to prep a handoff so Agy runs v0.25.5 ("CI and

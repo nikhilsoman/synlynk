@@ -9,6 +9,28 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.28.1] - 2026-11-06
+### Fixed
+- fix(vizor): resolve durable repo root via git-common-dir in worktrees (#5144) (#5148)
+- fix(viz): ensure .synlynk and viz-cache exist before starting Vizor server (#4819) (#5147)
+- fix: defer dispatch when the provider credit pool or model track is exhausted (#5146)
+- fix: do not blame the capability probe when routing selects another harness (#5140)
+- fix: let pr check use GitHub CI when the canonical ledger is unreachable (#5139)
+- fix: import synlynk from the dispatch worktree (#5138)
+- fix: do not block dispatch on an unplaced phase in observe mode (#5137)
+- fix: retry the lifecycle nudge when a fresh runner ledger hits disk I/O (#5136)
+- fix: stop the VS Code tag job from failing before it can package (#5135)
+- fix: do not fail a tag when PyPI has no trusted publisher (#5134)
+- fix: stop Marketing PR Sync from failing on PR #2175 (#5133)
+- fix: keep rollback stash from swallowing .synlynk outputs (#5132)
+- fix: verify comment and close on the object that was written (#5125)
+- fix: use story summaries as GitHub issue titles (#5124)
+### Changed
+- docs: RCA for LIVE-30 — Vizor daemon crash-loop recurrence, architectural root cause (#5143)
+- chore(release): batten down hatches — synchronize external surfaces and docs for v0.27.5 (#5049) (#5050)
+
+---
+
 ## [v0.27.5] - 2026-11-03
 ### Added
 - feat(surfaces): VS Code and OpenVSX extension listing, distribution packaging, and dispatch smoke verification (v0.27.0, PR #5040)

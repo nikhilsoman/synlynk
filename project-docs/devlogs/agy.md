@@ -1,5 +1,30 @@
 # Agy Devlog
 
+## 2026-11-06 — Day 1 "Clean Slate" (v0.28.1): FTUE Sweep, Vizor FTUE Fix & LIVE-30 Daemon Crash Loop Elimination
+
+### Shipped & Verified Across Fleet
+- **FTUE Deep-Sweep Audit & Formal Strategic Roadmap Authored:**
+  - Audited full repo for First-Time User Experience (FTUE) loose ends, architectural anti-patterns, developer segment expectations, competitive landscape (Pi, OpenHands/Devin, Conductor, Hermes, OpenClaw), and project capability boundaries.
+  - Published comprehensive roadmap artifact: `ftue-deep-sweep-and-formal-roadmap.md` covering Tier 1 Daily Named Releases (Day 1: Clean Slate, Day 2: Living Wire, Day 3: Port of Call, Day 4: Truth Ledger, Day 5: Genesis Gate), Tier 2 Developer Preview Milestone (v0.29.0), Tier 3 Weekly themes, Tier 4 Monthly expansions, and Tier 5 Quarterly industry packs.
+- **In-Flight Fleet Review & Merges Completed:**
+  - **Grok PR #5146 (Issue #5012 - Credit Preflight):** Completed QA verification checklist (`synlynk pr check`, 88/88 tests passed, policy check passed), posted formal review comment, and squash-merged into `main` (`980e7e9c`).
+  - **Claude PR #5143 (Issue #5142 - LIVE-30 RCA):** Rebased with `main` to integrate the rollback stash fix (`#5141`), verified all 6 CI checks green on GitHub Actions, completed QA review checklist, and squash-merged into `main` (`9b34a177`).
+- **FTUE Uninitialized Directory Crash Remediation (Issue #4819 - PR #5147):**
+  - Authored TDD reproduction test `tests/test_viz_ftue_uninitialized.py` verifying `FileNotFoundError` on uninitialized `.synlynk/` runs.
+  - Updated `synlynk/viz/server.py` (`VizorHandler.__init__` and `_start_server`) to lazily ensure `.synlynk/` and `VIZ_CACHE_DIR` exist before file I/O.
+  - Verified 305 viz unit tests passed, all 6 GitHub Actions CI checks green, and squash-merged into `main` (`6494b111`).
+- **LIVE-30 Vizor Daemon Crash-Loop Elimination (Issue #5144 - PR #5148):**
+  - Investigated crash loop caused by `_synlynk_import_root()` pointing to ephemeral linked git worktrees (`worktrees/job-*` or `.worktrees/*`) that were later pruned.
+  - Authored reproduction test `tests/test_live30_durable_import.py` testing worktree resolution to canonical repo vs standalone repo fallbacks.
+  - Updated `synlynk/vizor_daemon.py` to resolve the durable repository root via `git rev-parse --path-format=absolute --git-common-dir` when running inside any worktree.
+  - Verified all 54 daemon unit tests pass locally, all 6 GitHub Actions CI checks green, and squash-merged into `main` (`4b32047e`).
+- **Local Fleet Verification:**
+  - Reinstalled daemon locally with `python3 -m synlynk viz --install`.
+  - Inspected `~/Library/LaunchAgents/com.synlynk.vizor-daemon.plist` confirming `PYTHONPATH` was updated to durable root `/Users/nikhilsoman/dev/synlynk`.
+  - Confirmed `~/.synlynk/vizor-daemon/daemon.log` crash-loop terminated and daemon successfully started: `2026-11-06T04:39:16Z daemon starting on port 33333`.
+  - Verified `python3 -m synlynk viz --daemon-status` reporting `running: true, pid: 79893, port: 33333`.
+[@agy, @nikhilsoman]
+
 ## 2026-10-02 — 15-Minute Time-to-Wow Field Trials Across Target Repositories
 
 ### Executed & Verified Across Target Repositories
@@ -1376,4 +1401,13 @@
 - Added `maintainer triage` and `maintainer probe` to `COMMAND_TAXONOMY` in `synlynk/taxonomy.py` and regenerated `docs/reference/commands.md`.
 - Embedded `DEFAULT_ROLE_CHARTERS` canonical fallback in `synlynk/charters.py`, guaranteeing all roles resolve rich attributes in isolated worktrees.
 - 88/88 passing tests locally across all related suites.
+[@agy, @nikhilsoman]
+
+### 2026-11-03: Milestone v0.27.x Developer Preview Operationalization (Gates 1-6)
+- **Gate 1 (v0.27.0):** Developer Surfaces & VS Code / OpenVSX distribution packaging (PR #5040, Issue #5032).
+- **Gate 2 (v0.27.1):** Quickstart Engine & verified sub-15-minute onboarding loop (PR #5042, Issue #5033).
+- **Gate 3 (v0.27.2):** Diagnostics, prerequisite auditing & self-healing doctor remediation (PR #5044, Issue #5034).
+- **Gate 4 (v0.27.3):** 5-way cross-harness fresh-project journey matrix for Claude, Codex, Agy, Grok, and Muse (PR #5046, Issue #5035).
+- **Gate 5 (v0.27.4):** Developer Preview full acceptance test matrix, GOVERNS truth audit (0 unlinked stories, 0 shadow DBs), and sentinel health sweep (PR #5047, Issue #5036).
+- **Gate 6 (v0.27.5):** Developer Preview stable release gate, canonical VERSION bump to 0.27.5, documentation sync, git tag `v0.27.5`, and published release assets (PR #5048, Issue #5037, Epic #5038).
 [@agy, @nikhilsoman]
