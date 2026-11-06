@@ -3876,7 +3876,6 @@ def main(argv=None) -> None:
     elif args.command == "sync":
         if getattr(args, "daily", False) or getattr(args, "json", False):
             from synlynk.greenfield.daily_sync import generate_daily_sync, format_cli_greeting
-            import json
             sync_data = generate_daily_sync(".")
             if getattr(args, "json", False):
                 print(json.dumps(sync_data, indent=2))
