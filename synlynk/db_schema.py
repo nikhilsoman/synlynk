@@ -543,7 +543,8 @@ CREATE TABLE IF NOT EXISTS harness_reservations (
     job_id         TEXT,
     status         TEXT NOT NULL DEFAULT 'open',
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    released_at    TIMESTAMP
+    released_at    TIMESTAMP,
+    track          TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_harness_reservations_harness ON harness_reservations(harness, status);
 

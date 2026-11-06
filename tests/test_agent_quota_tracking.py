@@ -90,7 +90,7 @@ def test_agent_reservations_table_exists(project_dir):
     cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_reservations)")}
     assert cols == {
         "id", "harness", "tokens", "scope", "scope_id", "job_id",
-        "status", "created_at", "released_at",
+        "status", "created_at", "released_at", "track",
     }
     daemon_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
     assert "blocked_reason" in daemon_cols
