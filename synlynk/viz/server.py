@@ -44,6 +44,7 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
     """Serves viz-cache/ and handles Vizor POST routes."""
 
     def __init__(self, *args, **kwargs):
+        os.makedirs(_pkg().VIZ_CACHE_DIR, exist_ok=True)
         super().__init__(*args, directory=os.path.abspath(_pkg().VIZ_CACHE_DIR), **kwargs)
 
     def _read_json_body(self):
@@ -754,6 +755,9 @@ def _start_server(port: int) -> http.server.HTTPServer:
     from synlynk.local_http_auth import ensure_local_token
 
     ensure_local_token()
+    meta_dir = os.path.dirname(_pkg().VIZ_META_PATH) or ".synlynk"
+    os.makedirs(meta_dir, exist_ok=True)
+    os.makedirs(_pkg().VIZ_CACHE_DIR, exist_ok=True)
     server = http.server.HTTPServer(("127.0.0.1", port), VizorHandler)
     meta = {"port": port, "serving": True}
     with open(_pkg().VIZ_META_PATH, "w") as f:
