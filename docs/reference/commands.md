@@ -68,6 +68,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `story reclaim` (secondary) — goal
 - `story claim` (secondary) — goal
 - `story update` (secondary) — goal
+- `story sync` (secondary) — goal
 - `backlog capture` (secondary) — open
 - `backlog list` (secondary) — open
 - `backlog sync` (secondary) — open
@@ -77,6 +78,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `roadmap add` (secondary) — sustain
 - `roadmap update` (secondary) — sustain
 - `roadmap reassign` (secondary) — sustain
+- `roadmap render` (secondary) — sustain
 - `open` (primary) — open
 - `launch` (primary) — open
 - `roles` (secondary) — open

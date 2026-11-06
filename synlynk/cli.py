@@ -1618,6 +1618,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     story_update_parser.add_argument("--phase", default=None, help="Update story phase")
     story_update_parser.add_argument("--harness", default=None, help="Harness identity; auto-detected if omitted")
     story_update_parser.add_argument("--override", action="store_true", help="Force-take claim if transitioning to in_progress")
+    story_sub.add_parser("sync", help="Sync/render todo.md from state.db")
 
     pm_parser = subparsers.add_parser("pm", help="PM agent commands")
     pm_subparsers = pm_parser.add_subparsers(dest="pm_command")
@@ -1739,6 +1740,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     roadmap_reassign_parser.add_argument("--story-id", default=None, dest="story_id")
     roadmap_reassign_parser.add_argument("--notes", default=None)
     roadmap_reassign_parser.add_argument("--role", default="pm")
+    roadmap_render_parser = roadmap_sub.add_parser("render", help="Render roadmap.md from state.db")
+    roadmap_render_parser.add_argument("--role", default="pm")
 
     policy_parser = subparsers.add_parser("policy", help="Check policy authority")
     policy_subparsers = policy_parser.add_subparsers(dest="policy_command")
@@ -3181,6 +3184,10 @@ def main(argv=None) -> None:
                 override=getattr(args, "override", False),
                 harness=getattr(args, "harness", None),
             ) or 0)
+        elif args.story_action == "sync":
+            from synlynk.db import _generate_todo_md
+            _generate_todo_md()
+            print("Rendered todo.md from state.db")
     elif args.command == "pm" and args.pm_command == "sweep":
         from synlynk.pm_agent import cmd_pm_sweep
 
@@ -3280,6 +3287,10 @@ def main(argv=None) -> None:
             except ValueError as e:
                 print(f"Error: {e}")
                 sys.exit(1)
+        elif args.roadmap_action == "render":
+            from synlynk.db import _generate_roadmap_md
+            _generate_roadmap_md()
+            print("Rendered roadmap.md from state.db")
     elif args.command == "backlog":
         if args.backlog_action == "capture":
             from synlynk.backlog import stage_discovered_work

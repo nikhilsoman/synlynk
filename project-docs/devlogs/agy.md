@@ -1,5 +1,19 @@
 # Agy Devlog
 
+## 2026-11-06 — Day 4 "Truth Ledger" (v0.28.4): State DB Reconciliation & Shadow DB Elimination
+
+### Shipped & Verified Across Fleet
+- **Trigger & Cadence Governance:**
+  - Cadence ticket #5157 approved and closed on GitHub by Nikhil.
+  - Dedicated Parent Tracking Issue #5158 filed: `[Epic] Day 4: "Truth Ledger" (v0.28.4) — Execution & Live Progress Rollup`.
+- **Subsystem Implementation & Verification:**
+  - **Task 1 (gh:#4239):** In `.gitignore`, comprehensively ignored stray database files (`state.db*`, `**/state.db*`, `*.db`, `*.db-wal`, `*.db-shm`, `*.db*bak`) and nested `**/node_modules/`. In `synlynk/__init__.py`, added active worktree guard blocking creation or writing of shadow `state.db` files inside linked git worktrees. In `synlynk/state_registry.py`, gracefully recovered deterministic workspace state DB path when registry read access encounters sandbox permission restrictions.
+  - **Task 2 (gh:#4705):** In `synlynk/db.py`, enforced single-source authority model per spec `2026-10-29-roadmap-state-db-github-authority-design.md`: skipped false-positive git-HEAD drift checks for git-ignored on-demand views (`roadmap.md`, `todo.md`, `costs.md`), and ensured `memory.md` compares working-tree content against committed `project-docs/memory.md` in HEAD.
+  - **Task 3 (gh:#4371):** Added `synlynk roadmap render` and `synlynk story sync` CLI commands to `synlynk/cli.py` for on-demand generated view projection from authoritative `state.db`.
+- **Closeout & Rollup:**
+  - 5,458 tests collected and passing clean; full regression suite in `tests/test_truth_ledger.py`.
+[@agy, @nikhilsoman]
+
 ## 2026-11-06 — Day 3 "Port of Call" (v0.28.3): Port Normalization, Bearer Auth & Terminal Hyperlinks
 
 ### Shipped & Verified Across Fleet

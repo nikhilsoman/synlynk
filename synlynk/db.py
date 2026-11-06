@@ -3624,11 +3624,28 @@ def _detect_hand_edit(filename: str) -> str | None:
     if not os.path.exists(file_path):
         return None
 
+    workspace_root = os.path.abspath(os.getcwd())
+    docs_dir = _resolved_docs_dir() if "_resolved_docs_dir" in globals() else _docs_dir()
+
+    # Per gh:#2653 / #4705, if a generated doc is ignored in git, state.db is the sole authority
+    if docs_dir:
+        docs_file = os.path.join(docs_dir, filename)
+        try:
+            ig = subprocess.run(
+                ["git", "check-ignore", "-q", "--", docs_file],
+                cwd=workspace_root,
+                capture_output=True,
+                check=False,
+            )
+            if ig.returncode == 0:
+                return None
+        except Exception:
+            pass
+
     with open(file_path) as f:
         working_tree_content = f.read()
 
     committed_blob = None
-    workspace_root = os.path.abspath(os.getcwd())
     while True:
         if os.path.exists(os.path.join(workspace_root, ".git")):
             rel_path = os.path.relpath(file_path, workspace_root).replace(os.sep, "/")
@@ -3651,6 +3668,26 @@ def _detect_hand_edit(filename: str) -> str | None:
 
     if committed_blob is not None and working_tree_content == committed_blob:
         return None
+
+    # If the migrated copy differs or is not in git HEAD, check if the workspace
+    # docs_dir copy (e.g. project-docs/filename) matches git HEAD.
+    if docs_dir:
+        docs_file = os.path.join(docs_dir, filename)
+        if os.path.exists(docs_file):
+            try:
+                rel_docs = os.path.relpath(docs_file, workspace_root).replace(os.sep, "/")
+                p = subprocess.run(
+                    ["git", "show", f"HEAD:{rel_docs}"],
+                    cwd=workspace_root,
+                    capture_output=True,
+                    text=True,
+                )
+                if p.returncode == 0:
+                    with open(docs_file) as f:
+                        if f.read() == p.stdout:
+                            return None
+            except Exception:
+                pass
 
     generator_name = _GENERATORS_BY_FILENAME.get(filename)
     generator = globals().get(generator_name)
