@@ -1415,11 +1415,31 @@ def _synlynk_import_root() -> str:
 
     Launchd/systemd start with cwd `/` or `$HOME`. An editable install that
     points at a deleted worktree is invisible from those cwds, which is the
-    LIVE-16 crash-loop.
+    LIVE-16/LIVE-30 crash-loop. If synlynk is running from an editable install
+    inside a git worktree, resolve the canonical durable repository root via
+    the git common directory so pruning worktrees never causes ModuleNotFoundError.
     """
     import synlynk
 
-    return str(Path(synlynk.__file__).resolve().parent.parent)
+    raw_root = Path(synlynk.__file__).resolve().parent.parent
+    try:
+        res = subprocess.run(
+            ["git", "-C", str(raw_root), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+        if res.returncode == 0:
+            raw_out = res.stdout.strip()
+            if raw_out:
+                common_dir = Path(raw_out)
+                main_repo = common_dir.parent if common_dir.name == ".git" else common_dir
+                if (main_repo / "synlynk" / "__init__.py").is_file():
+                    return str(main_repo.resolve())
+    except Exception:
+        pass
+    return str(raw_root)
 
 
 def _plist_env_xml(env: dict) -> str:
