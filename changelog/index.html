@@ -45,6 +45,16 @@
 Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
 <hr>
 <h2><a href="https://github.com/nikhilsoman/synlynk/compare/v0.3.0...HEAD">Unreleased</a></h2>
+<div class="changelog-version-header"><span class="changelog-version">vv0.28.4</span><span class="changelog-date">2026-11-06</span></div>
+<h3 class="tag-added">Added</h3>
+- feat(cli): add `synlynk roadmap render` and `synlynk story sync` CLI commands for on-demand generated view refresh (#4371) (#5157)
+<h3 class="tag-changed">Changed</h3>
+- feat(db): enforce single-source authority model where state.db is the sole truth; ignore generated views in git and eliminate false-positive hand-edit drift warnings (#4705) (#5157)
+- feat(registry): gracefully recover canonical workspace ledger path when registry reading is restricted (#4239) (#5157)
+<h3 class="tag-fixed">Fixed</h3>
+- fix(hygiene): thoroughly gitignore stray state.db files, sidecars, and nested node_modules across all subtrees (#4239) (#5157)
+- fix(governance): block creation of shadow state.db instances inside linked git worktrees (#4239) (#5157)
+<hr>
 <div class="changelog-version-header"><span class="changelog-version">vv0.28.3</span><span class="changelog-date">2026-11-06</span></div>
 <h3 class="tag-added">Added</h3>
 - feat(terminal): introduce `synlynk.terminal` module with OSC 8 clickable hyperlink detection and graceful plain-text fallback (#5153) (#5155)
