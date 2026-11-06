@@ -1,5 +1,24 @@
 # Agy Devlog
 
+## 2026-11-06 — Day 2 "Living Wire" (v0.28.2): Onboarding Engine Dead Code Elimination & Verification
+
+### Shipped & Verified Across Fleet
+- **Trigger & Cadence Governance:**
+  - Cadence ticket #5151 approved and closed on GitHub by Nikhil.
+  - Dedicated Parent Tracking Issue #5152 filed: `[Epic] Day 2: "Living Wire" (v0.28.2) — Execution & Live Progress Rollup`.
+- **Subsystem Audits & Integration Verification (gh:#5117):**
+  - **Task 1 (gh:#3044):** Verified `synlynk probe --deps` wires `synlynk/probe_binding.py`, auditing system dependencies and harness authentications. Verified via `tests/test_cli_probe_deps.py` and `tests/test_probe_binding.py`.
+  - **Task 2 (gh:#4052):** Verified `synlynk fleet list/apply` wires `synlynk/fleet_templates.py`, exposing role fleet archetypes. Verified via `tests/test_cli_fleet.py`.
+  - **Task 3 (gh:#2928):** Verified `synlynk upgrade --all` wires `synlynk/version_policy.py`, planning and executing multi-workspace batch upgrades. Verified via `tests/test_upgrade_all.py`.
+  - **Task 4 (gh:#2919):** Verified `synlynk/topology_discovery.py` integrated into `synlynk/onboarding_state.py` for architecture discovery. Verified via `tests/test_onboarding_topology.py`.
+  - **Task 5 (gh:#2955):** Formal fate decision recorded for `synlynk/first_win_loop.py` — confirmed active core subsystem powering Stage 10 build experience micro-cycle verification in `synlynk/wizard.py` and `synlynk/viz/server.py`. Verified via `tests/test_first_win_loop.py`.
+- **Closeout & Rollup:**
+  - Full 19-test onboarding integration suite passing green.
+  - Sub-issues #3044, #4052, #2928, #2919, #2955 and parent #5117 closed.
+  - Comprehensive conversational status rollup posted on #5152 and issue closed.
+  - Day 3 Cadence Plan ticket #5153 filed on GitHub assigned to Nikhil.
+[@agy, @nikhilsoman]
+
 ## 2026-11-06 — Day 1 "Clean Slate" (v0.28.1): FTUE Sweep, Vizor FTUE Fix & LIVE-30 Daemon Crash Loop Elimination
 
 ### Shipped & Verified Across Fleet

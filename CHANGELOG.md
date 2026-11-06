@@ -9,6 +9,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.28.2] - 2026-11-06
+### Added
+- feat(probe): wire probe_binding.py into synlynk probe --deps for verified system and harness dependency auditing (#3044) (#5117)
+- feat(fleet): wire fleet_templates.py into synlynk fleet list and synlynk fleet apply for curated role fleet archetypes (#4052) (#5117)
+- feat(upgrade): wire version_policy.py into synlynk upgrade --all for multi-workspace version audit and safe batch updates (#2928) (#5117)
+- feat(onboarding): integrate topology_discovery.py into synlynk/onboarding_state.py for evidence-scored architecture topology discovery (#2919) (#5117)
+### Changed
+- chore(onboarding): record first_win_loop.py fate decision, retaining it as an active core subsystem powering Stage 10 build experience micro-cycle verification (#2955) (#5117)
+
+---
+
 ## [v0.28.1] - 2026-11-06
 ### Fixed
 - fix(vizor): resolve durable repo root via git-common-dir in worktrees (#5144) (#5148)
