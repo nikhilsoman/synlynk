@@ -26,7 +26,13 @@ bin/statusline.py
 project-docs/handoff-note.md
 .aider*
 node_modules/
+**/node_modules/
 state.db*
+**/state.db*
+*.db
+*.db-wal
+*.db-shm
+*.db*bak
 /build/
 /dist/
 graphify-out/

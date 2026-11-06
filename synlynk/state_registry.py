@@ -65,7 +65,7 @@ def _read_unlocked(path: Path) -> dict:
             return {"version": REGISTRY_VERSION, "products": {}}
         payload = json.loads(path.read_text(encoding="utf-8"))
     except PermissionError:
-        return {"version": REGISTRY_VERSION, "products": {}}
+        return {"version": REGISTRY_VERSION, "products": {}, "_permission_denied": True}
     except (OSError, json.JSONDecodeError) as exc:
         raise StateRegistryError(f"state registry is unreadable: {path}: {exc}") from exc
     if not isinstance(payload, dict) or payload.get("version") != REGISTRY_VERSION:
@@ -157,7 +157,10 @@ def canonical_path(
         # product has no DB to copy or masquerade as, so it may bootstrap at
         # its deterministic product path.  Existing unregistered files remain
         # fail-closed and must be explicitly inventoried/reconciled.
-        if allow_unregistered_existing and fallback.expanduser().resolve().exists():
+        if (
+            (allow_unregistered_existing or payload.get("_permission_denied"))
+            and fallback.expanduser().resolve().exists()
+        ):
             return fallback.expanduser().resolve()
         if not fallback.expanduser().resolve().exists():
             return fallback

@@ -593,6 +593,24 @@ def _get_db(
             ACTIVE_DB_PATH = os.path.abspath(path)
             return conn
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        # Enforce canonical state DB: block creation of shadow state.db inside linked git worktrees (gh:#4239)
+        if not read_only and _is_git_worktree() and not _IS_TESTING:
+            if os.environ.get("SYNLYNK_ALLOW_WORKTREE_DB") != "1":
+                try:
+                    resolved_worktree_root = _working_tree_root()
+                    abs_path = os.path.abspath(path)
+                    if abs_path.startswith(resolved_worktree_root + os.sep) and (
+                        os.path.basename(abs_path).startswith("state.db") or os.path.basename(abs_path) == "state.db"
+                    ):
+                        raise RuntimeError(
+                            f"refusing to create or open shadow state database inside linked worktree: {path}; "
+                            "all worktrees must resolve to the canonical workspace ledger via state_registry. "
+                            "Set SYNLYNK_ALLOW_WORKTREE_DB=1 only for explicit isolated testing."
+                        )
+                except (RuntimeError, ValueError):
+                    raise
+                except Exception:
+                    pass
         _check_write_capability(path)
         conn = _sqlite3.connect(path, timeout=30.0)
         try:

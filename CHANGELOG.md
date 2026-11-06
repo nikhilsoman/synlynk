@@ -9,6 +9,18 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.28.4] - 2026-11-06
+### Added
+- feat(cli): add `synlynk roadmap render` and `synlynk story sync` CLI commands for on-demand generated view refresh (#4371) (#5157)
+### Changed
+- feat(db): enforce single-source authority model where state.db is the sole truth; ignore generated views in git and eliminate false-positive hand-edit drift warnings (#4705) (#5157)
+- feat(registry): gracefully recover canonical workspace ledger path when registry reading is restricted (#4239) (#5157)
+### Fixed
+- fix(hygiene): thoroughly gitignore stray state.db files, sidecars, and nested node_modules across all subtrees (#4239) (#5157)
+- fix(governance): block creation of shadow state.db instances inside linked git worktrees (#4239) (#5157)
+
+---
+
 ## [v0.28.3] - 2026-11-06
 ### Added
 - feat(terminal): introduce `synlynk.terminal` module with OSC 8 clickable hyperlink detection and graceful plain-text fallback (#5153) (#5155)
