@@ -4311,8 +4311,9 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
     required_capabilities = _story_routing_capabilities(
         task, task_type, requires, requires_gh_write
     )
+    auto_selection = agent is None or agent == "auto"
     picked = None
-    if task_domain and not static_baseline:
+    if auto_selection and task_domain and not static_baseline:
         try:
             from synlynk import _get_db
             conn = _get_db()
@@ -4327,13 +4328,13 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
                 picked = choice["harness"] if choice else None
         except Exception:
             picked = None
-    if story_id and not static_baseline and picked is None:
+    if auto_selection and story_id and not static_baseline and picked is None:
         best_agent = _pkg("_best_agent_for_story")
         if best_agent:
             best = _call_best_agent(best_agent, story_id, required_capabilities)
             if best and best in baselines_map:
                 picked = best
-    if picked is None and resolved_agent_role and not static_baseline:
+    if auto_selection and picked is None and resolved_agent_role and not static_baseline:
         from synlynk._constants import _role_dispatch_story_id
 
         synthetic_story_id = _role_dispatch_story_id(resolved_agent_role)
@@ -4342,7 +4343,7 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
             best = _call_best_agent(best_agent, synthetic_story_id, required_capabilities)
             if best and best in baselines_map:
                 picked = best
-    if picked is None and resolved_agent_role:
+    if auto_selection and picked is None and resolved_agent_role:
         picked = _harness_for_org_role(resolved_agent_role, baselines_map, requires_gh_write)
 
     # An explicitly forced harness is binding.  Auto-routing may still
@@ -4374,7 +4375,7 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
             candidate_harness=candidate,
             task=task or "",
             requires=requires,
-            force_agent=force_agent,
+            force_agent=force_agent or not auto_selection,
             grants=grants,
             revokes=revokes,
             task_type=task_type,
@@ -4922,18 +4923,75 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 _est_tokens * cached_multiplier_fn(agent, model, dconn)
             ))
 
-        quota_status_fn = _pkg("_quota_status_for_agent")
-        qstatus = (
-            quota_status_fn(dconn, agent, estimated_tokens=_weighted_est_tokens)
-            if quota_status_fn
-            else {"status": "unknown", "degraded": True}
+        from synlynk.quota import resolve_harness_track
+        from synlynk.costs import (
+            _payment_model_config_for_agent,
+            _model_rate_for_version,
         )
 
-        if qstatus.get("status") == "exhausted":
+        _track = resolve_harness_track(agent, model)
+        _rates = _model_rate_for_version(model or "unknown", agent=agent)
+        _input_tokens = int(_weighted_est_tokens * 0.7)
+        _output_tokens = _weighted_est_tokens - _input_tokens
+        _estimated_cost_usd = (
+            _input_tokens / 1000 * float(_rates.get("input", 0.0))
+            + _output_tokens / 1000 * float(_rates.get("output", 0.0))
+        )
+        _payment_mode = _payment_model_config_for_agent(agent).get(
+            "mode", "pay_as_you_go"
+        )
+        if agent == "agy" and _payment_mode == "pay_as_you_go":
+            _payment_mode = "credit_grant"
+
+        _scope = "plan" if os.environ.get("SYNLYNK_SCHEDULE_RUN_ID") else "session"
+        has_reservations_table = dconn.execute(
+            "SELECT 1 FROM sqlite_master "
+            "WHERE type='table' AND name='harness_reservations'"
+        ).fetchone()
+        existing_reservation = None
+        if has_reservations_table and agent == "agy":
+            existing_reservation = dconn.execute(
+                "SELECT id FROM harness_reservations "
+                "WHERE status='open' AND job_id=? AND harness=? AND model=? AND track=?",
+                (job_id, agent, model or "unknown", _track),
+            ).fetchone()
+        elif has_reservations_table:
+            existing_reservation = dconn.execute(
+                "SELECT id FROM harness_reservations "
+                "WHERE status='open' AND job_id=? AND harness=?",
+                (job_id, agent),
+            ).fetchone()
+        reserve_result = {"accepted": True, "reason": "quota_check_unavailable"}
+        check_and_reserve_fn = _pkg("_check_and_reserve_quota")
+        if check_and_reserve_fn is None:
+            # The package compatibility surface is lazy and can be incomplete
+            # in parallel test/CLI startup. Quota enforcement must not fail
+            # open when that export has not yet been populated.
+            from synlynk.quota import _check_and_reserve_quota
+            check_and_reserve_fn = _check_and_reserve_quota
+        if (
+            check_and_reserve_fn
+            and has_reservations_table
+        ):
+            reserve_result = check_and_reserve_fn(
+                dconn,
+                harness=agent,
+                model=model or "unknown",
+                track=_track,
+                estimated_tokens=_weighted_est_tokens,
+                estimated_cost_usd=_estimated_cost_usd,
+                payment_mode=_payment_mode,
+                scope=_scope,
+                scope_id=os.environ.get("SYNLYNK_SCHEDULE_RUN_ID"),
+                job_id=job_id,
+                existing_reservation_id=(existing_reservation[0] if existing_reservation else None),
+            )
+
+        if not reserve_result.get("accepted", False):
             reset_at = None
             rows_fn = _pkg("_read_agent_quota_rows")
             if rows_fn:
-                for _r in rows_fn(dconn, agent) or []:
+                for _r in rows_fn(dconn, agent, track=_track, model=model) or []:
                     if _r.get("reset_at"):
                         reset_at = _r["reset_at"]
                         break
@@ -4943,17 +5001,20 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             ).fetchone()
             if existing_job:
                 dconn.execute(
-                    "UPDATE daemon_jobs SET status='queued', "
-                    "blocked_reason='quota_exhausted' WHERE job_id=?",
-                    (job_id,),
+                    "UPDATE daemon_jobs SET status='queued', blocked_reason=?, "
+                    "requested_model=?, resolved_model=? WHERE job_id=?",
+                    (reserve_result.get("reason", "quota_exhausted"),
+                     requested_model_input, model, job_id),
                 )
             else:
                 dconn.execute(
                     "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, "
-                    "priority, depends_on, enqueued_at, blocked_reason) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "priority, depends_on, enqueued_at, blocked_reason, "
+                    "requested_model, resolved_model) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (job_id, agent, task, story_id, "queued", 5, "[]", now_iso,
-                     "quota_exhausted"),
+                     reserve_result.get("reason", "quota_exhausted"),
+                     requested_model_input, model),
                 )
             dconn.commit()
             if owns_dconn and dconn is not None:
@@ -4963,31 +5024,16 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     pass
             return {
                 "deferred": True,
-                "reason": qstatus.get("reason", "quota_exhausted"),
+                "reason": reserve_result.get("reason", "quota_exhausted"),
                 "retry_after": reset_at,
                 "job_id": job_id,
+                "preflight": {
+                    "harness": agent,
+                    "model": model or "unknown",
+                    "track": _track,
+                    "result": reserve_result.get("reason"),
+                },
             }
-
-        open_reservation_fn = _pkg("_open_reservation")
-        has_reservations_table = dconn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='harness_reservations'"
-        ).fetchone()
-        if open_reservation_fn and has_reservations_table:
-            _scope = "plan" if os.environ.get("SYNLYNK_SCHEDULE_RUN_ID") else "session"
-            existing_reservation = dconn.execute(
-                "SELECT 1 FROM harness_reservations "
-                "WHERE status='open' AND job_id=?",
-                (job_id,),
-            ).fetchone()
-            if not existing_reservation:
-                open_reservation_fn(
-                    dconn,
-                    agent,
-                    _weighted_est_tokens,
-                    scope=_scope,
-                    scope_id=os.environ.get("SYNLYNK_SCHEDULE_RUN_ID"),
-                    job_id=job_id,
-                )
 
     # Captured before ad-hoc story synthesis. story-adhoc-* is not GOVERNS linkage.
     caller_story_id = story_id
@@ -5752,7 +5798,16 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     elif _startup_failover and startup_exit not in (None, 0):
         secondary = _secondary_harness(agent, baselines_map)
         touched = _worktree_files_touched(worktree_path) if worktree_path else []
-        if secondary and not touched:
+        quota_failure_fn = _pkg("_provider_quota_failure_reason")
+        try:
+            with open(log_file, encoding="utf-8", errors="replace") as startup_log:
+                startup_log_text = startup_log.read()
+        except OSError:
+            startup_log_text = ""
+        startup_quota_failure = (
+            quota_failure_fn(startup_log_text, startup_exit) if quota_failure_fn else None
+        )
+        if secondary and not touched and not startup_quota_failure:
             if local_slot_claimed:
                 dconn.rollback()
             print(f"  ↪ startup failure on '{agent}' (exit {startup_exit}); failing over to '{secondary}'")

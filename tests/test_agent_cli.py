@@ -13,6 +13,22 @@ import pytest
 from synlynk.agent_cli import SEED_CHARTERS
 
 
+def _seed_agy_preflight_capacity():
+    import synlynk as sl
+
+    conn = sl._get_db()
+    for model in ("gemini-3.8-flash-low", "gemini-3.8-flash-medium", "gemini-3.8-flash-high"):
+        sl._upsert_agent_quota(
+            "agy", "5h", 1_000_000, track="gemini", model=model, conn=conn
+        )
+    conn.execute(
+        "INSERT INTO credit_grants (agent, face_value_usd, remaining_usd, granted_at) "
+        "VALUES ('agy', 100.0, 100.0, '2026-11-01')"
+    )
+    conn.commit()
+    conn.close()
+
+
 def _governs_gate_db():
     db = sqlite3.connect(":memory:")
     db.executescript(
@@ -2254,6 +2270,26 @@ def test_cli_dispatch_as_agent_without_explicit_harness(project_dir, monkeypatch
     assert "agent" in captured
 
 
+def test_cli_dispatch_without_explicit_harness_preserves_auto_routing(
+    project_dir, monkeypatch
+):
+    from synlynk.cli import main
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+
+    def fake_dispatch_agent(agent, task, **kwargs):
+        captured["agent"] = agent
+        return {"id": "job-auto", "pid": 1, "agent": "codex"}
+
+    monkeypatch.setattr(dispatch_mod, "dispatch_agent", fake_dispatch_agent)
+    monkeypatch.setattr("synlynk.dispatch_agent", fake_dispatch_agent)
+
+    main(["dispatch", "--task", "implement CLI plumbing", "--role", "dev"])
+
+    assert captured["agent"] == "auto"
+
+
 def test_cli_dispatch_infers_review_task_type_for_gh_write(project_dir, monkeypatch, capsys):
     from synlynk.cli import main
     import synlynk.dispatch as dispatch_mod
@@ -3317,6 +3353,7 @@ def test_agy_headless_parity_pass_printtimeout_30(project_dir, monkeypatch):
         return type("DummyProc", (), {"pid": 9999})()
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    _seed_agy_preflight_capacity()
 
     dispatch_mod.dispatch_agent(
         agent="agy",

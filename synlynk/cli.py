@@ -1332,7 +1332,10 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     )
     dispatch_parser.add_argument(
         "--skip-preflight", action="store_true", dest="skip_preflight",
-        help="Bypass harness preflight checks"
+        help=(
+            "Bypass harness environment/capability probes; quota and credit "
+            "admission always remain enforced"
+        )
     )
     dispatch_parser.add_argument(
         "--dangerously-skip-permissions", "--insecure-skip-permissions", action="store_true", dest="skip_permissions",
@@ -2833,8 +2836,8 @@ def main(argv=None) -> None:
                 and not resolved_agent_id
             ):
                 args.agent = "auto"
-            if not args.agent and not resolved_agent_id:
-                args.agent = defaults["harness"]
+            if not args.agent:
+                args.agent = "auto"
             if not getattr(args, "role", None) and not resolved_agent_id:
                 args.role = defaults["role"]
 
@@ -2845,7 +2848,10 @@ def main(argv=None) -> None:
             _effective_task_type = getattr(args, "task_type", None) or (
                 _infer_task_type(args.task) if _effective_requires_gh_write else None
             )
-            if args.agent == "auto":
+            if args.agent == "auto" and (
+                getattr(args, "local_pilot_class", None)
+                or (getattr(args, "dry_run", False) and resolved_agent_id)
+            ):
                 from synlynk import _get_db
                 from synlynk.dispatch import _resolve_dispatch_agent, take_local_pilot_receipt
 
@@ -2882,8 +2888,9 @@ def main(argv=None) -> None:
                 "pr" if _effective_task_type == "review" or _task_opens_pr(args.task) else "issue"
             )
 
+            display_agent = defaults["harness"] if args.agent == "auto" else args.agent
             print(
-                f"→ {args.role}/{args.agent}, worktree {defaults['worktree']}, "
+                f"→ {args.role}/{display_agent}, worktree {defaults['worktree']}, "
                 f"permissions {defaults['permission_profile']}"
             )
 
@@ -2900,7 +2907,7 @@ def main(argv=None) -> None:
 
                 context_mode = getattr(args, "context_mode", "task")
                 preview = _render_dispatch_preview(
-                    args.agent or (known_agents[0] if not resolved_agent_id else None),
+                    display_agent or (known_agents[0] if not resolved_agent_id else None),
                     args.task, context_mode,
                     agent_id=resolved_agent_id,
                     story_id=getattr(args, "story_id", None),

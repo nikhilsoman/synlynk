@@ -245,6 +245,8 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     gh_write_evidence TEXT,
     gh_write_verification_attempts INTEGER NOT NULL DEFAULT 0,
     terminal_evidence_strength TEXT NOT NULL DEFAULT 'unknown',
+    terminal_reason TEXT,
+    partial_work_evidence TEXT,
     cost_missing_reason TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);
@@ -537,7 +539,11 @@ CREATE INDEX IF NOT EXISTS idx_harness_quotas_harness ON harness_quotas(harness)
 CREATE TABLE IF NOT EXISTS harness_reservations (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     harness        TEXT NOT NULL,
+    model          TEXT NOT NULL DEFAULT 'unknown',
+    track          TEXT NOT NULL DEFAULT 'default',
     tokens         INTEGER NOT NULL,
+    requests       INTEGER NOT NULL DEFAULT 0,
+    estimated_cost_usd REAL NOT NULL DEFAULT 0,
     scope          TEXT NOT NULL,
     scope_id       TEXT,
     job_id         TEXT,
@@ -546,6 +552,7 @@ CREATE TABLE IF NOT EXISTS harness_reservations (
     released_at    TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_harness_reservations_harness ON harness_reservations(harness, status);
+CREATE INDEX IF NOT EXISTS idx_harness_reservations_pool ON harness_reservations(harness, model, track, status);
 
 CREATE TABLE IF NOT EXISTS quota_burn_rate_weights (
     harness       TEXT NOT NULL,

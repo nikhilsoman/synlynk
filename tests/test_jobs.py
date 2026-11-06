@@ -4602,6 +4602,138 @@ def test_malformed_exit_marker_with_git_activity_is_failed_unverified(
     assert (wt / "partial.py").read_text() == "print('partial work')\n"
 
 
+def test_provider_429_preserves_partial_work_and_quota_terminal_reason(
+    tmp_path, project_dir, monkeypatch
+):
+    import json
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    wt = tmp_path / "worktrees" / "job-provider-quota"
+    wt.mkdir(parents=True)
+    (wt / ".git").mkdir()
+    (wt / "partial.py").write_text("print('partial work')\n")
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    log_file = log_dir / "job-provider-quota.log"
+    log_file.write_text(
+        'RESOURCE_EXHAUSTED (code 429): Your AI credits balance is too low to continue.'
+    )
+    (log_dir / "job-provider-quota.log.exit").write_text("1\n")
+
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda _pid: False)
+    monkeypatch.setattr(
+        jobs_mod,
+        "_resolve_persisted_termination_domain",
+        lambda *_args, **_kwargs: "stopped_verified",
+    )
+    monkeypatch.setattr(
+        sl,
+        "_inspect_worktree_git_state",
+        lambda *_args, **_kwargs: {
+            "base_commit": "abc123",
+            "has_activity": True,
+            "remote_has_activity": False,
+            "changed_files": ["partial.py"],
+            "commits_ahead": 0,
+            "dirty": True,
+        },
+    )
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, story_id, task, status, pid, "
+        "enqueued_at, started_at, log_path, requires_gh_write, worktree_path, process_state) "
+        "VALUES ('job-provider-quota', 'agy', 'agy', 'story-quota', 'write feature', "
+        "'running', 91919, '2026-11-01T00:00:00', '2026-11-01T00:00:00', ?, 0, ?, 'running')",
+        (str(log_file), str(wt)),
+    )
+    reservation_id = sl._open_reservation(
+        conn,
+        "agy",
+        5000,
+        scope="session",
+        job_id="job-provider-quota",
+        model="gemini-3.8-flash-low",
+        track="gemini",
+    )
+    conn.close()
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT status, terminal_reason, partial_work_evidence FROM daemon_jobs "
+        "WHERE job_id='job-provider-quota'"
+    ).fetchone()
+    reservation_status = conn.execute(
+        "SELECT status FROM harness_reservations WHERE id=?", (reservation_id,)
+    ).fetchone()[0]
+    conn.close()
+
+    assert row[0] == "provider_quota_exhausted"
+    assert row[1] == "provider_quota_429"
+    assert json.loads(row[2]) == {
+        "changed_files": ["partial.py"],
+        "worktree_path": str(wt),
+    }
+    assert reservation_status == "released"
+    assert wt.exists()
+    assert (wt / "partial.py").read_text() == "print('partial work')\n"
+
+
+def test_provider_quota_classifier_ignores_successful_task_prose():
+    from synlynk.jobs import _provider_quota_failure_reason
+
+    text = "Implemented handling for RESOURCE_EXHAUSTED (429); all tests passed."
+    assert _provider_quota_failure_reason(text, exit_code=0) is None
+
+
+def test_provider_quota_classifier_recognizes_standard_http_429():
+    from synlynk.jobs import _provider_quota_failure_reason
+
+    assert _provider_quota_failure_reason(
+        "Error: HTTP 429 Too Many Requests", exit_code=1
+    ) == "provider_quota_429"
+
+
+def test_provider_quota_classifier_ignores_429_in_ordinary_failure_prose():
+    from synlynk.jobs import _provider_quota_failure_reason
+
+    assert _provider_quota_failure_reason(
+        "pytest failed: mock provider returned 429 RESOURCE_EXHAUSTED for quota probe",
+        exit_code=1,
+    ) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "FAILED tests/test_jobs.py::test_provider_quota_classifier_recognizes_standard_http_429",
+        "ERROR tests/test_quota.py::test_429_handling - AssertionError",
+        "Traceback (most recent call last):\nAssertionError: expected 429 but got 200",
+    ],
+)
+def test_provider_quota_classifier_ignores_429_in_pytest_failures(text):
+    from synlynk.jobs import _provider_quota_failure_reason
+
+    assert _provider_quota_failure_reason(text, exit_code=1) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        'agy: RESOURCE_EXHAUSTED (code 429): Your AI credits balance is too low to continue.',
+        'grok: rate limited (429)',
+        '{"error":{"code":429,"status":"RESOURCE_EXHAUSTED","message":"quota exceeded"}}',
+    ],
+)
+def test_provider_quota_classifier_accepts_provider_framed_capacity_errors(text):
+    from synlynk.jobs import _provider_quota_failure_reason
+
+    assert _provider_quota_failure_reason(text, exit_code=1) == "provider_quota_429"
+
+
 def test_zombie_reap_skips_worktree_when_terminal_cas_loses(
     tmp_path, project_dir, monkeypatch
 ):

@@ -1003,6 +1003,20 @@ def _run_harness_rename_migration(conn) -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_harness_reservations_harness ON harness_reservations(harness, status)"
         )
+    if _table_exists(conn, "harness_reservations"):
+        reservation_cols = {
+            row[1] for row in conn.execute("PRAGMA table_info(harness_reservations)")
+        }
+        if "model" not in reservation_cols:
+            conn.execute(
+                "ALTER TABLE harness_reservations "
+                "ADD COLUMN model TEXT NOT NULL DEFAULT 'unknown'"
+            )
+        if "track" not in reservation_cols:
+            conn.execute(
+                "ALTER TABLE harness_reservations "
+                "ADD COLUMN track TEXT NOT NULL DEFAULT 'default'"
+            )
 
 
 def _snapshot_before_migration(conn: sqlite3.Connection) -> str | None:
@@ -1503,6 +1517,18 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                 conn.execute(
                     "ALTER TABLE daemon_jobs ADD COLUMN "
                     "terminal_evidence_strength TEXT NOT NULL DEFAULT 'unknown'"
+                )
+            except sqlite3.OperationalError:
+                pass
+        if "terminal_reason" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN terminal_reason TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "partial_work_evidence" not in daemon_job_cols:
+            try:
+                conn.execute(
+                    "ALTER TABLE daemon_jobs ADD COLUMN partial_work_evidence TEXT"
                 )
             except sqlite3.OperationalError:
                 pass
@@ -2203,7 +2229,11 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
             CREATE TABLE IF NOT EXISTS harness_reservations (
                 id             INTEGER PRIMARY KEY AUTOINCREMENT,
                 harness        TEXT NOT NULL,
+                model          TEXT NOT NULL DEFAULT 'unknown',
+                track          TEXT NOT NULL DEFAULT 'default',
                 tokens         INTEGER NOT NULL,
+                requests       INTEGER NOT NULL DEFAULT 0,
+                estimated_cost_usd REAL NOT NULL DEFAULT 0,
                 scope          TEXT NOT NULL,
                 scope_id       TEXT,
                 job_id         TEXT,
@@ -2215,6 +2245,33 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_harness_reservations_harness "
             "ON harness_reservations(harness, status)"
+        )
+        reservation_cols = {
+            row[1] for row in conn.execute("PRAGMA table_info(harness_reservations)")
+        }
+        if "model" not in reservation_cols:
+            conn.execute(
+                "ALTER TABLE harness_reservations "
+                "ADD COLUMN model TEXT NOT NULL DEFAULT 'unknown'"
+            )
+        if "track" not in reservation_cols:
+            conn.execute(
+                "ALTER TABLE harness_reservations "
+                "ADD COLUMN track TEXT NOT NULL DEFAULT 'default'"
+            )
+        if "requests" not in reservation_cols:
+            conn.execute(
+                "ALTER TABLE harness_reservations "
+                "ADD COLUMN requests INTEGER NOT NULL DEFAULT 0"
+            )
+        if "estimated_cost_usd" not in reservation_cols:
+            conn.execute(
+                "ALTER TABLE harness_reservations "
+                "ADD COLUMN estimated_cost_usd REAL NOT NULL DEFAULT 0"
+            )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_harness_reservations_pool "
+            "ON harness_reservations(harness, model, track, status)"
         )
         quota_cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_quotas)")}
         if quota_cols and "unit" not in quota_cols:

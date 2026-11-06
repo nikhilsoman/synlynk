@@ -89,7 +89,8 @@ def test_agent_reservations_table_exists(project_dir):
     conn = sl._get_db()
     cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_reservations)")}
     assert cols == {
-        "id", "harness", "tokens", "scope", "scope_id", "job_id",
+        "id", "harness", "model", "track", "tokens", "requests",
+        "estimated_cost_usd", "scope", "scope_id", "job_id",
         "status", "created_at", "released_at",
     }
     daemon_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
@@ -119,6 +120,60 @@ def test_open_release_reservation_lifecycle(project_dir):
     assert status == "released"
     assert released_at is not None
     assert sl._open_reservations_sum(conn, "claude") == 0
+
+
+def test_open_reservations_are_isolated_by_model_and_track(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    rid = sl._open_reservation(
+        conn,
+        "agy",
+        5000,
+        scope="adhoc",
+        model="gemini-3.7-flash",
+        track="gemini",
+    )
+
+    row = conn.execute(
+        "SELECT model, track FROM harness_reservations WHERE id=?", (rid,)
+    ).fetchone()
+    assert row == ("gemini-3.7-flash", "gemini")
+    assert sl._open_reservations_sum(
+        conn, "agy", model="gemini-3.7-flash", track="gemini"
+    ) == 5000
+    assert sl._open_reservations_sum(
+        conn, "agy", model="claude-sonnet-5", track="claude_proxy"
+    ) == 0
+
+
+def test_reservation_migration_preserves_legacy_rows(tmp_path):
+    import synlynk as sl
+
+    db_path = tmp_path / "legacy-reservations.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE harness_reservations ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, harness TEXT NOT NULL, "
+        "tokens INTEGER NOT NULL, scope TEXT NOT NULL, scope_id TEXT, job_id TEXT, "
+        "status TEXT NOT NULL DEFAULT 'open', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+        "released_at TIMESTAMP)"
+    )
+    conn.execute(
+        "INSERT INTO harness_reservations (harness, tokens, scope) VALUES ('agy', 1234, 'adhoc')"
+    )
+    conn.commit()
+
+    sl._migrate_db(conn)
+    sl._migrate_db(conn)
+
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_reservations)")}
+    row = conn.execute(
+        "SELECT harness, model, track, tokens FROM harness_reservations"
+    ).fetchone()
+    conn.close()
+    assert {"model", "track"} <= cols
+    assert row == ("agy", "unknown", "default", 1234)
 
 
 def test_open_reservations_sum_ignores_expired(project_dir):

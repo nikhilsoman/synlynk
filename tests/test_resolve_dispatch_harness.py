@@ -17,6 +17,67 @@ def _register_agent(tmp_path, monkeypatch, agent_id, org_role):
     return agent_id
 
 
+def test_explicit_harness_is_binding_before_capability_probe(monkeypatch):
+    import synlynk as sl
+    import synlynk.capability_probe as probe_mod
+    from synlynk.dispatch import resolve_dispatch_harness
+
+    monkeypatch.setattr(sl, "_best_agent_for_story", lambda *_args, **_kwargs: "agy")
+    probed = []
+
+    def capture_probe(**kwargs):
+        probed.append(kwargs["candidate_harness"])
+        return kwargs["candidate_harness"]
+
+    monkeypatch.setattr(probe_mod, "resolve_capable_dispatch_harness", capture_probe)
+
+    resolved = resolve_dispatch_harness(
+        "codex", story_id="story-learned-agy", task="implement the requested fix"
+    )
+
+    assert resolved == "codex"
+    assert probed == ["codex"]
+
+
+def test_explicit_harness_is_binding_through_real_capability_probe(monkeypatch):
+    from synlynk.capability_probe import IncompatibleHarnessCapabilityError
+    from synlynk.capability_probe import CapabilityEvaluationResult
+    from synlynk.dispatch import resolve_dispatch_harness
+
+    monkeypatch.setattr(
+        "synlynk.capability_probe.evaluate_harness_capabilities",
+        lambda harness, _required, **_kwargs: CapabilityEvaluationResult(
+            allowed=harness == "agy",
+            missing_capabilities=[] if harness == "agy" else ["browser"],
+        ),
+    )
+
+    with __import__("pytest").raises(IncompatibleHarnessCapabilityError):
+        resolve_dispatch_harness("codex", task="browser automation", requires=["browser"])
+
+
+def test_auto_harness_uses_learned_route_before_capability_probe(monkeypatch):
+    import synlynk as sl
+    import synlynk.capability_probe as probe_mod
+    from synlynk.dispatch import resolve_dispatch_harness
+
+    monkeypatch.setattr(sl, "_best_agent_for_story", lambda *_args, **_kwargs: "agy")
+    probed = []
+
+    def capture_probe(**kwargs):
+        probed.append(kwargs["candidate_harness"])
+        return kwargs["candidate_harness"]
+
+    monkeypatch.setattr(probe_mod, "resolve_capable_dispatch_harness", capture_probe)
+
+    resolved = resolve_dispatch_harness(
+        "auto", story_id="story-learned-agy", task="implement the requested fix"
+    )
+
+    assert resolved == "agy"
+    assert probed == ["agy"]
+
+
 def test_role_only_dispatch_uses_synthetic_story_capability_score(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     os.makedirs("synlynk/state", exist_ok=True)
@@ -42,7 +103,7 @@ def test_role_only_dispatch_uses_synthetic_story_capability_score(tmp_path, monk
     conn.commit()
     conn.close()
 
-    result = resolve_dispatch_harness("claude", agent_id="dev-agent-1")
+    result = resolve_dispatch_harness("auto", agent_id="dev-agent-1")
     assert result == "codex"
 
 
@@ -52,7 +113,7 @@ def test_role_only_dispatch_cold_start_falls_back_to_static_baseline(tmp_path, m
 
     _register_agent(tmp_path, monkeypatch, "dev-agent-2", "architect")
 
-    result = resolve_dispatch_harness("codex", agent_id="dev-agent-2")
+    result = resolve_dispatch_harness("auto", agent_id="dev-agent-2")
     assert result == "claude"
 
 
@@ -82,7 +143,7 @@ def test_static_baseline_forces_static_pick_over_synthetic_story_score(tmp_path,
     conn.close()
 
     result = resolve_dispatch_harness(
-        "codex", agent_id="dev-agent-3", static_baseline=True
+        "auto", agent_id="dev-agent-3", static_baseline=True
     )
     assert result == "claude"
 
@@ -111,7 +172,7 @@ def test_static_baseline_forces_static_pick_even_with_real_story_id_score(tmp_pa
     conn.close()
 
     result = resolve_dispatch_harness(
-        "codex", agent_id="dev-agent-4", story_id="story-real-1", static_baseline=True
+        "auto", agent_id="dev-agent-4", story_id="story-real-1", static_baseline=True
     )
     assert result == "claude"
 
@@ -137,9 +198,9 @@ def test_review_dispatch_excludes_branch_daemon_implementer(tmp_path, monkeypatc
     conn.close()
 
     # 1. Review task names PR #2272, head branch dispatch/codex/job-63a4b857, daemon job harness codex, purpose implementation, no cost row.
-    # resolve_dispatch_harness("codex", task=..., task_type="review", requires_gh_write=True) returns agy, not codex.
-    res1 = resolve_dispatch_harness("codex", task="review PR #2272", task_type="review", requires_gh_write=True)
-    assert res1 == "agy"
+    # An explicit excluded harness fails closed instead of silently becoming Agy.
+    with pytest.raises(IncompatibleHarnessCapabilityError):
+        resolve_dispatch_harness("codex", task="review PR #2272", task_type="review", requires_gh_write=True)
 
     # 2. Same rows, requested harness agy, returns agy.
     res2 = resolve_dispatch_harness("agy", task="review PR #2272", task_type="review", requires_gh_write=True)
@@ -170,8 +231,8 @@ def test_review_dispatch_excludes_branch_daemon_implementer(tmp_path, monkeypatc
     conn.commit()
     conn.close()
 
-    res5 = resolve_dispatch_harness("codex", task="review PR #2272", task_type="review", requires_gh_write=True)
-    assert res5 == "agy"
+    with pytest.raises(IncompatibleHarnessCapabilityError):
+        resolve_dispatch_harness("codex", task="review PR #2272", task_type="review", requires_gh_write=True)
 
     # 6. .synlynk/policy.json in the repo still has cross_harness_review_required_mode == observe after your change. Assert that. Do not edit the file.
     repo_policy_path = os.path.join(os.path.dirname(__file__), "..", ".synlynk", "policy.json")

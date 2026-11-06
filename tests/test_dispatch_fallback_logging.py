@@ -156,7 +156,7 @@ def test_mismatched_dispatch_does_not_leak_fallback_to_later_job(tmp_path, monke
     assert dispatch._pending_routing_fallback["actual_harness"] == "codex"
 
     agy_job = dispatch.dispatch_agent(
-        "agy",
+        "claude",
         "implement an unrelated task",
         skip_preflight=True,
         context_mode="none",

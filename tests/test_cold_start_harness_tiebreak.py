@@ -79,7 +79,7 @@ def test_reroute_message_blames_probed_harness_not_cli_argument():
     assert "capability-probed: 'grok'" not in message
 
 
-def test_resolve_records_substituted_local_as_the_probed_harness(monkeypatch):
+def test_explicit_harness_is_not_substituted_by_learned_local_route(monkeypatch):
     from synlynk.dispatch import resolve_dispatch_harness, take_probed_dispatch_harness
 
     monkeypatch.setattr(
@@ -93,5 +93,5 @@ def test_resolve_records_substituted_local_as_the_probed_harness(monkeypatch):
         task_type="infra",
         requires_gh_write=True,
     )
-    assert result == "codex"
-    assert take_probed_dispatch_harness() == "local"
+    assert result == "grok"
+    assert take_probed_dispatch_harness() == "grok"
