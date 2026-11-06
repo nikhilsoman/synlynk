@@ -2216,6 +2216,14 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
             "CREATE INDEX IF NOT EXISTS idx_harness_reservations_harness "
             "ON harness_reservations(harness, status)"
         )
+        reservation_cols = {
+            row[1] for row in conn.execute("PRAGMA table_info(harness_reservations)")
+        }
+        if reservation_cols and "track" not in reservation_cols:
+            try:
+                conn.execute("ALTER TABLE harness_reservations ADD COLUMN track TEXT")
+            except sqlite3.OperationalError:
+                pass
         quota_cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_quotas)")}
         if quota_cols and "unit" not in quota_cols:
             try:
