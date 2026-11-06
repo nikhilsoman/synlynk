@@ -23,8 +23,11 @@ def test_connect_blocks_shadow_db_inside_worktree(tmp_path, monkeypatch):
     shadow_db = worktree_root / ".synlynk" / "state.db"
 
     monkeypatch.setattr("synlynk._is_git_worktree", lambda: True)
+    monkeypatch.setattr("synlynk._INITIAL_GIT_WORKTREE", True)
     monkeypatch.setattr("synlynk._working_tree_root", lambda: str(worktree_root))
+    monkeypatch.setattr("synlynk._INITIAL_WORKING_TREE_ROOT", str(worktree_root))
     monkeypatch.setattr("synlynk._IS_TESTING", False)
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
     monkeypatch.delenv("SYNLYNK_ALLOW_WORKTREE_DB", raising=False)
 
     with pytest.raises(RuntimeError, match="refusing to create or open shadow state database inside linked worktree"):
@@ -38,8 +41,11 @@ def test_connect_allows_shadow_db_when_explicitly_permitted(tmp_path, monkeypatc
     allowed_db = worktree_root / "custom.db"
 
     monkeypatch.setattr("synlynk._is_git_worktree", lambda: True)
+    monkeypatch.setattr("synlynk._INITIAL_GIT_WORKTREE", True)
     monkeypatch.setattr("synlynk._working_tree_root", lambda: str(worktree_root))
+    monkeypatch.setattr("synlynk._INITIAL_WORKING_TREE_ROOT", str(worktree_root))
     monkeypatch.setattr("synlynk._IS_TESTING", False)
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
     monkeypatch.setenv("SYNLYNK_ALLOW_WORKTREE_DB", "1")
 
     conn = _get_db(str(allowed_db), read_only=False)

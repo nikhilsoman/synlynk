@@ -390,12 +390,20 @@ def _is_git_worktree() -> bool:
         return False
 
 
+def _safe_working_tree_root() -> str:
+    try:
+        return _working_tree_root()
+    except Exception:
+        return ""
+
+
 # Resolve once at import time so ordinary test doubles for subprocess calls do
 # not accidentally change DB-path safety decisions mid-test.
 # The linked-worktree guard only protects pytest from accidentally touching the
 # shared product ledger.  The CLI fast path has no pytest state to isolate and
 # must not pay for two git subprocesses before a read-only command starts.
 _INITIAL_GIT_WORKTREE = False if (_FAST_CLI or _vizor_daemon_process()) else _is_git_worktree()
+_INITIAL_WORKING_TREE_ROOT = "" if (_FAST_CLI or _vizor_daemon_process()) else _safe_working_tree_root()
 
 
 def _test_isolation_db_path() -> str:
@@ -594,23 +602,28 @@ def _get_db(
             return conn
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         # Enforce canonical state DB: block creation of shadow state.db inside linked git worktrees (gh:#4239)
-        if not read_only and _is_git_worktree() and not _IS_TESTING:
-            if os.environ.get("SYNLYNK_ALLOW_WORKTREE_DB") != "1":
-                try:
-                    resolved_worktree_root = _working_tree_root()
-                    abs_path = os.path.abspath(path)
-                    if abs_path.startswith(resolved_worktree_root + os.sep) and (
-                        os.path.basename(abs_path).startswith("state.db") or os.path.basename(abs_path) == "state.db"
-                    ):
-                        raise RuntimeError(
-                            f"refusing to create or open shadow state database inside linked worktree: {path}; "
-                            "all worktrees must resolve to the canonical workspace ledger via state_registry. "
-                            "Set SYNLYNK_ALLOW_WORKTREE_DB=1 only for explicit isolated testing."
-                        )
-                except (RuntimeError, ValueError):
-                    raise
-                except Exception:
-                    pass
+        if (
+            not read_only
+            and not _IS_TESTING
+            and not os.environ.get("PYTEST_CURRENT_TEST")
+            and _INITIAL_GIT_WORKTREE
+            and os.environ.get("SYNLYNK_ALLOW_WORKTREE_DB") != "1"
+        ):
+            try:
+                resolved_worktree_root = _INITIAL_WORKING_TREE_ROOT or _safe_working_tree_root()
+                abs_path = os.path.abspath(path)
+                if resolved_worktree_root and abs_path.startswith(resolved_worktree_root + os.sep) and (
+                    os.path.basename(abs_path).startswith("state.db") or os.path.basename(abs_path) == "state.db"
+                ):
+                    raise RuntimeError(
+                        f"refusing to create or open shadow state database inside linked worktree: {path}; "
+                        "all worktrees must resolve to the canonical workspace ledger via state_registry. "
+                        "Set SYNLYNK_ALLOW_WORKTREE_DB=1 only for explicit isolated testing."
+                    )
+            except (RuntimeError, ValueError):
+                raise
+            except Exception:
+                pass
         _check_write_capability(path)
         conn = _sqlite3.connect(path, timeout=30.0)
         try:
