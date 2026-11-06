@@ -436,6 +436,13 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     init_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
                              help="Preview what init would write without writing anything")
 
+    new_parser = subparsers.add_parser("new", help="Start Greenfield Guided Onboarding for a blank-canvas project")
+    new_parser.add_argument("intent", nargs="?", default="", help="Project intent or description")
+    new_parser.add_argument("--name", "-n", default=None, help="Target project/directory name")
+    new_parser.add_argument("--fast-forward", "-f", action="store_true", help="Fast-forward genesis directly to working scaffold")
+    new_parser.add_argument("--github-repo", default=None, help="GitHub repository URL or slug")
+    new_parser.add_argument("--yes", "--non-interactive", action="store_true", dest="non_interactive", help="Run non-interactively")
+
     brainstorm_parser = subparsers.add_parser(
         "brainstorm", help="Classify this repo (Welcome Fork) and synthesize strategic goals")
     brainstorm_parser.add_argument("--path", default=".",
@@ -877,6 +884,12 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     sync_parser.add_argument(
         "--repair-sops", action="store_true", dest="repair_sops",
         help="Re-inject missing SOP sections into directive files")
+    sync_parser.add_argument(
+        "--daily", action="store_true",
+        help="Trigger or preview the Daily Sync morning standup briefing")
+    sync_parser.add_argument(
+        "--json", action="store_true",
+        help="Output raw daily sync JSON payload")
 
     configure_parser = subparsers.add_parser(
         "configure", help="Configure synlynk components")
@@ -2539,6 +2552,30 @@ def main(argv=None) -> None:
                  non_interactive=getattr(args, "non_interactive", False),
                  dry_run=getattr(args, "dry_run", False),
                  replace_generated_docs=getattr(args, "replace_generated_docs", False))
+    elif args.command == "new":
+        from synlynk.greenfield.orchestrator import GreenfieldOrchestrator
+        raw_intent = getattr(args, "intent", "") or ""
+        if not raw_intent and not getattr(args, "non_interactive", False):
+            try:
+                raw_intent = input("What would you like to build? ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print("\nAborted.")
+                sys.exit(1)
+        if not raw_intent:
+            raw_intent = "A new software project built with autonomous multi-agent governance"
+        
+        target_dir = getattr(args, "name", None) or "."
+        if target_dir != "." and not os.path.exists(target_dir):
+            os.makedirs(target_dir, exist_ok=True)
+            
+        orchestrator = GreenfieldOrchestrator(target_dir)
+        orchestrator.run(
+            raw_intent,
+            project_name=getattr(args, "name", None),
+            fast_forward=getattr(args, "fast_forward", False),
+            github_repo=getattr(args, "github_repo", None),
+        )
+        return
     elif args.command == "brainstorm":
         cmd_brainstorm(args)
     elif args.command == "brief":
@@ -3837,6 +3874,15 @@ def main(argv=None) -> None:
     elif args.command == "repair":
         sys.exit(cmd_repair(dry_run=not args.confirm))
     elif args.command == "sync":
+        if getattr(args, "daily", False) or getattr(args, "json", False):
+            from synlynk.greenfield.daily_sync import generate_daily_sync, format_cli_greeting
+            import json
+            sync_data = generate_daily_sync(".")
+            if getattr(args, "json", False):
+                print(json.dumps(sync_data, indent=2))
+            else:
+                print(format_cli_greeting(sync_data))
+            return
         sys.exit(cmd_sync(dry_run=not args.confirm, repair_sops=getattr(args, "repair_sops", False)))
     elif args.command == "configure":
         if getattr(args, "configure_target", None) == "agent":
