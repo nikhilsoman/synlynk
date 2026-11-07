@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Launch HN: Synlynk (v0.29.0 Dev Preview) — The Full-Stack Builder Harness | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Nov 07, 2026</span>
+        
+          <span class="blog-post-pr">PR #5165</span>
+        
+      </div>
+      <h1 class="blog-post-title">Launch HN: Synlynk (v0.29.0 Dev Preview) — The Full-Stack Builder Harness</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>Launch HN: Synlynk (v0.29.0 Dev Preview) — The Full-Stack Builder Harness</h1>
+<p>Hi Hacker News,</p>
+<p>I’m Nikhil, and for the past five months I’ve been building <strong>Synlynk</strong> (https://github.com/nikhilsoman/synlynk). Today we’re releasing the <strong>v0.29.0 Developer Preview</strong> under the Apache 2.0 license.</p>
+<h3>The Problem with Solo Building in the Agentic Era</h3>
+<p>When building non-trivial software today, single developers face a brutal cognitive bottleneck: you have to be the Product Manager, Software Architect, Tech Lead, Backend Dev, Frontend Dev, and QA Engineer simultaneously.</p>
+<p>Most AI developer tools today give you a single monolithic chat window or an autonomous coding agent with a bash shell. While impressive for small scripts, they break down on 10,000+ line codebases because:</p>
+<ol>
+<li><strong>Chat windows don't have role separation:</strong> An agent writing code shouldn't be the same agent approving its own architecture or certifying its own test coverage.</li>
+<li><strong>Context degradation is real:</strong> Throwing an entire repo into a 1M token context window leads to subtle hallucinations, silent regressions, and massive token burn.</li>
+<li><strong>No verifiable contracts:</strong> Most agents claim a task is &quot;done&quot; when the code is written, regardless of whether tests actually pass or regressions were introduced.</li>
+</ol>
+<h3>The Two Paradigms Synlynk Explores</h3>
+<p>Synlynk started as an experiment to explore two emerging paradigms in software engineering:</p>
+<ol>
+<li><strong>Paradigm 2a (The Full-Stack Builder):</strong> A single human engineer with specific core competencies can assemble a specialized digital team (PM, Architect, TPM, Dev, QA, Maintainer) to fill all other functional voids and build complete, production-grade products.</li>
+<li><strong>Paradigm 2b (The Autonomous Organisation):</strong> An engineering organization emerges from high-level policy directives, goals, and budgets—autonomously leasing whatever resources (cloud compute, model APIs, human sign-off gates) are needed to execute verified deliverables.</li>
+</ol>
+<p>We believe you cannot achieve 2b without first mastering the atomic unit of collaboration in 2a. That’s what this Developer Preview is designed to test with you.</p>
+<h3>What Synlynk Does</h3>
+<p>When you install Synlynk and run <code>synlynk new</code> in a blank directory (or <code>synlynk onboard</code> in an existing repo):</p>
+<ul>
+<li><strong>Multi-Harness Execution:</strong> Synlynk doesn’t lock you into one model provider. It orchestrates Claude, OpenAI/Codex, Google Gemini/Agy, and Grok—dynamically routing tasks to whichever engine has proven highest empirical capability for that specific domain.</li>
+<li><strong>The GOVERNS SDLC:</strong> Your fleet moves through an explicit lifecycle:
+<ol>
+<li><strong>PM:</strong> Synthesizes your intent into a crisp Executive Brief and Goal 1.</li>
+<li><strong>Architect:</strong> Generates a formal design spec and isolates genuine architectural dilemmas.</li>
+<li><strong>DECIDE Panel:</strong> Convenes multiple AI engines (e.g. Claude + Codex + Grok) to debate the trade-offs live and record a signed decision.</li>
+<li><strong>TPM:</strong> Breaks the approved spec into atomic, dependency-ordered tasks.</li>
+<li><strong>Dev &amp; QA:</strong> Execute test-driven development (TDD) in isolated worktrees with non-author verification before merge.</li>
+</ol>
+</li>
+<li><strong>The Synlynk Invariants (Inspired by Asimov's Laws):</strong>
+<ul>
+<li><em>Invariant 0:</em> The fleet will never leak secrets or compromise system integrity.</li>
+<li><em>Invariant 1:</em> The human operator holds sole sovereign authority.</li>
+<li><em>Invariant 2 (Evidence Over Assertions):</em> No task or bugfix is marked complete without passing tests and diff proofs.</li>
+<li><em>Invariant 3:</em> Token burn and quotas are strictly metered against hard budgets.</li>
+</ul>
+</li>
+<li><strong>Companion v2.1:</strong> An ambient co-pilot that surfaces 4-part task boundaries (<code>[Signal]</code>, <code>[Context]</code>, <code>[Nudge]</code>, <code>[Deep Links]</code>) with clickable terminal hyperlinks into your local Vizor observatory (<code>http://localhost:33333</code>) and GitHub PRs.</li>
+</ul>
+<h3>Why Developer Preview?</h3>
+<p>We have no monetization motive today. Our objective is to put Synlynk into the hands of real builders, see whether our hypotheses hold across diverse tech stacks, and learn where the human-machine boundary needs refinement.</p>
+<h3>Getting Started (5 Minutes)</h3>
+<pre><code class="language-bash"># Install via pipx (recommended) or pip
+pipx install synlynk
+
+# Start a brand new project with your synthetic team
+synlynk new &quot;your-project-name&quot;
+
+# Or onboard an existing repository
+cd existing-repo &amp;&amp; synlynk onboard
+</code></pre>
+<p>The repo is open source (Apache 2.0): https://github.com/nikhilsoman/synlynk</p>
+<p>We'd love your feedback, critiques, and stories on how your fleet performs!</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
