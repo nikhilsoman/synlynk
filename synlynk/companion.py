@@ -31,7 +31,14 @@ DEVELOPER_SEGMENTS = (
 
 _PINNED_STAGE: Optional[str] = None
 _PINNED_SEGMENT: Optional[str] = None
-_ENABLED: bool = True
+_ENABLED: bool = False
+
+
+def is_companion_enabled() -> bool:
+    """Check whether Companion engine is enabled via env var or runtime setting."""
+    if os.environ.get("SYNLYNK_COMPANION", "0").lower() in ("1", "true", "yes"):
+        return True
+    return _ENABLED
 
 
 def enable_companion(enabled: bool) -> None:
@@ -121,7 +128,7 @@ def infer_stage_and_segment() -> Tuple[str, str]:
 
 def maybe_add_hint(data: FenceData) -> None:
     """Callback registered into synlynk.fencing._HINT_CONTRIBUTORS."""
-    if not _ENABLED:
+    if not is_companion_enabled():
         return
 
     stage, segment = infer_stage_and_segment()

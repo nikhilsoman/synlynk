@@ -5,6 +5,13 @@ from synlynk.fencing import FenceData, clear_hint_contributors, render_task_fenc
 
 
 def setup_function(_):
+    companion.enable_companion(False)
+    clear_hint_contributors()
+    companion.clear_pinned_stage()
+
+
+def teardown_function(_):
+    companion.enable_companion(False)
     clear_hint_contributors()
     companion.clear_pinned_stage()
 
