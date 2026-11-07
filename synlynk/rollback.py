@@ -152,7 +152,7 @@ def _expand_owned_directory(path: str, outputs: list) -> list:
             full = os.path.normpath(os.path.join(dirpath, name))
             if _operation_owned(full, outputs):
                 continue
-            if full.endswith(("-shm", "-wal")):
+            if full.endswith(("-shm", "-wal", ".lock")):
                 continue
             if os.path.basename(full).startswith(".sentinel-"):
                 continue
@@ -187,7 +187,7 @@ def _stash_paths(untracked_paths: list) -> list:
         # SQLite creates these transient sidecars while a database is open.
         # They can disappear between `git status` and `git stash`, which makes
         # an explicit pathspec fail with "does not match index".
-        if path.endswith(("-shm", "-wal")):
+        if path.endswith(("-shm", "-wal", ".lock")):
             continue
         # Sentinel alerts are written through a temporary `.sentinel-*` file
         # before being atomically renamed into place.  The temporary file can

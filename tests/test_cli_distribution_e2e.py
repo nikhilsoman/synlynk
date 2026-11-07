@@ -200,6 +200,7 @@ def test_wheel_build_and_cli_endpoints_e2e(tmp_path):
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=test_repo, check=True)
     subprocess.run(["git", "config", "user.name", "Test"], cwd=test_repo, check=True)
     (test_repo / "README.md").write_text("# Test Repo\n")
+    (test_repo / ".gitignore").write_text("state.db*\n")
     subprocess.run(["git", "add", "."], cwd=test_repo, check=True)
     subprocess.run(["git", "commit", "-m", "init"], cwd=test_repo, check=True)
 
