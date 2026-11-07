@@ -1,0 +1,20 @@
+{
+  "decision_id": "dec-8b3c1d42",
+  "topic": "Final Sprint Master Plan: Deep Repo Backlog & Tech-Debt Sweep, Worktree/Branch Hygiene, Packaging Hermeticity, and Autonomous GitHub Observability Protocol for Developer Preview v0.29.0",
+  "date": "2026-11-07",
+  "panel": [
+    "claude",
+    "agy",
+    "codex",
+    "grok"
+  ],
+  "status": "approved",
+  "inputs": {
+    "claude": "The findings of this deep sweep confirm that Synlynk has been operating under severe operational debt. Accumulating 135 worktrees is not merely a disk hygiene issue—it is the direct architectural cause of the recurring LIVE-16 and LIVE-30 crash-loops...",
+    "agy": "From a product and onboarding standpoint, shipping a developer preview with 85+ dead worktrees/job-* folders and operational files at the repository root destroys credibility...",
+    "codex": "The mechanical root cause of instability across past releases is the interplay between editable installs and short-lived git worktrees. When Worktree Hygiene prunes a worktree, any background process holding a reference to that worktree dies on ModuleNotFoundError...",
+    "grok": "This final sprint cements the operational transition to Paradigm 2a while laying the cryptographic bedrock for Paradigm 2b: Sovereign Key Infrastructure, Fenced Companion, and GitHub-native telemetry rollups..."
+  },
+  "synthesis": "The panel unanimously approves the Final Sprint Master Plan across 4 phases: Deep Repo & Worktree Housekeeping, Core Engine Hermeticity & Test Green, Unified Genesis Onboarding & Sovereign Key, and Developer Preview Gate Closeout.",
+  "decision": "Execute the Final Sprint Master Plan immediately under the governance of parent issue #5163, with GitHub as the sole observability and approval surface."
+}

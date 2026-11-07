@@ -33,6 +33,8 @@ state.db*
 *.db-wal
 *.db-shm
 *.db*bak
+*.bak
+.env.local*
 /build/
 /dist/
 graphify-out/

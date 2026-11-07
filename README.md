@@ -7,14 +7,14 @@
 
 <p align="center">
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5467%20collected-brightgreen" alt="Tests"</a>
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.28.5-blue" alt="Version"></a>
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.29.0-blue" alt="Version"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-Apache--2.0-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
 </p>
 
 Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. The Python CLI injects scoped project context into every dispatch, uses empirical harness allocation only after a harness has at least five completed, merged jobs for the relevant task type, and follows the documented interim policy until then. See the [empirical capability policy](docs/blog/244-chore-empirical-capability-policy.md) and [routing policy](.synlynk/policy.json). Synlynk also tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
-**v0.28.5:** Day 5 Genesis Gate Release — Greenfield Guided Onboarding engine (`synlynk new`), progressive fleet awakening (Stages 0–5), Genuine Dilemma Engine, DECIDE consensus panel, Multi-Channel Daily Sync, and Multi-Surface Genesis Rollup Card. 5467 tests collected.
+**v0.29.0:** Developer Preview Release — The Full-Stack Builder Harness, Sovereign Genesis Engine (`synlynk new`), Companion v2.1 ambient co-pilot with OSC 8 deep links, Synlynk Invariants, and Apache 2.0 licensing.
 
 ## Documentation
 

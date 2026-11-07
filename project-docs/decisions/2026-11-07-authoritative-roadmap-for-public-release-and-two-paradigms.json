@@ -1,0 +1,20 @@
+{
+  "decision_id": "dec-7a2b0e91",
+  "topic": "Authoritative Roadmap for Public Developer Preview Release and Progressive Evolution toward Two Paradigms: (2a) The Full-Stack Builder and (2b) The Autonomous Emerging Organisation",
+  "date": "2026-11-07",
+  "panel": [
+    "claude",
+    "agy",
+    "codex",
+    "grok"
+  ],
+  "status": "approved",
+  "inputs": {
+    "claude": "Paradigm 2a (The Full-Stack Builder) and Paradigm 2b (The Autonomous Organisation) are not competing architectures; they are sequential phases of organizational emergence. A fully autonomous organisation (2b) cannot exist stably without first mastering the atomic unit of collaboration: a biological agent directing specialized synthetic roles through explicit policy, verified evidence, and unambiguous handoffs (2a)...",
+    "agy": "The greatest risk to Synlynk's public debut is not lack of capability, but cognitive overload and installation friction. Over 5 months of rapid evolution, Synlynk has accumulated immense power, but also operational complexity. To prove Paradigm 2a, Synlynk must deliver an undeniable Time-to-Wow under 15 minutes...",
+    "codex": "From a systems engineering perspective, Synlynk cannot achieve widespread adoption or enterprise credibility until its execution environment is completely hermetic. The divergence between Agy's release reporting and Claude's audit highlighted a critical vulnerability: Synlynk has operated in an editable install inside worktrees paradigm...",
+    "grok": "Paradigm 2b posits that an autonomous organization emerges from a set of policy directives and goals, leveraging any available resources (biological, AI models, tools, infra). This requires a dynamic capability engine rather than hardcoded agent pipelines..."
+  },
+  "synthesis": "The panel unanimously converges on a cohesive, two-phase strategy that directly validates Paradigms 2a and 2b: Strategic Progression (2a -> 2b), Immediate Stability Prerequisite (hermetic packaging, zero test failures, clean root), and Frictionless Onboarding UX.",
+  "decision": "Adopt the Authoritative Master Roadmap for Synlynk: Phase 1: The Full-Stack Builder (v0.29.0 Developer Preview Launch) and Phase 2: The Autonomous Organisation (v1.0.0+ Enterprise & Swarm Expansion)."
+}

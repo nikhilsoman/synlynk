@@ -1,7 +1,20 @@
 """Shared task-boundary cost fence helpers."""
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Callable, List, Optional
+
+_HINT_CONTRIBUTORS: List[Callable[["FenceData"], None]] = []
+
+
+def register_hint_contributor(fn: Callable[["FenceData"], None]) -> None:
+    """Any enabled feature can register a callback that may append to data.hints."""
+    if fn not in _HINT_CONTRIBUTORS:
+        _HINT_CONTRIBUTORS.append(fn)
+
+
+def clear_hint_contributors() -> None:
+    """Clear registered hint contributors (primarily for test isolation)."""
+    _HINT_CONTRIBUTORS.clear()
 
 
 @dataclass
@@ -26,6 +39,11 @@ class NudgeData:
 
 def render_task_fence(data: FenceData) -> str:
     """Render a bordered fence block for a FenceData instance."""
+    for contributor in list(_HINT_CONTRIBUTORS):
+        try:
+            contributor(data)
+        except Exception:
+            pass
     label = data.label or data.command
     suffix = "estimate" if data.kind == "estimate" else "complete"
     header = f"-- {label} {suffix} " + "-" * max(1, 32 - len(label) - len(suffix))
