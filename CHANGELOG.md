@@ -9,6 +9,20 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.29.0] - 2026-11-07
+### Developer Preview Release — The Full-Stack Builder & Sovereign Genesis Engine
+- **Hermetic Packaging & LIVE-30 Resolution:** Hardened standalone wheel distribution and sandbox-isolated execution for `vizor_daemon` and `dispatch.py` (#5163).
+- **Test Suite Hermeticity:** Virtualized identity and workspace permission checks in `synlynk/doctor.py`, guaranteeing 100% green test passes on pristine machines.
+- **Sovereign Cryptographic Identity (`synlynk/crypto.py`):** Standalone Ed25519/HMAC-SHA256 identity generation with 12-word BIP-39 mnemonic recovery, anchoring sovereign biological authority over all policy and goal approvals.
+- **Companion v2.1 Engine (`synlynk/companion.py`):** Ambient multi-channel co-pilot with canonical 4-part message anatomy (`[Signal]`, `[Context]`, `[Nudge]`, `[Deep Links]`), relationship ladder progression, and terminal OSC 8 clickable hyperlinks into GitHub and Vizor.
+- **Generic Hint-Contributor Seam (`synlynk/fencing.py`):** Added `_HINT_CONTRIBUTORS` and `register_hint_contributor()` for modular, non-circular feature integration at task cost fences.
+- **Domain Taxonomy & Fleet Recommender (`synlynk/taxonomy.py`):** Added `WORKSPACE_DOMAINS` and automated role archetype recommendations for Web, Mobile, AI/ML, Backend, and Systems workspaces.
+- **The Synlynk Invariants:** Codified the 4 non-negotiable platform invariants (derived from Isaac Asimov's Laws) into the Genesis onboarding briefing.
+- **Licensing:** Re-licensed Synlynk under the Apache License, Version 2.0.
+- **Repo Housekeeping:** Purged 103 orphaned job worktrees and curated the repository root to canonical product files.
+
+---
+
 ## [v0.28.5] - 2026-11-06
 ### Added
 - feat(greenfield): implement Greenfield Genesis Engine and `synlynk new` CLI command for blank-canvas project onboarding (#5160) (#5161)

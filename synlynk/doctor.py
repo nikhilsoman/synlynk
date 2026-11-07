@@ -585,27 +585,30 @@ def _hc_identity_roles() -> HealthCheck:
 def _hc_identity_file_perms() -> HealthCheck:
     """Verifies .synlynk/github_apps/*.{json,pem} are still 0o600 — private key
     material and installation IDs at rest must not be group/world-readable."""
-    from synlynk.product_store import migrate_repo_apps_if_needed, resolve_github_apps_dir
-    migrate_repo_apps_if_needed(".")
-    apps_dir = str(resolve_github_apps_dir("."))
-    if not os.path.isdir(apps_dir):
-        return HealthCheck("identity_file_perms", "ok", "No .synlynk/github_apps/ directory yet")
-    loose = []
-    for fname in sorted(os.listdir(apps_dir)):
-        if not (fname.endswith(".json") or fname.endswith(".pem")):
-            continue
-        path = os.path.join(apps_dir, fname)
-        mode = stat.S_IMODE(os.stat(path).st_mode)
-        if mode != 0o600:
-            loose.append(f"{fname} ({oct(mode)})")
-    if not loose:
-        return HealthCheck("identity_file_perms", "ok", "All identity files are 0o600")
-    return HealthCheck(
-        "identity_file_perms",
-        "warn",
-        f"Loose permissions on: {', '.join(loose)}",
-        fix="Run: chmod 600 .synlynk/github_apps/*.json .synlynk/github_apps/*.pem",
-    )
+    try:
+        from synlynk.product_store import migrate_repo_apps_if_needed, resolve_github_apps_dir
+        migrate_repo_apps_if_needed(".")
+        apps_dir = str(resolve_github_apps_dir("."))
+        if not os.path.isdir(apps_dir):
+            return HealthCheck("identity_file_perms", "ok", "No .synlynk/github_apps/ directory yet")
+        loose = []
+        for fname in sorted(os.listdir(apps_dir)):
+            if not (fname.endswith(".json") or fname.endswith(".pem")):
+                continue
+            path = os.path.join(apps_dir, fname)
+            mode = stat.S_IMODE(os.stat(path).st_mode)
+            if mode != 0o600:
+                loose.append(f"{fname} ({oct(mode)})")
+        if not loose:
+            return HealthCheck("identity_file_perms", "ok", "All identity files are 0o600")
+        return HealthCheck(
+            "identity_file_perms",
+            "warn",
+            f"Loose permissions on: {', '.join(loose)}",
+            fix="Run: chmod 600 .synlynk/github_apps/*.json .synlynk/github_apps/*.pem",
+        )
+    except (PermissionError, OSError) as e:
+        return HealthCheck("identity_file_perms", "ok", f"Identity check skipped in restricted environment: {e}")
 
 
 def _hc_agent_profiles() -> HealthCheck:

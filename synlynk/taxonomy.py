@@ -3,6 +3,68 @@
 import argparse
 
 
+WORKSPACE_DOMAINS = (
+    "fullstack_web",
+    "backend_distributed",
+    "mobile",
+    "ai_ml",
+    "cli_infra",
+    "embedded",
+)
+
+ORG_POSITIONS = (
+    "standalone_exploration",
+    "core_platform",
+    "product_feature",
+    "internal_tool",
+)
+
+_ARCHETYPE_TEMPLATES = {
+    "mobile": [
+        {"role": "pm", "specialization": "Mobile Product Manager"},
+        {"role": "architect", "specialization": "Mobile Systems Architect (iOS/Android)"},
+        {"role": "dev", "specialization": "Native/Cross-Platform Mobile Developer"},
+        {"role": "qa", "specialization": "Mobile Device & Matrix QA Specialist"},
+    ],
+    "ai_ml": [
+        {"role": "pm", "specialization": "AI/ML Product Manager"},
+        {"role": "architect", "specialization": "MLOps & Model Evaluation Architect"},
+        {"role": "dev", "specialization": "PyTorch/JAX & Data Pipeline Engineer"},
+        {"role": "qa", "specialization": "Model Drift & Invariant Testing QA"},
+    ],
+    "fullstack_web": [
+        {"role": "pm", "specialization": "Web Product Manager"},
+        {"role": "architect", "specialization": "Full-Stack Web Architect"},
+        {"role": "dev", "specialization": "Frontend & API Developer"},
+        {"role": "qa", "specialization": "End-to-End & Browser Matrix QA"},
+    ],
+    "backend_distributed": [
+        {"role": "pm", "specialization": "Platform Product Manager"},
+        {"role": "architect", "specialization": "Distributed Systems Architect"},
+        {"role": "dev", "specialization": "High-Throughput Backend Engineer"},
+        {"role": "qa", "specialization": "Concurrency & Fault-Tolerance QA"},
+    ],
+    "cli_infra": [
+        {"role": "pm", "specialization": "Developer Experience Product Manager"},
+        {"role": "architect", "specialization": "CLI & Infrastructure Architect"},
+        {"role": "dev", "specialization": "Systems & Plumbing Engineer"},
+        {"role": "qa", "specialization": "Hermetic Sandbox & Cross-Platform QA"},
+    ],
+}
+
+
+def recommend_fleet_archetypes(domain: str, org_position: str = "product_feature") -> list[dict]:
+    """Recommend agent fleet archetypes based on workspace domain and org position."""
+    if domain in _ARCHETYPE_TEMPLATES:
+        return [dict(item) for item in _ARCHETYPE_TEMPLATES[domain]]
+    return [
+        {"role": "pm", "specialization": "General Product Manager"},
+        {"role": "architect", "specialization": "General Systems Architect"},
+        {"role": "dev", "specialization": "Core Software Engineer"},
+        {"role": "qa", "specialization": "Verification & Test QA"},
+    ]
+
+
 CORE_COMMANDS = (
     "init",
     "scan",
