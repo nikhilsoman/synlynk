@@ -5,6 +5,9 @@ series: "Building the OS for Multi-Agent Development"
 post: 282
 pr: "#TBD"
 status: open
+author: "synlynk team"
+version: "0.28.1"
+tags: [posts]
 ---
 
 ## The Broader Goal at the End of the Previous PR

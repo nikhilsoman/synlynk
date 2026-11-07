@@ -327,6 +327,9 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [275](./275-prTBD-first-win-loop-wiring.md) | PR #TBD — Making the First Win Reach S10 | TBD | 2026-10-15 |
 | [280](./280-prTBD-v0.25.3.md) | v0.25.3 — Muse Readiness and Capacity-Routing Evidence | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-10-24 |
 | [281](./281-pr5018-v0.26.8.md) | PR #5018 — v0.26.8: Harness Context Compaction Protocol | [#5018](https://github.com/nikhilsoman/synlynk/pull/5018) | 2026-11-01 |
+| [282](./282-prTBD-v0.28.1.md) | PR #TBD — v0.28.1 Release | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-11-06 |
+| [283](./283-prTBD-v0.28.2.md) | PR #TBD — v0.28.2 Release | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-11-06 |
+| [99999](./v0.29.0-hacker-news-announcement.md) | Launch HN: Synlynk (v0.29.0 Dev Preview) — The Full-Stack Builder Harness | [#5165](https://github.com/nikhilsoman/synlynk/pull/5165) | 2026-11-07 |
 
 ## Per-PR Post Template
 
