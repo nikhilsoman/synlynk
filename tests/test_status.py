@@ -208,3 +208,22 @@ def test_status_warns_when_quota_calibration_overdue(tmp_path, monkeypatch, caps
     captured = capsys.readouterr()
     assert "quota calibration overdue" in captured.out
 
+def test_status_uninitialized_directory_exits_zero(tmp_path, monkeypatch, capsys):
+    """Verify synlynk status on an uninitialized repository exits 0 without OperationalError (gh:#5166)."""
+    import subprocess
+    from synlynk.cli import main
+    import synlynk
+
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("SYNLYNK_STATE_DB_PATH", raising=False)
+    monkeypatch.setattr(synlynk, "DB_PATH", None)
+    monkeypatch.setattr(synlynk, "ACTIVE_DB_PATH", None)
+
+    main(["status"])
+    captured = capsys.readouterr()
+    assert "SYNLYNK ECOSYSTEM STATUS" in captured.out
+
+    main(["status", "--json"])
+    captured_json = capsys.readouterr()
+    assert '"headless_efficiency":' in captured_json.out

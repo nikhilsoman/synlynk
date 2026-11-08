@@ -2292,6 +2292,19 @@ def _command_from_argv(argv):
     return None
 
 
+def _safe_status_db():
+    """Return a read-only DB connection, falling back to an in-memory schema if missing."""
+    import sqlite3
+    from synlynk import _get_db
+    try:
+        return _get_db(read_only=True)
+    except (sqlite3.OperationalError, RuntimeError, FileNotFoundError):
+        from synlynk.db import _migrate_db
+        conn = sqlite3.connect(":memory:")
+        _migrate_db(conn)
+        return conn
+
+
 def _run_fast_observability_command(cli_tokens, selected_command):
     """Run the two read-only observability commands without legacy imports.
 
@@ -2322,7 +2335,7 @@ def _run_fast_observability_command(cli_tokens, selected_command):
         _package = sys.modules["synlynk"]
         _package._read_sentinel_alerts = _read_sentinel_alerts
         _package._load_capability_roles = _load_capability_roles
-        conn = _get_db(read_only=True)
+        conn = _safe_status_db()
         try:
             cmd_status(
                 db_conn=conn,
@@ -2495,14 +2508,15 @@ def main(argv=None) -> None:
     from synlynk.scheduler import cmd_schedule
     from synlynk.db import cmd_credit_grant
     _reconcile_jobs()
-    try:
-        from synlynk.capability_watch import spawn_staleness_check_thread
-        from synlynk import _get_db, load_config
+    if selected_command != "status":
+        try:
+            from synlynk.capability_watch import spawn_staleness_check_thread
+            from synlynk import _get_db, load_config
 
-        _watch_conn = _get_db()
-        spawn_staleness_check_thread(_watch_conn, load_config())
-    except Exception:
-        pass  # staleness checks are best-effort; never block a real command on this
+            _watch_conn = _get_db()
+            spawn_staleness_check_thread(_watch_conn, load_config())
+        except Exception:
+            pass  # staleness checks are best-effort; never block a real command on this
     parser = build_parser(selected_command=selected_command if fast_entrypoint else None)
     args = parser.parse_args(cli_tokens)
     help_parsers = getattr(parser, "_synlynk_help_parsers", {})
@@ -2698,10 +2712,13 @@ def main(argv=None) -> None:
         if getattr(args, "platform", False):
             cmd_project_status(json_output=args.json_output, platform=True)
         else:
-            from synlynk import _get_db
-            cmd_ecosystem_status(
-                db_conn=_get_db(read_only=True), json_output=args.json_output
-            )
+            conn = _safe_status_db()
+            try:
+                cmd_ecosystem_status(
+                    db_conn=conn, json_output=args.json_output
+                )
+            finally:
+                conn.close()
     elif args.command == "backup":
         from synlynk.backup import (
             cmd_backup_create,
