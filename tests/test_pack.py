@@ -85,3 +85,37 @@ def test_cmd_pack_cli(tmp_path, capsys):
     assert "## Task Context Pack" in captured.out
     assert "verify_jwt" in captured.out
 
+def test_synthesize_context_pack_with_story_lookup(tmp_path, monkeypatch):
+    """Verify story pack assembly does not raise SQLite OperationalError (gh:#5169)."""
+    import sqlite3
+    import synlynk
+    from synlynk.db import _migrate_db
+    from synlynk.worktree_sparse import derive_sparse_cone_paths_from_graph
+
+    db_path = tmp_path / "state.db"
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+    monkeypatch.setattr(synlynk, "DB_PATH", str(db_path))
+
+    conn = sqlite3.connect(str(db_path))
+    _migrate_db(conn)
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?, ?)", ("story-42", "Fix auth token expiration"))
+    conn.commit()
+    conn.close()
+
+    out_dir = tmp_path / ".synlynk" / "graphify-out"
+    out_dir.mkdir(parents=True)
+    graph = {
+        "nodes": [
+            {"id": "synlynk.auth:verify_jwt", "label": "verify_jwt", "file": "synlynk/auth.py", "line": 42},
+        ],
+        "edges": []
+    }
+    (out_dir / "graph.json").write_text(json.dumps(graph))
+
+    pack = synthesize_context_pack(str(tmp_path), story_id="story-42")
+    assert "## Task Context Pack" in pack
+    assert "verify_jwt" in pack
+
+    # Also verify worktree_sparse story query
+    cone_paths = derive_sparse_cone_paths_from_graph(str(tmp_path), story_id="story-42")
+    assert isinstance(cone_paths, list)

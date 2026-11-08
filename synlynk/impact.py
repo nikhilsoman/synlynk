@@ -189,9 +189,9 @@ def export_topological_features(
         try:
             from synlynk import _get_db
             conn = _get_db()
-            row = conn.execute("SELECT title, description FROM stories WHERE story_id = ?", (story_id,)).fetchone()
-            if row:
-                query += f" {row[0] or ''} {row[1] or ''}"
+            row = conn.execute("SELECT title FROM stories WHERE story_id = ?", (story_id,)).fetchone()
+            if row and row[0]:
+                query += f" {row[0]}"
             conn.close()
         except Exception:
             pass
