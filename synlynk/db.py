@@ -3173,6 +3173,10 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
     db_path_for_rollback = DB_PATH
     if os.path.commonpath([abs_db_path, cwd]) == cwd:
         db_path_for_rollback = os.path.relpath(abs_db_path, cwd)
+    docs_dir_for_rollback = docs_dir
+    abs_docs_dir = os.path.abspath(docs_dir)
+    if os.path.commonpath([abs_docs_dir, cwd]) == cwd:
+        docs_dir_for_rollback = os.path.relpath(abs_docs_dir, cwd)
     untracked_paths = [
         db_path_for_rollback,
         f"{db_path_for_rollback}-wal",
@@ -3180,7 +3184,7 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
         f"{db_path_for_rollback}-journal",
         backup_dir,
         sentinel,
-        docs_dir,
+        docs_dir_for_rollback,
     ]
 
     try:
@@ -3203,9 +3207,9 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
             _migrate_dr_mirror(backup_dir)
 
             subprocess.run(
-                ["git", "rm", "--cached", "-r", "--quiet", raw_docs_dir],
+                ["git", "rm", "--cached", "-r", "--quiet", "--ignore-unmatch", raw_docs_dir],
                 cwd=project_root,
-                check=True,
+                check=False,
                 stderr=subprocess.DEVNULL,
             )
             print(f"  ✓ git rm --cached {raw_docs_dir}/")
