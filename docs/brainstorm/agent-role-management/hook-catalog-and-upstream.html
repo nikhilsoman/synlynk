@@ -1,0 +1,48 @@
+<h2>Closing the loop: attach existing hooks, or request new ones upstream</h2>
+<p class="subtitle">Two new affordances on any "Guidance only" authority/trigger row.</p>
+
+<div class="mockup">
+  <div class="mockup-header">Authority row: vendor_risk_review (currently Guidance only)</div>
+  <div class="mockup-body">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+      <input class="mock-input" style="flex:1" value="vendor_risk_review">
+      <span style="background:#3a3320;color:#e8d89e;padding:4px 8px;border-radius:6px;font-size:11px">◌ Guidance only</span>
+    </div>
+    <div class="split">
+      <div class="mockup">
+        <div class="mockup-header">① Attach an existing native hook</div>
+        <div class="mockup-body">
+          <p class="label">Native code hooks (searchable, independent of any authority)</p>
+          <div class="mock-sidebar" style="margin-bottom:6px">run_secret_scanning <small>(secops · GitHub tool)</small></div>
+          <div class="mock-sidebar" style="margin-bottom:6px">pr_check_gate <small>(synlynk pr check)</small></div>
+          <div class="mock-sidebar" style="margin-bottom:6px">dispatch_routing_rule <small>(policy.json task_allocation)</small></div>
+          <div class="mock-sidebar" style="margin-bottom:6px">scheduler_autonomy_stage <small>(_autonomy_pass)</small></div>
+          <div class="mock-sidebar">sentinel_pattern_handler <small>(check_sentinel_patterns)</small></div>
+          <button class="mock-button" style="margin-top:8px">Attach "pr_check_gate" →</button>
+          <p class="label" style="margin-top:6px">Browsing this catalog independent of any intent is the other direction you asked about — see what synlynk can already enforce, then decide which authority should use it.</p>
+        </div>
+      </div>
+      <div class="mockup">
+        <div class="mockup-header">② No hook fits — request one upstream</div>
+        <div class="mockup-body">
+          <p>No native hook covers "vendor risk review" yet.</p>
+          <button class="mock-button" style="background:#2b6463">File feature request on github.com/nikhilsoman/synlynk →</button>
+          <p class="label" style="margin-top:8px">Opens a pre-filled issue: title <code>[Charter Intent] vendor_risk_review for secops</code>, labels <code>feature-proposal</code> + <code>pm-intake</code>, body auto-includes role/mandate context + your workspace id. Goes to synlynk core (not your fork) — PM triages it alongside every other workspace's requests, and checks for duplicates before filing (existing <code>duplicate</code> label).</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px">This is how intents flow back from every user's deployment into synlynk core roadmap: not a support ticket, a tracked GitHub feature request with full context attached automatically.</p>
+
+<div class="options" style="margin-top:20px">
+  <div class="option" data-choice="loop-good" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content"><h3>This closes the loop correctly</h3><p>Ready to write up the spec</p></div>
+  </div>
+  <div class="option" data-choice="loop-adjust" onclick="toggleSelect(this)">
+    <div class="letter">✎</div>
+    <div class="content"><h3>Adjust something</h3><p>Tell me what in the terminal</p></div>
+  </div>
+</div>
