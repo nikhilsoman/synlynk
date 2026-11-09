@@ -520,6 +520,8 @@ def generate_viz_data(db_path: Optional[str] = None) -> dict:
         except Exception:
             return {}
 
+    _ENFORCED_AUTHORITIES = {"worktree_cleanup", "release_cut", "policy_sync", "approve_priority"}
+
     def _load_workspace_agents() -> list:
         """Project the durable agent registry into the Vizor data shape."""
         from synlynk import agent_store, charter_schema
@@ -553,11 +555,17 @@ def generate_viz_data(db_path: Optional[str] = None) -> dict:
             harnesses = metadata.get("harnesses") or metadata.get("target_harnesses") or []
             if isinstance(harnesses, str):
                 harnesses = [item.strip() for item in harnesses.strip("[]").split(",") if item.strip()]
+            raw_authorities = metadata.get("autonomous_authorities") or []
+            authorities = [
+                {"name": a, "enforced": a in _ENFORCED_AUTHORITIES}
+                for a in (raw_authorities if isinstance(raw_authorities, list) else [])
+            ]
             projected.append({
                 "agent_id": entry.get("agent_id", ""),
                 "role": role,
                 "durability": metadata.get("durability", "dispatch-only"),
                 "target_harnesses": list(harnesses) if isinstance(harnesses, list) else [],
+                "autonomous_authorities": authorities,
                 "charter": charter,
                 "charter_excerpt": " ".join(body.strip().split())[:220],
                 "charter_revision": revision,

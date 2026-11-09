@@ -12,6 +12,13 @@ def generate_roles_html(data: dict, port: int) -> str:
         durability = str(agent.get("durability") or "dispatch-only")
         badge = "Durable" if durability == "durable" else "Dispatch-only"
         harnesses = agent.get("target_harnesses") or ["Unassigned"]
+        authorities = agent.get("autonomous_authorities") or []
+        authority_html = "".join(
+            f'<span class="authority {"enforced" if (a.get("enforced") if isinstance(a, dict) else False) else "guidance"}">'
+            f'{html.escape(a.get("name", "") if isinstance(a, dict) else str(a))} '
+            f'<small>{"Enforced" if (a.get("enforced") if isinstance(a, dict) else False) else "Guidance"}</small></span>'
+            for a in authorities
+        )
         cards.append(f"""
         <article class="role-card">
           <div class="card-top"><span class="role-tag">@{html.escape(role)}</span>
@@ -31,6 +38,7 @@ def generate_roles_html(data: dict, port: int) -> str:
               <span class="save-status" aria-live="polite"></span>
             </form>
           </details>
+          <div class="authorities">{authority_html}</div>
         </article>""")
     cards_html = "\n".join(cards) or '<div class="empty">No active workspace roles yet. Provision the first one below.</div>'
     goal_summary = " · ".join(
@@ -53,12 +61,14 @@ h1{{font-size:34px;margin:8px 0}}.subtitle{{color:var(--muted);margin:0 0 24px}}
 .edit-charter{{margin-top:12px}}.edit-charter summary{{cursor:pointer;color:var(--accent);font-weight:700}}
 .charter-edit-form{{display:grid;gap:8px;margin-top:10px}}.charter-edit-form textarea{{border:1px solid var(--line);border-radius:7px;padding:8px;font:inherit}}
 .save-status{{font-size:11px;color:var(--muted)}}
+.authorities{{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}}.authority{{font-size:11px;border-radius:99px;padding:4px 8px;background:var(--accent-bg);color:#087462}}
+.authority.guidance{{background:#f1f0ea;color:#8a7a3a}}.authority small{{font-weight:700;margin-left:3px}}
 </style></head><body><main>
 <div class="eyebrow">Vizor / Living Workspace</div><h1>Workspace Agent Roles</h1>
 <p class="subtitle">Living Charters for <strong>{workspace_name}</strong> — durable identities with visible ownership.</p>
 <section class="summary"><div><strong>Workspace Persona &amp; Goals</strong><span>{len(agents)} active role(s) · governed by living charters</span></div><div class="goals"><strong>Active goals</strong><span>{goal_summary}</span></div></section>
 <section><div class="section-head"><h2>Living Charters</h2><span>{len(agents)} active</span></div><div class="grid">{cards_html}</div></section>
-<section class="drawer" id="provision"><h2>Onboard Workspace Role</h2><p>Role provisioning stays on the CLI (<code>synlynk identity</code>).</p></section>
+<section class="drawer" id="provision"><h2>Onboard Workspace Role</h2><p>Use the 5-step wizard below, or <code>synlynk agent activate &lt;role&gt;</code> + <code>synlynk identity init --role &lt;role&gt;</code> from the CLI.</p></section>
 </main>
 <script>
 window.__submitCharterEdit = function(ev) {{

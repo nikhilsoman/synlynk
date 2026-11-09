@@ -97,3 +97,20 @@ def test_handle_charter_update_conflict_on_stale_revision(monkeypatch):
     assert "conflict" in result["error"].lower()
 
 
+def test_generate_roles_html_no_longer_claims_cli_only_provisioning():
+    rendered = generate_roles_html(_roles_data(), 8721)
+    assert "stays on the CLI" not in rendered
+
+
+def test_generate_roles_html_tags_enforced_authority():
+    data = _roles_data()
+    data["workspace_agents"][0]["autonomous_authorities"] = [
+        {"name": "worktree_cleanup", "enforced": True},
+        {"name": "author_blog", "enforced": False},
+    ]
+    rendered = generate_roles_html(data, 8721)
+    assert "Enforced" in rendered
+    assert "Guidance" in rendered
+
+
+
