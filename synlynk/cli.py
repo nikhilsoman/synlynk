@@ -1022,6 +1022,11 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     agent_disable_parser = agent_sub.add_parser("disable", help="Disable a workspace agent")
     agent_disable_parser.add_argument("id_or_alias", help="Agent ID or alias (e.g. role slug)")
 
+    agent_activate_parser = agent_sub.add_parser(
+        "activate", help="Register a known role as a real dispatchable agent"
+    )
+    agent_activate_parser.add_argument("role", help="Role slug to activate")
+
     exec_parser = subparsers.add_parser("exec", help="Execute an AI CLI with synlynk context")
     exec_parser.add_argument("cmd", nargs=argparse.REMAINDER, help="Command to execute")
     exec_parser.add_argument("--force", action="store_true",
@@ -3054,6 +3059,13 @@ def main(argv=None) -> None:
             agent_cli.cmd_agent_sync_routing(args.id_or_alias)
         elif args.agent_action == "disable":
             agent_cli.cmd_agent_disable(args.id_or_alias)
+        elif args.agent_action == "activate":
+            from synlynk.role_activation import activate_role
+            import getpass
+
+            agent_id = activate_role(args.role, actor=getpass.getuser(), actor_type="human")
+            print(f"  activated role '{agent_id}' as a dispatchable agent")
+            print(f"  provision its GitHub App identity with: synlynk identity init --role {agent_id}")
         else:
             help_parsers.get("agent", parser).print_help()
     elif args.command == "backfill-capability-ratings":

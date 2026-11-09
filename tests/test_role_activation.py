@@ -53,3 +53,17 @@ def test_activate_maintainer_role(tmp_path, monkeypatch):
     assert "release_cut" in charter
     assert "identity_binding" in charter
 
+
+def test_cli_agent_activate_calls_role_activation(tmp_path, monkeypatch, capsys):
+    _fake_home(tmp_path, monkeypatch)
+    import sys
+    from synlynk import cli
+
+    monkeypatch.setattr(sys, "argv", ["synlynk", "agent", "activate", "secops"])
+    cli.main()
+
+    from synlynk import agent_store
+    agent_ids = [e["agent_id"] for e in agent_store.list_agents()]
+    assert "secops" in agent_ids
+
+
