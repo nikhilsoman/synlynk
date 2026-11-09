@@ -21,6 +21,7 @@
 5. Native hook catalog (Capability Registry, native-code-hook source)
 6. Capability Registry local source (harness-installed MCPs/Skills)
 7. Trust/dedup gate (§3a.4) — a precondition for remote-connector ingestion and the upstream feature-request flow, both of which remain **out of scope** for this plan per spec §7 (filed as a follow-on once this gate exists)
+8. TPM charter tool-use migration for GitHub sync — added per decide panel decision `2026-11-09-decide-panel-should-bidirectional-sync-w`; wraps `gh sync-roadmap` as a Capability Registry entry, migrates `tpm`'s charter into `agent_store`
 
 ---
 
@@ -2038,6 +2039,146 @@ This step has no code and is not part of the TDD task sequence above — it is t
 
 ---
 
+# Phase 8: TPM charter tool-use migration for GitHub sync
+
+Added per `project-docs/decisions/2026-11-09-decide-panel-should-bidirectional-sync-w.md` — "external-system-touching, judgment-bearing functionality is agent-role tool-use via the Capability Registry; local control-plane mechanics stay native." `synlynk gh sync-roadmap` (`synlynk/gh_sync_cli.py:cmd_sync_roadmap`) is today a native CLI command with no charter authority behind it. This phase wraps the existing function as a `native_code` Capability Registry entry and grants `tpm` the authority to invoke it, without touching `cmd_sync_roadmap`'s own logic. Depends on Task 2/3 (`propose_charter_revision`'s `actor_type` param) and Task 15 (`capability_registry.py`) already being in place.
+
+### Task 20: Wrap `gh sync-roadmap` as a Capability Registry entry, grant `tpm` the authority, migrate `tpm.json` into `agent_store`
+
+**Files:**
+- Create: `.synlynk/capability_registry/native/gh-sync-roadmap.json`
+- Modify: `.synlynk/charters/tpm.json` (add `autonomous_authorities` entry + `capability_refs`)
+- Modify: `synlynk/role_activation.py` or a one-off migration call (migrate `tpm` into `agent_store`)
+- Test: `tests/test_capability_registry.py`, `tests/test_agent_store.py`
+
+- [ ] **Step 1: Write the failing test for the new manifest**
+
+Add to `tests/test_capability_registry.py`:
+
+```python
+def test_load_native_capabilities_includes_gh_sync_roadmap():
+    from synlynk import capability_registry
+    caps = capability_registry.load_native_capabilities()
+    ids = {c["capability_id"] for c in caps}
+    assert "gh-sync-roadmap" in ids
+    entry = next(c for c in caps if c["capability_id"] == "gh-sync-roadmap")
+    assert entry["enforced_hook"] == "synlynk.gh_sync_cli:cmd_sync_roadmap"
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pytest tests/test_capability_registry.py::test_load_native_capabilities_includes_gh_sync_roadmap -v`
+Expected: FAIL — `AssertionError` (no `gh-sync-roadmap` entry on disk yet)
+
+- [ ] **Step 3: Create the manifest**
+
+Create `.synlynk/capability_registry/native/gh-sync-roadmap.json`:
+
+```json
+{
+  "capability_id": "gh-sync-roadmap",
+  "name": "gh_sync_roadmap",
+  "source": "native",
+  "description": "Projects state.db GOVERNS goals/stories to GitHub Milestones/Issues (one-way today; bidirectional sync is a separate, deferred follow-on).",
+  "purpose": "Keep GitHub's shareable projection of roadmap state in sync with state.db, the sole authority, without hand-edited roadmap.md/todo.md.",
+  "scope": "network:github,state.db:goals,state.db:stories",
+  "auth": {"type": "github_app"},
+  "enforced_hook": "synlynk.gh_sync_cli:cmd_sync_roadmap",
+  "harness_compat": "any",
+  "workspace_id": "local",
+  "owner": "synlynk-core",
+  "version": "1.0.0"
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `pytest tests/test_capability_registry.py::test_load_native_capabilities_includes_gh_sync_roadmap -v`
+Expected: PASS
+
+- [ ] **Step 5: Write the failing test for tpm's new authority**
+
+Add to `tests/test_agent_store.py`:
+
+```python
+def test_tpm_charter_has_gh_sync_authority():
+    import json
+    with open(".synlynk/charters/tpm.json") as fh:
+        charter = json.load(fh)
+    assert "sync_external_tracker" in charter["autonomous_authorities"]
+    assert "gh-sync-roadmap" in charter.get("capability_refs", [])
+```
+
+- [ ] **Step 6: Run test to verify it fails**
+
+Run: `pytest tests/test_agent_store.py::test_tpm_charter_has_gh_sync_authority -v`
+Expected: FAIL — `KeyError`/`AssertionError` (authority and `capability_refs` don't exist yet)
+
+- [ ] **Step 7: Update `tpm.json`**
+
+Edit `.synlynk/charters/tpm.json`'s `autonomous_authorities` list to add `"sync_external_tracker"`, add a new top-level `"capability_refs": ["gh-sync-roadmap"]` field, and extend `wake_cycle_sop` with a new step:
+
+```json
+"7. Tracker Sync: Invoke the `gh-sync-roadmap` capability (synlynk.gh_sync_cli:cmd_sync_roadmap) to project state.db goal/story state to GitHub as the shareable read-only view, after sweep execution."
+```
+
+- [ ] **Step 8: Run test to verify it passes**
+
+Run: `pytest tests/test_agent_store.py::test_tpm_charter_has_gh_sync_authority -v`
+Expected: PASS
+
+- [ ] **Step 9: Migrate `tpm` into `agent_store`**
+
+`agent_store.read_charter('tpm')` currently returns empty content at revision 0 — `tpm` has never been registered into the versioned markdown system every other role in this plan uses. Run once, interactively or as a migration script:
+
+```python
+from synlynk import agent_store
+import json
+
+with open(".synlynk/charters/tpm.json") as fh:
+    tpm_charter = json.load(fh)
+
+if "tpm" not in {e["agent_id"] for e in agent_store.list_agents()}:
+    agent_store.register_agent("tpm", [{"kind": "role_slug", "value": "tpm"}])
+
+agent_store.propose_charter_revision(
+    "tpm", tpm_charter, actor="nikhil", parent_revision=0, actor_type="human",
+)
+```
+
+- [ ] **Step 10: Verify the migration**
+
+Run: `python3 -c "from synlynk import agent_store; content, rev = agent_store.read_charter('tpm'); print(rev); assert rev >= 1"`
+Expected: prints `1` (or higher), no `AssertionError`
+
+- [ ] **Step 11: Run the full affected test surface together**
+
+Run: `pytest tests/test_capability_registry.py tests/test_agent_store.py tests/test_charters.py -v`
+Expected: PASS, 0 failures
+
+- [ ] **Step 12: Commit**
+
+```bash
+git add .synlynk/capability_registry/native/gh-sync-roadmap.json .synlynk/charters/tpm.json tests/test_capability_registry.py tests/test_agent_store.py
+git commit -m "feat: wrap gh sync-roadmap as a tpm-owned Capability Registry entry
+
+Per decide-panel decision 2026-11-09-decide-panel-should-bidirectional-sync-w:
+external-system-touching, judgment-bearing functionality becomes agent-role
+tool-use via the Capability Registry rather than a bare native CLI command.
+Wraps the existing cmd_sync_roadmap unchanged; migrates tpm's charter into
+agent_store so it gets audited writes like every other role in this plan.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
+```
+
+- [ ] **Step 13: File the follow-on stories under `goal-658aa384`**
+
+Not code — per the decide panel's `[defer-safely]` items, file two GitHub issues (not implemented in this plan):
+1. "Bidirectional GitHub sync (conflict resolution, idempotency, webhook/polling semantics) — tpm capability follow-on" — linked to `goal-658aa384`, blocked on a concrete trigger (no work starts until one exists).
+2. "Linear/Jira/Asana/Slack connectors via Composio/Smithery — tpm/role tool-use follow-ons" — linked to `goal-658aa384`, gated by Phase 7/Task 18's trust/dedup gate before any ingestion work starts.
+
+---
+
 ## Self-Review
 
 **Spec coverage check (against `docs/superpowers/specs/2026-11-09-vizor-agent-role-management-design.md`):**
@@ -2060,12 +2201,13 @@ This step has no code and is not part of the TDD task sequence above — it is t
 - §6 phase sequencing -> this plan's Phase 1-7 structure mirrors it exactly, governance gates front-loaded into Phase 1 ✓
 - §7 out of scope (hosted service, DLP/infra PEP pipelines, remote ingestion) -> correctly not built; Task 19 files the one legitimate follow-on ✓
 - §8 open items -> explicitly not resolved by this plan (they are marked open in the spec itself for a reason); Task 12's GitHub-App-self-revocation limitation and Task 18's `NotImplementedError` injection point are the concrete manifestations of those open items surfacing in code, handled honestly rather than papered over
+- Decide panel `2026-11-09-decide-panel-should-bidirectional-sync-w` (not in the original spec, added post-approval per Nikhil's explicit request) -> Task 20 wraps `gh sync-roadmap` as a Capability Registry entry and migrates `tpm` into `agent_store`; the panel's two `[defer-safely]` items (bidirectional sync, Linear/Jira/Asana/Slack connectors) are correctly filed as follow-on stories in Task 20 Step 13, not built here ✓
 
 **Placeholder scan:** No TBD/TODO strings. The one `NotImplementedError` (Task 18's `_search_issues`) is not a placeholder for missing plan content — it is the documented, deliberate seam the spec's own Phase 7 gating requires (dedup-check logic is real and tested; only the live GitHub network call, which needs credentials no test should depend on, is left as an injection point, exactly as `tests/test_upstream_dedup_gate.py` demonstrates by stubbing it).
 
 **Type/signature consistency check:**
 - `activate_role(role, actor, actor_type="human")` — same signature used in Tasks 5, 6, 7, 8
-- `propose_charter_revision(agent_id, content, actor, parent_revision, actor_type="service")` — same signature used in Tasks 2, 3, 5, 9
+- `propose_charter_revision(agent_id, content, actor, parent_revision, actor_type="service")` — same signature used in Tasks 2, 3, 5, 9, 20
 - `load_native_capabilities()` / `load_local_capabilities(harness=None)` — same names used in Tasks 15, 16, 17
 - `cmd_identity_revoke(role, actor)` — same signature used in Tasks 12, 13
 - `REQUIRED_MANIFEST_FIELDS` tuple defined once in Task 15, referenced (not redefined) in Task 16
