@@ -118,9 +118,15 @@ select:focus{border-color:var(--accent)}
 .card h3{font-size:12px;margin:0 0 8px;line-height:1.4;font-weight:600;color:var(--ink)}
 .meta{color:var(--muted);font-size:11px;margin:3px 0}
 .goal-meta{color:var(--accent);font-weight:500}
-.links{display:flex;gap:8px;font-size:11px;margin-top:6px}
+.links{display:flex;gap:8px;font-size:11px;margin-top:6px;flex-wrap:wrap}
 .links a{color:var(--accent);text-decoration:none;font-weight:500}
 .links a:hover{text-decoration:underline}
+.goal-card{border-left:3px solid var(--accent);background:linear-gradient(135deg,var(--panel),var(--panel-2))}
+.goal-pill{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+.badge-link{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:4px;background:var(--panel-2);border:1px solid var(--line);font-size:10px;font-weight:600;color:var(--accent);text-decoration:none}
+.badge-link:hover{border-color:var(--accent);text-decoration:none}
+.pr-badge{color:#8b5cf6;border-color:rgba(139,92,246,0.3);background:rgba(139,92,246,0.08)}
+.criterion{font-style:italic;color:var(--muted);margin-top:4px;font-size:10px}
 .card-actions{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
 .status-btns{display:flex;gap:4px;flex-wrap:wrap}
 .st-btn{border:1px solid var(--line);background:var(--panel);border-radius:4px;padding:3px 6px;font-size:10px;cursor:pointer;font-family:inherit;font-weight:600;transition:all .15s}
@@ -165,8 +171,21 @@ function draw(){
     return `<section class="column" data-stage="${st}">
       <div class="column-header"><h2>${stageIcons[st]||st}</h2><span class="column-count">${stageCards.length}</span></div>
       ${stageCards.map(c=>{
+        if (c.is_goal) {
+          return `<article class="card goal-card" id="card-${esc(c.story_id)}">
+            <div class="card-top">
+              <span class="status-pill goal-pill">🎯 Goal</span>
+              <span class="story-id">${esc(c.story_id)}</span>
+            </div>
+            <h3>${esc(c.title)}</h3>
+            <div class="meta">${esc(c.type_id||'feature')} · <strong>${c.linked_stories_count||0}</strong> linked tasks</div>
+            ${c.criterion ? `<div class="meta criterion">${esc(c.criterion)}</div>` : ''}
+          </article>`;
+        }
         const sc=statusColors[c.status]||statusColors.open;
         const pulseHtml=c.status==='in_progress'?'<span class="pulse-dot"></span> ':'';
+        const ghIssueBadge=c.tracker&&c.tracker.url?`<a href="${esc(c.tracker.url)}" target="_blank" rel="noopener" class="badge-link">#${esc(c.tracker.id)}</a>`:link(c.tracker);
+        const ghPrBadge=c.pr_url?`<a href="${esc(c.pr_url)}" target="_blank" rel="noopener" class="badge-link pr-badge">PR #${esc(c.pr_number||'')}</a>`:'';
         return `<article class="card" id="card-${esc(c.story_id)}">
           <div class="card-top">
             <span class="status-pill" style="background:${sc.bg};border-color:${sc.border};color:${sc.color};">${pulseHtml}${esc(sc.label)}</span>
@@ -175,7 +194,7 @@ function draw(){
           <h3>${esc(c.title)}</h3>
           <div class="meta">${esc(c.repo_name||c.repo_id||'unassigned')} · ${esc(c.type_id||'untyped')}</div>
           ${c.goal_id?`<div class="meta goal-meta">🎯 ${esc(c.goal_id)}</div>`:`<div class="meta goal-meta unmapped-goal">⚪ Unmapped</div>`}
-          <div class="links">${link(c.tracker)}${c.pr_url?`<a href="${esc(c.pr_url)}" target="_blank" rel="noopener">PR</a>`:''}</div>
+          <div class="links">${ghIssueBadge}${ghPrBadge}</div>
           <div class="card-actions">
             <div class="status-btns">
               ${['ready','in_progress','done','blocked'].filter(s=>s!==c.status).map(s=>{

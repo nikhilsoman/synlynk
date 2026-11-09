@@ -37,11 +37,15 @@ def test_board_cards_distribution_across_7_stages(tmp_path, monkeypatch):
     conn.close()
 
     board_data_res = board_data(str(repo))
-    assert len(board_data_res["cards"]) == 7
+    assert len(board_data_res["cards"]) == 9
     assert board_data_res["governs_stages"] == list(GOVERNS_STAGES)
     
     stages_present = {c["governs_stage"] for c in board_data_res["cards"]}
     assert stages_present == set(stages)
+
+    goal_cards = [c for c in board_data_res["cards"] if c.get("is_goal")]
+    assert len(goal_cards) == 2
+    assert all(c["governs_stage"] == "goal" for c in goal_cards)
 
 def test_governs_sweep_populates_board_and_gantt(tmp_path, monkeypatch):
     repo, db_file = _setup_product_workspace(tmp_path, monkeypatch, "sweepws")
@@ -69,7 +73,9 @@ def test_governs_sweep_populates_board_and_gantt(tmp_path, monkeypatch):
     assert stats["unresolved_count"] == 5
     assert conn.execute("SELECT COUNT(*) FROM goals").fetchone()[0] == 2
 
-    # Board cards check: all 5 cards present on board regardless of mapping status
+    # Board cards check: 5 story cards + 2 active goal cards present on board
     board_res = board_data(str(repo))
-    assert len(board_res["cards"]) == 5
+    assert len(board_res["cards"]) == 7
+    assert len([c for c in board_res["cards"] if not c.get("is_goal")]) == 5
+    assert len([c for c in board_res["cards"] if c.get("is_goal")]) == 2
     conn.close()

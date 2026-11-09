@@ -67,6 +67,20 @@ def _pointer(story: dict, repo_names: dict[str, str]) -> Optional[dict]:
             "id": story.get("source_ref"),
             "container": repo_names.get(str(story.get("repo_id")), ""),
         }
+    if not pointer and story.get("gh_issue"):
+        container = repo_names.get(str(story.get("repo_id")), "")
+        if not container:
+            try:
+                from synlynk import load_config
+                cfg = load_config()
+                container = cfg.get("github_repo") or cfg.get("repo") or ""
+            except Exception:
+                container = ""
+        pointer = {
+            "tracker": "github",
+            "id": str(story.get("gh_issue")),
+            "container": container,
+        }
     if not pointer:
         return None
     tracker = str(pointer.get("tracker") or pointer.get("surface") or "").strip().lower()
@@ -136,16 +150,70 @@ def board_data(
             item["repo_name"] = repo_names.get(str(item.get("repo_id")), item.get("repo_id"))
             item["tracker"] = _pointer(item, repo_names)
             item["pr_url"] = None
-            if item.get("pr_number") and item.get("repo_id") in repo_names:
-                nwo = repo_names[item["repo_id"]]
+            if item.get("pr_number"):
+                nwo = repo_names.get(str(item.get("repo_id")), "")
+                if not nwo:
+                    try:
+                        from synlynk import load_config
+                        cfg = load_config()
+                        nwo = cfg.get("github_repo") or cfg.get("repo") or ""
+                    except Exception:
+                        nwo = ""
                 if _NWO_RE.fullmatch(nwo):
                     item["pr_url"] = f"https://github.com/{nwo}/pull/{quote(str(item['pr_number']), safe='.-_:')}"
             cards.append(item)
+
+        # Query active living goals to populate the 'goal' stage
+        goal_cols = _columns(conn, "goals")
+        goal_cards = []
+        if {"goal_id", "outcome"}.issubset(goal_cols):
+            g_cols = ["goal_id", "outcome"]
+            for col in ("criterion", "status", "kind", "created_at"):
+                if col in goal_cols:
+                    g_cols.append(col)
+            where_clause = " WHERE status = 'active'" if "status" in goal_cols else ""
+            try:
+                g_rows = conn.execute(f"SELECT {', '.join(g_cols)} FROM goals{where_clause}").fetchall()
+            except Exception:
+                g_rows = []
+
+            # Story counts per goal
+            story_counts: dict[str, int] = {}
+            for r in rows:
+                r_dict = dict(r)
+                gid = r_dict.get("goal_id")
+                if gid:
+                    story_counts[gid] = story_counts.get(gid, 0) + 1
+
+            for grow in g_rows:
+                gdict = dict(grow)
+                gid = gdict["goal_id"]
+                if goal_id and gid != goal_id:
+                    continue
+                gcard = {
+                    "story_id": gid,
+                    "title": gdict.get("outcome") or gid,
+                    "status": "ready" if story_counts.get(gid, 0) > 0 else "open",
+                    "governs_stage": "goal",
+                    "stage": "goal",
+                    "repo_id": None,
+                    "repo_name": "Living Goal",
+                    "type_id": gdict.get("kind") or "feature",
+                    "goal_id": gid,
+                    "is_goal": True,
+                    "criterion": gdict.get("criterion") or "",
+                    "linked_stories_count": story_counts.get(gid, 0),
+                    "tracker": None,
+                    "pr_url": None,
+                }
+                goal_cards.append(gcard)
+
+        cards = goal_cards + cards
         all_rows = [dict(row) for row in rows]
         filters = {
             "repos": sorted({row.get("repo_id") for row in all_rows if row.get("repo_id")}),
             "types": sorted({row.get("type_id") for row in all_rows if row.get("type_id")}),
-            "goals": sorted({row.get("goal_id") for row in all_rows if row.get("goal_id")}),
+            "goals": sorted({row.get("goal_id") for row in all_rows if row.get("goal_id")} | {g["goal_id"] for g in goal_cards}),
         }
         return {
             "identity_slug": slug,
