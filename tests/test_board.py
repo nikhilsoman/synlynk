@@ -116,3 +116,58 @@ def test_board_view_is_local_and_uses_status_api():
     assert "GOVERNS" in html
     assert "github.com" not in html
 
+
+def test_board_data_populates_goal_cards_and_links(tmp_path, monkeypatch):
+    """Verify board_data() populates Goal stage from active goals and links stories (gh:#5175)."""
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    repo = tmp_path / "repo"
+    (repo / ".synlynk").mkdir(parents=True)
+    monkeypatch.chdir(repo)
+    (repo / ".synlynk" / "config.json").write_text(json.dumps({
+        "identity_slug": "acme",
+        "github_repo": "acme/repo",
+    }))
+    db_path = state_db_path("acme")
+    db_path.parent.mkdir(parents=True)
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        CREATE TABLE stories (
+            story_id TEXT PRIMARY KEY, title TEXT, status TEXT,
+            repo_id TEXT, type_id TEXT, goal_id TEXT,
+            source_type TEXT, source_ref TEXT, gh_issue TEXT, pr_number INTEGER,
+            created_at TEXT, updated_at TEXT, governs_stage TEXT
+        );
+        CREATE TABLE goals (
+            goal_id TEXT PRIMARY KEY, outcome TEXT, criterion TEXT,
+            status TEXT DEFAULT 'active', kind TEXT DEFAULT 'feature'
+        );
+        INSERT INTO goals (goal_id, outcome, criterion, status, kind) VALUES
+            ('goal-autonomy', 'Achieve Full Workspace Autonomy', 'Zero regressions', 'active', 'strategic');
+        INSERT INTO stories (story_id, title, status, goal_id, gh_issue, pr_number, governs_stage) VALUES
+            ('story-1', 'Build worker daemon', 'in_progress', 'goal-autonomy', '5175', 5180, 'execute');
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    payload = board_data(str(repo))
+    cards = payload["cards"]
+    assert len(cards) == 2
+
+    # Goal card assertions
+    goal_card = next(c for c in cards if c.get("is_goal"))
+    assert goal_card["story_id"] == "goal-autonomy"
+    assert goal_card["governs_stage"] == "goal"
+    assert goal_card["title"] == "Achieve Full Workspace Autonomy"
+    assert goal_card["criterion"] == "Zero regressions"
+    assert goal_card["type_id"] == "strategic"
+    assert goal_card["linked_stories_count"] == 1
+
+    # Story card assertions
+    story_card = next(c for c in cards if not c.get("is_goal"))
+    assert story_card["story_id"] == "story-1"
+    assert story_card["tracker"]["url"] == "https://github.com/acme/repo/issues/5175"
+    assert story_card["pr_url"] == "https://github.com/acme/repo/pull/5180"
+
