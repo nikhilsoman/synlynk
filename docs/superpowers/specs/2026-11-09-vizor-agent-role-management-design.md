@@ -4,6 +4,7 @@
 **Status:** Brainstormed, approved by Nikhil, decide-panel-gated, pending plan + build
 **Motivating incident:** gh:#5178-#5181 (X6M-Work governance gap — PRs #5172-#5174 merged on a fabricated non-author review, with no role charged to catch it)
 **Decide panel:** `project-docs/decisions/2026-11-09-decide-panel-agent-role-management-agent...` (claude/agy/codex/grok) — approved Agent Studio as foundational, gated on §3a's four conditions, rejected tool-named roles (§4a). Re-run `project-docs/decisions/2026-11-09-decide-panel-re-run-agent-role-managemen...` (claude/agy/codex) — hosted Team/Enterprise forward-compatibility review, gated on §3b's four schema seams.
+**GOVERNS goal:** `goal-658aa384` — parent tracking issue: gh:#5185
 
 ## 1. Problem
 
