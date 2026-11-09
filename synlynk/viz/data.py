@@ -491,6 +491,7 @@ def generate_viz_data(db_path: Optional[str] = None) -> dict:
             "costs": {"total_usd": 0.0, "total_usd_estimated": 0.0, "by_agent": {}, "by_stage": {}},
             "agents": {},
             "workspace_agents": _load_workspace_agents(),
+            "capability_registry": _load_capability_registry(),
             "workspace_map": _load_workspace_map(),
             "file_tree": file_tree,
             "notes": _load_json_optional(_pkg().VIZ_NOTES_PATH, default={}),
@@ -519,6 +520,18 @@ def generate_viz_data(db_path: Optional[str] = None) -> dict:
                 return json.load(f)
         except Exception:
             return {}
+
+    def _load_capability_registry() -> list:
+        from synlynk import capability_registry
+        try:
+            native_caps = capability_registry.load_native_capabilities()
+        except ValueError:
+            native_caps = []
+        try:
+            local_caps = capability_registry.load_local_capabilities()
+        except ValueError:
+            local_caps = []
+        return native_caps + local_caps
 
     _ENFORCED_AUTHORITIES = {"worktree_cleanup", "release_cut", "policy_sync", "approve_priority"}
 

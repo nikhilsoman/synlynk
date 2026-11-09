@@ -34,6 +34,12 @@ def generate_roles_html(data: dict, port: int) -> str:
               <label>Mandate (Instructions section)
                 <textarea name="mandate" rows="4">{html.escape(str(agent.get('charter_excerpt') or ''))}</textarea>
               </label>
+              <label>Attach existing capability
+                <select name="capability_id">
+                  <option value="">— none —</option>
+                  {"".join(f'<option value="{html.escape(c.get("capability_id",""))}">{html.escape(c.get("capability_id",""))} ({html.escape(c.get("source",""))})</option>' for c in (data.get("capability_registry") or []))}
+                </select>
+              </label>
               <button type="submit" class="primary">Save revision</button>
               <span class="save-status" aria-live="polite"></span>
             </form>

@@ -120,5 +120,16 @@ def test_generate_roles_html_renders_ftue_wizard_steps():
     assert "synlynk identity init --role" in rendered
 
 
+def test_generate_roles_html_lists_attachable_capabilities():
+    data = _roles_data()
+    data["capability_registry"] = [
+        {"capability_id": "worktree-cleanup", "name": "worktree_cleanup", "source": "native"},
+    ]
+    rendered = generate_roles_html(data, 8721)
+    assert "worktree-cleanup" in rendered
+    assert "Attach" in rendered
+
+
+
 
 
