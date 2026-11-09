@@ -63,14 +63,100 @@ h1{{font-size:34px;margin:8px 0}}.subtitle{{color:var(--muted);margin:0 0 24px}}
 .save-status{{font-size:11px;color:var(--muted)}}
 .authorities{{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}}.authority{{font-size:11px;border-radius:99px;padding:4px 8px;background:var(--accent-bg);color:#087462}}
 .authority.guidance{{background:#f1f0ea;color:#8a7a3a}}.authority small{{font-weight:700;margin-left:3px}}
+.wizard .steps{{list-style:none;display:flex;gap:10px;padding:0;margin:0 0 16px;font-size:12px;color:#7fa8a3}}
+.wizard .steps li.active{{color:#3de0c0;font-weight:700}}
+.wizard [data-panel]{{display:grid;gap:10px}}.wizard pre{{background:#0c2225;padding:10px;border-radius:7px;color:#9ef5df}}
+.wizard-status{{font-size:11px;color:#b7d4ce}}
 </style></head><body><main>
 <div class="eyebrow">Vizor / Living Workspace</div><h1>Workspace Agent Roles</h1>
 <p class="subtitle">Living Charters for <strong>{workspace_name}</strong> — durable identities with visible ownership.</p>
 <section class="summary"><div><strong>Workspace Persona &amp; Goals</strong><span>{len(agents)} active role(s) · governed by living charters</span></div><div class="goals"><strong>Active goals</strong><span>{goal_summary}</span></div></section>
 <section><div class="section-head"><h2>Living Charters</h2><span>{len(agents)} active</span></div><div class="grid">{cards_html}</div></section>
-<section class="drawer" id="provision"><h2>Onboard Workspace Role</h2><p>Use the 5-step wizard below, or <code>synlynk agent activate &lt;role&gt;</code> + <code>synlynk identity init --role &lt;role&gt;</code> from the CLI.</p></section>
+<section class="drawer" id="provision"><h2>Onboard Workspace Role</h2>
+<div class="wizard" id="ftue-wizard">
+  <ol class="steps">
+    <li data-step="1" class="active">1. Function family</li>
+    <li data-step="2">2. Fields</li>
+    <li data-step="3">3. Escalation scope</li>
+    <li data-step="4">4. Identity</li>
+    <li data-step="5">5. Review</li>
+  </ol>
+  <form id="ftue-form" onsubmit="return window.__submitFtue(event)">
+    <div data-panel="1">
+      <label>Function family
+        <select name="role">
+          <option value="dev">dev — delivery</option>
+          <option value="qa">qa — quality/trust</option>
+          <option value="secops">secops — quality/trust</option>
+          <option value="maintainer">maintainer — platform</option>
+          <option value="infra-devops">infra-devops — platform</option>
+          <option value="designer">designer — experience</option>
+          <option value="marketing">marketing — experience</option>
+        </select>
+      </label>
+      <button type="button" onclick="window.__ftueNext(1)">Next</button>
+    </div>
+    <div data-panel="2" hidden>
+      <label>Mandate (free text)<textarea name="mandate" rows="3"></textarea></label>
+      <label>Durability
+        <select name="durability"><option value="durable">durable</option><option value="dispatch-only">dispatch-only</option><option value="session-only">session-only</option></select>
+      </label>
+      <button type="button" onclick="window.__ftueNext(2)">Next</button>
+    </div>
+    <div data-panel="3" hidden>
+      <p>Escalation triggers and veto scope are refined after activation, in the
+         BAU charter editor above — this step confirms you understand the role
+         activates with its taxonomy default scope (spec §2).</p>
+      <button type="button" onclick="window.__ftueNext(3)">Next</button>
+    </div>
+    <div data-panel="4" hidden>
+      <p>After activation, provision this role's GitHub App identity from a
+         terminal (requires a browser for GitHub's manifest flow — cannot run
+         inside Vizor):</p>
+      <pre id="ftue-identity-cmd">synlynk identity init --role &lt;role&gt;</pre>
+      <button type="button" onclick="window.__ftueNext(4)">Next</button>
+    </div>
+    <div data-panel="5" hidden>
+      <p>Review your selections, then activate.</p>
+      <button type="submit" class="primary">Activate role</button>
+    </div>
+  </form>
+  <p class="wizard-status" aria-live="polite"></p>
+</div>
+</section>
 </main>
 <script>
+window.__ftueNext = function(fromStep) {{
+  document.querySelector('[data-panel="' + fromStep + '"]').hidden = true;
+  document.querySelector('[data-panel="' + (fromStep + 1) + '"]').hidden = false;
+  document.querySelectorAll(".steps li").forEach(li => li.classList.remove("active"));
+  document.querySelector('[data-step="' + (fromStep + 1) + '"]').classList.add("active");
+  if (fromStep + 1 === 4) {{
+    const role = document.querySelector('[name="role"]').value;
+    document.getElementById("ftue-identity-cmd").textContent = "synlynk identity init --role " + role;
+  }}
+}};
+window.__submitFtue = function(ev) {{
+  ev.preventDefault();
+  const form = ev.target;
+  const status = document.querySelector(".wizard-status");
+  const body = {{
+    role: form.role.value,
+    durability: form.durability.value,
+    mandate: form.mandate.value,
+  }};
+  status.textContent = "activating...";
+  fetch("/roles/create", {{
+    method: "POST",
+    headers: {{"Content-Type": "application/json"}},
+    body: JSON.stringify(body),
+  }}).then(r => r.json()).then(result => {{
+    status.textContent = result.ok
+      ? "activated as " + result.agent_id + " — reload to see it in Living Charters"
+      : "error: " + result.error;
+  }}).catch(() => {{ status.textContent = "network error"; }});
+  return false;
+}};
 window.__submitCharterEdit = function(ev) {{
   ev.preventDefault();
   const form = ev.target;

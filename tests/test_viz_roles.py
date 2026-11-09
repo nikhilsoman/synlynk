@@ -113,4 +113,12 @@ def test_generate_roles_html_tags_enforced_authority():
     assert "Guidance" in rendered
 
 
+def test_generate_roles_html_renders_ftue_wizard_steps():
+    rendered = generate_roles_html(_roles_data(), 8721)
+    assert 'data-step="1"' in rendered
+    assert 'data-step="4"' in rendered
+    assert "synlynk identity init --role" in rendered
+
+
+
 
