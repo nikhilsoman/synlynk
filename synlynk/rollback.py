@@ -30,7 +30,7 @@ def _dest_for(backup_dir: str, path: str) -> Path:
     """Map a (possibly absolute) source path onto a location inside backup_dir."""
     normalized = str(path)
     if os.path.isabs(normalized):
-        normalized = normalized.lstrip(os.sep)
+        normalized = os.path.splitdrive(normalized)[1].lstrip(os.sep)
     return Path(backup_dir) / normalized
 
 

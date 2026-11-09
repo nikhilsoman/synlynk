@@ -1125,3 +1125,31 @@ def test_migrate_repairs_calibration_results_quality_verified_on_bootstrapped_sc
     }
     assert "quality_verified" in result_cols
     conn.close()
+
+def test_migrate_succeeds_with_untracked_project_docs(tmp_path, monkeypatch):
+    """Verify synlynk migrate succeeds when project-docs is untracked in git (gh:#5167)."""
+    import subprocess as sp
+    from synlynk import db as db_mod
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    sp.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    sp.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True)
+    sp.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+
+    # Initial commit without project-docs
+    (tmp_path / "README.md").write_text("# Test Repo\n")
+    sp.run(["git", "add", "README.md"], cwd=tmp_path, check=True)
+    sp.run(["git", "commit", "-m", "initial", "-q"], cwd=tmp_path, check=True)
+
+    # project-docs exists on disk but is untracked
+    _make_project_docs(tmp_path)
+    _seed_stories("story-bs12a-roles")
+
+    # Running cmd_migrate must not raise CalledProcessError
+    db_mod.cmd_migrate()
+
+    assert (tmp_path / ".synlynk" / ".synlynk_migrated").exists()
+    assert (tmp_path / ".synlynk" / "project-docs").exists()
+    assert (tmp_path / ".gitignore").exists()
+    assert "project-docs/" in (tmp_path / ".gitignore").read_text()
