@@ -455,31 +455,37 @@ def cmd_status(
         from synlynk.worktree import _worktree_status_hint
 
     if db_conn is None:
-        db_conn = _get_db()
+        try:
+            db_conn = _get_db(read_only=True)
+        except Exception:
+            db_conn = None
 
     config = load_config()
     dispatch_mode = config.get("dispatch_mode", "daily-grind")
-    harness_rows = _load_harness_status_rows(db_conn)
+    harness_rows = _load_harness_status_rows(db_conn) if db_conn is not None else []
     # Annotate fleet operability tier (Supported / Proven / Experimental / …)
     if include_worktree_hint:
         try:
             from synlynk.fleet import tier_for_agent
 
             for row in harness_rows:
-                row["fleet_tier"] = tier_for_agent(db_conn, row.get("harness_name", ""))
+                row["fleet_tier"] = tier_for_agent(db_conn, row.get("harness_name", "")) if db_conn is not None else "—"
         except Exception:
             for row in harness_rows:
                 row.setdefault("fleet_tier", "—")
-    cycle_map = _load_cycle_capability_rows(db_conn)
+    cycle_map = _load_cycle_capability_rows(db_conn) if db_conn is not None else {}
     efficiency = _headless_efficiency_ratio(_load_exec_jobs_from_telemetry())
     sentinels_active = len(_read_sentinel_alerts())
     rates_updated_at = _load_model_rates().get("rates_updated_at") if include_worktree_hint else None
     worktree_hint = _worktree_status_hint() if include_worktree_hint else None
-    reassessment = (
-        capability_sweep_status(db_conn)
-        if include_worktree_hint
-        else {"overdue": False, "last_sweep_at": None, "jobs_since_sweep": 0, "job_threshold": 25, "max_age_days": 30}
-    )
+    try:
+        reassessment = (
+            capability_sweep_status(db_conn)
+            if include_worktree_hint and db_conn is not None
+            else {"overdue": False, "last_sweep_at": None, "jobs_since_sweep": 0, "job_threshold": 25, "max_age_days": 30}
+        )
+    except Exception:
+        reassessment = {"overdue": False, "last_sweep_at": None, "jobs_since_sweep": 0, "job_threshold": 25, "max_age_days": 30}
     host_auth_events = _host_auth_audit_events()
     output = _format_status_terminal(
         harness_rows,
@@ -508,23 +514,27 @@ def cmd_status(
                 "(gh:#2139) — jobs.json terminal records that could not be applied "
                 "to daemon_jobs"
             )
-        if is_smoke_test_stale(db_conn, threshold_days=7):
+        if db_conn is not None and is_smoke_test_stale(db_conn, threshold_days=7):
             extra_lines.append(
                 "⚠ smoke test overdue - run `synlynk selftest --live` or enable `auto_smoke_test` in config"
             )
 
         from synlynk.quota import is_quota_calibration_stale
 
-        if is_quota_calibration_stale(db_conn, threshold_hours=24):
+        if db_conn is not None and is_quota_calibration_stale(db_conn, threshold_hours=24):
             extra_lines.append(
                 "⚠ quota calibration overdue - run `synlynk quota calibrate` "
                 "or ensure the daemon is running (`synlynk daemon start`)"
             )
 
-        recent_incidents = db_conn.execute(
-            "SELECT harness, failing_path, classification, detected_at FROM capability_incidents "
-            "WHERE classification = 'regression' ORDER BY detected_at DESC LIMIT 5"
-        ).fetchall()
+        recent_incidents = (
+            db_conn.execute(
+                "SELECT harness, failing_path, classification, detected_at FROM capability_incidents "
+                "WHERE classification = 'regression' ORDER BY detected_at DESC LIMIT 5"
+            ).fetchall()
+            if db_conn is not None
+            else []
+        )
         if recent_incidents:
             extra_lines.append("Recent regressions:")
             for harness, path, classification, detected_at in recent_incidents:

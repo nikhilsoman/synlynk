@@ -2699,8 +2699,12 @@ def main(argv=None) -> None:
             cmd_project_status(json_output=args.json_output, platform=True)
         else:
             from synlynk import _get_db
+            try:
+                db_conn = _get_db(read_only=True)
+            except Exception:
+                db_conn = None
             cmd_ecosystem_status(
-                db_conn=_get_db(read_only=True), json_output=args.json_output
+                db_conn=db_conn, json_output=args.json_output
             )
     elif args.command == "backup":
         from synlynk.backup import (
