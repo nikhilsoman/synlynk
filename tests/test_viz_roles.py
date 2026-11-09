@@ -41,3 +41,18 @@ def test_handler_handle_role_create(monkeypatch):
     assert result["ok"] is True
     assert "agent_id" in result
     assert calls["aliases"] == [{"kind": "role_slug", "value": "security-auditor"}]
+
+
+def test_handle_role_create_stamps_human_actor_type(monkeypatch):
+    from synlynk import agent_store
+
+    calls = {}
+    monkeypatch.setattr(agent_store, "list_agents", lambda: [])
+    monkeypatch.setattr(agent_store, "register_agent", lambda agent_id, aliases: None)
+    monkeypatch.setattr(
+        agent_store, "propose_charter_revision",
+        lambda *args, **kwargs: calls.update(kwargs) or 1,
+    )
+    VizorHandler.__new__(VizorHandler)._handle_role_create({"role": "security-auditor", "durability": "durable"})
+    assert calls.get("actor_type") == "human"
+

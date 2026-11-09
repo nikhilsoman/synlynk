@@ -616,7 +616,9 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
                 f"Own work assigned to the {role} role.\n"
             )
         agent_store.register_agent(agent_id, [{"kind": "role_slug", "value": role}])
-        agent_store.propose_charter_revision(agent_id, charter, actor="vizor", parent_revision=0)
+        agent_store.propose_charter_revision(
+            agent_id, charter, actor="vizor", parent_revision=0, actor_type="human",
+        )
         return {"ok": True, "agent_id": agent_id}
 
     def _handle_role_create_request(self):
