@@ -46,3 +46,31 @@ def test_load_native_capabilities_empty_dir_returns_empty_list(tmp_path, monkeyp
     monkeypatch.chdir(tmp_path)
     from synlynk import capability_registry
     assert capability_registry.load_native_capabilities() == []
+
+
+def test_load_local_capabilities_scoped_by_harness_bindings(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    registry_dir = tmp_path / ".synlynk" / "capability_registry" / "local"
+    registry_dir.mkdir(parents=True)
+    manifest = {
+        "capability_id": "stitch-ui-driver",
+        "name": "generate_screen_from_text",
+        "source": "local_harness",
+        "description": "Generates a UI screen mockup from a text prompt via the Stitch MCP server.",
+        "purpose": "Design-stage mockup generation.",
+        "scope": "mcp:stitch",
+        "auth": {"type": "mcp_server", "server": "stitch"},
+        "enforced_hook": None,
+        "harness_compat": ["claude"],
+        "workspace_id": "local",
+        "owner": "designer",
+        "version": "1.0.0",
+    }
+    (registry_dir / "stitch-ui-driver.json").write_text(json.dumps(manifest))
+
+    from synlynk import capability_registry
+    caps = capability_registry.load_local_capabilities(harness="claude")
+    assert len(caps) == 1
+    caps_other = capability_registry.load_local_capabilities(harness="grok")
+    assert caps_other == []
+

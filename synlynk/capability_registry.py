@@ -42,3 +42,28 @@ def load_native_capabilities() -> list:
         _validate_manifest(manifest, path)
         capabilities.append(manifest)
     return capabilities
+
+
+LOCAL_REGISTRY_DIR = os.path.join(".synlynk", "capability_registry", "local")
+
+
+def load_local_capabilities(harness: str = None) -> list:
+    """Load local_harness-source manifests, optionally filtered to those whose
+    harness_compat includes `harness` (or is the literal string "any").
+    """
+    if not os.path.isdir(LOCAL_REGISTRY_DIR):
+        return []
+    capabilities = []
+    for name in sorted(os.listdir(LOCAL_REGISTRY_DIR)):
+        if not name.endswith(".json"):
+            continue
+        path = os.path.join(LOCAL_REGISTRY_DIR, name)
+        with open(path) as fh:
+            manifest = json.load(fh)
+        _validate_manifest(manifest, path)
+        compat = manifest.get("harness_compat")
+        if harness is not None and compat != "any" and harness not in (compat or []):
+            continue
+        capabilities.append(manifest)
+    return capabilities
+
