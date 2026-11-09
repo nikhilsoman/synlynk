@@ -40,3 +40,16 @@ def test_activate_role_rejects_unknown_role(tmp_path, monkeypatch):
 
     with pytest.raises(ValueError, match="no seed charter"):
         role_activation.activate_role("not-a-real-role", actor="nikhil", actor_type="human")
+
+
+def test_activate_maintainer_role(tmp_path, monkeypatch):
+    _fake_home(tmp_path, monkeypatch)
+    from synlynk import agent_store, role_activation
+
+    role_activation.activate_role("maintainer", actor="nikhil", actor_type="human")
+
+    charter, _ = agent_store.read_charter("maintainer")
+    assert "worktree_cleanup" in charter
+    assert "release_cut" in charter
+    assert "identity_binding" in charter
+
