@@ -1,0 +1,143 @@
+<!-- generated - source of truth is state.db -->
+---
+decision_id: dec-0d41e039
+topic: "DECIDE PANEL: Agent Role Management ("Agent Studio") in synlynk — strategic review.
+
+CONTEXT: synlynk is an Apache-2.0 host-local multi-agent engineering OS orchestrating Claude/Agy/Grok/Codex harnesses with git-worktree isolation and SQLite state. A design spec was just committed at docs/superpowers/specs/2026-11-09-vizor-agent-role-management-design.md proposing: (a) a 10-role functional taxonomy (pm/architect/tpm/dev delivery; qa/secops quality-trust; maintainer/infra-devops platform; designer/marketing experience), closing a gap where "maintainer" has a full charter but no dispatchable identity; (b) a BAU charter editor in Vizor replacing a dead "Edit Charter" button, using free-text prompt-box fields for mandate/autonomous_authorities/escalation_triggers each tagged "Enforced" (wired to a real code hook) or "Guidance only" (narrative context, no hook yet); (c) a 5-step FTUE role-provisioning wizard; (d) a "Capability Registry" unifying three sources into one manifest shape — native synlynk code hooks (each requiring description/purpose/scope), local-harness-installed MCPs/Skills scoped by harness_bindings, and remote third-party connector manifests (Zapier MCP / Composio / Smithery already exist as consumable MCP servers — no need to build an equivalent); (e) an upstream GitHub feature-request flow for Guidance-only intents with no matching hook (issue labeled feature-proposal+pm-intake), and a fork-and-PR path for locally-built hooks (synlynk's Apache-2.0 license permits forking freely; contributing back is a process convention, not a legal obligation); (f) a 7-phase build sequence.
+
+Separately open and relevant: gh:#2126 (BS-15, story-2ebedf92, "synlynk as a standalone harness") — an unresolved brainstorm thread on harness independence: is a "home harness" essential, can any harness invoke synlynk behaviors interchangeably, how would direct-to-OpenRouter dispatch work, can third-party IDEs/plugins (Cursor/Warp/Pi-style) host a synlynk plugin. Also open: the 2026-10-04 Empirical Capability Assessment Policy, which put Claude's own default PM/review/deploy role lock under reassessment pending measured capability_ratings/cost_entries data per harness, rather than hand-authored heuristics — the same empirical-measurement lens should probably apply to any new Agent Studio role/tool pattern this panel recommends.
+
+Evaluate and give a clear recommendation on EACH of the following, in order:
+
+1. Relevance & importance of Agent Role Management ("Agent Studio") within synlynk, as an essential element of the dev toolkit — is this foundational or peripheral to synlynk's value proposition?
+
+2. Strategic-capability importance: how does this compare against competing agentic dev-tooling platforms (Pi Code, T3 Code, Devin/OpenHands, OpenCode, etc.)? Is first-class agent role/charter management a differentiator or table stakes?
+
+3. What enhancements should be added to the spec's current scope (10-role taxonomy, charter editor, FTUE wizard, Capability Registry, upstream feature-request flow, 7-phase plan)? Be concrete — name specific gaps or additions, not generic praise.
+
+4. As a dev tool, does including tool/driver-specific agent roles make sense as a capability pattern — e.g. a "Google Stitch UI/UX driver agent" as a named role bound to a specific tool? Argue for or against this pattern existing as a first-class synlynk concept.
+
+5. Build vs. delegate: should synlynk build these tool-specific agent patterns itself, or should it let the underlying harness manage tool binding, with synlynk's own generic function-scoped agents (dev/qa/secops/etc.) discovering capabilities dynamically via tool documentation, a tool's own website, or MCP discovery mechanics — rather than synlynk hard-coding per-tool roles?
+
+6. Outbound/inside-out distribution: should a synlynk MCP server be published for inclusion in harness marketplaces (Claude/Codex/etc. plugin or MCP marketplaces)? Is that a better distribution surface than today's install.sh/pipx path? Relate this to the open gh:#2126 harness-independence thread — does exposing synlynk itself as an MCP server change the home-harness-essential question?
+
+Give a clear position on each numbered item, not just discussion. 250-450 words total, structured by numbered item."
+date: 2026-11-09
+panel: [claude, agy, codex, grok]
+status: approved
+---
+
+## Topic
+DECIDE PANEL: Agent Role Management ("Agent Studio") in synlynk — strategic review.
+
+CONTEXT: synlynk is an Apache-2.0 host-local multi-agent engineering OS orchestrating Claude/Agy/Grok/Codex harnesses with git-worktree isolation and SQLite state. A design spec was just committed at docs/superpowers/specs/2026-11-09-vizor-agent-role-management-design.md proposing: (a) a 10-role functional taxonomy (pm/architect/tpm/dev delivery; qa/secops quality-trust; maintainer/infra-devops platform; designer/marketing experience), closing a gap where "maintainer" has a full charter but no dispatchable identity; (b) a BAU charter editor in Vizor replacing a dead "Edit Charter" button, using free-text prompt-box fields for mandate/autonomous_authorities/escalation_triggers each tagged "Enforced" (wired to a real code hook) or "Guidance only" (narrative context, no hook yet); (c) a 5-step FTUE role-provisioning wizard; (d) a "Capability Registry" unifying three sources into one manifest shape — native synlynk code hooks (each requiring description/purpose/scope), local-harness-installed MCPs/Skills scoped by harness_bindings, and remote third-party connector manifests (Zapier MCP / Composio / Smithery already exist as consumable MCP servers — no need to build an equivalent); (e) an upstream GitHub feature-request flow for Guidance-only intents with no matching hook (issue labeled feature-proposal+pm-intake), and a fork-and-PR path for locally-built hooks (synlynk's Apache-2.0 license permits forking freely; contributing back is a process convention, not a legal obligation); (f) a 7-phase build sequence.
+
+Separately open and relevant: gh:#2126 (BS-15, story-2ebedf92, "synlynk as a standalone harness") — an unresolved brainstorm thread on harness independence: is a "home harness" essential, can any harness invoke synlynk behaviors interchangeably, how would direct-to-OpenRouter dispatch work, can third-party IDEs/plugins (Cursor/Warp/Pi-style) host a synlynk plugin. Also open: the 2026-10-04 Empirical Capability Assessment Policy, which put Claude's own default PM/review/deploy role lock under reassessment pending measured capability_ratings/cost_entries data per harness, rather than hand-authored heuristics — the same empirical-measurement lens should probably apply to any new Agent Studio role/tool pattern this panel recommends.
+
+Evaluate and give a clear recommendation on EACH of the following, in order:
+
+1. Relevance & importance of Agent Role Management ("Agent Studio") within synlynk, as an essential element of the dev toolkit — is this foundational or peripheral to synlynk's value proposition?
+
+2. Strategic-capability importance: how does this compare against competing agentic dev-tooling platforms (Pi Code, T3 Code, Devin/OpenHands, OpenCode, etc.)? Is first-class agent role/charter management a differentiator or table stakes?
+
+3. What enhancements should be added to the spec's current scope (10-role taxonomy, charter editor, FTUE wizard, Capability Registry, upstream feature-request flow, 7-phase plan)? Be concrete — name specific gaps or additions, not generic praise.
+
+4. As a dev tool, does including tool/driver-specific agent roles make sense as a capability pattern — e.g. a "Google Stitch UI/UX driver agent" as a named role bound to a specific tool? Argue for or against this pattern existing as a first-class synlynk concept.
+
+5. Build vs. delegate: should synlynk build these tool-specific agent patterns itself, or should it let the underlying harness manage tool binding, with synlynk's own generic function-scoped agents (dev/qa/secops/etc.) discovering capabilities dynamically via tool documentation, a tool's own website, or MCP discovery mechanics — rather than synlynk hard-coding per-tool roles?
+
+6. Outbound/inside-out distribution: should a synlynk MCP server be published for inclusion in harness marketplaces (Claude/Codex/etc. plugin or MCP marketplaces)? Is that a better distribution surface than today's install.sh/pipx path? Relate this to the open gh:#2126 harness-independence thread — does exposing synlynk itself as an MCP server change the home-harness-essential question?
+
+Give a clear position on each numbered item, not just discussion. 250-450 words total, structured by numbered item.
+
+## Panel Inputs
+
+### claude
+[model=default; version=2.1.319 (Claude Code)]
+
+**1. Relevance:** Foundational, not peripheral. synlynk's value is coordinating heterogeneous harnesses toward accountable outcomes — "who is responsible for what" is the substrate everything else (dispatch, review gates, cost attribution) sits on. "maintainer" having a charter but no dispatchable identity is a real structural gap, not cosmetic.
+
+**2. Strategic comparison:** Table stakes to have *some* role concept (every competitor has personas/subagents). First-class, editable, enforceable charters with Enforced-vs-Guidance distinction is the differentiator — most competitors treat roles as prompt templates, not governed identities tied to merge/review gates. Keep that enforcement linkage; it's the moat, not the taxonomy itself.
+
+**3. Scope additions:** (a) Version/audit history on charter edits — a BAU editor with no diff log will cause unexplained-behavior-drift incidents. (b) Role deprecation/merge path, not just creation — the 10-role list will need pruning as empirical data lands. (c) Explicit coupling to the Empirical Capability Assessment Policy: every new role should ship with a `capability_ratings` task-type bucket from day one, not bolted on later. (d) Capability Registry needs a staleness/revocation check for remote connector manifests (Zapier/Composio entries can silently break). (e) The upstream feature-request flow needs a dedup pass against existing open issues before filing — otherwise it duplicates (cf. gh#2139 mistaken-closed pattern).
+
+**4. Tool-specific roles (e.g. "Stitch UI/UX driver agent"):** Against, as a first-class named role. It conflates *function* (designer) with *tool binding* (which MCP backs it). Function-scoped roles should stay stable; tool bindings should be swappable config under them via the Capability Registry's harness_bindings, not a new role per tool — otherwise the taxonomy explodes 1:1 with every MCP that ships.
+
+**5. Build vs delegate:** Delegate. synlynk should stay a thin, generic function-scoped role layer and let harnesses/MCP discovery own tool binding — hard-coding per-tool roles creates maintenance debt synlynk doesn't need to own, and duplicates what Composio/Smithery already solve.
+
+**6. Outbound MCP distribution:** Yes — publish a synlynk MCP server. It's a materially better distribution surface than install.sh/pipx (meets users inside their existing harness) and it directly answers gh#2126: an MCP-exposed synlynk makes "home harness" a UX default, not an architectural requirement — any harness can invoke synlynk behaviors as tools, weakening the home-harness-essential premise. Sequence this after Phase 1-3 of the spec, not before.
+
+### agy
+[model=default; version=1.5.3]
+
+Last completed task: `[x] Implement atomic GOVERNS goal+phase ceremony and phase-aware enforcement [backend] <!-- id:story-690e6184 -->`  
+Next task from `todo.md`: `[ ] Fix CONTEXT_BUILD_DEGRADED: remove invalid description and criteria columns from pack and worktree queries [backend] <!-- id:story-ca20f0a8 -->`
+
+---
+
+### Strategic Review: Agent Role Management ("Agent Studio")
+
+1. **Relevance & Importance:**  
+   **Foundational.** synlynk’s core premise is deterministic, host-local multi-agent engineering governance. As evidenced by the X6M unverified review incident, unenforced charters and unprovisioned roles (`maintainer`) degrade multi-agent coordination into ungrounded narrative prompts. Linking free-text intent directly to concrete code hooks (Enforced vs. Guidance) is essential infrastructure, not UI sugar.
+
+2. **Strategic-Capability Importance:**  
+   **Strong differentiator.** Competing agent platforms (Devin, OpenHands, Pi Code, T3 Code) focus primarily on autonomous single-agent task execution or ephemeral subagent swarms. synlynk’s org-functional taxonomy, formal charters with cross-lane vetoes (e.g. `secops`), and git-worktree isolation elevate it from a simple task harness to an auditable engineering operating system.
+
+3. **Recommended Spec Enhancements:**  
+   - **Empirical Routing Feedback:** Integrate the 2026-10-04 Empirical Capability Assessment data (`capability_ratings`, cost, and quality) directly into the FTUE/BAU editor to flag mismatches when binding a role's authorities to an underperforming harness.
+   - **Charter Drift & Telemetry Auditing:** Emit audit events whenever an agent attempts actions exceeding its declared authorities or guidance boundaries.
+   - **Role Deprecation Lifecycle:** Add an explicit archival/retirement workflow in Phase 3 to safely revoke GitHub App identities and reassign orphaned scheduler/dispatch tasks.
+
+4. **Tool/Driver-Specific Roles:**  
+   **Against.** Naming roles after specific external tools (e.g., "Google Stitch Driver Agent") violates clean functional domain design and causes brittle role bloat. Roles define organizational accountability; tools are interchangeable execution capabilities.
+
+5. **Build vs. Delegate:**  
+   **Delegate.** synlynk should retain generic, function-scoped agents (`designer`, `dev`, `infra/devops`) and rely on the Capability Registry (MCPs, harness skills, and dynamic tool discovery) to bind tools at runtime. Hard-coding vendor-specific agents into synlynk core introduces needless maintenance drag and harms harness portability.
+
+6. **Outbound MCP Distribution & [gh:#2126](conversation://gh-2126):**  
+   **Publish the synlynk MCP server.** Distributing synlynk as an MCP server directly resolves the "home harness" debate in [gh:#2126](conversation://gh-2126). Instead of forcing developers into a synlynk-centric shell or IDE, any client (Cursor, Warp, Claude Desktop) can invoke synlynk’s state, worktrees, and governance gates as native tools, making it an omnipresent runtime while preserving the CLI/pipx daemon underneath.
+
+### Final Position
+**Approve the spec for build with the three §3 additions.** Formally reject tool-specific roles in favor of dynamic MCP capability attachment onto generic functional roles, and prioritize an outbound synlynk MCP server to establish harness-independent distribution.
+
+### codex
+[model=default; version=codex-cli 0.163.0]
+
+1. **Foundational, not peripheral.** Agent Role Management should become a core synlynk capability because synlynk’s value is governed, repeatable multi-agent execution—not merely dispatching models. Role charters, authority boundaries, escalation rules, and measurable outcomes are the control plane for that value.
+
+2. **A differentiator, but not yet sufficient.** Most competing tools emphasize coding agents, workflows, or autonomous execution; few make organizational role design explicit. First-class roles can differentiate synlynk, especially for teams requiring auditability and predictable handoffs. However, taxonomy alone is not defensible: the differentiator must be enforced behavior, evidence-backed routing, and measurable quality/cost results.
+
+3. **Add four concrete elements.** First, define role versioning, approval, rollback, and migration semantics. Second, add an evaluation harness: role-level quality, latency, cost, escalation, and rework metrics by harness and capability. Third, specify conflict resolution when multiple roles or tools claim a capability. Fourth, add policy provenance and audit logs showing which charter rule, hook, or connector caused each action. The FTUE should include a safe simulation/dry run before activation.
+
+4. **Tool-specific roles should not be primitive identities.** A “Google Stitch UI/UX driver” is useful operationally, but naming every tool creates taxonomy sprawl and vendor coupling. Represent it as a generic role plus a capability/tool binding, with optional named presets. The stable identity should be “designer” or “frontend implementer”; Stitch is an interchangeable driver.
+
+5. **Delegate binding; own governance.** Synlynk should build generic function-scoped roles and capability contracts, while harnesses and MCP discovery manage tool-specific bindings. Synlynk should validate manifests, permissions, provenance, and compatibility, but avoid hard-coding per-tool agents. This keeps the registry extensible and aligns with the empirical-capability policy.
+
+6. **Publish synlynk as an MCP server, but complement—not replace—the installer path.** Marketplace distribution lowers adoption friction and makes synlynk consumable from Claude, Codex, IDEs, and other hosts. Yet MCP exposure alone does not eliminate the need for local state, worktrees, policy, and lifecycle management. It weakens the assumption that one “home harness” is essential, supporting gh:#2126’s independence goal, but synlynk should remain a host-local control plane.
+
+**Final position:** approve Agent Studio as foundational, expand it with governance, evaluation, provenance, and dry-run safeguards, model tool bindings as dynamic capabilities rather than permanent roles, and pursue MCP marketplace distribution alongside install.sh/pipx.
+
+### grok
+[model=default; version=grok 1.0.70 (f50904eaee6c) [stable]]
+
+I'll read the Agent Studio spec and the open harness-independence thread so the panel recommendation is grounded in what was actually proposed.**1. Foundational.** synlynk’s value is accountable autonomy: named roles, non-author review, worktree isolation, and gates that actually fire. The X6M incident showed a full `maintainer` charter with no registry identity and no hook is theater. Agent Studio is the control plane. Phases 1–2 (dispatchable `maintainer` / `secops` / `infra-devops`, and an editor that tags Enforced vs Guidance) are the toolkit. The FTUE wizard and remote catalog are product completeness.
+
+**2. Enforcement is the differentiator; the taxonomy is table stakes.** CrewAI, Devin playbooks, OpenHands, and Cursor rules already ship named personas plus tool lists. A 10-role org chart will not separate synlynk. What others do not show is a charter line wired to a real gate (`pr check`, GitHub App identity, scheduler) versus narrative guidance. Keep harness assignment under the 2026-10-04 measurement policy (`capability_ratings` / `cost_entries`). Do not freeze a new hand-authored lock inside these roles.
+
+**3. Add four constraints.** Version the charter schema and audit who changed an authority: edits that add gates are privileged writes, and the motivating bug was a fabricated review. Reject two roles claiming the same enforced hook (secops veto vs qa merge). Dedupe Guidance-only intents locally before filing `feature-proposal` issues on `nikhilsoman/synlynk`. Require a trust and egress review before phase 7 ingest of Zapier, Composio, or Smithery manifests. Leave designer/tpm idleness to the next capability review, as the spec already says.
+
+**4. Against tool-specific roles.** A “Google Stitch UI/UX driver” is a capability binding, not an accountability seat. Roles answer who may merge, veto, or escalate. Tools answer how. Putting a vendor tool in the taxonomy repeats the harness lock the empirical policy just suspended. Stitch belongs in the registry, attached to `designer` or `dev` through `harness_bindings`.
+
+**5. Delegate tool binding. Build only governance hooks.** Harnesses and MCP discovery already advertise tools, skills, and remote connectors. synlynk should own the manifest shape, the Enforced/Guidance tag, and native hooks harnesses will not do consistently: review provenance, secret scan, worktree cleanup, release cut, identity. Function-scoped roles should attach capabilities at runtime from tool docs and MCP descriptors, not from a hard-coded per-vendor agent list.
+
+**6. Publish a thin synlynk MCP beside `install.sh`, not instead of it.** The installer remains the host OS: worktrees, `state.db`, the scheduler, and GitHub App identities. An MCP for `dispatch`, `pr check`, GOVERNS, cost, and charter read is the right marketplace surface for Claude, Codex, Cursor, and Warp. That changes gh:#2126: a home harness is a session convenience once the control plane is callable as tools. It does not make synlynk a model loop. The daemon still has to run on the host.
+
+Ship phases 1–4: real identities, enforced-versus-guidance charters, a native hook catalog, and audited edits. Treat tool-named agents as capabilities. Let harnesses and MCP discovery bind tools. Publish synlynk-as-MCP as a second distribution path. Hold remote ingest and upstream issue filing until dedupe and egress rules exist, and route every new role from measured capability data.
+
+## Synthesis
+Decision: Approve Agent Role Management/"Agent Studio" as foundational and greenlight the committed spec for build, but gate it with the cross-panel consensus additions before Phase 1 starts: (1) charter edits are versioned, audited writes — every Enforced/Guidance change gets a diff log and an attributable actor, since the X6M fabricated-review incident is exactly the failure mode an unaudited free-text charter editor reproduces; (2) every new role ships wired into the 2026-10-04 Empirical Capability Assessment Policy from day one — a `capability_ratings` task-type bucket, not a hand-authored harness assignment — so Agent Studio doesn't recreate the same kind of unmeasured lock it's meant to replace; (3) add a role deprecation/merge lifecycle (not just creation) alongside GitHub App identity revocation, since the taxonomy will need pruning as data lands; (4) require dedup-against-open-issues and a trust/egress review before the upstream feature-request flow and remote Capability Registry ingest (Zapier/Composio/Smithery) go live, per gh:#2139's stale-closure lesson and the registry's third-party trust surface. On tool-specific roles: reject the pattern outright — "Google Stitch UI/UX driver" and similar vendor-named roles conflate accountability (who may merge/veto/escalate) with tool binding (how work gets done), and would re-literate the same per-harness hard-coding the empirical policy just suspended; model Stitch and equivalents as `harness_bindings` entries in the Capability Registry attached to stable functional roles (designer/dev), not as primitives. Correspondingly, delegate tool/driver binding to harnesses and MCP discovery mechanics; synlynk's job is the generic function-scoped role layer plus the governance hooks harnesses won't reliably self-enforce (review provenance, secret scanning, worktree cleanup, release cuts, identity) — not a hand-maintained per-vendor agent catalog. On distribution, publish a thin synlynk MCP server (dispatch, pr check, GOVERNS, cost, charter read) as a second surface alongside install.sh/pipx, not a replacement — this directly weakens the home-harness-essential premise in gh:#2126 (synlynk's control plane becomes callable as tools from any MCP-capable client) while leaving the host-local daemon, worktrees, and `state.db` as the thing that still has to run somewhere. Sequence: ship Phases 1–4 of the spec (identities, Enforced/Guidance charters with audit log, native hook catalog, role lifecycle) now; hold Phase 7's remote-manifest ingest and upstream issue-filing until the dedup/trust-review gates above exist; file the MCP-server publication and the tool-binding-vs-role boundary as explicit follow-on stories linked under BS-15/gh:#2126 rather than silently folding them into this spec's existing phase count.
+
+## Decision
+Decision: Approve Agent Role Management/"Agent Studio" as foundational and greenlight the committed spec for build, but gate it with the cross-panel consensus additions before Phase 1 starts: (1) charter edits are versioned, audited writes — every Enforced/Guidance change gets a diff log and an attributable actor, since the X6M fabricated-review incident is exactly the failure mode an unaudited free-text charter editor reproduces; (2) every new role ships wired into the 2026-10-04 Empirical Capability Assessment Policy from day one — a `capability_ratings` task-type bucket, not a hand-authored harness assignment — so Agent Studio doesn't recreate the same kind of unmeasured lock it's meant to replace; (3) add a role deprecation/merge lifecycle (not just creation) alongside GitHub App identity revocation, since the taxonomy will need pruning as data lands; (4) require dedup-against-open-issues and a trust/egress review before the upstream feature-request flow and remote Capability Registry ingest (Zapier/Composio/Smithery) go live, per gh:#2139's stale-closure lesson and the registry's third-party trust surface. On tool-specific roles: reject the pattern outright — "Google Stitch UI/UX driver" and similar vendor-named roles conflate accountability (who may merge/veto/escalate) with tool binding (how work gets done), and would re-literate the same per-harness hard-coding the empirical policy just suspended; model Stitch and equivalents as `harness_bindings` entries in the Capability Registry attached to stable functional roles (designer/dev), not as primitives. Correspondingly, delegate tool/driver binding to harnesses and MCP discovery mechanics; synlynk's job is the generic function-scoped role layer plus the governance hooks harnesses won't reliably self-enforce (review provenance, secret scanning, worktree cleanup, release cuts, identity) — not a hand-maintained per-vendor agent catalog. On distribution, publish a thin synlynk MCP server (dispatch, pr check, GOVERNS, cost, charter read) as a second surface alongside install.sh/pipx, not a replacement — this directly weakens the home-harness-essential premise in gh:#2126 (synlynk's control plane becomes callable as tools from any MCP-capable client) while leaving the host-local daemon, worktrees, and `state.db` as the thing that still has to run somewhere. Sequence: ship Phases 1–4 of the spec (identities, Enforced/Guidance charters with audit log, native hook catalog, role lifecycle) now; hold Phase 7's remote-manifest ingest and upstream issue-filing until the dedup/trust-review gates above exist; file the MCP-server publication and the tool-binding-vs-role boundary as explicit follow-on stories linked under BS-15/gh:#2126 rather than silently folding them into this spec's existing phase count.
+
+> Signatures: see 2026-11-09-decide-panel-agent-role-management-agent.json

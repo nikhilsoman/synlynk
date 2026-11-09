@@ -1,0 +1,58 @@
+<h2>Step 2 revised — charter fields as prompts, not fixed chips</h2>
+<p class="subtitle">Each field is a free-text box pre-filled with a recommended default (from the role template), fully editable, with "+ Add another". Underneath, each item gets auto-tagged so you can see what it actually DOES in synlynk.</p>
+
+<div class="mockup">
+  <div class="mockup-header">Mandate</div>
+  <div class="mockup-body">
+    <textarea class="mock-input" style="width:100%;min-height:50px" >Security posture: secrets, credentials, access, vulnerable dependencies</textarea>
+    <p class="label" style="margin-top:4px">Guidance only — shapes how secops reasons, not a code gate</p>
+  </div>
+</div>
+
+<div class="mockup" style="margin-top:16px">
+  <div class="mockup-header">Autonomous authorities</div>
+  <div class="mockup-body">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <input class="mock-input" style="flex:1" value="secret_scan">
+      <span style="background:#1b4546;color:#9ee8d6;padding:4px 8px;border-radius:6px;font-size:11px">⚡ Enforced — wired to run_secret_scanning</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <input class="mock-input" style="flex:1" value="credential_audit">
+      <span style="background:#1b4546;color:#9ee8d6;padding:4px 8px;border-radius:6px;font-size:11px">⚡ Enforced — wired to gh security-advisories</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <input class="mock-input" style="flex:1" value="vendor_risk_review">
+      <span style="background:#3a3320;color:#e8d89e;padding:4px 8px;border-radius:6px;font-size:11px">◌ Guidance only — no code hook yet</span>
+    </div>
+    <button class="mock-button" style="background:transparent;border:1px dashed #47736f;color:#9ee8d6">+ Add another authority</button>
+    <p class="label" style="margin-top:8px">Typing something new never fails — it's accepted as "Guidance only" immediately, and flagged for an engineer to wire up a real gate later if it should become enforced.</p>
+  </div>
+</div>
+
+<div class="mockup" style="margin-top:16px">
+  <div class="mockup-header">Escalation triggers</div>
+  <div class="mockup-body">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <input class="mock-input" style="flex:1" value="credential_leak_detected">
+      <span style="background:#1b4546;color:#9ee8d6;padding:4px 8px;border-radius:6px;font-size:11px">⚡ Enforced — routes to sentinel.md + human</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <input class="mock-input" style="flex:1" value="critical_vulnerability_found">
+      <span style="background:#1b4546;color:#9ee8d6;padding:4px 8px;border-radius:6px;font-size:11px">⚡ Enforced — routes to sentinel.md + human</span>
+    </div>
+    <button class="mock-button" style="background:transparent;border:1px dashed #47736f;color:#9ee8d6">+ Add another trigger</button>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:14px">Recommended defaults come from the role template you picked in Step 1 (e.g. secops template). "Blank charter" in Step 1 means every box starts empty instead of pre-filled.</p>
+
+<div class="options" style="margin-top:20px">
+  <div class="option" data-choice="prompt-good" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content"><h3>This is what I meant</h3><p>Prompt boxes + enforced/guidance tagging makes sense</p></div>
+  </div>
+  <div class="option" data-choice="prompt-adjust" onclick="toggleSelect(this)">
+    <div class="letter">✎</div>
+    <div class="content"><h3>Close, but adjust</h3><p>Tell me what in the terminal</p></div>
+  </div>
+</div>

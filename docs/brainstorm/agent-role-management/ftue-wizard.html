@@ -1,0 +1,84 @@
+<h2>FTUE — provisioning a new role (e.g. secops, infra/devops)</h2>
+<p class="subtitle">5-step guided wizard, replacing "stays on the CLI" from today's roles.py drawer</p>
+
+<div class="mockup">
+  <div class="mockup-header">Step 1 of 5 — Pick a function</div>
+  <div class="mockup-body">
+    <div class="mock-nav">synlynk / Vizor / Roles / New Role</div>
+    <p class="label">Which function family is this role?</p>
+    <div style="display:flex;gap:10px;margin:12px 0">
+      <div class="mock-sidebar">Delivery</div>
+      <div class="mock-sidebar" style="background:#1f2e3a">Quality &amp; Trust ✓</div>
+      <div class="mock-sidebar">Platform</div>
+      <div class="mock-sidebar">Experience</div>
+    </div>
+    <p class="label">Template suggestions for Quality &amp; Trust</p>
+    <div style="display:flex;gap:10px">
+      <div class="mock-sidebar">qa (exists)</div>
+      <div class="mock-sidebar" style="background:#3a1f1f">secops — start from template</div>
+      <div class="mock-sidebar">Blank charter</div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup" style="margin-top:18px">
+  <div class="mockup-header">Step 2 of 5 — Customize charter (guided fields, not raw JSON)</div>
+  <div class="mockup-body">
+    <label class="label">Mandate</label>
+    <input class="mock-input" value="Security posture: secrets, credentials, access, vulnerable deps">
+    <label class="label" style="margin-top:10px;display:block">Autonomous authorities (checklist, pulled from charter_schema.py enum — can't drift)</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+      <span class="option" style="padding:6px 10px;background:#1b4546" data-choice="s1">✓ secret_scan</span>
+      <span class="option" style="padding:6px 10px;background:#1b4546" data-choice="s2">✓ credential_audit</span>
+      <span class="option" style="padding:6px 10px;background:#1b4546" data-choice="s3">✓ dependency_vuln_triage</span>
+      <span class="option" style="padding:6px 10px" data-choice="s4">access_review</span>
+    </div>
+    <label class="label" style="margin-top:10px;display:block">Tools / credentials this role needs</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+      <span class="option" style="padding:6px 10px;background:#1b4546">run_secret_scanning (MCP)</span>
+      <span class="option" style="padding:6px 10px;background:#1b4546">gh security-advisories</span>
+    </div>
+  </div>
+</div>
+
+<div class="mockup" style="margin-top:18px">
+  <div class="mockup-header">Step 3 of 5 — Escalation &amp; veto scope</div>
+  <div class="mockup-body">
+    <label class="label">Escalation triggers</label>
+    <input class="mock-input" value="credential_leak_detected, critical_vulnerability_found, unauthorized_gh_write_detected">
+    <label class="label" style="margin-top:10px;display:block">Cross-lane authority</label>
+    <div class="option" style="background:#3a1f1f;padding:10px;border-radius:8px;margin-top:6px">☑ Can block/veto any PR or release regardless of other approvals (matches secops's cross-cutting design)</div>
+  </div>
+</div>
+
+<div class="mockup" style="margin-top:18px">
+  <div class="mockup-header">Step 4 of 5 — Provision identity</div>
+  <div class="mockup-body">
+    <p>⚙ Creating GitHub App identity for <b>secops</b> · writing <code>.synlynk/charters/secops.json</code> · registering in agent table · validating against charter_schema.py enum...</p>
+    <div class="placeholder">✓ Schema valid &nbsp; ✓ No role-name collision &nbsp; ✓ GitHub App provisioned</div>
+  </div>
+</div>
+
+<div class="mockup" style="margin-top:18px">
+  <div class="mockup-header">Step 5 of 5 — Review &amp; activate</div>
+  <div class="mockup-body">
+    <p class="label">What activating this charter changes in synlynk's actual behavior (point 5):</p>
+    <ul>
+      <li>Dispatch routing: secops becomes a valid <code>--role</code> target for <code>synlynk dispatch</code></li>
+      <li><code>synlynk pr check</code> gains a new hard gate: secops sign-off required when a PR touches secrets/deps</li>
+      <li>Scheduler: no change (secops is dispatch-only, not in the autonomy-pass loop)</li>
+    </ul>
+    <button class="mock-button">Activate secops</button>
+  </div>
+</div>
+
+<div class="options" style="margin-top:20px">
+  <div class="option" data-choice="wizard-good" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content"><h3>This FTUE flow works</h3><p>Move to the BAU edit-existing-charter screen</p></div>
+  </div>
+  <div class="option" data-choice="wizard-adjust" onclick="toggleSelect(this)">
+    <div class="letter">✎</div>
+    <div class="content"><h3>Adjust something first</h3><p>Tell me what in the terminal</p></div>
+  </div>
+</div>
