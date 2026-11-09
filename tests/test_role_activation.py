@@ -67,3 +67,18 @@ def test_cli_agent_activate_calls_role_activation(tmp_path, monkeypatch, capsys)
     assert "secops" in agent_ids
 
 
+def test_activate_role_seeds_capability_ratings(tmp_path, monkeypatch):
+    _fake_home(tmp_path, monkeypatch)
+    import sqlite3
+    from synlynk import _get_db, role_activation
+
+    conn = _get_db()
+    role_activation.activate_role("secops", actor="nikhil", actor_type="human")
+
+    rows = conn.execute(
+        "SELECT COUNT(*) FROM capability_ratings WHERE agent='secops' AND signal_source='seed'"
+    ).fetchone()
+    assert rows[0] > 0
+
+
+

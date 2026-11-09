@@ -17,6 +17,8 @@ def activate_role(role: str, actor: str, actor_type: str = "human") -> str:
     Raises ValueError if `role` has no entry in agent_cli.SEED_CHARTERS.
     """
     from synlynk.agent_cli import SEED_CHARTERS
+    from synlynk import _get_db
+    from synlynk.role_activation_seed import seed_role_capability_envelope
 
     existing_ids = {e["agent_id"] for e in agent_store.list_agents()}
     if role in existing_ids:
@@ -30,4 +32,5 @@ def activate_role(role: str, actor: str, actor_type: str = "human") -> str:
     agent_store.propose_charter_revision(
         role, seed, actor=actor, parent_revision=0, actor_type=actor_type,
     )
+    seed_role_capability_envelope(_get_db(), role)
     return role
