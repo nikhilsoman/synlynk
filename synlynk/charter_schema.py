@@ -10,6 +10,7 @@ from __future__ import annotations
 
 KNOWN_ROLES = (
     "dev", "qa", "pm", "architect", "tpm", "designer", "marketing", "synlynk-bot", "maintainer",
+    "secops", "infra-devops",
 )
 VALID_DURABILITY = ("durable", "session-only", "dispatch-only")
 REQUIRED_SECTIONS = ("Instructions", "Authority & Escalation", "Workflow Ownership")

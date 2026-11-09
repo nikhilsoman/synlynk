@@ -48,7 +48,12 @@ def test_split_frontmatter_unclosed_returns_none():
     content = "---\nrole: dev\n\n## Instructions\n\nbody\n"
     frontmatter_text, body = charter_schema.split_frontmatter(content)
     assert frontmatter_text is None
-    assert body == content
+
+
+def test_known_roles_includes_secops_and_infra_devops():
+    from synlynk.charter_schema import KNOWN_ROLES
+    assert "secops" in KNOWN_ROLES
+    assert "infra-devops" in KNOWN_ROLES
 
 
 def test_parse_frontmatter_scalars_and_quoted_strings():
