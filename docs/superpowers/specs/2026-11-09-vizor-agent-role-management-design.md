@@ -1,8 +1,9 @@
 # Vizor Agent Role Management — Design
 
 **Date:** 2026-11-09
-**Status:** Brainstormed, approved by Nikhil, pending plan + build
+**Status:** Brainstormed, approved by Nikhil, decide-panel-gated, pending plan + build
 **Motivating incident:** gh:#5178-#5181 (X6M-Work governance gap — PRs #5172-#5174 merged on a fabricated non-author review, with no role charged to catch it)
+**Decide panel:** `project-docs/decisions/2026-11-09-decide-panel-agent-role-management-agent...` (claude/agy/codex/grok) — approved Agent Studio as foundational, gated on §3a's four conditions, rejected tool-named roles (§4a)
 
 ## 1. Problem
 
@@ -51,6 +52,17 @@ Each charter field (mandate, `autonomous_authorities`, `escalation_triggers`) is
 
 Mandate stays free text throughout — it's always guidance, shaping how the agent reasons, never a code gate.
 
+### 3a. Governance gates (from the 2026-11-09 decide panel)
+
+The panel (claude/agy/codex/grok) approved Agent Studio as foundational but made these four conditions a precondition of Phase 1, not a later hardening pass — reasoning that an unaudited free-text charter editor reproduces the same failure shape as the motivating incident (an unattributed, unverified change to who's trusted to do what):
+
+1. **Audited charter writes.** Every charter edit (mandate/authorities/triggers, Enforced or Guidance) is a versioned write with a diff and an attributable actor — no silent overwrite of `.synlynk/charters/<role>.json`. This is the direct governance analogue of the review-provenance gap the X6M incident exposed, applied to charter edits themselves.
+2. **`capability_ratings` wiring from day one.** Every role activated through the FTUE wizard or promoted via Phase 1 (`maintainer`, `secops`, `infra/devops`) gets a `capability_ratings` task-type bucket immediately, not a hand-authored assignment added later. Agent Studio must not recreate the kind of unmeasured routing lock the 2026-10-04 Empirical Capability Assessment Policy is actively reassessing.
+3. **Role lifecycle includes deprecation/merge, not just creation.** The FTUE wizard (§5) and registry need a symmetric "retire or merge this role" path — including GitHub App identity revocation — so the taxonomy can be pruned as usage data lands, not just grown.
+4. **Trust/dedup review gates remote and upstream flows.** The upstream GitHub feature-request flow (§4) and the Capability Registry's remote-connector ingestion (§4, Zapier MCP/Composio/Smithery) do not ship until a dedup-against-open-issues check and a third-party trust/egress review exist. The panel cited gh:#2139's stale-closure lesson as the precedent for why "file it and assume it's handled" isn't sufficient, and remote manifests are the registry's largest untrusted-input surface.
+
+These gates are reflected in the phase sequencing in §6.
+
 ## 4. Capability Registry (unifies code hooks, local MCPs/Skills, and third-party connectors)
 
 A single data model with three ingestion sources, each producing the same manifest shape so the "browse and attach" UI in the charter editor works identically regardless of source:
@@ -73,7 +85,13 @@ A single data model with three ingestion sources, each producing the same manife
 - **Local-harness** — MCP servers and Skills already installed in whichever harness will execute the agent, scoped by `harness_bindings` (a Claude-only MCP must not appear as attachable when the role's binding is Codex-only).
 - **Remote connector** — third-party-published manifests satisfying the same shape. Confirmed via research: **Zapier MCP** (~10-40k app actions depending on source) and **Composio**/**Smithery** (MCP tool registries) already exist and are directly consumable as MCP servers — synlynk does not need to build a Zapier/IFTTT equivalent, only ingest manifests from them. ([LangGraph Studio: The first agent IDE](https://blog.langchain.com/langgraph-studio-the-first-agent-ide), [CrewAI Agents concepts](https://docs.crewai.com/en/concepts/agents.md) — used as external validation, not a UI template to copy: CrewAI's free-text `role`/`goal`/`backstory` + named-`tools`-list split independently converges with the prompt-box + attach-from-registry split designed here.)
 
-When no existing capability (native, local, or remote) covers a "Guidance only" authority, the editor offers **"File feature request on github.com/nikhilsoman/synlynk →"**: pre-filled issue titled `[Charter Intent] <authority> for <role>`, labeled `feature-proposal` + `pm-intake`, body auto-populated with role/mandate context and workspace id, filed against synlynk core (not the user's fork) so PM can triage and dedupe (existing `duplicate` label) across every workspace's requests. synlynk is Apache-2.0 — forking and extending locally is already fully permitted and requires no license accommodation; "contributing back" is a process convention, not a license obligation, so a local fork that builds a new native hook uses the same flow as a pull request instead of an issue.
+When no existing capability (native, local, or remote) covers a "Guidance only" authority, the editor offers **"File feature request on github.com/nikhilsoman/synlynk →"**: pre-filled issue titled `[Charter Intent] <authority> for <role>`, labeled `feature-proposal` + `pm-intake`, body auto-populated with role/mandate context and workspace id, filed against synlynk core (not the user's fork) so PM can triage and dedupe (existing `duplicate` label) across every workspace's requests. synlynk is Apache-2.0 — forking and extending locally is already fully permitted and requires no license accommodation; "contributing back" is a process convention, not a license obligation, so a local fork that builds a new native hook uses the same flow as a pull request instead of an issue. **Gated per §3a.4** — this flow does not ship until the dedup/trust-review gate exists.
+
+### 4a. Tool/driver-specific roles — rejected
+
+The decide panel explicitly rejected naming agent roles after specific tools (e.g. a "Google Stitch UI/UX driver agent" as its own role). Reasoning: a role is an *accountability* boundary (who may merge, veto, escalate) and a tool binding is an *execution* detail (how the work gets done) — collapsing them into one vendor-named primitive re-introduces the same per-harness/per-tool hard-coding the 2026-10-04 Empirical Capability Assessment Policy just suspended for harness routing.
+
+Tool/driver integrations like Stitch are modeled as `harness_bindings` + Capability Registry entries attached to the existing stable functional roles (`designer`, `dev`) — not as new role primitives. Tool binding itself is delegated to the harness and MCP discovery mechanics (a tool's own manifest/documentation), not hard-coded per-vendor inside synlynk. synlynk's layer stops at the generic function-scoped roles plus the governance hooks harnesses don't reliably self-enforce (review provenance, secret scanning, worktree cleanup, release cuts, identity) — it does not grow a hand-maintained per-vendor agent catalog.
 
 ## 5. Vizor UI: FTUE and BAU
 
@@ -91,19 +109,28 @@ When no existing capability (native, local, or remote) covers a "Guidance only" 
 
 ## 6. Phased build plan
 
-Each phase is independently shippable; #1-#2 alone resolves the motivating incident.
+Re-sequenced per the decide panel: §3a's governance gates move into the earliest phases they bear on, rather than trailing as hardening work; the two phases with the largest untrusted-input/trust-review surface (remote registry ingest, upstream issue-filing) are explicitly held until their gate lands. Each phase is independently shippable; #1-#2 alone resolves the motivating incident.
 
-1. **Taxonomy activation** — register `maintainer`, `secops`, `infra/devops` as real dispatchable agents with GitHub App identities; wire `external_contribution_triage` into maintainer's charter.
-2. **BAU charter editor** — prompt-box fields with Enforced/Guidance tagging, replacing the dead button in `roles.py`.
-3. **FTUE wizard** — 5-step new-role provisioning, built on #2's field components.
-4. **Native hook catalog** — browsable, `description`/`purpose`/`scope` required per entry; wires into #2's "Attach existing hook" action.
-5. **Upstream feature-request flow** — "File on github.com/nikhilsoman/synlynk" action for Guidance-only items.
-6. **Capability Registry, local source** — installed-MCP/Skill picker scoped per `harness_bindings`.
-7. **Capability Registry, remote source** — third-party connector manifest ingestion (Zapier MCP/Composio/Smithery-compatible), same manifest shape as #6.
+1. **Taxonomy activation + audit log + capability_ratings wiring** — register `maintainer`, `secops`, `infra/devops` as real dispatchable agents with GitHub App identities; wire `external_contribution_triage` into maintainer's charter; every charter write (this phase's and all later ones) goes through a versioned, attributable diff log (§3a.1); every activated role gets a `capability_ratings` task-type bucket at activation, not after the fact (§3a.2).
+2. **BAU charter editor** — prompt-box fields with Enforced/Guidance tagging, replacing the dead button in `roles.py`; writes go through Phase 1's audit log.
+3. **Role lifecycle: deprecation/merge** — symmetric "retire or merge this role" path (§3a.3), including GitHub App identity revocation; ships alongside the editor since both operate on the same charter-write path.
+4. **FTUE wizard** — 5-step new-role provisioning, built on #2/#3's field and lifecycle components.
+5. **Native hook catalog** — browsable, `description`/`purpose`/`scope` required per entry; wires into #2's "Attach existing hook" action.
+6. **Capability Registry, local source** — installed-MCP/Skill picker scoped per `harness_bindings`. No external trust surface (harness-local), so not gated.
+7. **HELD until the §3a.4 trust/dedup gate exists:** upstream feature-request flow ("File on github.com/nikhilsoman/synlynk") and Capability Registry remote-source ingestion (Zapier MCP/Composio/Smithery-compatible manifests). The dedup-against-open-issues check and third-party trust/egress review are a prerequisite design-and-build item in their own right, not a checkbox inside this phase.
 
-## 7. Open items for the implementation plan
+## 7. Explicitly out of scope (filed as follow-ons, not folded in)
+
+Per the decide panel, two adjacent questions it raised are follow-on stories under BS-15/gh:#2126, not scope creep into this spec:
+
+- **Publishing a synlynk MCP server** (dispatch, pr check, GOVERNS, cost, charter read) into harness/plugin marketplaces as a second distribution surface alongside `install.sh`/pipx. The panel's view: this weakens (doesn't eliminate) the "home harness essential" premise in gh:#2126, since synlynk's control plane becomes callable from any MCP-capable client — but the host-local daemon/worktrees/`state.db` still need somewhere to run. Worth its own design pass against gh:#2126's five open questions.
+- **The tool-binding-vs-role boundary** (§4a) generalized beyond this spec's taxonomy — i.e., a reusable principle for any future "should X be a role or a capability" question, not just Stitch.
+
+## 8. Open items for the implementation plan
 
 - Exact `charter_schema.py` changes needed to support free-text authorities/triggers with an Enforced/Guidance classification (currently a closed enum).
 - Where the Capability Registry's manifest store lives (new `state.db` table vs. a `.synlynk/capabilities/` file tree) — follows the same durability pattern as charters.
 - Whether `designer`/`tpm`'s idle-activity status gets addressed in this work or deferred to the next Empirical Capability Assessment Policy review cycle (recommend: defer — it's a capability-measurement question, not a role-management-tooling gap).
 - `synlynk pr check`'s new secops-gate condition (which PR shapes trigger it) needs its own small design pass during planning, not fully specified here.
+- Concrete design for the charter audit log (§3a.1): storage (state.db table vs. append-only file), what counts as "attributable actor" for a Vizor-UI-initiated edit (session identity vs. GitHub login), and retention.
+- Concrete design for the §3a.4 trust/dedup gate itself (dedup matching strategy against open issues; what "third-party trust review" checks for a remote connector manifest before it's ingestable) — needed before Phase 7 can start.
