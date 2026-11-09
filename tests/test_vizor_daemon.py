@@ -395,6 +395,36 @@ def test_probe_health_alerts_on_import_crashloop(tmp_path, monkeypatch):
     assert alerts and alerts[0][0] == "CRITICAL"
 
 
+def test_probe_health_recovers_after_startup(tmp_path, monkeypatch):
+    """If ModuleNotFoundError was followed by a successful startup, probe_health should succeed."""
+    from synlynk import vizor_daemon
+
+    log = tmp_path / "daemon.log"
+    log.write_text(
+        "ModuleNotFoundError: No module named 'synlynk'\n"
+        "2026-11-09T08:00:00Z daemon starting on port 33333\n"
+    )
+    monkeypatch.setattr(vizor_daemon, "LOGFILE", log)
+    monkeypatch.setattr(vizor_daemon, "is_running", lambda: True)
+    monkeypatch.setattr(vizor_daemon, "status", lambda: {"service_registered": True, "running": True})
+
+    result = vizor_daemon.probe_health()
+    assert result["ok"] is True
+    assert result["code"] == "ok"
+
+
+def test_service_environment_includes_executable_path():
+    """_service_environment() must include the Python executable directory in PATH."""
+    from synlynk import vizor_daemon
+    import sys
+    from pathlib import Path
+
+    env = vizor_daemon._service_environment()
+    assert "PATH" in env
+    exe_dir = str(Path(sys.executable).resolve().parent)
+    assert exe_dir in env["PATH"].split(":")
+
+
 def test_install_systemd_nonzero_returncode_reports_failure(tmp_path, monkeypatch):
     from synlynk import vizor_daemon
 

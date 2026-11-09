@@ -1412,7 +1412,16 @@ _SYSTEMD_UNIT_NAME = "synlynk-vizor-daemon.service"
 def _service_environment() -> dict:
     local_bin = os.path.expanduser("~/.local/bin")
     pyenv_shims = os.path.expanduser("~/.pyenv/shims")
-    default_path = f"/opt/homebrew/bin:/usr/local/bin:{local_bin}:{pyenv_shims}:/usr/bin:/bin:/usr/sbin:/sbin"
+    exe_dir = str(Path(sys.executable).resolve().parent)
+    path_parts = [exe_dir]
+    if hasattr(sys, "base_prefix") and sys.prefix != sys.base_prefix:
+        venv_bin = os.path.join(sys.prefix, "bin")
+        if venv_bin not in path_parts:
+            path_parts.append(venv_bin)
+    for p in ["/opt/homebrew/bin", "/usr/local/bin", local_bin, pyenv_shims, "/usr/bin", "/bin", "/usr/sbin", "/sbin"]:
+        if p not in path_parts:
+            path_parts.append(p)
+    default_path = ":".join(path_parts)
     return {
         "PATH": default_path,
         "PYTHONPATH": _synlynk_import_root(),
@@ -1593,7 +1602,11 @@ def probe_health() -> dict:
     try:
         if LOGFILE.exists():
             tail = LOGFILE.read_text(errors="replace")[-8000:]
-            crashloop = "ModuleNotFoundError: No module named 'synlynk'" in tail
+            if "ModuleNotFoundError: No module named 'synlynk'" in tail:
+                err_idx = tail.rfind("ModuleNotFoundError: No module named 'synlynk'")
+                start_idx = tail.rfind("daemon starting on port")
+                if start_idx == -1 or start_idx < err_idx:
+                    crashloop = True
     except OSError:
         tail = ""
 
@@ -1608,6 +1621,14 @@ def probe_health() -> dict:
         )
         _write_sentinel_alert("CRITICAL", code, message)
         return {"ok": False, "code": code, "running": running, "registered": registered}
+
+    if running and not crashloop:
+        try:
+            from synlynk.sentinel import _clear_sentinel_alerts
+            _clear_sentinel_alerts(code="VIZOR_DAEMON_CRASHLOOP")
+            _clear_sentinel_alerts(code="VIZOR_DAEMON_DOWN")
+        except Exception:
+            pass
 
     return {"ok": True, "code": "ok", "running": running, "registered": registered}
 
