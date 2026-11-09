@@ -130,11 +130,11 @@ def synthesize_context_pack(
             from synlynk import _get_db
             conn = _get_db()
             row = conn.execute(
-                "SELECT title, description, criteria FROM stories WHERE story_id = ?",
+                "SELECT title FROM stories WHERE story_id = ?",
                 (story_id,),
             ).fetchone()
-            if row:
-                query_text += f" {row[0] or ''} {row[1] or ''} {row[2] or ''}"
+            if row and row[0]:
+                query_text += f" {row[0]}"
             conn.close()
         except Exception as exc:
             from synlynk.dispatch import _warn_context_build_failure
