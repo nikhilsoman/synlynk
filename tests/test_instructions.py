@@ -360,3 +360,36 @@ def test_tool_templates_are_substantially_smaller_than_canonical_protocol():
         "## PR Review Discipline",
     ):
         assert section in canonical
+
+def test_write_instruction_manifest_noop_when_shas_identical(tmp_path, monkeypatch):
+    """Verify _write_instruction_manifest skips writing when SHAs match (gh:#5168)."""
+    from pathlib import Path
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+
+    from synlynk.instructions import _write_instruction_manifest, _INSTRUCTIONS_MANIFEST
+
+    entries = {
+        "CLAUDE.md": {"tool": "claude", "sha": "a" * 16},
+        "GEMINI.md": {"tool": "gemini", "sha": "b" * 16},
+    }
+
+    # Initial write creates manifest
+    _write_instruction_manifest(entries)
+    manifest_path = Path(_INSTRUCTIONS_MANIFEST)
+    assert manifest_path.exists()
+    first_mtime = manifest_path.stat().st_mtime_ns
+    first_content = manifest_path.read_text(encoding="utf-8")
+
+    # Second write with identical SHAs must be a no-op
+    _write_instruction_manifest(entries)
+    assert manifest_path.stat().st_mtime_ns == first_mtime
+    assert manifest_path.read_text(encoding="utf-8") == first_content
+
+    # Third write with modified SHA should update manifest
+    modified_entries = {
+        "CLAUDE.md": {"tool": "claude", "sha": "c" * 16},
+        "GEMINI.md": {"tool": "gemini", "sha": "b" * 16},
+    }
+    _write_instruction_manifest(modified_entries)
+    assert manifest_path.read_text(encoding="utf-8") != first_content

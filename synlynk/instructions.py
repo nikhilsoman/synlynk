@@ -895,8 +895,24 @@ def _load_instruction_manifest() -> dict:
 def _write_instruction_manifest(entries: dict) -> None:
     """Write .synlynk/instructions.json with schema_version, synlynk_version, and file SHAs."""
     os.makedirs(os.path.dirname(_INSTRUCTIONS_MANIFEST), exist_ok=True)
-    ts = time.strftime('%Y-%m-%dT%H:%M:%S')
     existing = _load_instruction_manifest()
+    if os.path.exists(_INSTRUCTIONS_MANIFEST):
+        try:
+            with open(_INSTRUCTIONS_MANIFEST, "r", encoding="utf-8") as f:
+                raw_manifest = json.load(f)
+            if (
+                isinstance(raw_manifest, dict)
+                and raw_manifest.get("synlynk_version") == VERSION
+                and all(
+                    path in existing and existing[path].get("sha") == info.get("sha")
+                    for path, info in entries.items()
+                )
+            ):
+                return
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    ts = time.strftime('%Y-%m-%dT%H:%M:%S')
     existing.update({
         path: {
             "tool": info["tool"],
@@ -911,7 +927,7 @@ def _write_instruction_manifest(entries: dict) -> None:
         "synlynk_version": VERSION,
         "files": existing,
     }
-    with open(_INSTRUCTIONS_MANIFEST, "w") as f:
+    with open(_INSTRUCTIONS_MANIFEST, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
 
 
