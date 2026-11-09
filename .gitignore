@@ -11,6 +11,7 @@
 !.synlynk/social_drafts.json
 !.synlynk/models.json
 !.synlynk/charters/
+!.synlynk/capability_registry/
 __pycache__/
 *.pyc
 .DS_Store

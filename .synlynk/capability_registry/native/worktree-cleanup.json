@@ -1,0 +1,14 @@
+{
+  "capability_id": "worktree-cleanup",
+  "name": "worktree_cleanup",
+  "source": "native",
+  "description": "Removes merged/stale git worktrees and prunes their local branches.",
+  "purpose": "Prevent stale worktree/branch accumulation after PR merge.",
+  "scope": "filesystem:worktrees,git:branches",
+  "auth": {"type": "none"},
+  "enforced_hook": "synlynk.worktree:cmd_worktree_clean",
+  "harness_compat": "any",
+  "workspace_id": "local",
+  "owner": "synlynk-core",
+  "version": "1.0.0"
+}
