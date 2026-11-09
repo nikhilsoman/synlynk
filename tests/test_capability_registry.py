@@ -74,3 +74,13 @@ def test_load_local_capabilities_scoped_by_harness_bindings(tmp_path, monkeypatc
     caps_other = capability_registry.load_local_capabilities(harness="grok")
     assert caps_other == []
 
+
+def test_load_native_capabilities_includes_gh_sync_roadmap():
+    from synlynk import capability_registry
+    caps = capability_registry.load_native_capabilities()
+    ids = {c["capability_id"] for c in caps}
+    assert "gh-sync-roadmap" in ids
+    entry = next(c for c in caps if c["capability_id"] == "gh-sync-roadmap")
+    assert entry["enforced_hook"] == "synlynk.gh_sync_cli:cmd_sync_roadmap"
+
+

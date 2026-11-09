@@ -63,6 +63,15 @@ def test_propose_charter_revision_stamps_actor_type_and_workspace_id(tmp_path, m
     assert entry["workspace_id"] == agent_store.get_workspace_id()
 
 
+def test_tpm_charter_has_gh_sync_authority():
+    import json
+    with open(".synlynk/charters/tpm.json") as fh:
+        charter = json.load(fh)
+    assert "sync_external_tracker" in charter["autonomous_authorities"]
+    assert "gh-sync-roadmap" in charter.get("capability_refs", [])
+
+
+
 
 def _valid_charter(marker: str) -> str:
     return (
