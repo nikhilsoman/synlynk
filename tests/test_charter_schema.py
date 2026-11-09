@@ -56,6 +56,31 @@ def test_known_roles_includes_secops_and_infra_devops():
     assert "infra-devops" in KNOWN_ROLES
 
 
+def test_seed_charter_secops_has_identity_binding_and_workspace_id():
+    from synlynk.agent_cli import SEED_CHARTERS
+    from synlynk.charter_schema import parse_frontmatter, split_frontmatter
+
+    content = SEED_CHARTERS["secops"]
+    frontmatter_text, _ = split_frontmatter(content)
+    data = parse_frontmatter(frontmatter_text)
+    assert data["workspace_id"] == "local"
+    assert data["identity_binding"] == {"provider": "github_app", "subject": "secops"}
+    assert data["policy_refs"] == {}
+
+
+def test_seed_charter_infra_devops_has_identity_binding_and_workspace_id():
+    from synlynk.agent_cli import SEED_CHARTERS
+    from synlynk.charter_schema import parse_frontmatter, split_frontmatter
+
+    content = SEED_CHARTERS["infra-devops"]
+    frontmatter_text, _ = split_frontmatter(content)
+    data = parse_frontmatter(frontmatter_text)
+    assert data["workspace_id"] == "local"
+    assert data["identity_binding"] == {"provider": "github_app", "subject": "infra-devops"}
+    assert data["policy_refs"] == {}
+
+
+
 def test_parse_frontmatter_scalars_and_quoted_strings():
     data = charter_schema.parse_frontmatter(
         'schema_version: 1\nrole: dev\ndescription: "Implementation — writes the code."\n'

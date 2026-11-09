@@ -94,6 +94,9 @@ def parse_frontmatter(frontmatter_text: str) -> dict:
         elif rest == "[]":
             data[key] = []
             i += 1
+        elif rest == "{}":
+            data[key] = {}
+            i += 1
         elif rest.startswith("[") and rest.endswith("]"):
             inner = rest[1:-1].strip()
             data[key] = [x.strip() for x in inner.split(",")] if inner else []
