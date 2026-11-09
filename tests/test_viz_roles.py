@@ -56,3 +56,44 @@ def test_handle_role_create_stamps_human_actor_type(monkeypatch):
     VizorHandler.__new__(VizorHandler)._handle_role_create({"role": "security-auditor", "durability": "durable"})
     assert calls.get("actor_type") == "human"
 
+
+def test_handle_charter_update_writes_new_revision(monkeypatch):
+    from synlynk import agent_store
+
+    calls = {}
+    monkeypatch.setattr(agent_store, "read_charter", lambda agent_id: (
+        "---\nschema_version: 1\nrole: secops\ndescription: \"x\"\n"
+        "durability: durable\ntools: []\ncredentials: []\n---\n\n"
+        "## Instructions\n\nOld mandate.\n\n## Authority & Escalation\n\nOld.\n\n"
+        "## Workflow Ownership\n\nOld.\n",
+        1,
+    ))
+    monkeypatch.setattr(
+        agent_store, "propose_charter_revision",
+        lambda *args, **kwargs: calls.update(kwargs) or 2,
+    )
+    result = VizorHandler.__new__(VizorHandler)._handle_charter_update({
+        "agent_id": "secops", "parent_revision": 1,
+        "mandate": "New mandate text.",
+    })
+    assert result["ok"] is True
+    assert result["revision"] == 2
+    assert calls.get("actor_type") == "human"
+
+
+def test_handle_charter_update_conflict_on_stale_revision(monkeypatch):
+    from synlynk import agent_store
+
+    monkeypatch.setattr(agent_store, "read_charter", lambda agent_id: ("---\nrole: secops\n---\n\n## Instructions\n\nx\n", 3))
+
+    def _raise(*args, **kwargs):
+        raise agent_store.RevisionConflictError("stale")
+    monkeypatch.setattr(agent_store, "propose_charter_revision", _raise)
+
+    result = VizorHandler.__new__(VizorHandler)._handle_charter_update({
+        "agent_id": "secops", "parent_revision": 1, "mandate": "New mandate.",
+    })
+    assert result["ok"] is False
+    assert "conflict" in result["error"].lower()
+
+
