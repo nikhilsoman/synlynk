@@ -3,7 +3,7 @@
 **Date:** 2026-11-09
 **Status:** Brainstormed, approved by Nikhil, decide-panel-gated, pending plan + build
 **Motivating incident:** gh:#5178-#5181 (X6M-Work governance gap — PRs #5172-#5174 merged on a fabricated non-author review, with no role charged to catch it)
-**Decide panel:** `project-docs/decisions/2026-11-09-decide-panel-agent-role-management-agent...` (claude/agy/codex/grok) — approved Agent Studio as foundational, gated on §3a's four conditions, rejected tool-named roles (§4a)
+**Decide panel:** `project-docs/decisions/2026-11-09-decide-panel-agent-role-management-agent...` (claude/agy/codex/grok) — approved Agent Studio as foundational, gated on §3a's four conditions, rejected tool-named roles (§4a). Re-run `project-docs/decisions/2026-11-09-decide-panel-re-run-agent-role-managemen...` (claude/agy/codex) — hosted Team/Enterprise forward-compatibility review, gated on §3b's four schema seams.
 
 ## 1. Problem
 
@@ -63,6 +63,22 @@ The panel (claude/agy/codex/grok) approved Agent Studio as foundational but made
 
 These gates are reflected in the phase sequencing in §6.
 
+### 3b. Hosted Team/Enterprise forward-compatibility (from the 2026-11-09 decide-panel re-run)
+
+Everything above was designed assuming a single local host, single human operator, single `state.db`, single set of GitHub App identities — matching synlynk's current reality. But Vizor's committed tier progression (Local → Team, synced to synlynk.com via NATS, post-v1.0 → Enterprise, v1.2+) and the 2026-11-08 roadmap's Horizon 3 (`synlynk.com` platform services, workspace registry, hosted relay) mean this spec's data model is the foundation a hosted Agent Studio gets built on later. The panel's verdict: **the spec does not need re-architecting, but four schema-only seams must land in Phase 1, not be retrofitted after Team/Enterprise work starts** — each is cheap now and a real data migration later.
+
+**[must-do-now] — zero behavioral change, additive fields only:**
+1. **`workspace_id` field** (default `"local"`) on the charter schema, Capability Registry manifest, and audit log rows (§3a.1). Unscoped records today become unscopeable — not just hard-to-query — once hosted Vizor needs to filter by tenant. Every sub-agent on the panel flagged this independently.
+2. **`identity_binding` object** replacing the implicit "role = GitHub App" assumption: `{provider: "github_app" | ..., subject: ...}`. GitHub-App-per-role is the single most load-bearing local-host-only assumption in the current design — everything else in the taxonomy survives hosting unchanged, this doesn't, because a hosted identity provider has to be able to sit behind the same field without a migration.
+3. **Audit log immutability is a real constraint, not just a convention** (sharpens §3a.1): no UPDATE/DELETE path on audit rows, actor attribution required on every row, and the actor must be classifiable as human/agent/service. SOC2-grade immutability bolted onto a mutable table after the fact is a real migration; designing it in now costs nothing.
+4. **Minimal provenance/scope fields on Capability Registry manifests**: `owner`, `scope`, `version`, in addition to the fields already in §4's shape. Remote connector ingestion (gated per §3a.4) must not have to retrofit identity onto entries that shipped without it.
+
+**[design-now-build-later]:** Third-party DLP (data-loss-prevention) policy and infrastructure policy (preferred cloud providers, VPC/network config, IAM) are **not** charter fields and **not** Capability Registry entry types. Both are policy-enforcement-point concepts that a charter *references* by id — `secops`'s charter references a DLP policy id, `infra/devops`'s charter references an infra policy id — rather than embedding the policy itself. Spec this reference shape now (a plain `policy_refs: { dlp?: string, infra?: string }` field is sufficient for Phase 1); do not build the actual DLP policy-enforcement pipeline or the infra-policy schema until Horizon 3's cloud swarm runners make them load-bearing.
+
+**[defer-safely]:** SSO/SAML/SCIM/LDAP implementations, data-residency enforcement, access-review tooling, cloud-provider adapters, and the hosted service itself. All of these are genuinely additive once the `workspace_id` and `identity_binding` seams above exist — no foundation work needed beyond those two fields.
+
+These four must-do-now seams are folded into §4's manifest shape and §6's Phase 1 scope below; §7 is extended with the defer-safely list so it isn't silently assumed in scope.
+
 ## 4. Capability Registry (unifies code hooks, local MCPs/Skills, and third-party connectors)
 
 A single data model with three ingestion sources, each producing the same manifest shape so the "browse and attach" UI in the charter editor works identically regardless of source:
@@ -77,9 +93,14 @@ A single data model with three ingestion sources, each producing the same manife
   "scope": "...",
   "auth": { "type": "...", "...": "..." },
   "enforced_hook": "synlynk.cli:cmd_pr_check#secops_gate | null",
-  "harness_compat": ["claude", "codex", "agy", "grok"] | "any"
+  "harness_compat": ["claude", "codex", "agy", "grok"] | "any",
+  "workspace_id": "local",
+  "owner": "...",
+  "version": "1.0.0"
 }
 ```
+
+Per §3b.1 and §3b.4: `workspace_id` defaults to `"local"` for every entry today but makes every manifest tenant-scopable without a later migration; `owner`/`version` (alongside the existing `scope`) give remote connector manifests the provenance fields they'll need once remote ingestion ships (§3a.4). Charters and audit log rows carry the same `workspace_id` field, and a role's `identity_binding` object (§3b.2) replaces the implicit "role = GitHub App" assumption — e.g. `{"provider": "github_app", "subject": "<app-id>"}` today, with room for a hosted identity provider to sit behind the same field later. `secops` and `infra/devops` charters additionally carry a `policy_refs` object (§3b, design-now-build-later) — e.g. `{"dlp": "<policy-id>", "infra": "<policy-id>"}` — referencing, not embedding, their respective policy-enforcement-point configs.
 
 - **Native** — synlynk's own code hooks: `pr_check_gate`, `dispatch_routing_rule`, `scheduler_autonomy_stage`, `sentinel_pattern_handler`, `run_secret_scanning`, etc. Each requires a canonical `description`/`purpose`/`scope` — no bare function names in the catalog.
 - **Local-harness** — MCP servers and Skills already installed in whichever harness will execute the agent, scoped by `harness_bindings` (a Claude-only MCP must not appear as attachable when the role's binding is Codex-only).
@@ -111,7 +132,7 @@ Tool/driver integrations like Stitch are modeled as `harness_bindings` + Capabil
 
 Re-sequenced per the decide panel: §3a's governance gates move into the earliest phases they bear on, rather than trailing as hardening work; the two phases with the largest untrusted-input/trust-review surface (remote registry ingest, upstream issue-filing) are explicitly held until their gate lands. Each phase is independently shippable; #1-#2 alone resolves the motivating incident.
 
-1. **Taxonomy activation + audit log + capability_ratings wiring** — register `maintainer`, `secops`, `infra/devops` as real dispatchable agents with GitHub App identities; wire `external_contribution_triage` into maintainer's charter; every charter write (this phase's and all later ones) goes through a versioned, attributable diff log (§3a.1); every activated role gets a `capability_ratings` task-type bucket at activation, not after the fact (§3a.2).
+1. **Taxonomy activation + audit log + capability_ratings wiring** — register `maintainer`, `secops`, `infra/devops` as real dispatchable agents with GitHub App identities; wire `external_contribution_triage` into maintainer's charter; every charter write (this phase's and all later ones) goes through a versioned, attributable diff log (§3a.1); every activated role gets a `capability_ratings` task-type bucket at activation, not after the fact (§3a.2). Schema additionally carries the §3b.1-.3 seams from the start: `workspace_id` (default `"local"`) on charters, Capability Registry manifests, and audit rows; `identity_binding` in place of the implicit GitHub-App-per-role assumption; audit rows genuinely append-only with human/agent/service-classifiable actor attribution. `secops`/`infra/devops` charters include an empty/placeholder `policy_refs` object from activation.
 2. **BAU charter editor** — prompt-box fields with Enforced/Guidance tagging, replacing the dead button in `roles.py`; writes go through Phase 1's audit log.
 3. **Role lifecycle: deprecation/merge** — symmetric "retire or merge this role" path (§3a.3), including GitHub App identity revocation; ships alongside the editor since both operate on the same charter-write path.
 4. **FTUE wizard** — 5-step new-role provisioning, built on #2/#3's field and lifecycle components.
@@ -125,6 +146,8 @@ Per the decide panel, two adjacent questions it raised are follow-on stories und
 
 - **Publishing a synlynk MCP server** (dispatch, pr check, GOVERNS, cost, charter read) into harness/plugin marketplaces as a second distribution surface alongside `install.sh`/pipx. The panel's view: this weakens (doesn't eliminate) the "home harness essential" premise in gh:#2126, since synlynk's control plane becomes callable from any MCP-capable client — but the host-local daemon/worktrees/`state.db` still need somewhere to run. Worth its own design pass against gh:#2126's five open questions.
 - **The tool-binding-vs-role boundary** (§4a) generalized beyond this spec's taxonomy — i.e., a reusable principle for any future "should X be a role or a capability" question, not just Stitch.
+- **Hosted Team/Enterprise itself** (§3b, defer-safely list): SSO/SAML/SCIM/LDAP implementations, data-residency enforcement, access-review tooling, cloud-provider adapters, and the `synlynk.com` hosted service. The §3b.1/.2 seams (`workspace_id`, `identity_binding`) exist precisely so these are additive extensions later, not foundation work now.
+- **The DLP and infra policy-enforcement-point pipelines themselves** (§3b, design-now-build-later) — only the `policy_refs` reference shape ships in Phase 1; the actual DLP scanning/enforcement logic and the infra-policy schema (stack/workspace/global provider/VPC/IAM config) are separate design-and-build items, expected around Horizon 3's cloud swarm runners.
 
 ## 8. Open items for the implementation plan
 
@@ -134,3 +157,5 @@ Per the decide panel, two adjacent questions it raised are follow-on stories und
 - `synlynk pr check`'s new secops-gate condition (which PR shapes trigger it) needs its own small design pass during planning, not fully specified here.
 - Concrete design for the charter audit log (§3a.1): storage (state.db table vs. append-only file), what counts as "attributable actor" for a Vizor-UI-initiated edit (session identity vs. GitHub login), and retention.
 - Concrete design for the §3a.4 trust/dedup gate itself (dedup matching strategy against open issues; what "third-party trust review" checks for a remote connector manifest before it's ingestable) — needed before Phase 7 can start.
+- Exact migration path for `identity_binding` (§3b.2) when a hosted identity provider lands — the `provider`/`subject` shape is fixed now, but which providers synlynk.com actually supports, and how an existing local `github_app` binding gets linked to a hosted account, is a Horizon-3-era design question, not this plan's.
+- Concrete schema for the `policy_refs.dlp`/`policy_refs.infra` policy-enforcement-point objects themselves (§3b design-now-build-later) — this spec only fixes that charters reference policy ids, not what a DLP or infra policy document contains.
