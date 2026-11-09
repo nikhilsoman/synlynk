@@ -81,4 +81,19 @@ def test_activate_role_seeds_capability_ratings(tmp_path, monkeypatch):
     assert rows[0] > 0
 
 
+def test_cli_agent_deprecate_disables_and_revokes(tmp_path, monkeypatch):
+    _fake_home(tmp_path, monkeypatch)
+    import sys
+    from synlynk import agent_store, cli
+
+    monkeypatch.setattr(sys, "argv", ["synlynk", "agent", "activate", "secops"])
+    cli.main()
+    monkeypatch.setattr(sys, "argv", ["synlynk", "agent", "deprecate", "secops"])
+    cli.main()
+
+    entries = [e for e in agent_store.list_agents() if e["agent_id"] == "secops"]
+    assert entries[0]["disabled"] is True
+
+
+
 

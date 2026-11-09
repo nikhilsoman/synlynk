@@ -1029,6 +1029,11 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     )
     agent_activate_parser.add_argument("role", help="Role slug to activate")
 
+    agent_deprecate_parser = agent_sub.add_parser(
+        "deprecate", help="Disable a role's agent record and revoke its GitHub App identity"
+    )
+    agent_deprecate_parser.add_argument("role", help="Role slug to deprecate")
+
     exec_parser = subparsers.add_parser("exec", help="Execute an AI CLI with synlynk context")
     exec_parser.add_argument("cmd", nargs=argparse.REMAINDER, help="Command to execute")
     exec_parser.add_argument("--force", action="store_true",
@@ -3068,6 +3073,11 @@ def main(argv=None) -> None:
             agent_id = activate_role(args.role, actor=getpass.getuser(), actor_type="human")
             print(f"  activated role '{agent_id}' as a dispatchable agent")
             print(f"  provision its GitHub App identity with: synlynk identity init --role {agent_id}")
+        elif args.agent_action == "deprecate":
+            import getpass
+            from synlynk.team import cmd_identity_revoke
+            cmd_identity_revoke(args.role, actor=getpass.getuser())
+            print(f"  deprecated role '{args.role}'")
         else:
             help_parsers.get("agent", parser).print_help()
     elif args.command == "backfill-capability-ratings":
