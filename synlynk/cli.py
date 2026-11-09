@@ -932,6 +932,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     type_relabel_parser.add_argument("type_id")
     type_relabel_parser.add_argument("label")
     identity_sub.add_parser("list", help="List provisioned role identities")
+    identity_revoke_parser = identity_sub.add_parser("revoke", help="Revoke a role's local GitHub App credential material")
+    identity_revoke_parser.add_argument("--role", required=True)
     identity_whoami_p = identity_sub.add_parser("whoami", help="Show active 3-tier identity attribution")
     identity_whoami_p.add_argument("--user", help="Explicit user attribution")
     identity_whoami_p.add_argument("--role", help="Explicit role charter")
@@ -3930,6 +3932,10 @@ def main(argv=None) -> None:
                 cmd_identity_init()
         elif action == "list":
             cmd_identity_list()
+        elif action == "revoke":
+            import getpass
+            from synlynk.team import cmd_identity_revoke
+            cmd_identity_revoke(args.role, actor=getpass.getuser())
         elif action in ("whoami", "triplet", "show"):
             from synlynk.attribution import cmd_whoami
             sys.exit(cmd_whoami(args))
