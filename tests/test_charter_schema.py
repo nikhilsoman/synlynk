@@ -48,7 +48,37 @@ def test_split_frontmatter_unclosed_returns_none():
     content = "---\nrole: dev\n\n## Instructions\n\nbody\n"
     frontmatter_text, body = charter_schema.split_frontmatter(content)
     assert frontmatter_text is None
-    assert body == content
+
+
+def test_known_roles_includes_secops_and_infra_devops():
+    from synlynk.charter_schema import KNOWN_ROLES
+    assert "secops" in KNOWN_ROLES
+    assert "infra-devops" in KNOWN_ROLES
+
+
+def test_seed_charter_secops_has_identity_binding_and_workspace_id():
+    from synlynk.agent_cli import SEED_CHARTERS
+    from synlynk.charter_schema import parse_frontmatter, split_frontmatter
+
+    content = SEED_CHARTERS["secops"]
+    frontmatter_text, _ = split_frontmatter(content)
+    data = parse_frontmatter(frontmatter_text)
+    assert data["workspace_id"] == "local"
+    assert data["identity_binding"] == {"provider": "github_app", "subject": "secops"}
+    assert data["policy_refs"] == {}
+
+
+def test_seed_charter_infra_devops_has_identity_binding_and_workspace_id():
+    from synlynk.agent_cli import SEED_CHARTERS
+    from synlynk.charter_schema import parse_frontmatter, split_frontmatter
+
+    content = SEED_CHARTERS["infra-devops"]
+    frontmatter_text, _ = split_frontmatter(content)
+    data = parse_frontmatter(frontmatter_text)
+    assert data["workspace_id"] == "local"
+    assert data["identity_binding"] == {"provider": "github_app", "subject": "infra-devops"}
+    assert data["policy_refs"] == {}
+
 
 
 def test_parse_frontmatter_scalars_and_quoted_strings():

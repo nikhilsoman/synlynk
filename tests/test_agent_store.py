@@ -27,6 +27,52 @@ def test_get_workspace_id_mint_writes_to_workspace_json_not_legacy(tmp_path, mon
     assert not os.path.exists(".synlynk/config.json")
 
 
+def test_propose_charter_revision_rejects_invalid_actor_type(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("os.path.expanduser", lambda p: p.replace("~", str(tmp_path / "fake_home")))
+    from synlynk import agent_store
+    content = (
+        "---\nschema_version: 1\nrole: dev\ndescription: \"x\"\n"
+        "durability: dispatch-only\ntools: []\ncredentials: []\n---\n\n"
+        "## Instructions\n\nDo work.\n\n## Authority & Escalation\n\nEscalate.\n\n"
+        "## Workflow Ownership\n\nOwn it.\n"
+    )
+    with pytest.raises(ValueError, match="actor_type"):
+        agent_store.propose_charter_revision(
+            "dev-test", content, actor="someone", parent_revision=0, actor_type="robot"
+        )
+
+
+def test_propose_charter_revision_stamps_actor_type_and_workspace_id(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("os.path.expanduser", lambda p: p.replace("~", str(tmp_path / "fake_home")))
+    from synlynk import agent_store
+    content = (
+        "---\nschema_version: 1\nrole: dev\ndescription: \"x\"\n"
+        "durability: dispatch-only\ntools: []\ncredentials: []\n---\n\n"
+        "## Instructions\n\nDo work.\n\n## Authority & Escalation\n\nEscalate.\n\n"
+        "## Workflow Ownership\n\nOwn it.\n"
+    )
+    agent_store.propose_charter_revision(
+        "dev-test", content, actor="nikhil", parent_revision=0, actor_type="human"
+    )
+    base = agent_store.agent_store_path("dev-test")
+    with open(f"{base}/charter.revisions.jsonl") as fh:
+        entry = json.loads(fh.readline())
+    assert entry["actor_type"] == "human"
+    assert entry["workspace_id"] == agent_store.get_workspace_id()
+
+
+def test_tpm_charter_has_gh_sync_authority():
+    import json
+    with open(".synlynk/charters/tpm.json") as fh:
+        charter = json.load(fh)
+    assert "sync_external_tracker" in charter["autonomous_authorities"]
+    assert "gh-sync-roadmap" in charter.get("capability_refs", [])
+
+
+
+
 def _valid_charter(marker: str) -> str:
     return (
         "---\n"

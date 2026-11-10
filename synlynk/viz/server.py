@@ -261,7 +261,7 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_OPTIONS(self):
         clean_path = self.path.split("?")[0]
-        valid_paths = ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref", "/roles/create", "/worktrees/clean", "/tools/install", "/api/tools/install", "/api/board/status", "/api/board/stage", "/graph/refresh", "/api/graph/refresh", "/api/v1/graph/refresh")
+        valid_paths = ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref", "/roles/create", "/roles/charter/update", "/worktrees/clean", "/tools/install", "/api/tools/install", "/api/board/status", "/api/board/stage", "/graph/refresh", "/api/graph/refresh", "/api/v1/graph/refresh")
         if clean_path not in valid_paths and not clean_path.endswith("/api/graph/refresh") and not clean_path.endswith("/api/tools/install"):
             self.send_error(404)
             return
@@ -284,6 +284,8 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_view_pref_request()
         elif clean_path == "/roles/create":
             self._handle_role_create_request()
+        elif clean_path == "/roles/charter/update":
+            self._handle_charter_update_request()
         elif clean_path == "/worktrees/clean":
             self._handle_worktree_clean_request()
         elif clean_path in ("/tools/install", "/api/tools/install") or clean_path.endswith("/api/tools/install"):
@@ -616,7 +618,9 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
                 f"Own work assigned to the {role} role.\n"
             )
         agent_store.register_agent(agent_id, [{"kind": "role_slug", "value": role}])
-        agent_store.propose_charter_revision(agent_id, charter, actor="vizor", parent_revision=0)
+        agent_store.propose_charter_revision(
+            agent_id, charter, actor="vizor", parent_revision=0, actor_type="human",
+        )
         return {"ok": True, "agent_id": agent_id}
 
     def _handle_role_create_request(self):
@@ -627,6 +631,65 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             return
         try:
             result = self._handle_role_create(payload)
+        except Exception as exc:
+            self.send_error(500, str(exc))
+            return
+        self._send_json_ok(result)
+
+    def _handle_charter_update(self, payload: dict) -> dict:
+        """Apply an edited field onto an existing charter and write a new revision.
+
+        Only the free-text body sections the BAU editor exposes (mandate ->
+        Instructions section body) are supported in this first cut; structural
+        frontmatter fields (role, durability) are not editable here — that
+        remains a CLI-only / role-lifecycle (Phase 3) operation.
+        """
+        from synlynk import agent_store
+
+        agent_id = str(payload.get("agent_id") or "").strip()
+        if not agent_id:
+            return {"ok": False, "error": "agent_id required"}
+        try:
+            parent_revision = int(payload.get("parent_revision"))
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "parent_revision must be an integer"}
+        mandate = str(payload.get("mandate") or "").strip()
+        if not mandate:
+            return {"ok": False, "error": "mandate must not be empty"}
+
+        content, current_revision = agent_store.read_charter(agent_id)
+        if current_revision != parent_revision:
+            return {
+                "ok": False,
+                "error": f"conflict: charter has moved to revision {current_revision}, "
+                         f"reload before editing",
+            }
+
+        header = "## Instructions"
+        if header not in content:
+            return {"ok": False, "error": "charter has no Instructions section to update"}
+        before, _, after = content.partition(header)
+        next_header_idx = after.find("\n## ")
+        rest = after[next_header_idx:] if next_header_idx != -1 else ""
+        new_content = f"{before}{header}\n\n{mandate}\n{rest}"
+
+        try:
+            new_revision = agent_store.propose_charter_revision(
+                agent_id, new_content, actor="vizor", parent_revision=parent_revision,
+                actor_type="human",
+            )
+        except agent_store.RevisionConflictError as exc:
+            return {"ok": False, "error": f"conflict: {exc}"}
+        return {"ok": True, "revision": new_revision}
+
+    def _handle_charter_update_request(self):
+        try:
+            payload = self._read_json_body()
+        except (json.JSONDecodeError, TypeError, ValueError):
+            self.send_error(400, "Invalid JSON")
+            return
+        try:
+            result = self._handle_charter_update(payload)
         except Exception as exc:
             self.send_error(500, str(exc))
             return

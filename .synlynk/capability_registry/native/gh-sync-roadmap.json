@@ -1,0 +1,14 @@
+{
+  "capability_id": "gh-sync-roadmap",
+  "name": "gh_sync_roadmap",
+  "source": "native",
+  "description": "Projects state.db GOVERNS goals/stories to GitHub Milestones/Issues (one-way today; bidirectional sync is a separate, deferred follow-on).",
+  "purpose": "Keep GitHub's shareable projection of roadmap state in sync with state.db, the sole authority, without hand-edited roadmap.md/todo.md.",
+  "scope": "network:github,state.db:goals,state.db:stories",
+  "auth": {"type": "github_app"},
+  "enforced_hook": "synlynk.gh_sync_cli:cmd_sync_roadmap",
+  "harness_compat": "any",
+  "workspace_id": "local",
+  "owner": "synlynk-core",
+  "version": "1.0.0"
+}

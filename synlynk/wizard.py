@@ -1309,7 +1309,7 @@ def cmd_wizard_init(
         except Exception:
             pass
 
-    print(f"  {_GREEN}✓{_RESET} Provisioned 8 standard agent charters in .synlynk/agents/ (<5s)")
+    print(f"  {_GREEN}✓{_RESET} Provisioned {len(SEED_CHARTERS)} standard agent charters in .synlynk/agents/ (<5s)")
 
     # 5. Auto-invoke synlynk backlog ingest --sync-github
     backlog_result = {"ingested": 0, "fetched": 0, "duplicates": 0}

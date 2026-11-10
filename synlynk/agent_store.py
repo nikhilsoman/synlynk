@@ -249,6 +249,7 @@ def _write_versioned_file(
     content: str,
     actor: str,
     parent_revision: int,
+    actor_type: str = "service",
 ) -> int:
     """Write a new revision of a single-file versioned artifact.
 
@@ -274,6 +275,8 @@ def _write_versioned_file(
         "parent_hash": parent_hash,
         "content_hash": _content_hash(content),
         "actor": actor,
+        "actor_type": actor_type,
+        "workspace_id": get_workspace_id(),
         "timestamp": _now_iso(),
     }
     with open(revisions_path, "a") as f:
@@ -289,13 +292,26 @@ def read_charter(agent_id: str):
     )
 
 
+_VALID_ACTOR_TYPES = ("human", "agent", "service")
+
+
 def propose_charter_revision(
-    agent_id: str, content: str, actor: str, parent_revision: int
+    agent_id: str,
+    content: str,
+    actor: str,
+    parent_revision: int,
+    actor_type: str = "service",
 ) -> int:
     """Write a new charter revision if parent_revision matches the current head.
 
-    No auto-approval logic is included; the gated mutability tier is out of scope.
+    actor_type must be classifiable as 'human', 'agent', or 'service' (§3a.1/§3b.3
+    audit-immutability seam) — no auto-approval logic is included; the gated
+    mutability tier is out of scope.
     """
+    if actor_type not in _VALID_ACTOR_TYPES:
+        raise ValueError(
+            f"actor_type {actor_type!r} must be one of {_VALID_ACTOR_TYPES}"
+        )
     charter_schema.validate_charter(content)
     base = agent_store_path(agent_id)
     return _write_versioned_file(
@@ -304,6 +320,7 @@ def propose_charter_revision(
         content,
         actor,
         parent_revision,
+        actor_type=actor_type,
     )
 
 

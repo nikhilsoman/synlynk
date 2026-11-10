@@ -1290,3 +1290,43 @@ def cmd_identity_list() -> None:
         status = "provisioned" if config.get("installation_id") else "pending installation"
         print(f"  {role:<14}  {slug:<24}  {status}")
     print()
+
+
+def cmd_identity_revoke(role: str, actor: str) -> None:
+    """Revoke a role's local GitHub App credential material and disable its agent record.
+
+    Does NOT delete or suspend the GitHub App installation itself — that
+    requires the App owner's authenticated web session, which an
+    installation token cannot grant itself. Prints the manual follow-up step.
+    """
+    from synlynk.product_store import resolve_github_apps_dir
+    from synlynk.identity_roles import load_declared_roles, write_declared_roles
+    from synlynk import agent_store
+
+    apps_dir = resolve_github_apps_dir(".")
+    json_path = apps_dir / f"{role}.json"
+    pem_path = apps_dir / f"{role}.pem"
+    app_slug = None
+    if json_path.exists():
+        try:
+            app_slug = json.loads(json_path.read_text()).get("app_slug")
+        except (json.JSONDecodeError, OSError):
+            pass
+        json_path.unlink()
+    if pem_path.exists():
+        pem_path.unlink()
+
+    declared = load_declared_roles()
+    if role in declared:
+        write_declared_roles([r for r in declared if r != role])
+
+    agent_store.set_agent_disabled(role, actor=actor)
+
+    print(f"  revoked local credential material for role '{role}'")
+    if app_slug:
+        print(f"  manual step required: suspend or delete the GitHub App '{app_slug}' "
+              f"at https://github.com/settings/apps/{app_slug} (installation tokens cannot "
+              f"self-revoke)")
+    else:
+        print("  no GitHub App was provisioned for this role locally")
+

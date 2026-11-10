@@ -111,7 +111,7 @@ def test_cmd_wizard_init_speed_and_charters(tmp_path, monkeypatch):
 
     assert duration < 5.0, f"Onboarding took {duration:.2f}s, exceeding 5s target"
     assert res["elapsed_seconds"] < 5.0
-    assert len(res["charters_provisioned"]) == 8
+    assert len(res["charters_provisioned"]) == len(SEED_CHARTERS)
     assert set(res["charters_provisioned"]) == set(SEED_CHARTERS.keys())
 
     # Verify physical charter files in .synlynk/agents/

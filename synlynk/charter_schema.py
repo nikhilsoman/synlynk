@@ -10,6 +10,7 @@ from __future__ import annotations
 
 KNOWN_ROLES = (
     "dev", "qa", "pm", "architect", "tpm", "designer", "marketing", "synlynk-bot", "maintainer",
+    "secops", "infra-devops",
 )
 VALID_DURABILITY = ("durable", "session-only", "dispatch-only")
 REQUIRED_SECTIONS = ("Instructions", "Authority & Escalation", "Workflow Ownership")
@@ -92,6 +93,9 @@ def parse_frontmatter(frontmatter_text: str) -> dict:
             i = j
         elif rest == "[]":
             data[key] = []
+            i += 1
+        elif rest == "{}":
+            data[key] = {}
             i += 1
         elif rest.startswith("[") and rest.endswith("]"):
             inner = rest[1:-1].strip()

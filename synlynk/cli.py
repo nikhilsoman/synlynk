@@ -932,6 +932,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     type_relabel_parser.add_argument("type_id")
     type_relabel_parser.add_argument("label")
     identity_sub.add_parser("list", help="List provisioned role identities")
+    identity_revoke_parser = identity_sub.add_parser("revoke", help="Revoke a role's local GitHub App credential material")
+    identity_revoke_parser.add_argument("--role", required=True)
     identity_whoami_p = identity_sub.add_parser("whoami", help="Show active 3-tier identity attribution")
     identity_whoami_p.add_argument("--user", help="Explicit user attribution")
     identity_whoami_p.add_argument("--role", help="Explicit role charter")
@@ -1021,6 +1023,16 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
 
     agent_disable_parser = agent_sub.add_parser("disable", help="Disable a workspace agent")
     agent_disable_parser.add_argument("id_or_alias", help="Agent ID or alias (e.g. role slug)")
+
+    agent_activate_parser = agent_sub.add_parser(
+        "activate", help="Register a known role as a real dispatchable agent"
+    )
+    agent_activate_parser.add_argument("role", help="Role slug to activate")
+
+    agent_deprecate_parser = agent_sub.add_parser(
+        "deprecate", help="Disable a role's agent record and revoke its GitHub App identity"
+    )
+    agent_deprecate_parser.add_argument("role", help="Role slug to deprecate")
 
     exec_parser = subparsers.add_parser("exec", help="Execute an AI CLI with synlynk context")
     exec_parser.add_argument("cmd", nargs=argparse.REMAINDER, help="Command to execute")
@@ -3054,6 +3066,18 @@ def main(argv=None) -> None:
             agent_cli.cmd_agent_sync_routing(args.id_or_alias)
         elif args.agent_action == "disable":
             agent_cli.cmd_agent_disable(args.id_or_alias)
+        elif args.agent_action == "activate":
+            from synlynk.role_activation import activate_role
+            import getpass
+
+            agent_id = activate_role(args.role, actor=getpass.getuser(), actor_type="human")
+            print(f"  activated role '{agent_id}' as a dispatchable agent")
+            print(f"  provision its GitHub App identity with: synlynk identity init --role {agent_id}")
+        elif args.agent_action == "deprecate":
+            import getpass
+            from synlynk.team import cmd_identity_revoke
+            cmd_identity_revoke(args.role, actor=getpass.getuser())
+            print(f"  deprecated role '{args.role}'")
         else:
             help_parsers.get("agent", parser).print_help()
     elif args.command == "backfill-capability-ratings":
@@ -3918,6 +3942,10 @@ def main(argv=None) -> None:
                 cmd_identity_init()
         elif action == "list":
             cmd_identity_list()
+        elif action == "revoke":
+            import getpass
+            from synlynk.team import cmd_identity_revoke
+            cmd_identity_revoke(args.role, actor=getpass.getuser())
         elif action in ("whoami", "triplet", "show"):
             from synlynk.attribution import cmd_whoami
             sys.exit(cmd_whoami(args))
