@@ -504,7 +504,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "pack", help="Synthesize a concise AST context pack from the knowledge graph"
     )
     pack_parser.add_argument("target", help="Task description or story ID (e.g. story-1234)")
-    pack_parser.add_argument("--budget", type=int, default=1500, help="Token budget ceiling (default: 1500)")
+    pack_parser.add_argument("--budget", type=int, default=3000, help="Token budget ceiling (default: 3000)")
+    pack_parser.add_argument("--inspect", action="store_true", help="Display token estimate breakdown by section")
 
     connector_parser = subparsers.add_parser(
         "connector", help="Catalog a product-scoped outbound connector"
