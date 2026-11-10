@@ -93,6 +93,10 @@ def create_orphan_stories(orphans: list[dict[str, Any]]) -> list[str]:
         return []
     conn = _get_db()
     created = []
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
+    desc_col = "body" if "body" in cols else ("description" if "description" in cols else None)
+    crit_col = "acceptance_criteria" if "acceptance_criteria" in cols else ("criteria" if "criteria" in cols else None)
+
     for orphan in orphans:
         story_id = f"story-orphan-{uuid.uuid4().hex[:8]}"
         title = f"Orphan symbol {orphan['label']}"
@@ -101,10 +105,22 @@ def create_orphan_stories(orphans: list[dict[str, Any]]) -> list[str]:
             f"has in-degree 0 and is outside entrypoint chains."
         )
         criteria = f"- Decide whether `{orphan['label']}` stays, or remove the dead symbol."
+        
+        insert_cols = ["story_id", "title"]
+        values = [story_id, title]
+        if desc_col:
+            insert_cols.append(desc_col)
+            values.append(description)
+        if crit_col:
+            insert_cols.append(crit_col)
+            values.append(json.dumps([criteria]) if crit_col == "acceptance_criteria" else criteria)
+        insert_cols.extend(["status", "priority"])
+        values.extend(["ready", 2 if "priority" in cols and any("INT" in str(r[2]).upper() for r in conn.execute("PRAGMA table_info(stories)") if r[1] == "priority") else "p2"])
+
+        placeholders = ", ".join(["?"] * len(values))
         conn.execute(
-            "INSERT INTO stories (story_id, title, body, acceptance_criteria, status, priority) "
-            "VALUES (?, ?, ?, ?, 'ready', 2)",
-            (story_id, title, description, json.dumps([criteria])),
+            f"INSERT INTO stories ({', '.join(insert_cols)}) VALUES ({placeholders})",
+            values,
         )
         created.append(story_id)
     conn.commit()
