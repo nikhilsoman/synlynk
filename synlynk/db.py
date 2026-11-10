@@ -2469,6 +2469,7 @@ def _migrate_archetype_schema(conn: sqlite3.Connection) -> None:
 
     ensure_archetype_schema(conn)
     for column, definition in (
+        ("role", "TEXT"),
         ("archetype_id", "TEXT REFERENCES agent_archetypes(archetype_id)"),
         ("secondary_hat", "TEXT REFERENCES agent_archetypes(archetype_id)"),
         ("sfia_disciplines", "TEXT"),

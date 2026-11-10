@@ -2202,9 +2202,16 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "autonomy", help="View or set the workspace autonomy dial (manual/supervised/autonomous)")
     autonomy_sub = autonomy_parser.add_subparsers(dest="autonomy_action")
     autonomy_sub.add_parser("show", help="Show the current autonomy mode")
+    autonomy_sub.add_parser("status", help="Show agent autonomy levels across the workspace")
     autonomy_set_parser = autonomy_sub.add_parser("set", help="Set the autonomy mode")
     autonomy_set_parser.add_argument(
         "mode", choices=["manual", "supervised", "autonomous"])
+    promote_parser = autonomy_sub.add_parser("promote", help="Promote an agent to a higher autonomy tier")
+    promote_parser.add_argument("--agent", required=True, help="Agent ID or role to promote")
+    promote_parser.add_argument("--to", required=True, choices=["L1_ADVISORY", "L2_GATED", "L3_AUTONOMOUS"], help="Target autonomy tier")
+    demote_parser = autonomy_sub.add_parser("demote", help="Demote an agent to a lower autonomy tier")
+    demote_parser.add_argument("--agent", required=True, help="Agent ID or role to demote")
+    demote_parser.add_argument("--reason", default="Manual operator demotion", help="Demotion rationale")
 
     board_parser = subparsers.add_parser(
         "board", help="Sovereign Board governance: Ed25519-signed proposal ledger")
@@ -4033,11 +4040,36 @@ def main(argv=None) -> None:
         else:
             help_parsers.get("session", parser).print_help()
     elif args.command == "autonomy":
-        from synlynk.autonomy import get_autonomy_mode, set_autonomy_mode
+        from synlynk.autonomy import (
+            get_autonomy_mode, set_autonomy_mode,
+            promote_agent_autonomy, demote_agent_autonomy,
+            AutonomyLevel
+        )
         action = getattr(args, "autonomy_action", None)
         if action == "set":
             mode = set_autonomy_mode(args.mode)
             print(f"  ✓ autonomy_mode = {mode.value}")
+        elif action == "status":
+            from synlynk.db import _get_db
+            conn = _get_db()
+            try:
+                rows = conn.execute(
+                    "SELECT agent_id, role, archetype_id, autonomy_level, domain_autonomy_caps FROM workspace_agents"
+                ).fetchall()
+                print("\n  AGENT AUTONOMY STATUS (Horizon 3)")
+                print(f"  {'AGENT':<18} {'ROLE':<15} {'ARCHETYPE':<15} {'LEVEL':<15} {'CAP':<15}")
+                print("  " + "─" * 75)
+                for r in rows:
+                    print(f"  {r[0]:<18} {str(r[1] or ''):<15} {str(r[2] or ''):<15} {str(r[3] or 'L1_ADVISORY'):<15} {str(r[4] or 'none'):<15}")
+                print()
+            finally:
+                conn.close()
+        elif action == "promote":
+            new_level = promote_agent_autonomy(args.agent, args.to, authorized_by="human")
+            print(f"  ✓ Promoted agent '{args.agent}' to {new_level.value} (authorized by human)")
+        elif action == "demote":
+            new_level = demote_agent_autonomy(args.agent, reason=args.reason, tripped_by="operator")
+            print(f"  ⚠ Demoted agent '{args.agent}' to {new_level.value} ({args.reason})")
         else:
             mode = get_autonomy_mode()
             print(f"  Autonomy mode: {mode.value}")
