@@ -7,6 +7,12 @@
 - **Directories:** bin, docs, project-docs, synlynk, tests, website
 
 ## Decisions
+- **2026-11-10 [Track 2 Horizon 3 (v0.31.0): Autonomous Fleet Governance, Universal Archetypes & Visual Organogram]:**
+  Unanimously approved via 4-Harness Decide Panel (`dec-4a53a2ee`, `claude`, `agy`, `codex`, `grok`) and shipped via PR #5195:
+  (1) 6 Universal Archetypes: Implemented capability-neutral archetypes (`orchestrator`, `strategist`, `director`, `creator`, `inspector`, `custodian`) in `synlynk/archetypes.py` with 1:N cardinality and secondary hats, decoupling agent definitions from software-specific mechanics (TDD, git, worktrees moved to domain packs).
+  (2) Domain Packs & Confirmation Boundary: Added `synlynk/domain_packs.py` with in-repo packs (`software`, `hitchcock` film studio, `rxcc` biopharma clinical trials). Suggestions (tools/scopes) are advisory baselines requiring explicit human confirmation before execution.
+  (3) 3-Tier Autonomy Evolutionary Ladder: Implemented `L1_ADVISORY` -> `L2_GATED` -> `L3_AUTONOMOUS` in `synlynk/autonomy.py`. Human-only promotion gate; Sentinel-owned automatic demotion on circuit breaker trips (`TOKEN_CIRCUIT_BREAKER_TRIPPED`); launch restrictions (L3 restricted to TPM reference orchestrator; mandatory domain caps like `Rxcc` <= L2).
+  (4) Visual Organogram View: Built offline-first SVG/HTML5 interactive tree canvas in Vizor (`/w/<slug>/organogram.html`) displaying archetypes, hats, autonomy tiers, and inspection drawer. [@agy, @nikhilsoman]
 - **2026-11-06 [Day 1 "Clean Slate" (v0.28.1): LIVE-30 Durable Import Resolution & Uninitialized Vizor Directory Creation]:**
   Resolved Sev1 issue #5142/#5144 (LIVE-30 daemon crash-loop) and #4819 (viz FTUE uninitialized directory crash):
   (1) Durable Import Root: `_synlynk_import_root()` in `synlynk/vizor_daemon.py` now resolves the canonical repository root via `git rev-parse --path-format=absolute --git-common-dir` when running inside linked git worktrees. This prevents launchd plists from capturing ephemeral worktree paths that later get pruned, permanently stopping `ModuleNotFoundError: No module named 'synlynk'`.
