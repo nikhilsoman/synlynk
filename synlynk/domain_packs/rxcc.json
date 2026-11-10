@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "domain_id": "rxcc",
+  "name": "Clinical Research & Biopharma Operations",
+  "industry": "Pharmaceutical and Medicine Manufacturing",
+  "naics": "325412",
+  "apqc": "Manage Clinical Quality and Compliance",
+  "max_autonomy_level": "L2_GATED",
+  "lifecycle_stages": [
+    {"stage": "protocol_intent", "owner_archetype": "strategist", "output": "clinical_intent_brief"},
+    {"stage": "regulatory_spec", "owner_archetype": "director", "output": "fda_protocol_spec"},
+    {"stage": "trial_schedule", "owner_archetype": "orchestrator", "output": "milestone_ledger"},
+    {"stage": "trial_execution", "owner_archetype": "creator", "output": "clinical_dataset"},
+    {"stage": "compliance_audit", "owner_archetype": "inspector", "output": "audit_receipt"},
+    {"stage": "regulatory_filing", "owner_archetype": "custodian", "output": "submission_binder"}
+  ],
+  "suggested_tools": [
+    {
+      "archetype": "creator",
+      "sfia": "DATM",
+      "tool_id": "biostat-analyzer",
+      "source": "cli_binary",
+      "scope_paths": ["trials/data/**", "analysis/**"]
+    },
+    {
+      "archetype": "director",
+      "sfia": "REQM",
+      "tool_id": "protocol-validator",
+      "source": "native_code",
+      "scope_paths": ["protocols/**"]
+    },
+    {
+      "archetype": "inspector",
+      "sfia": "BURM",
+      "tool_id": "gcp-audit-verifier",
+      "source": "native_code",
+      "scope_paths": ["audits/**", "compliance/**"]
+    },
+    {
+      "archetype": "orchestrator",
+      "sfia": "PRMG",
+      "tool_id": "trial-milestone-ledger",
+      "source": "native_code",
+      "scope_paths": ["milestones/**"]
+    }
+  ]
+}

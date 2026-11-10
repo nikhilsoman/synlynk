@@ -12,6 +12,10 @@ KNOWN_ROLES = (
     "dev", "qa", "pm", "architect", "tpm", "designer", "marketing", "synlynk-bot", "maintainer",
     "secops", "infra-devops",
 )
+VALID_ARCHETYPES = (
+    "orchestrator", "strategist", "director", "creator", "inspector", "custodian",
+)
+VALID_AUTONOMY_LEVELS = ("L1_ADVISORY", "L2_GATED", "L3_AUTONOMOUS")
 VALID_DURABILITY = ("durable", "session-only", "dispatch-only")
 REQUIRED_SECTIONS = ("Instructions", "Authority & Escalation", "Workflow Ownership")
 REQUIRED_FRONTMATTER_KEYS = (
@@ -136,6 +140,30 @@ def validate_charter(content: str, known_roles=KNOWN_ROLES) -> dict:
         errors.append(
             f"invalid durability {data['durability']!r}; "
             f"must be one of {', '.join(VALID_DURABILITY)}"
+        )
+
+    if "primary_archetype" in data and data["primary_archetype"] not in VALID_ARCHETYPES:
+        errors.append(
+            f"unknown primary_archetype {data['primary_archetype']!r}; "
+            f"must be one of {', '.join(VALID_ARCHETYPES)}"
+        )
+
+    if "secondary_hat" in data and data["secondary_hat"] and data["secondary_hat"] not in VALID_ARCHETYPES:
+        errors.append(
+            f"unknown secondary_hat {data['secondary_hat']!r}; "
+            f"must be one of {', '.join(VALID_ARCHETYPES)}"
+        )
+
+    if "autonomy_level" in data and data["autonomy_level"] not in VALID_AUTONOMY_LEVELS:
+        errors.append(
+            f"invalid autonomy_level {data['autonomy_level']!r}; "
+            f"must be one of {', '.join(VALID_AUTONOMY_LEVELS)}"
+        )
+
+    if "domain_autonomy_caps" in data and data["domain_autonomy_caps"] not in VALID_AUTONOMY_LEVELS:
+        errors.append(
+            f"invalid domain_autonomy_caps {data['domain_autonomy_caps']!r}; "
+            f"must be one of {', '.join(VALID_AUTONOMY_LEVELS)}"
         )
 
     for list_key in (

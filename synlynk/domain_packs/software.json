@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "domain_id": "software",
+  "name": "Software & Systems Engineering",
+  "industry": "Software & Internet Services",
+  "naics": "541511",
+  "apqc": "Deliver IT Solutions",
+  "max_autonomy_level": "L3_AUTONOMOUS",
+  "lifecycle_stages": [
+    {"stage": "brainstorm", "owner_archetype": "strategist", "output": "vision_doc"},
+    {"stage": "spec", "owner_archetype": "director", "output": "design_spec"},
+    {"stage": "plan", "owner_archetype": "orchestrator", "output": "implementation_plan"},
+    {"stage": "execution", "owner_archetype": "creator", "output": "code_commits"},
+    {"stage": "review", "owner_archetype": "inspector", "output": "verification_receipt"},
+    {"stage": "maintain", "owner_archetype": "custodian", "output": "release_artifacts"}
+  ],
+  "suggested_tools": [
+    {
+      "archetype": "creator",
+      "sfia": "PROG",
+      "tool_id": "python-runtime",
+      "source": "native_code",
+      "scope_paths": ["synlynk/**", "tests/**"]
+    },
+    {
+      "archetype": "creator",
+      "sfia": "DBDS",
+      "tool_id": "sqlite-cli",
+      "source": "native_code",
+      "scope_paths": ["synlynk/db.py", "migrations/**"]
+    },
+    {
+      "archetype": "inspector",
+      "sfia": "TEST",
+      "tool_id": "pytest-runner",
+      "source": "native_code",
+      "scope_paths": ["tests/**"]
+    },
+    {
+      "archetype": "orchestrator",
+      "sfia": "PGMT",
+      "tool_id": "tpm-wave-planner",
+      "source": "native_code",
+      "scope_paths": ["docs/superpowers/plans/**"]
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "domain_id": "hitchcock",
+  "name": "Film & Creative Media Production",
+  "industry": "Film & Creative Media Production",
+  "naics": "512110",
+  "apqc": "Produce and Deliver Creative Content",
+  "max_autonomy_level": "L2_GATED",
+  "lifecycle_stages": [
+    {"stage": "premise", "owner_archetype": "strategist", "output": "treatment_doc"},
+    {"stage": "script", "owner_archetype": "director", "output": "screenplay_spec"},
+    {"stage": "production_schedule", "owner_archetype": "orchestrator", "output": "call_sheets"},
+    {"stage": "crafting", "owner_archetype": "creator", "output": "rendered_scenes"},
+    {"stage": "qc_continuity", "owner_archetype": "inspector", "output": "qc_report"},
+    {"stage": "mastering", "owner_archetype": "custodian", "output": "dcp_distribution_pack"}
+  ],
+  "suggested_tools": [
+    {
+      "archetype": "creator",
+      "sfia": "MUDI",
+      "tool_id": "ffmpeg-transcoder",
+      "source": "cli_binary",
+      "scope_paths": ["footage/**", "timeline/**", "cuts/**"]
+    },
+    {
+      "archetype": "creator",
+      "sfia": "ANIM",
+      "tool_id": "blender-mcp",
+      "source": "mcp_server",
+      "scope_paths": ["assets/3d/**", "scenes/**"]
+    },
+    {
+      "archetype": "creator",
+      "sfia": "SNDD",
+      "tool_id": "sox-audio-suite",
+      "source": "cli_binary",
+      "scope_paths": ["assets/audio/**", "scenes/soundtrack/**"]
+    },
+    {
+      "archetype": "orchestrator",
+      "sfia": "PRMG",
+      "tool_id": "production-tracker",
+      "source": "native_code",
+      "scope_paths": ["production/**"]
+    }
+  ]
+}
