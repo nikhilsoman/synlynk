@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>v0.31.0 Milestone Retrospective: Autonomous Fleet Governance &amp; Universal Archetypes | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Nov 10, 2026</span>
+        
+          <span class="blog-post-pr">PR #5195</span>
+        
+      </div>
+      <h1 class="blog-post-title">v0.31.0 Milestone Retrospective: Autonomous Fleet Governance &amp; Universal Archetypes</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>Overview</h2>
+<p>Synlynk <code>v0.31.0</code> delivers the architectural foundation for <strong>Horizon 3: Autonomous Fleet Governance &amp; Universal Archetypes</strong>. This release decouples agent roles from software-specific titles into 6 universal capability-neutral archetypes, enables multi-discipline 1:N cardinality and secondary hats across diverse industries (e.g. film production pipelines in Hitchcock, clinical trials in Rxcc), introduces a 3-tier evolutionary autonomy ladder with automatic Sentinel demotions, and integrates an offline-first Visual Organogram Canvas in Vizor.</p>
+<h2>What Shipped in v0.31.0</h2>
+<h3>1. Six Universal Capability-Neutral Archetypes</h3>
+<ul>
+<li><strong>Universal Taxonomies:</strong> Introduced <code>orchestrator</code>, <code>strategist</code>, <code>director</code>, <code>creator</code>, <code>inspector</code>, and <code>custodian</code>.</li>
+<li><strong>Capability-Neutral Core:</strong> Abstracted all software-specific lifecycle mechanics (TDD, worktrees, git merges) out of core archetype definitions into modular domain packs.</li>
+<li><strong>1:N Cardinality &amp; Secondary Hats:</strong> Enabled multiple agents to instantiate the same archetype across specialized disciplines (e.g. <code>creator</code> as editor, animator, sound-designer) and wear secondary hats (e.g. <code>creator</code> with <code>inspector</code> hat).</li>
+<li><strong>SQLite Schema Migration:</strong> Added <code>agent_archetypes</code>, <code>agent_workflow_edges</code>, and <code>rsi_evaluations</code> tables with backwards-compatible schema extensions to <code>workspace_agents</code>.</li>
+</ul>
+<h3>2. In-Repo Domain Profile Packs &amp; Confirmation Boundaries</h3>
+<ul>
+<li><strong>Versioned Domain Profiles:</strong> Shipped in-repo packs for <code>software.json</code>, <code>hitchcock.json</code> (film studio), and <code>rxcc.json</code> (clinical trials).</li>
+<li><strong>Taxonomy Security Boundary:</strong> Enforced that taxonomy suggestions (SFIA/APQC) serve strictly as advisory baselines (<code>requires_confirmation=True</code>), preventing automatic tool grants or filesystem write access without explicit human sign-off.</li>
+<li><strong>Mandatory Domain Caps:</strong> Hard-coded autonomy ceilings for regulated domains (e.g. <code>Rxcc</code> capped at $\le$ <code>L2_GATED</code>).</li>
+</ul>
+<h3>3. Three-Tier Autonomy Evolutionary Ladder</h3>
+<ul>
+<li><strong>Autonomy Progression:</strong> <code>L1_ADVISORY</code> (observe &amp; propose) $\to$ <code>L2_GATED</code> (supervised approval) $\to$ <code>L3_AUTONOMOUS</code> (unattended execution).</li>
+<li><strong>Human-Only Promotion:</strong> Safety invariant requiring explicit human authorization (<code>authorized_by=&quot;human&quot;</code>) — agent self-promotion fails closed.</li>
+<li><strong>Automatic Sentinel Demotion:</strong> Integrated automatic demotion hooks into the token circuit breaker (<code>TOKEN_CIRCUIT_BREAKER_TRIPPED</code>), recording immutable incident audit receipts in <code>rsi_evaluations</code>.</li>
+<li><strong>Launch Constraints:</strong> L3 execution restricted strictly to the reference <code>@tpm</code> orchestrator at launch.</li>
+</ul>
+<h3>4. Interactive Visual Organogram Canvas in Vizor</h3>
+<ul>
+<li><strong>Offline-First Tree Projection:</strong> Built SVG/HTML5 interactive organogram canvas at <code>/w/&lt;slug&gt;/organogram.html</code> with zero external CDN dependencies.</li>
+<li><strong>HUD &amp; Inspection Drawer:</strong> Visualized reporting edges, secondary hat chips, autonomy badges, and collapsible details drawers.</li>
+</ul>
+<h3>5. CLI &amp; Governance Surface</h3>
+<ul>
+<li><strong>Autonomy CLI Verb:</strong> Added <code>synlynk autonomy {status,promote,demote}</code> registered under Tier 2 sustain commands.</li>
+<li><strong>Documentation Synchronization:</strong> Updated command references and official documentation bundles.</li>
+</ul>
+<h2>Verification &amp; Metrics</h2>
+<ul>
+<li><strong>Test Suite:</strong> 5,553 tests collected clean; full 7-job CI matrix passing 100% green on GitHub Actions (Python 3.10 and 3.12).</li>
+<li><strong>Non-Author Review &amp; Merge:</strong> Decided via 4-harness consensus (<code>dec-4a53a2ee</code>), verified via <code>synlynk pr check --pr 5195</code>, and merged cleanly into <code>main</code>.</li>
+</ul>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -45,6 +45,23 @@
 Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
 <hr>
 <h2><a href="https://github.com/nikhilsoman/synlynk/compare/v0.3.0...HEAD">Unreleased</a></h2>
+<div class="changelog-version-header"><span class="changelog-version">vv0.31.0</span><span class="changelog-date">2026-11-10</span></div>
+<h3 class="tag-added">Added</h3>
+- feat(fleet): Autonomous Fleet Orchestrator, Archetype Abstraction & Visual Organogram (Horizon 3) (#5195)
+<h3 class="tag-fixed">Fixed</h3>
+- fix(vizor): resolve runpy warning, board goals, sentinel alert ages, and gantt overlap (#5194)
+<hr>
+<div class="changelog-version-header"><span class="changelog-version">vv0.31.0</span><span class="changelog-date">2026-11-10</span></div>
+<h3 class="tag-added">Added</h3>
+- feat(fleet): implement 6 universal capability-neutral archetypes in SQLite schema with 1:N cardinality and secondary hats (#5195)
+- feat(domain_packs): introduce in-repo versioned domain packs (software, hitchcock, rxcc) with confirmation-gated tool baseline suggestions (#5195)
+- feat(autonomy): implement 3-tier autonomy evolutionary ladder (L1 Advisory -> L2 Gated -> L3 Autonomous) with human-only promotion and Sentinel-owned automatic demotion (#5195)
+- feat(tpm): integrate TPM wake cycle with earned autonomy ladder (zero dispatch in L1 Advisory, gated in L2, autonomous in L3) (#5195)
+- feat(viz): deliver offline-first SVG/HTML5 visual organogram canvas at `/w/<slug>/organogram.html` (#5195)
+- feat(cli): add `synlynk autonomy {status,promote,demote}` CLI surface (#5195)
+<h3 class="tag-fixed">Fixed</h3>
+- fix(taxonomy): add autonomy command surface to COMMAND_TAXONOMY and regenerate command reference docs (#5195)
+- fix(test): scope mock_job_cost_usd in test_circuit_breaker_live19 to prevent cross-worker test bleed (#5195)
 <div class="changelog-version-header"><span class="changelog-version">vv0.30.0</span><span class="changelog-date">2026-11-10</span></div>
 <h3 class="tag-added">Added</h3>
 - feat(gateway): add synlynk configure openrouter BYOK wizard and CLI integration (#5192)
