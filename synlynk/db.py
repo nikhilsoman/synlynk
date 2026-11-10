@@ -2453,6 +2453,34 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
     for version 16+. See synlynk/migrations/runner.py."""
     _run_legacy_migration_and_repairs(conn)
     run_pending_migrations(conn)
+    _migrate_archetype_schema(conn)
+
+
+def _migrate_archetype_schema(conn: sqlite3.Connection) -> None:
+    """Install the additive archetype substrate on old and fresh databases."""
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS workspace_agents (
+            agent_id TEXT PRIMARY KEY,
+            workspace_id TEXT NOT NULL
+        )"""
+    )
+
+    from synlynk.archetypes import ensure_archetype_schema
+
+    ensure_archetype_schema(conn)
+    for column, definition in (
+        ("archetype_id", "TEXT REFERENCES agent_archetypes(archetype_id)"),
+        ("secondary_hat", "TEXT REFERENCES agent_archetypes(archetype_id)"),
+        ("sfia_disciplines", "TEXT"),
+        ("autonomy_level", "TEXT NOT NULL DEFAULT 'L1_ADVISORY'"),
+        ("domain_autonomy_caps", "TEXT"),
+    ):
+        _add_column_if_missing(
+            conn,
+            table="workspace_agents",
+            column=column,
+            definition=definition,
+        )
 
 
 _VALID_COST_SOURCES = {
