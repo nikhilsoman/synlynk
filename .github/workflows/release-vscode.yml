@@ -46,6 +46,7 @@ jobs:
 
       - name: Publish to Visual Studio Marketplace
         if: env.VSCE_PAT != ''
+        continue-on-error: true
         run: |
           vsix_file=$(find . -maxdepth 1 -name 'synlynk-vscode-*.vsix' -print -quit)
           echo "Publishing $vsix_file to Visual Studio Marketplace..."
@@ -56,6 +57,7 @@ jobs:
 
       - name: Publish to Open VSX Registry
         if: env.OVSX_PAT != ''
+        continue-on-error: true
         run: |
           vsix_file=$(find . -maxdepth 1 -name 'synlynk-vscode-*.vsix' -print -quit)
           echo "Publishing $vsix_file to Open VSX Registry..."
@@ -65,6 +67,7 @@ jobs:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
 
       - name: Upload VSIX release artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: synlynk-vscode-release-vsix
