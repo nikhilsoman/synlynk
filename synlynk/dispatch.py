@@ -2742,11 +2742,9 @@ _PR_REVIEW_RETRY_GUARD = (
     "second cycle, stop retrying and report back for escalation.\n\n"
 )
 
-# A present graph is stale once HEAD has moved more than this many commits
-# past the commit recorded at extract time (#2140). Missing graphs still
-# refresh immediately. When that distance cannot be measured, file age is
-# the fallback so a graph with no built_at_commit cannot stay silent forever.
-_GRAPH_STALE_COMMIT_THRESHOLD = 25
+# A present graph is stale once HEAD has moved past the commit recorded at extract
+# time. Zero-drift invariant ensures dispatch context is always synchronized to current HEAD.
+_GRAPH_STALE_COMMIT_THRESHOLD = 0
 _GRAPH_STALE_MTIME_SECONDS = 7 * 24 * 60 * 60
 _CONTEXT_BUILD_SENTINEL_CODE = "CONTEXT_BUILD_DEGRADED"
 
