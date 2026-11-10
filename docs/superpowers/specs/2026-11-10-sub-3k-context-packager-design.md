@@ -207,3 +207,22 @@ If an uncompressed standard dispatch prompt exceeds 3,000 tokens, `synlynk senti
 2. **Signature Integrity Invariant**: No function definition signature or type annotation is truncated mid-identifier. Signatures must remain valid AST strings.
 3. **Zero External Network Dependencies**: Graph slicing, AST compaction, and impact extraction operate 100% locally on `.synlynk/graphify-out/graph.json` and Python source files.
 4. **Deterministic Output**: Given the same git commit and story ID, the generated context pack produces identical character output across all harnesses.
+
+---
+
+## 8. Future Horizon: Curated Document Sidecar Graph (`goal-34c225e1`)
+
+To prevent non-code artifacts from bloating the core code AST graph while still granting agents semantic access to specifications and architectural history, this design establishes the roadmap bridge for the **Curated Markdown Document Sidecar Graph**:
+
+### 8.1 Scope & Architecture
+- **Curated Ingestion Allowlist**: Rather than parsing arbitrary text, the sidecar deterministically indexes structured markdown artifacts: `docs/superpowers/specs/`, `docs/superpowers/plans/`, `project-docs/decisions/`, `docs/rfcs/`, role charters, and `.agents/` profiles.
+- **Dual-Graph Separation**: The core AST graph stays strictly `--code-only` (`.synlynk/graphify-out/graph.json`) to preserve sub-second code slicing speeds. The document sidecar resides at `.synlynk/graphify-out/doc_graph.json`.
+- **Cross-Graph Edges**: Document nodes link to code symbols via explicit backticks or markdown links (`[ClassName](file:///...)`), allowing the packager to traverse from a spec requirement directly to the implementing code function.
+
+### 8.2 Trigger & Activation Criteria
+The sidecar graph is triggered and merged into context packs under the following deterministic conditions:
+1. **Role / Discipline Trigger**: Dispatches assigning `architect`, `pm`, `strategist`, `director`, or `docs` roles automatically mount the document sidecar.
+2. **Path / Domain Trigger**: Tasks touching files in `docs/`, `project-docs/`, or specs (`engg_domain in ('docs', 'architecture', 'strategy')`).
+3. **Budget Partitioning**: In document-enabled mode, the AST budget envelope dynamically partitions into 600 tokens for code AST + 600 tokens for spec/decision excerpts, preserving the strict 3,000-token total ceiling.
+4. **Goal Alignment**: Formally tracked under active goal [`goal-34c225e1`](file:///Users/nikhilsoman/dev/synlynk/project-docs/todo.md) (*"Decide whether a curated deterministic markdown sidecar should join specs, plans, decisions, RCAs, skills, and charters to code symbols"*) and governed by [`goal-eacab0dc`](file:///Users/nikhilsoman/dev/synlynk/project-docs/todo.md).
+
