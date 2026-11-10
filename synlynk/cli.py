@@ -233,6 +233,12 @@ def cmd_watch(args) -> None:
             need_refresh = not rendered_once or (now - last_refresh) >= refresh_seconds
 
             if need_refresh:
+                try:
+                    from synlynk.watch import check_and_refresh_ast_on_drift
+                    check_and_refresh_ast_on_drift(repo_root=os.getcwd())
+                except Exception:
+                    pass
+
                 rows, cols = _get_terminal_size()
                 buf.rows = rows
                 buf.cols = cols
@@ -504,7 +510,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "pack", help="Synthesize a concise AST context pack from the knowledge graph"
     )
     pack_parser.add_argument("target", help="Task description or story ID (e.g. story-1234)")
-    pack_parser.add_argument("--budget", type=int, default=1500, help="Token budget ceiling (default: 1500)")
+    pack_parser.add_argument("--budget", type=int, default=3000, help="Token budget ceiling (default: 3000)")
+    pack_parser.add_argument("--inspect", action="store_true", help="Display token estimate breakdown by section")
 
     connector_parser = subparsers.add_parser(
         "connector", help="Catalog a product-scoped outbound connector"
@@ -1375,6 +1382,10 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     dispatch_parser.add_argument(
         "--context-mode", choices=["none", "task", "full"], default="task",
         dest="context_mode", help="Context injection mode"
+    )
+    dispatch_parser.add_argument(
+        "--full-context", action="store_true", dest="full_context",
+        help="Bypass 3k token budget ceiling and inject full uncompacted context",
     )
     dispatch_parser.add_argument(
         "--skip-preflight", action="store_true", dest="skip_preflight",
@@ -3034,6 +3045,7 @@ def main(argv=None) -> None:
                                  gh_write_expect=getattr(args, "gh_write_expect", None),
                                  requires=getattr(args, "requires", []),
                                  context_mode=getattr(args, "context_mode", "task"),
+                                 full_context=getattr(args, "full_context", False),
                                  skip_preflight=getattr(args, "skip_preflight", False),
                                  skip_permissions=getattr(args, "skip_permissions", False),
                                  container_image=getattr(args, "container_image", None),

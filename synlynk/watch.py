@@ -43,6 +43,17 @@ def check_and_refresh_ast_on_drift(repo_root: str) -> bool:
         except Exception:
             built_at = None
 
+    if not built_at:
+        graph_path = os.path.join(out_dir, "graph.json")
+        if os.path.isfile(graph_path):
+            try:
+                with open(graph_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    built_at = data.get("built_at_commit") or data.get("built_at")
+            except Exception:
+                built_at = None
+
     if built_at and built_at == head_sha:
         return False
 
@@ -61,3 +72,9 @@ def check_and_refresh_ast_on_drift(repo_root: str) -> bool:
         from synlynk.dispatch import _warn_context_build_failure
         _warn_context_build_failure("graph watch refresh", str(exc), repo_root)
     return False
+
+
+def trigger_post_merge_graph_sweep(repo_root: str = ".") -> bool:
+    """Trigger an immediate AST extraction sweep after a merge to prevent graph staleness."""
+    return check_and_refresh_ast_on_drift(repo_root)
+

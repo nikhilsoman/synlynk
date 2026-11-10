@@ -39,6 +39,12 @@ def check_pr_impact_attestation(repo_root: str = ".") -> Dict[str, Any]:
     
     Returns a dict with `passed: bool`, `error: Optional[str]`, and `untested_symbols: list`.
     """
+    try:
+        from synlynk.watch import check_and_refresh_ast_on_drift
+        check_and_refresh_ast_on_drift(repo_root)
+    except Exception:
+        pass
+
     modified_symbols = _get_modified_symbols_from_diff(repo_root)
     if not modified_symbols:
         return {
