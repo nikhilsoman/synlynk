@@ -125,7 +125,7 @@ def _reviewer_role_from_login(login):
 def _existing_review_submitted_keys(pr_number):
     """Returns the set of (reviewer_login, submitted_at) already emitted for pr_number."""
     from synlynk import _get_db
-    conn = _get_db()
+    conn = _get_db(read_only=True, migrate=False)
     rows = conn.execute(
         "SELECT payload_json FROM events WHERE event_type='review_submitted'"
     ).fetchall()
@@ -186,7 +186,7 @@ def _scan_pr_reviews(pr_number):
 def _existing_spec_verified_pr_numbers():
     """Returns the set of PR numbers that already have a spec_verified event."""
     from synlynk import _get_db
-    conn = _get_db()
+    conn = _get_db(read_only=True, migrate=False)
     rows = conn.execute(
         "SELECT payload_json FROM events WHERE event_type='spec_verified'"
     ).fetchall()
@@ -236,7 +236,7 @@ def _scan_pr_completion(pr_number, pr_body):
 def _existing_approval_resolved_keys() -> set:
     """Returns the set of issue URLs that already have an approval_resolved event."""
     from synlynk import _get_db
-    conn = _get_db()
+    conn = _get_db(read_only=True, migrate=False)
     rows = conn.execute(
         "SELECT payload_json FROM events WHERE event_type='approval_resolved'"
     ).fetchall()
@@ -380,7 +380,7 @@ def record_goal_suggestion(stage: str, outcome: str, criterion: str,
 def pending_events(harness_name: str, event_type: str) -> list:
     """Returns events of event_type with id greater than harness_name's checkpoint, oldest first."""
     from synlynk import _get_db
-    conn = _get_db()
+    conn = _get_db(read_only=True, migrate=False)
     row = conn.execute(
         "SELECT last_seen_event_id FROM subscriptions WHERE harness_name=? AND event_type=?",
         (harness_name, event_type),

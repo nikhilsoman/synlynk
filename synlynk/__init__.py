@@ -553,8 +553,8 @@ def _get_db(
 
         parent = os.path.dirname(path) or "."
         if os.path.exists(path):
-            fd = os.open(path, os.O_RDWR)
-            os.close(fd)
+            if not (os.access(path, os.R_OK) and os.access(path, os.W_OK)):
+                raise PermissionError(f"[Errno 13] Permission denied: {path!r}")
             return
 
         # A new database has no file to open yet.  Probe the parent directory
