@@ -1,7 +1,7 @@
 # Autonomous Fleet Orchestrator, Archetype Abstraction & Visual Organogram Designer
 
 **Date:** 2026-11-10  
-**Status:** Draft — Ready for Decide Panel  
+**Status:** Approved (Ratified via Decide Panel dec-4a53a2ee with 3 Binding Amendments)  
 **Authors:** Agy (Gemini) with Nikhil Soman  
 **Target Release:** `v0.31.0` (Horizon 3 Platform Foundation)  
 **Parent Goals:** `goal-f424fc4c` (TPM / Orchestrator Agent), `goal-06758149` (Full Workspace Agent Fleet), `goal-658aa384` (Agent Studio Phase 2)
@@ -28,11 +28,13 @@ This specification unifies these capabilities into an architectural leap:
 
 An **Archetype** is an invariant behavioral primitive defining the execution lifecycle, input contracts, and output obligations of an agent, completely agnostic of industry or job title.
 
+> **Binding Amendment 1 (dec-4a53a2ee):** Archetype definitions are strictly capability-neutral. Concrete execution steps, conventions (e.g. TDD, AST analysis, video codec checks), and artifacts load from versioned **Domain Profile Packs**, not from the archetype core enum.
+
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                      THE 6 UNIVERSAL ARCHETYPES                        │
 ├─────────────────┬──────────────────┬───────────────────────────────────┤
-│ Archetype       │ Primary Function │ Core Lifecycle Contract           │
+│ Archetype       │ Primary Function │ Capability-Neutral Contract       │
 ├─────────────────┼──────────────────┼───────────────────────────────────┤
 │ 1. orchestrator │ Coordination &   │ Ingests raw inputs → clusters     │
 │                 │ Wave Assembly    │ into tasks → builds dependency    │
@@ -45,37 +47,40 @@ An **Archetype** is an invariant behavioral primitive defining the execution lif
 │                 │ Architecture     │ contracts → gates plan execution  │
 ├─────────────────┼──────────────────┼───────────────────────────────────┤
 │ 4. creator      │ Implementation & │ Receives task briefs → executes   │
-│                 │ Asset Crafting   │ asset builds / coding via TDD     │
+│                 │ Asset Crafting   │ asset builds / implementation     │
 ├─────────────────┼──────────────────┼───────────────────────────────────┤
-│ 5. inspector    │ Verification &   │ Conducts non-author review → runs │
-│                 │ Quality Assurance│ regression audits → gates merges  │
+│ 5. inspector    │ Verification &   │ Conducts independent review → runs│
+│                 │ Quality Assurance│ verification audits → gates advance│
 ├─────────────────┼──────────────────┼───────────────────────────────────┤
-│ 6. custodian    │ Substrate Health │ Prunes worktrees/scratch → policy │
-│                 │ & Infrastructure │ sync → manages release artifacts  │
+│ 6. custodian    │ Substrate Health │ Workspace hygiene, state integrity,│
+│                 │ & Infrastructure │ maintenance, and delivery sync    │
 └─────────────────┴──────────────────┴───────────────────────────────────┘
 ```
 
-### 1:N Archetype-to-Agent Cardinality
+### 1:N Archetype-to-Agent Cardinality & Secondary Hats
 
-A workspace is **never constrained to one agent per archetype**. A single archetype can be instantiated across multiple specialized agents operating in distinct disciplines:
-
+1. **1:N Cardinality:** A workspace is **never constrained to one agent per archetype**. A single archetype can be instantiated across multiple specialized agents operating in distinct disciplines:
 ```
 Archetype: creator (Implementation & Asset Crafting)
- ├── Agent: @editor          (SFIA: MUDI - Video editing & timeline assembly)
- ├── Agent: @animator        (SFIA: ANIM - 3D skeletal rigging & keyframes)
- └── Agent: @sound-designer  (SFIA: SNDD - DSP scripting, Foley audio mixing)
+ ├── Agent: @editor          (Discipline: Video editing & timeline assembly)
+ ├── Agent: @animator        (Discipline: 3D skeletal rigging & keyframes)
+ └── Agent: @sound-designer  (Discipline: DSP scripting, Foley audio mixing)
 
 Archetype: orchestrator (Coordination & Wave Assembly)
- ├── Agent: @prod-coordinator(SFIA: PRMG - Production schedule & call sheets)
- └── Agent: @post-supervisor (SFIA: PRMG - VFX vendor waves & render queue)
+ ├── Agent: @prod-coordinator(Discipline: Production schedule & call sheets)
+ └── Agent: @post-supervisor (Discipline: VFX vendor waves & render queue)
 ```
+
+2. **Secondary Archetype Hats:** In small workspaces or lean teams, an agent carries a primary archetype and an optional **`secondary_hat`** (e.g., a technical founder carrying `primary_archetype="director"` with `secondary_hat="strategist"`).
 
 ---
 
-## 3. 3D Taxonomy & Deterministic Resource Inference
+## 3. 3D Taxonomy & Suggested Resource Baselines
 
 Every agent instance is formally indexed by the tuple:
 $$\text{Agent} = (\text{Archetype}, \text{SFIA Discipline}, \text{Industry Domain})$$
+
+> **Binding Amendment 2 (dec-4a53a2ee):** The taxonomy layer is reclassified from "deterministic inference" to **"suggested baseline, human-confirmed grant."** Taxonomy codes (SFIA 8/9, APQC, NAICS) provide standardized vocabulary, onboarding suggestions, and prompt templates. **Under no circumstances does taxonomy lookup automatically grant write-capable tools or filesystem access.** All write authorities and path scopes require explicit human confirmation.
 
 ### Domain Profiles & Crosswalk
 
@@ -101,26 +106,28 @@ $$\text{Agent} = (\text{Archetype}, \text{SFIA Discipline}, \text{Industry Domai
 | | `@biostatistician`| `creator` | `DATM` (Data Science) | `PROG` |
 | | `@compliance-auditor` | `inspector` | `BURM` (Compliance/Audit)| `TEST` |
 
-### Deterministic Tool & Resource Inference Engine
+### Suggested Baselines & Human-Confirmed Scoping Engine
 
-During onboarding (FTUE) or agent creation (BAU), Synlynk inspects `(Archetype, SFIA)` to deterministically recommend:
+During onboarding (FTUE) or agent creation (BAU), Synlynk inspects `(Archetype, SFIA, Domain Pack)` to **suggest**:
 
-1. **Tool & MCP Bindings:**
+1. **Suggested Tools & MCP Servers (Draft Baseline):**
    - `creator + SNDD`: Recommends `ffmpeg`, `sox`, and `audiosuite-mcp`.
    - `creator + ANIM`: Recommends `blender-mcp`, `usd-toolset`, and GPU render hooks.
    - `creator + PROG`: Recommends language runtimes, package managers, and AST indexers.
-   - `orchestrator + PRMG`: Recommends issue trackers, calendar/schedule drivers, and wave calculators.
-2. **Filesystem Path Scoping:**
-   - Path patterns automatically default to the agent's discipline (e.g. `@sound-designer` is granted write access to `assets/audio/**` and `scenes/soundtrack/**`, read-only to `scenes/video/**`).
-3. **Verification Contracts:**
-   - `inspector + TEST`: Requires zero-exit code test passes.
-   - `inspector + MUDI`: Requires codec compliance, resolution checks, and 0 dropped frames.
+   - `orchestrator + PRMG`: Recommends issue trackers, schedule drivers, and wave calculators.
+2. **Suggested Path Scoping:**
+   - Visual suggestions are pre-filled in Vizor (e.g. `@sound-designer` suggested paths: `assets/audio/**`, `scenes/soundtrack/**`).
+   - Conductor explicitly checks/approves write permissions before grants are committed.
+3. **Domain Verification Assertions:**
+   - Software: Exit code 0 test passes and lint checks.
+   - Multimedia/Film: Codec compliance, resolution checks, and 0 dropped frames.
+   - Biopharma: Protocol compliance checklist and regulatory signature verification.
 
 ---
 
 ## 4. The Autonomy Evolutionary Ladder (L1 → L2 → L3)
 
-Autonomy is not a static binary flag. It is an earned state governed by an **Autonomy Maturity Model**:
+Autonomy is an earned operational state governed by an **Autonomy Maturity Model**:
 
 ```
  Level 1: Advisory (Mode 3)       Level 2: Gated (Mode 1)        Level 3: Autonomous (Mode 2)
@@ -131,17 +138,30 @@ Autonomy is not a static binary flag. It is an earned state governed by an **Aut
 • Suggests dispatch proposals      approval to dispatch            (architect, budget, 2x fail)
 ```
 
-### The RSI (Recursive Self-Improvement) Scoring Engine
+> **Binding Amendment 3 (dec-4a53a2ee):**
+> 1. **Non-Self-Interested Ledger:** The RSI reliability ledger and demotion tripwires are recorded strictly by a non-self-interested runtime (`sentinel` / `inspector`), **never by agent self-report**.
+> 2. **L3 Launch Boundary:** At initial launch (`v0.31.0`), **Level 3 (Autonomous Execution) eligibility is restricted exclusively to the `@tpm` reference orchestrator**. All other agents remain at L1 or L2.
+> 3. **Mandatory Domain Autonomy Caps:** High-risk domains carry permanent configuration ceilings (e.g., `Rxcc` clinical trials are hard-capped at $\le L2$ regardless of numerical RSI score).
 
-In accordance with Harness² (arXiv:2610.14224), each agent maintains an empirical track record stored in `state.db`:
+### The RSI (Recursive Self-Improvement) Reliability Engine
+
+In accordance with Harness² (arXiv:2610.14224), each agent's track record is tracked in `state.db` by the Sentinel/Inspector monitor:
 
 $$\text{RSI Score} = w_1 \cdot A_{\text{proposal}} + w_2 \cdot (1 - R_{\text{rework}}) + w_3 \cdot V_{\text{verification}} - w_4 \cdot \Delta_{\text{cost}}$$
 
-Where:
-- $A_{\text{proposal}}$ = Proposal acceptance rate ($\ge 90\%$ required for promotion).
-- $R_{\text{rework}}$ = Percentage of dispatched tasks requiring manual rollback or immediate re-work ($\le 5\%$).
-- $V_{\text{verification}}$ = First-pass QA verification rate ($\ge 95\%$).
-- $\Delta_{\text{cost}}$ = Budget variance (|actual - estimated| / estimated).
+Standard Calibrated Weights (Phase 1 Baseline):
+- $w_1 = 0.30$ (Proposal acceptance rate)
+- $w_2 = 0.35$ (Low rework rate, where $R_{\text{rework}} \le 15\%$ for L2, $\le 8\%$ for L3)
+- $w_3 = 0.25$ (First-pass verification rate $\ge 95\%$)
+- $w_4 = 0.10$ (Budget cost stability)
+
+### Promotion & Demotion Invariants
+1. **Promotions are strictly user-authorized:** No agent can ever self-promote. The Sentinel surfaces promotion eligibility when empirical gates are cleared, but promotion requires cryptographic human confirmation.
+2. **Demotions are automatic & immediate:** Sentinel automatically trips and demotes an L3 agent to L2 upon:
+   - `TOKEN_CIRCUIT_BREAKER_TRIPPED`
+   - 2x consecutive failed QA verification cycles on the same wave
+   - Unhandled blast-radius or worktree corruption
+   Demotions immediately halt autonomous execution and notify the human conductor.
 
 ### Gated Promotion & Circuit-Breaker Demotion
 1. **Promotions are strictly user-authorized:** When an agent's RSI score crosses the readiness threshold (e.g., $N \ge 20$ successful cycles with $\ge 90\%$ score), Vizor displays an **"Eligible for Autonomy Promotion"** indicator. The conductor explicitly confirms promotion.
@@ -291,29 +311,40 @@ The software engineering `@tpm` agent serves as the canonical reference implemen
 
 ---
 
-## 8. Phased Implementation Plan
+## 8. Phased Implementation Sequence
 
-- **Phase 1: Database Migration & Archetype Core (`synlynk/archetypes.py`)**
-  - Implement `agent_archetypes`, `agent_workflow_edges`, and `rsi_evaluations` tables.
-  - Extend `synlynk/charter_schema.py` to validate `archetype_id`, `sfia_disciplines`, and `autonomy_level`.
-- **Phase 2: Deterministic Taxonomy & Resource Inference (`synlynk/taxonomy_inference.py`)**
-  - Connect SFIA 8/9 taxonomy dictionary to recommended MCP tools, permissions, and file patterns.
-  - Implement CLI helper `synlynk agent recommend-tools --sfia <CODE>`.
-- **Phase 3: RSI Scoring & Autonomy Ladder Engine (`synlynk/rsi.py`)**
-  - Track cycle proposals, rework events, and verification outcomes.
-  - Implement circuit-breaker demotion hook in `synlynk/sentinel.py`.
-- **Phase 4: Vizor Organogram Designer Canvas (`synlynk/viz/organogram.py`)**
-  - Implement visual node-graph canvas using offline SVGs/HTML5 canvas with interactive drag-and-drop.
-  - Provide domain templates: Full-Stack SaaS, Film Studio (Hitchcock), Video Production (Vdowrx).
-  - Add Inspection Drawer with live charter editing, tool attachment, and RSI status.
-- **Phase 5: TPM Orchestrator Evolution & End-to-End Verification**
-  - Wire `synlynk/tpm_sweep.py` into the L1/L2/L3 autonomy engine.
-  - Comprehensive unit and integration test suite across all 6 archetypes.
+Per Decide Panel ratification (`dec-4a53a2ee`), implementation is partitioned into clear delivery horizons:
+
+### Immediate Milestone (`v0.31.0` — Core Substrate & TPM Autopilot)
+- **Phase 1: Archetype Schema, Secondary Hats & Domain Packs (`synlynk/archetypes.py`, `synlynk/domain_packs.py`)**
+  - Implement `agent_archetypes`, `agent_workflow_edges`, and `rsi_evaluations` tables in `state.db`.
+  - Add `primary_archetype`, `secondary_hat`, `autonomy_level`, and `domain_autonomy_caps` to `synlynk/charter_schema.py`.
+  - Ship in-repo versioned domain packs (`synlynk/domain_packs/software.json`, `hitchcock.json`, `rxcc.json`) defining domain lifecycle steps and suggested tool baselines.
+- **Phase 2: Autonomy Ladder Core, Sentinel Demotion & TPM Integration (`synlynk/autonomy.py`, `synlynk/tpm_sweep.py`)**
+  - Wire L1/L2/L3 state transitions with human confirmation gates.
+  - Implement Sentinel-driven automatic demotion circuit breakers in `synlynk/sentinel.py`.
+  - Restrict L3 eligibility strictly to `@tpm` orchestrator.
+- **Phase 3: Vizor Organogram & Workflow Inspector (`synlynk/viz/organogram.py`)**
+  - Offline-first HTML/SVG node-tree & inspection drawer in Vizor.
+  - Interactive reporting edge and review-gate visualization with human confirmation diff for write grants.
+
+### Future Milestones (Gated on Empirical Evidence)
+- **Phase 4: Multi-Domain Cross-Role Autonomy Promotion (Gated)**
+- **Phase 5: Cross-Workspace Federation & Cloud Swarm Runners (Horizon 3+)**
 
 ---
 
-## 9. Verification & Safety Contracts
+## 9. Empirical Usage Gates & Safety Invariants
 
-1. **Non-Regressive Software Baseline:** Existing 10 software agent roles remain 100% operational as default seeds under their corresponding archetypes.
-2. **Offline-First Guarantee:** The Organogram Designer in Vizor operates completely host-local with zero cloud CDN dependencies.
-3. **Safety Invariant:** An agent can never self-promote to Level 2 or Level 3. Promotions require cryptographic/explicit human authorization. Circuit-breaker demotions are unilateral and deterministic.
+| Evolution Milestone | Scope | Empirical Usage Gate to Unlock |
+| :--- | :--- | :--- |
+| **v0.31.0 Substrate** | Archetype schema, TPM L1/L2/L3, Vizor organogram view | Zero regression across 10 software agent roles; 100% testbed pass. |
+| **Phase 4: Cross-Domain Autonomy** | Multi-agent L2/L3 promotion across non-software workspaces (Hitchcock, Rxcc) | • $\ge 20$ successful TPM cycles<br>• Zero self-promotion incidents<br>• Human override rate $\le 25\%$<br>• Passed automated demotion drill |
+| **Horizon 3+: Federation & Cloud Swarms** | Cross-workspace state federation, multi-tenant charts, AWS Spot runners | • $\ge 2$ independent non-software workspaces<br>• $\ge 30$ stratified L2 cycles per workspace<br>• Human override rate $< 10\%$<br>• Zero unconfirmed write-path escapes |
+
+### Safety Invariants
+1. **No Self-Promotion:** An agent can never self-promote. All L1 $\to$ L2 and L2 $\to$ L3 promotions require cryptographic human confirmation.
+2. **Sentinel-Owned Demotion:** Automatic demotions are executed unilaterally by the `sentinel` / `inspector` monitor, never by agent self-report.
+3. **No Unconfirmed Write Grants:** Taxonomy codes and domain packs provide suggestions only. All write-capable tools and filesystem paths require explicit human confirmation.
+4. **Mandatory Domain Ceilings:** Domains with safety/regulatory sensitivity (`Rxcc`) are hard-capped at $\le L2$.
+5. **Offline-First Guarantee:** All Vizor organogram projections and SVG rendering run 100% host-local without internet or CDN dependencies.
