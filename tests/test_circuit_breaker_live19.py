@@ -108,7 +108,7 @@ def test_evaluate_job_circuit_breaker_killed_live19(
 ):
     # Simulate a breach
     mock_extract_tokens.return_value = (500_000, 4_600_000) # total > 5_000_000
-    mock_job_cost_usd.return_value = 16.00 # cost > 15.00
+    mock_job_cost_usd.side_effect = lambda agent, *args, **kwargs: 16.00 if agent == "test-agent" else 0.0
     
     # Process successfully killed
     mock_kill_process_tree.return_value = (True, "SIGKILL")
@@ -133,7 +133,11 @@ def test_evaluate_job_circuit_breaker_killed_live19(
     assert "circuit_breaker_reason" in job
     
     # Sentinel alert written
-    mock_write_sentinel.assert_called_once()
+    mock_write_sentinel.assert_called()
+    assert any(
+        c.args[1] == "TOKEN_CIRCUIT_BREAKER_TRIPPED" and "job-123" in c.args[2]
+        for c in mock_write_sentinel.call_args_list
+    )
     
     # Telemetry should log normal kill
     mock_log_telemetry.assert_called_with({
