@@ -1,6 +1,6 @@
 # Autonomous Fleet Orchestrator, Archetype Abstraction & Visual Organogram Designer Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Implement the Phase 1–2 Horizon 3 platform foundation: 6 universal archetypes, secondary hats, in-repo domain packs, 3-tier autonomy ladder with Sentinel-owned circuit breakers, TPM L1/L2/L3 autopilot, and Vizor Organogram view.
 
@@ -33,25 +33,25 @@
 - Consumes: `synlynk.db._get_db()`
 - Produces: `ensure_archetype_schema(conn)`, `list_archetypes(conn)`, `get_archetype(conn, archetype_id)`
 
-- [ ] **Step 1: Write failing tests for archetype schema and initial records**
+- [x] **Step 1: Write failing tests for archetype schema and initial records**
 Create `tests/test_archetypes.py` verifying:
 1. `agent_archetypes`, `agent_workflow_edges`, and `rsi_evaluations` tables are created with proper schemas.
 2. The 6 capability-neutral archetypes (`orchestrator`, `strategist`, `director`, `creator`, `inspector`, `custodian`) are seeded.
 3. `workspace_agents` table has `archetype_id`, `secondary_hat`, `sfia_disciplines`, `autonomy_level`, and `domain_autonomy_caps` columns.
 
-- [ ] **Step 2: Run test to confirm failure**
+- [x] **Step 2: Run test to confirm failure**
 Run `pytest tests/test_archetypes.py` and confirm `ModuleNotFoundError: No module named 'synlynk.archetypes'`.
 
-- [ ] **Step 3: Implement `synlynk/archetypes.py` and wire into `synlynk/db.py`**
+- [x] **Step 3: Implement `synlynk/archetypes.py` and wire into `synlynk/db.py`**
 Implement:
 - `ARCHETYPE_DEFINITIONS`: Dictionary containing the 6 universal capability-neutral archetypes.
 - `ensure_archetype_schema(conn)`: Executes table creation DDL and seeds archetypes.
 - Column additions to `workspace_agents` in `synlynk/db.py` migration handler.
 
-- [ ] **Step 4: Run tests and ensure pass**
+- [x] **Step 4: Run tests and ensure pass**
 Run `pytest tests/test_archetypes.py -v` and verify all tests pass.
 
-- [ ] **Step 5: Commit changes**
+- [x] **Step 5: Commit changes**
 `git add synlynk/archetypes.py synlynk/db.py tests/test_archetypes.py && git commit -m "feat(archetypes): implement core archetype schema and database migrations"`
 
 ---
@@ -71,24 +71,24 @@ Run `pytest tests/test_archetypes.py -v` and verify all tests pass.
 - Consumes: `synlynk.archetypes.ARCHETYPE_DEFINITIONS`
 - Produces: `load_domain_pack(domain_id)`, `validate_charter_with_archetype(charter_dict)`, `get_suggested_tool_baseline(domain_id, archetype_id, sfia_codes)`
 
-- [ ] **Step 1: Write failing tests for domain packs and charter validation**
+- [x] **Step 1: Write failing tests for domain packs and charter validation**
 Create `tests/test_domain_packs.py` asserting:
 1. `software.json`, `hitchcock.json`, and `rxcc.json` load with valid structure (domain metadata, lifecycle stages, suggested tool baselines).
 2. `get_suggested_tool_baseline` returns suggestions marked strictly `requires_confirmation=True`.
 3. `synlynk/charter_schema.py` validates `primary_archetype`, optional `secondary_hat`, and enforces `domain_autonomy_caps`.
 
-- [ ] **Step 2: Run tests to confirm failure**
+- [x] **Step 2: Run tests to confirm failure**
 Run `pytest tests/test_domain_packs.py tests/test_charter_schema_archetypes.py`.
 
-- [ ] **Step 3: Implement domain packs and charter schema updates**
+- [x] **Step 3: Implement domain packs and charter schema updates**
 1. Create `synlynk/domain_packs/{software,hitchcock,rxcc}.json` with domain-specific lifecycle definitions and suggested tools.
 2. Implement `synlynk/domain_packs.py` with loader and suggestion resolver.
 3. Update `synlynk/charter_schema.py` to validate archetypes, secondary hats, and domain caps.
 
-- [ ] **Step 4: Run tests and confirm passing**
+- [x] **Step 4: Run tests and confirm passing**
 Run `pytest tests/test_domain_packs.py tests/test_charter_schema_archetypes.py -v`.
 
-- [ ] **Step 5: Commit changes**
+- [x] **Step 5: Commit changes**
 `git add synlynk/domain_packs* synlynk/charter_schema.py tests/test_domain_packs.py tests/test_charter_schema_archetypes.py && git commit -m "feat(domain_packs): add versioned domain packs and archetype charter validation"`
 
 ---
@@ -105,7 +105,7 @@ Run `pytest tests/test_domain_packs.py tests/test_charter_schema_archetypes.py -
 - Consumes: `synlynk.db._get_db()`, `synlynk.sentinel`
 - Produces: `get_agent_autonomy_level(agent_id)`, `promote_agent_autonomy(agent_id, target_level, authorized_by)`, `demote_agent_autonomy(agent_id, reason, tripped_by)`
 
-- [ ] **Step 1: Write failing tests for Autonomy Ladder and circuit breakers**
+- [x] **Step 1: Write failing tests for Autonomy Ladder and circuit breakers**
 Create `tests/test_autonomy_ladder.py` asserting:
 1. Default autonomy level is `L1_ADVISORY`.
 2. Agent self-promotion is rejected; promotion requires explicit `authorized_by="human"`.
@@ -113,10 +113,10 @@ Create `tests/test_autonomy_ladder.py` asserting:
 4. Only `@tpm` is eligible for `L3_AUTONOMOUS` in `v0.31.0`.
 5. Sentinel tripwire (`TOKEN_CIRCUIT_BREAKER_TRIPPED` or 2x QA verification failure) immediately demotes agent from L3 to L2 and records event in `rsi_evaluations`.
 
-- [ ] **Step 2: Run tests to confirm failure**
+- [x] **Step 2: Run tests to confirm failure**
 Run `pytest tests/test_autonomy_ladder.py`.
 
-- [ ] **Step 3: Implement `synlynk/autonomy.py` and Sentinel integration**
+- [x] **Step 3: Implement `synlynk/autonomy.py` and Sentinel integration**
 Implement:
 1. `AutonomyLevel` enum: `L1_ADVISORY`, `L2_GATED`, `L3_AUTONOMOUS`.
 2. `promote_agent_autonomy` with cryptographic/human-signed validation.
@@ -124,10 +124,10 @@ Implement:
 4. Hook in `synlynk/sentinel.py` calling demotion when circuit breakers trip.
 5. CLI subcommand: `synlynk autonomy {status,promote,demote}`.
 
-- [ ] **Step 4: Run tests and verify pass**
+- [x] **Step 4: Run tests and verify pass**
 Run `pytest tests/test_autonomy_ladder.py -v`.
 
-- [ ] **Step 5: Commit changes**
+- [x] **Step 5: Commit changes**
 `git add synlynk/autonomy.py synlynk/sentinel.py synlynk/cli.py tests/test_autonomy_ladder.py && git commit -m "feat(autonomy): implement 3-tier autonomy ladder and sentinel circuit breakers"`
 
 ---
@@ -143,25 +143,25 @@ Run `pytest tests/test_autonomy_ladder.py -v`.
 - Consumes: `synlynk.autonomy.get_agent_autonomy_level("tpm")`
 - Produces: `run_tpm_wake_cycle(dry_run=False)` honoring L1, L2, and L3 autonomy levels
 
-- [ ] **Step 1: Write failing tests for TPM autonomy levels**
+- [x] **Step 1: Write failing tests for TPM autonomy levels**
 Create `tests/test_tpm_autonomy.py` asserting:
 1. In `L1_ADVISORY`: TPM ingests raw issues, clusters them, outputs status proposal, but executes zero dispatch and creates zero PR branches.
 2. In `L2_GATED`: TPM ingests issues, drafts reproduction specs, marks tasks ready, but requires human approval before invoking `dispatch_agent`.
 3. In `L3_AUTONOMOUS`: TPM autonomously dispatches ready waves for routine tier-1/tier-2 tasks, halting only on hard gates (missing goal, tier-3 ambiguity).
 
-- [ ] **Step 2: Run tests to confirm failure**
+- [x] **Step 2: Run tests to confirm failure**
 Run `pytest tests/test_tpm_autonomy.py`.
 
-- [ ] **Step 3: Update `synlynk/tpm_sweep.py`**
+- [x] **Step 3: Update `synlynk/tpm_sweep.py`**
 Inspect TPM's configured autonomy level from `synlynk/autonomy.py`:
 - In L1: Skip `run_sweep_pass()` and emit structured JSON proposal summary.
 - In L2: Generate approval tickets before dispatching.
 - In L3: Autonomously dispatch ready stories.
 
-- [ ] **Step 4: Run tests and verify pass**
+- [x] **Step 4: Run tests and verify pass**
 Run `pytest tests/test_tpm_autonomy.py -v`.
 
-- [ ] **Step 5: Commit changes**
+- [x] **Step 5: Commit changes**
 `git add synlynk/tpm_sweep.py tests/test_tpm_autonomy.py && git commit -m "feat(tpm): wire TPM wake cycle into 3-tier autonomy engine"`
 
 ---
@@ -178,25 +178,25 @@ Run `pytest tests/test_tpm_autonomy.py -v`.
 - Consumes: `synlynk.archetypes.list_archetypes()`, `synlynk.db._get_db()`
 - Produces: `generate_organogram_html(data, port)`, routes `/w/<slug>/organogram` and `/w/<slug>/api/organogram`
 
-- [ ] **Step 1: Write failing tests for Organogram view rendering and API**
+- [x] **Step 1: Write failing tests for Organogram view rendering and API**
 Create `tests/test_viz_organogram.py` asserting:
 1. `/w/<slug>/organogram` returns valid offline HTML5/SVG without external CDN scripts.
 2. Renders nodes with Archetype badges, SFIA tags, and Autonomy levels.
 3. Renders workflow edges (`delegation`, `review_gate`).
 4. `/w/<slug>/api/organogram` returns JSON graph topology.
 
-- [ ] **Step 2: Run tests to confirm failure**
+- [x] **Step 2: Run tests to confirm failure**
 Run `pytest tests/test_viz_organogram.py`.
 
-- [ ] **Step 3: Implement `synlynk/viz/organogram.py` and register routes in `server.py`**
+- [x] **Step 3: Implement `synlynk/viz/organogram.py` and register routes in `server.py`**
 1. Implement offline SVG-based tree/graph layout in `synlynk/viz/organogram.py`.
 2. Add inspection drawer with live charter viewing, suggested tool confirmation checkboxes, and autonomy level indicator.
 3. Register route `/organogram` in `synlynk/viz/server.py` and add to `synlynk/viz/nav.py`.
 
-- [ ] **Step 4: Run tests and verify pass**
+- [x] **Step 4: Run tests and verify pass**
 Run `pytest tests/test_viz_organogram.py -v`.
 
-- [ ] **Step 5: Commit changes**
+- [x] **Step 5: Commit changes**
 `git add synlynk/viz/organogram.py synlynk/viz/server.py synlynk/viz/nav.py tests/test_viz_organogram.py && git commit -m "feat(vizor): add offline-first organogram and workflow inspector"`
 
 ---
@@ -210,18 +210,18 @@ Run `pytest tests/test_viz_organogram.py -v`.
 **Interfaces:**
 - Validates the entire pipeline from Archetype schema $\to$ Domain pack $\to$ Autonomy ladder $\to$ TPM execution $\to$ Vizor projection.
 
-- [ ] **Step 1: Write End-to-End integration test suite**
+- [x] **Step 1: Write End-to-End integration test suite**
 Create `tests/test_fleet_orchestrator_e2e.py` validating:
 1. Non-regression: All 10 existing software roles (`pm`, `architect`, `tpm`, `dev`, `designer`, `qa`, `marketing`, `maintainer`, `secops`, `infra-devops`) initialize and validate properly.
 2. Domain pack loading for non-software domains (`hitchcock`, `rxcc`).
 3. Autonomous demotion drill: Simulating a token runaway event triggers Sentinel and successfully demotes TPM from L3 to L2.
 4. Human authorization barrier: Unverified promotion attempts fail closed.
 
-- [ ] **Step 2: Run the full test suite**
+- [x] **Step 2: Run the full test suite**
 Run `pytest tests/test_archetypes.py tests/test_domain_packs.py tests/test_autonomy_ladder.py tests/test_tpm_autonomy.py tests/test_viz_organogram.py tests/test_fleet_orchestrator_e2e.py -v`.
 
-- [ ] **Step 3: Run existing regression tests**
+- [x] **Step 3: Run existing regression tests**
 Run `pytest tests/test_charter_schema.py tests/test_support_engineer.py tests/test_tpm_sweep.py -v` to confirm zero regression on existing fleet operations.
 
-- [ ] **Step 4: Commit changes**
+- [x] **Step 4: Commit changes**
 `git add tests/test_fleet_orchestrator_e2e.py && git commit -m "test(fleet): add end-to-end integration test suite and non-regression verification"`
