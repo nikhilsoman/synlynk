@@ -108,6 +108,56 @@ def _open_product_db(
     return conn, slug
 
 
+def _build_goal_cards(conn: sqlite3.Connection, story_rows: list, goal_id: Optional[str] = None) -> list:
+    """Query active living goals to populate the 'goal' stage on GOVERNS boards."""
+    goal_cols = _columns(conn, "goals")
+    goal_cards = []
+    if not {"goal_id", "outcome"}.issubset(goal_cols):
+        return goal_cards
+
+    g_cols = ["goal_id", "outcome"]
+    for col in ("criterion", "status", "kind", "created_at"):
+        if col in goal_cols:
+            g_cols.append(col)
+    where_clause = " WHERE status = 'active'" if "status" in goal_cols else ""
+    try:
+        g_rows = conn.execute(f"SELECT {', '.join(g_cols)} FROM goals{where_clause}").fetchall()
+    except Exception:
+        g_rows = []
+
+    # Story counts per goal
+    story_counts: dict = {}
+    for r in story_rows:
+        r_dict = dict(r) if not isinstance(r, dict) else r
+        gid = r_dict.get("goal_id")
+        if gid:
+            story_counts[gid] = story_counts.get(gid, 0) + 1
+
+    for grow in g_rows:
+        gdict = dict(grow)
+        gid = gdict["goal_id"]
+        if goal_id and gid != goal_id:
+            continue
+        gcard = {
+            "story_id": gid,
+            "title": gdict.get("outcome") or gid,
+            "status": "ready" if story_counts.get(gid, 0) > 0 else "open",
+            "governs_stage": "goal",
+            "stage": "goal",
+            "repo_id": None,
+            "repo_name": "Living Goal",
+            "type_id": gdict.get("kind") or "feature",
+            "goal_id": gid,
+            "is_goal": True,
+            "criterion": gdict.get("criterion") or "",
+            "linked_stories_count": story_counts.get(gid, 0),
+            "tracker": None,
+            "pr_url": None,
+        }
+        goal_cards.append(gcard)
+    return goal_cards
+
+
 def board_data(
     repo_path: str = ".",
     *,
@@ -164,50 +214,7 @@ def board_data(
             cards.append(item)
 
         # Query active living goals to populate the 'goal' stage
-        goal_cols = _columns(conn, "goals")
-        goal_cards = []
-        if {"goal_id", "outcome"}.issubset(goal_cols):
-            g_cols = ["goal_id", "outcome"]
-            for col in ("criterion", "status", "kind", "created_at"):
-                if col in goal_cols:
-                    g_cols.append(col)
-            where_clause = " WHERE status = 'active'" if "status" in goal_cols else ""
-            try:
-                g_rows = conn.execute(f"SELECT {', '.join(g_cols)} FROM goals{where_clause}").fetchall()
-            except Exception:
-                g_rows = []
-
-            # Story counts per goal
-            story_counts: dict[str, int] = {}
-            for r in rows:
-                r_dict = dict(r)
-                gid = r_dict.get("goal_id")
-                if gid:
-                    story_counts[gid] = story_counts.get(gid, 0) + 1
-
-            for grow in g_rows:
-                gdict = dict(grow)
-                gid = gdict["goal_id"]
-                if goal_id and gid != goal_id:
-                    continue
-                gcard = {
-                    "story_id": gid,
-                    "title": gdict.get("outcome") or gid,
-                    "status": "ready" if story_counts.get(gid, 0) > 0 else "open",
-                    "governs_stage": "goal",
-                    "stage": "goal",
-                    "repo_id": None,
-                    "repo_name": "Living Goal",
-                    "type_id": gdict.get("kind") or "feature",
-                    "goal_id": gid,
-                    "is_goal": True,
-                    "criterion": gdict.get("criterion") or "",
-                    "linked_stories_count": story_counts.get(gid, 0),
-                    "tracker": None,
-                    "pr_url": None,
-                }
-                goal_cards.append(gcard)
-
+        goal_cards = _build_goal_cards(conn, rows, goal_id=goal_id)
         cards = goal_cards + cards
         all_rows = [dict(row) for row in rows]
         filters = {
@@ -324,7 +331,8 @@ def board_data_for_context(
             params.append(goal_id)
 
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        query = f"SELECT * FROM stories {where} ORDER BY id DESC"
+        order_col = "id" if "id" in story_cols else ("created_at" if "created_at" in story_cols else "story_id")
+        query = f"SELECT * FROM stories {where} ORDER BY {order_col} DESC"
         rows = conn.execute(query, params).fetchall()
 
         cards = []
@@ -359,6 +367,12 @@ def board_data_for_context(
                 "pr_url": None,
             })
 
+        goal_cards = _build_goal_cards(conn, rows, goal_id=goal_id)
+        cards = goal_cards + cards
+        for g in goal_cards:
+            if g.get("goal_id"):
+                goals.add(g["goal_id"])
+
         return {
             "identity_slug": ctx.slug,
             "cards": cards,
@@ -368,6 +382,7 @@ def board_data_for_context(
                 "goals": sorted(list(goals)),
             },
             "statuses": list(BOARD_STATUSES),
+            "governs_stages": list(GOVERNS_STAGES),
             "governs_stages": list(GOVERNS_STAGES),
         }
     finally:

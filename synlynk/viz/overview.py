@@ -40,17 +40,47 @@ def generate_overview_html(data: dict, port: int) -> str:
             '</div>'
         )
 
+    def _format_age_label(ts_str: str) -> str:
+        if not ts_str:
+            return ""
+        from datetime import datetime, timezone
+        try:
+            clean = str(ts_str).strip().replace(" UTC", "").replace("Z", "")
+            dt = None
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d"):
+                try:
+                    dt = datetime.strptime(clean, fmt).replace(tzinfo=timezone.utc)
+                    break
+                except Exception:
+                    pass
+            if not dt:
+                return ""
+            diff = max(0.0, (datetime.now(timezone.utc) - dt).total_seconds())
+            if diff < 60:
+                return "just now"
+            if diff < 3600:
+                return f"{int(diff // 60)}m ago"
+            if diff < 86400:
+                return f"{int(diff // 3600)}h ago"
+            return f"{int(diff // 86400)}d ago"
+        except Exception:
+            return ""
+
     def _member_button(member: dict, index: int, code: str, section: str) -> str:
         sev = str(member.get("severity") or "WARNING").upper()
         pattern = member.get("pattern") or ""
         raw_msg = member.get("message") or "Sentinel alert active"
         msg = f"{pattern}: {raw_msg}" if pattern and not str(raw_msg).startswith(str(pattern)) else raw_msg
-        ts = str(member.get("ts") or "")
+        ts = str(member.get("last_seen") or member.get("ts") or member.get("first_seen") or "")
+        age = _format_age_label(ts)
+        age_html = f'<span class="alert-age" title="{html.escape(ts)}">{html.escape(age)}</span>' if age else ""
+        ts_html = f'<span class="alert-ts">{html.escape(ts)}</span>' if ts else ""
         return (
             f'<div class="sentinel-member"><div class="alert-item {_sev_class(sev)}">'
             f'<span class="alert-pill">{html.escape(sev)}</span>'
             f'<span class="alert-msg">{html.escape(str(msg))}</span>'
-            f'<span class="alert-ts">{html.escape(ts)}</span>'
+            f'{age_html}'
+            f'{ts_html}'
             f'</div>{_action_buttons("occurrence", code, index, section)}</div>'
         )
 
@@ -65,14 +95,21 @@ def generate_overview_html(data: dict, port: int) -> str:
             index += 1
         hidden = int(group.get("hidden_member_count") or 0)
         more = f'<div class="sentinel-more">{hidden} more</div>' if hidden else ""
+        first_seen = str(group.get("first_seen") or "")
+        last_seen = str(group.get("last_seen") or "")
+        last_age = _format_age_label(last_seen)
+        age_html = f'<span class="alert-age" title="last seen: {html.escape(last_seen)}">{html.escape(last_age)}</span>' if last_age else ""
+        first_html = f'<span class="alert-ts" title="first seen">first: {html.escape(first_seen)}</span>' if first_seen else ""
+        last_html = f'<span class="alert-ts" title="last seen">last: {html.escape(last_seen)}</span>' if last_seen else ""
         block = (
             f'<details class="sentinel-group" data-sentinel-group="{html.escape(code)}"{open_attr}>'
             f'<summary class="alert-item {_sev_class(sev)}">'
             f'<span class="alert-pill">{html.escape(sev)}</span>'
             f'<span class="sentinel-code">{html.escape(code)}</span>'
             f'<span class="sentinel-count">{int(group.get("count") or 0)}</span>'
-            f'<span class="alert-ts">first seen {html.escape(str(group.get("first_seen") or ""))}</span>'
-            f'<span class="alert-ts">last seen {html.escape(str(group.get("last_seen") or ""))}</span>'
+            f'{age_html}'
+            f'{first_html}'
+            f'{last_html}'
             f'{_action_buttons("pattern", code, section=section)}'
             f'</summary>'
             f'<div class="sentinel-members">{"".join(buttons)}{more}</div>'
@@ -275,6 +312,9 @@ def generate_overview_html(data: dict, port: int) -> str:
     .alert-item.sev-crit { border-left: 3px solid #ef4444; }
     .alert-item.sev-warn { border-left: 3px solid #f59e0b; }
     .alert-pill { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; background: rgba(0,0,0,0.2); }
+    .sentinel-code { font-weight: 700; color: var(--text); }
+    .sentinel-count { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--bg3); border: 1px solid var(--border2); color: var(--text2); }
+    .alert-age { color: var(--text2); font-size: 11px; font-weight: 600; background: var(--bg3); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border2); white-space: nowrap; margin-left: auto; }
     .alert-msg { flex: 1; word-break: break-word; }
     .alert-ts { color: var(--text3); font-size: 11px; font-family: var(--font-mono); }
     button.alert-item { width: 100%; text-align: left; color: inherit; font: inherit; cursor: pointer; border: 0; }
@@ -605,6 +645,22 @@ def generate_overview_html(data: dict, port: int) -> str:
               if (!list) return;
               list.textContent = '';
               let alertIndex = 0;
+              function formatAge(ts) {
+                if (!ts) return '';
+                try {
+                  var clean = String(ts).replace(' UTC', 'Z').replace(' ', 'T');
+                  if (!clean.endsWith('Z') && !clean.includes('+')) clean += 'Z';
+                  var d = new Date(clean);
+                  if (isNaN(d.getTime())) return '';
+                  var diff = Math.max(0, (Date.now() - d.getTime()) / 1000);
+                  if (diff < 60) return 'just now';
+                  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+                  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+                  return Math.floor(diff / 86400) + 'd ago';
+                } catch (e) {
+                  return '';
+                }
+              }
               function appendMembers(parent, group, section) {
                 (group.members || []).forEach(function (alert) {
                   const wrap = document.createElement('div');
@@ -614,7 +670,35 @@ def generate_overview_html(data: dict, port: int) -> str:
                   row.className = 'alert-item ' + ((sev === 'CRITICAL' || sev === 'CRIT') ? 'sev-crit' : 'sev-warn');
                   const currentIndex = alertIndex;
                   alertIndex += 1;
-                  row.textContent = (alert.severity || '') + ' ' + (alert.pattern || '') + ' ' + (alert.message || '');
+
+                  const pill = document.createElement('span');
+                  pill.className = 'alert-pill';
+                  pill.textContent = sev;
+                  row.appendChild(pill);
+
+                  const msg = document.createElement('span');
+                  msg.className = 'alert-msg';
+                  const pat = alert.pattern || '';
+                  const mText = alert.message || '';
+                  msg.textContent = pat && !mText.startsWith(pat) ? (pat + ': ' + mText) : mText;
+                  row.appendChild(msg);
+
+                  const tsVal = alert.last_seen || alert.ts || alert.first_seen || '';
+                  if (tsVal) {
+                    const ageVal = formatAge(tsVal);
+                    if (ageVal) {
+                      const ageSpan = document.createElement('span');
+                      ageSpan.className = 'alert-age';
+                      ageSpan.textContent = ageVal;
+                      ageSpan.title = tsVal;
+                      row.appendChild(ageSpan);
+                    }
+                    const tsSpan = document.createElement('span');
+                    tsSpan.className = 'alert-ts';
+                    tsSpan.textContent = tsVal;
+                    row.appendChild(tsSpan);
+                  }
+
                   wrap.appendChild(row);
                   appendActions(wrap, 'occurrence', group.code || '', currentIndex, section);
                   parent.appendChild(wrap);
@@ -642,7 +726,40 @@ def generate_overview_html(data: dict, port: int) -> str:
                 details.setAttribute('data-sentinel-group', group.code || '');
                 if (!group.collapsed) details.open = true;
                 const summary = document.createElement('summary');
-                summary.textContent = (group.severity || '') + ' ' + (group.code || '') + ' ' + String(group.count || 0);
+                const sev = String(group.severity || 'WARNING').toUpperCase();
+                summary.className = 'alert-item ' + ((sev === 'CRITICAL' || sev === 'CRIT') ? 'sev-crit' : 'sev-warn');
+
+                const pill = document.createElement('span');
+                pill.className = 'alert-pill';
+                pill.textContent = sev;
+                summary.appendChild(pill);
+
+                const codeSpan = document.createElement('span');
+                codeSpan.className = 'sentinel-code';
+                codeSpan.textContent = group.code || '';
+                summary.appendChild(codeSpan);
+
+                const countSpan = document.createElement('span');
+                countSpan.className = 'sentinel-count';
+                countSpan.textContent = String(group.count || 0);
+                summary.appendChild(countSpan);
+
+                const lastSeen = group.last_seen || '';
+                if (lastSeen) {
+                  const age = formatAge(lastSeen);
+                  if (age) {
+                    const ageSpan = document.createElement('span');
+                    ageSpan.className = 'alert-age';
+                    ageSpan.textContent = age;
+                    ageSpan.title = 'last seen: ' + lastSeen;
+                    summary.appendChild(ageSpan);
+                  }
+                  const lastSpan = document.createElement('span');
+                  lastSpan.className = 'alert-ts';
+                  lastSpan.textContent = 'last: ' + lastSeen;
+                  summary.appendChild(lastSpan);
+                }
+
                 appendActions(summary, 'pattern', group.code || '', null, 'active');
                 details.appendChild(summary);
                 appendMembers(details, group, 'active');
@@ -659,7 +776,35 @@ def generate_overview_html(data: dict, port: int) -> str:
                 details.setAttribute('data-sentinel-group', group.code || '');
                 if (!group.collapsed) details.open = true;
                 const summary = document.createElement('summary');
-                summary.textContent = (group.severity || '') + ' ' + (group.code || '');
+                const sev = String(group.severity || 'INFO').toUpperCase();
+                summary.className = 'alert-item ' + ((sev === 'CRITICAL' || sev === 'CRIT') ? 'sev-crit' : 'sev-warn');
+
+                const pill = document.createElement('span');
+                pill.className = 'alert-pill';
+                pill.textContent = sev;
+                summary.appendChild(pill);
+
+                const codeSpan = document.createElement('span');
+                codeSpan.className = 'sentinel-code';
+                codeSpan.textContent = group.code || '';
+                summary.appendChild(codeSpan);
+
+                const countSpan = document.createElement('span');
+                countSpan.className = 'sentinel-count';
+                countSpan.textContent = String(group.count || 0);
+                summary.appendChild(countSpan);
+
+                const lastSeen = group.last_seen || '';
+                if (lastSeen) {
+                  const age = formatAge(lastSeen);
+                  if (age) {
+                    const ageSpan = document.createElement('span');
+                    ageSpan.className = 'alert-age';
+                    ageSpan.textContent = age;
+                    summary.appendChild(ageSpan);
+                  }
+                }
+
                 appendActions(summary, 'pattern', group.code || '', null, 'acked');
                 details.appendChild(summary);
                 appendMembers(details, group, 'acked');

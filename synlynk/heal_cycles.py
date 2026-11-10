@@ -102,10 +102,11 @@ def _create_story_safe(
             import uuid
             conn = _get_db()
             story_id = f"story-cycle-{uuid.uuid4().hex[:8]}"
+            import json
             conn.execute(
-                "INSERT INTO stories (story_id, title, description, criteria, status, priority) "
+                "INSERT INTO stories (story_id, title, body, acceptance_criteria, status, priority) "
                 "VALUES (?, ?, ?, ?, 'ready', ?)",
-                (story_id, title, description, criteria, priority),
+                (story_id, title, description, json.dumps([criteria] if isinstance(criteria, str) else list(criteria)), priority),
             )
             from synlynk.governs_engine import associate_story
             associate_story(

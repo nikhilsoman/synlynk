@@ -102,9 +102,9 @@ def create_orphan_stories(orphans: list[dict[str, Any]]) -> list[str]:
         )
         criteria = f"- Decide whether `{orphan['label']}` stays, or remove the dead symbol."
         conn.execute(
-            "INSERT INTO stories (story_id, title, description, criteria, status, priority) "
-            "VALUES (?, ?, ?, ?, 'ready', 'p2')",
-            (story_id, title, description, criteria),
+            "INSERT INTO stories (story_id, title, body, acceptance_criteria, status, priority) "
+            "VALUES (?, ?, ?, ?, 'ready', 2)",
+            (story_id, title, description, json.dumps([criteria])),
         )
         created.append(story_id)
     conn.commit()
