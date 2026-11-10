@@ -3,7 +3,8 @@
   "displayName": "Synlynk Multi-Agent Engineering",
   "description": "Multi-agent orchestration, leased worktree isolation, adversarial verification, and goal tracking for Synlynk.",
   "version": "0.31.0",
-  "publisher": "synlynk",
+  "publisher": "SynlynkAI",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/nikhilsoman/synlynk"
