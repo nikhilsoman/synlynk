@@ -234,6 +234,7 @@ state.
 - `identity show` — open
 - `identity whoami` — open
 - `identity triplet` — open
+- `identity revoke` — sustain
 - `relay peer list` — sustain
 - `relay peer add` — sustain
 - `events tail` — sustain
