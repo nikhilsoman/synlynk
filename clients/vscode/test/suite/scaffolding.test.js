@@ -18,7 +18,8 @@ describe("Scaffolding & Manifest Validation", () => {
     const pkg = readManifest();
 
     assert.equal(pkg.name, "synlynk-vscode");
-    assert.equal(pkg.publisher, "synlynk");
+    assert.equal(pkg.publisher, "SynlynkAI");
+    assert.equal(pkg.license, "Apache-2.0");
     assert.equal(pkg.version, "0.31.0");
     assert.equal(pkg.main, "./extension.js");
     assert.equal(pkg.engines.vscode, "^1.85.0");
