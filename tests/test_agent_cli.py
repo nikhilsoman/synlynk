@@ -3705,7 +3705,7 @@ def test_featonboarding_implement_zerorisk_dirty_worktree_and_first_win__story_7
 
     assert t_elapsed < 5.0
     assert init_res["elapsed_seconds"] < 5.0
-    assert len(init_res["charters_provisioned"]) == 8
+    assert len(init_res["charters_provisioned"]) == len(SEED_CHARTERS)
     assert "dev" in init_res["charters_provisioned"]
     assert "qa" in init_res["charters_provisioned"]
     assert "pm" in init_res["charters_provisioned"]

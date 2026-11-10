@@ -642,6 +642,8 @@ COMMAND_TAXONOMY = [
      "orientation_gateway": False, "audience": "pilot", "trigger_phrases": [], "hook_event": None},
     {"command": "identity triplet", "governs_stage": "open", "maturity_tier": "latent", "prominence": None,
      "orientation_gateway": False, "audience": "pilot", "trigger_phrases": [], "hook_event": None},
+    {"command": "identity revoke", "governs_stage": "sustain", "maturity_tier": "latent", "prominence": None,
+     "orientation_gateway": False, "audience": "pilot", "trigger_phrases": [], "hook_event": None},
     {"command": "relay hub init", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human", "trigger_phrases": [], "hook_event": None},
     {"command": "relay hub connect", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
