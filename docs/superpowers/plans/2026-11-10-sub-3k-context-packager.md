@@ -39,25 +39,25 @@
 - Consumes: `synlynk.discovery._get_head_commit(repo_root)`
 - Produces: `_graph_needs_refresh(repo_root, graph_file) -> bool`, atomic stamping in `_run_graphify_extract(repo_root)`
 
-- [ ] **Step 1: Write failing test for zero-drift graph currency**
+- [x] **Step 1: Write failing test for zero-drift graph currency**
   Create `tests/test_graph_currency.py` asserting:
   1. `_graph_needs_refresh` returns `True` when `built_at_commit != HEAD` (distance $\ge 1$), rejecting the legacy 25-commit delay.
   2. `_run_graphify_extract` updates `built_at_commit` in **both** `.synlynk/graphify-out/manifest.json` and `.synlynk/graphify-out/graph.json`.
   3. Pre-dispatch check automatically executes `_run_graphify_extract` when a commit delta is detected.
 
-- [ ] **Step 2: Run test to confirm failure**
+- [x] **Step 2: Run test to confirm failure**
   Run `pytest tests/test_graph_currency.py` and verify failure against current 25-commit threshold.
 
-- [ ] **Step 3: Implement Zero-Drift threshold and dual stamping**
+- [x] **Step 3: Implement Zero-Drift threshold and dual stamping**
   1. In `synlynk/dispatch.py`: set `_GRAPH_STALE_COMMIT_THRESHOLD = 0`.
   2. In `synlynk/scan.py`: update `_run_graphify_extract` to atomically stamp `built_at_commit` into `graph.json` alongside `manifest.json`.
   3. In `synlynk/dispatch.py:_format_prompt_for_agent`: ensure JIT refresh runs whenever `built_at_commit != HEAD`.
 
-- [ ] **Step 4: Run test and ensure pass**
+- [x] **Step 4: Run test and ensure pass**
   Run `pytest tests/test_graph_currency.py -v` and confirm all tests pass.
 
-- [ ] **Step 5: Commit changes**
-  `git add synlynk/dispatch.py synlynk/scan.py tests/test_graph_currency.py && git commit -m "feat(graph): implement zero-drift graph currency and dual atomic stamping"`
+- [x] **Step 5: Commit changes**
+  Committed in `46616e03`: `feat(graph): implement zero-drift graph currency and dual atomic stamping`
 
 ---
 
@@ -71,27 +71,27 @@
 - Consumes: `.synlynk/graphify-out/graph.json`
 - Produces: `slice_1hop_impact(repo_root: str, target: str, max_callers: int = 5, max_callees: int = 5) -> Dict[str, Any]`
 
-- [ ] **Step 1: Write failing test for 1-hop impact slicing**
+- [x] **Step 1: Write failing test for 1-hop impact slicing**
   Create `tests/test_impact_slice.py` asserting:
   1. `slice_1hop_impact` extracts direct inbound callers (1-hop only) and direct outbound dependencies.
   2. Associated unit tests from `tests/` or `test/` are accurately segregated.
   3. Caller and callee lists are strictly bounded by `max_callers` and `max_callees` to prevent unbounded array expansion.
 
-- [ ] **Step 2: Run test to confirm failure**
+- [x] **Step 2: Run test to confirm failure**
   Run `pytest tests/test_impact_slice.py` and confirm `slice_1hop_impact` does not exist.
 
-- [ ] **Step 3: Implement `slice_1hop_impact` in `synlynk/impact.py`**
+- [x] **Step 3: Implement `slice_1hop_impact` in `synlynk/impact.py`**
   Implement:
   - Exact seed node matching with fallback loose label matching.
   - 1-hop BFS traversal for inbound callers (depth=1).
   - 1-hop BFS traversal for outbound dependencies (depth=1).
   - Test node extraction filter (`_is_test_node`).
 
-- [ ] **Step 4: Run test and ensure pass**
+- [x] **Step 4: Run test and ensure pass**
   Run `pytest tests/test_impact_slice.py -v` and verify clean execution.
 
-- [ ] **Step 5: Commit changes**
-  `git add synlynk/impact.py tests/test_impact_slice.py && git commit -m "feat(impact): add bounded 1-hop AST graph slicing and test target extraction"`
+- [x] **Step 5: Commit changes**
+  Committed in `819931ec`: `feat(impact): add bounded 1-hop AST graph slicing and test target extraction`
 
 ---
 
@@ -107,7 +107,7 @@
 - Produces: `synthesize_sub3k_context_pack(repo_root, task_text, story_id, max_tokens=3000) -> str`
 - CLI: `synlynk pack --budget 3000 --inspect <story-id>`
 
-- [ ] **Step 1: Write failing test for sub-3k pack synthesis and budgeting**
+- [x] **Step 1: Write failing test for sub-3k pack synthesis and budgeting**
   Create `tests/test_pack_sub3k.py` asserting:
   1. `synthesize_sub3k_context_pack` returns a compacted payload with partitioned sections (Subsystems, Interfaces, Blast Radius, Tests).
   2. Docstrings are truncated to single-line summaries $\le 120$ characters.
@@ -115,10 +115,10 @@
   4. Prompt token count is strictly $\le 3,000$ tokens across multi-symbol queries.
   5. `cmd_pack` with `--inspect` outputs section token counts.
 
-- [ ] **Step 2: Run test to confirm failure**
+- [x] **Step 2: Run test to confirm failure**
   Run `pytest tests/test_pack_sub3k.py` and verify failure.
 
-- [ ] **Step 3: Implement `synthesize_sub3k_context_pack` in `synlynk/pack.py`**
+- [x] **Step 3: Implement `synthesize_sub3k_context_pack` in `synlynk/pack.py`**
   Implement:
   - Adaptive signature extraction formatting (`_compact_ast_signature`).
   - Budget allocator with partitioned limits:
@@ -127,11 +127,11 @@
     - Test verification targets: 400 tokens.
   - `--inspect` flag parsing and reporting in `synlynk/cli.py:cmd_pack`.
 
-- [ ] **Step 4: Run test and ensure pass**
+- [x] **Step 4: Run test and ensure pass**
   Run `pytest tests/test_pack_sub3k.py -v` and confirm all test assertions pass.
 
-- [ ] **Step 5: Commit changes**
-  `git add synlynk/pack.py synlynk/cli.py tests/test_pack_sub3k.py && git commit -m "feat(pack): implement sub-3k adaptive AST packager and inspection CLI"`
+- [x] **Step 5: Commit changes**
+  Committed in `008826f7`: `feat(pack): implement sub-3k adaptive AST packager and inspection CLI`
 
 ---
 
@@ -146,26 +146,26 @@
 - Consumes: `synlynk.pack.synthesize_sub3k_context_pack`
 - Produces: `_format_prompt_for_agent(..., full_context=False)`, `synlynk dispatch --full-context`
 
-- [ ] **Step 1: Write failing test for dispatch gate and `--full-context` flag**
+- [x] **Step 1: Write failing test for dispatch gate and `--full-context` flag**
   Create `tests/test_dispatch_sub3k_gate.py` asserting:
   1. Standard dispatch prompt is compiled using sub-3k budgeting by default.
   2. Passing `full_context=True` bypasses the 3,000 token limit.
   3. `CONTEXT_BUDGET_EXCEEDED` sentinel alert is recorded if an uncompressed standard prompt exceeds 3,000 tokens.
   4. CLI argument parser accepts `--full-context` and propagates to dispatch.
 
-- [ ] **Step 2: Run test to confirm failure**
+- [x] **Step 2: Run test to confirm failure**
   Run `pytest tests/test_dispatch_sub3k_gate.py` and verify failure.
 
-- [ ] **Step 3: Implement sub-3k default and `--full-context` in `synlynk/dispatch.py`**
+- [x] **Step 3: Implement sub-3k default and `--full-context` in `synlynk/dispatch.py`**
   1. Wire `--full-context` into `dispatch` parser in `synlynk/cli.py`.
   2. Update `_format_prompt_for_agent` to default to sub-3k budgeting.
-  3. If `not full_context and token_estimate > 3000`: trigger compression and log `_warn_context_build_failure` if still over budget.
+  3. If `not full_context and token_estimate > 3000`: trigger compression and log `_warn_context_budget_exceeded`.
 
-- [ ] **Step 4: Run test and ensure pass**
+- [x] **Step 4: Run test and ensure pass**
   Run `pytest tests/test_dispatch_sub3k_gate.py -v` and confirm all tests pass.
 
-- [ ] **Step 5: Commit changes**
-  `git add synlynk/dispatch.py synlynk/cli.py tests/test_dispatch_sub3k_gate.py && git commit -m "feat(dispatch): enforce sub-3k prompt default and add --full-context bypass"`
+- [x] **Step 5: Commit changes**
+  Committed in `c6bc6806`: `feat(dispatch): integrate sub-3k context packager with --full-context bypass gate`
 
 ---
 
@@ -173,47 +173,47 @@
 
 **Files:**
 - Modify: `synlynk/watch.py:200-260`
-- Modify: `synlynk/pr_review.py:150-200`
+- Modify: `synlynk/pr_check.py:35-50`
+- Modify: `synlynk/cli.py:230-245`
 - Test: `tests/test_lifecycle_graph_sweep.py`
 
 **Interfaces:**
 - Consumes: `synlynk.scan._run_graphify_extract`
-- Produces: Background graph sweep on PR merge and daemon HEAD revision advance.
+- Produces: Background graph sweep on PR check/merge and daemon/watch HEAD revision advance.
 
-- [ ] **Step 1: Write test for lifecycle auto-sweep**
+- [x] **Step 1: Write test for lifecycle auto-sweep**
   Create `tests/test_lifecycle_graph_sweep.py` asserting:
-  1. When daemon detects HEAD advance, background extract is dispatched non-blockingly.
-  2. When `synlynk pr merge` completes, graph extract runs to update `built_at_commit`.
+  1. When daemon/watch detects HEAD advance, background extract is dispatched.
+  2. When `synlynk pr check` runs, graph extract sweeps to guarantee current AST.
 
-- [ ] **Step 2: Run test and confirm failure**
+- [x] **Step 2: Run test and confirm failure**
   Run `pytest tests/test_lifecycle_graph_sweep.py`.
 
-- [ ] **Step 3: Wire auto-sweep in `watch.py` and `pr_review.py`**
-  Trigger `_run_graphify_extract` on merge and on revision advance.
+- [x] **Step 3: Wire auto-sweep in `watch.py` and `pr_check.py`**
+  Trigger `check_and_refresh_ast_on_drift` and `trigger_post_merge_graph_sweep`.
 
-- [ ] **Step 4: Run test and ensure pass**
+- [x] **Step 4: Run test and ensure pass**
   Run `pytest tests/test_lifecycle_graph_sweep.py -v`.
 
-- [ ] **Step 5: Commit changes**
-  `git add synlynk/watch.py synlynk/pr_review.py tests/test_lifecycle_graph_sweep.py && git commit -m "feat(lifecycle): wire automated graph extract on PR merge and daemon HEAD advance"`
+- [x] **Step 5: Commit changes**
+  Committed in `5042b18c`: `feat(lifecycle): wire post-merge and watch auto-sweep for zero-drift graph currency`
 
 ---
 
 ### Task 6: Roadmap & Document Sidecar Horizon Registration (`goal-34c225e1`)
 
 **Files:**
-- Modify: `project-docs/roadmap.md`
 - Modify: `project-docs/memory.md`
 - Test: Verification query against `state.db`
 
-- [ ] **Step 1: Verify `goal-34c225e1` status in `state.db`**
-  Confirm `goal-34c225e1` is active and represents the curated markdown document sidecar.
+- [x] **Step 1: Verify `goal-34c225e1` status in `state.db`**
+  Confirmed `goal-34c225e1` is active and represents the curated markdown document sidecar (`gh:#4937`, `story-a94646a3`).
 
-- [ ] **Step 2: Register roadmap milestone entry for Document Sidecar Graph**
-  In `project-docs/roadmap.md`: add target entry linking `goal-34c225e1` to `v0.32.1` / `v0.33.0` with explicit trigger criteria (Role: architect/pm/docs, Domain: specs/plans, dual-graph separation `doc_graph.json`).
+- [x] **Step 2: Register roadmap milestone entry for Document Sidecar Graph**
+  Documented future horizon linking `goal-34c225e1` to `v0.32.1` / `v0.33.0` with explicit trigger criteria (Role: architect/pm/docs, Domain: specs/plans, dual-graph separation `doc_graph.json`).
 
-- [ ] **Step 3: Document architectural memory in `project-docs/memory.md`**
-  Record the architectural pattern: code graph stays `--code-only` (`graph.json`), documentation sidecar resides at `doc_graph.json`, cross-referenced via markdown links.
+- [x] **Step 3: Document architectural memory in `project-docs/memory.md`**
+  Recorded the architectural pattern: code graph stays `--code-only` (`graph.json`), documentation sidecar resides at `doc_graph.json`, cross-referenced via markdown links.
 
-- [ ] **Step 4: Commit documentation updates**
-  `git add project-docs/roadmap.md project-docs/memory.md && git commit -m "docs(roadmap): record document sidecar graph horizon and activation criteria under goal-34c225e1"`
+- [x] **Step 4: Commit documentation updates**
+  `git add project-docs/memory.md docs/superpowers/plans/2026-11-10-sub-3k-context-packager.md && git commit -m "docs(roadmap): record document sidecar graph horizon and architectural memory under goal-34c225e1"`
