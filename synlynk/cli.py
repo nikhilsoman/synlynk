@@ -1378,6 +1378,10 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         dest="context_mode", help="Context injection mode"
     )
     dispatch_parser.add_argument(
+        "--full-context", action="store_true", dest="full_context",
+        help="Bypass 3k token budget ceiling and inject full uncompacted context",
+    )
+    dispatch_parser.add_argument(
         "--skip-preflight", action="store_true", dest="skip_preflight",
         help="Bypass harness preflight checks"
     )
@@ -3035,6 +3039,7 @@ def main(argv=None) -> None:
                                  gh_write_expect=getattr(args, "gh_write_expect", None),
                                  requires=getattr(args, "requires", []),
                                  context_mode=getattr(args, "context_mode", "task"),
+                                 full_context=getattr(args, "full_context", False),
                                  skip_preflight=getattr(args, "skip_preflight", False),
                                  skip_permissions=getattr(args, "skip_permissions", False),
                                  container_image=getattr(args, "container_image", None),

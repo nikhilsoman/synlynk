@@ -2747,6 +2747,8 @@ _PR_REVIEW_RETRY_GUARD = (
 _GRAPH_STALE_COMMIT_THRESHOLD = 0
 _GRAPH_STALE_MTIME_SECONDS = 7 * 24 * 60 * 60
 _CONTEXT_BUILD_SENTINEL_CODE = "CONTEXT_BUILD_DEGRADED"
+_CONTEXT_BUDGET_EXCEEDED_CODE = "CONTEXT_BUDGET_EXCEEDED"
+
 
 
 def _read_graph_built_at_commit(repo_root: str) -> str:
@@ -2844,6 +2846,32 @@ def _warn_context_build_failure(step: str, reason: str, repo_root: str) -> None:
             f"({type(exc).__name__}: {exc})",
             file=sys.stderr,
         )
+
+
+def _warn_context_budget_exceeded(tokens: int, limit: int, repo_root: str) -> None:
+    """Log a budget exceeded warning and record a sentinel alert."""
+    message = (
+        f"dispatch context payload ({tokens} tokens) exceeds standard budget ({limit} tokens). "
+        "Use --full-context to bypass the budget limit."
+    )
+    print(f"  ⚠ context budget: {message}", file=sys.stderr)
+    sentinel_path = os.path.join(repo_root, ".synlynk", "sentinel.md")
+    try:
+        from synlynk.sentinel import _write_sentinel_alert
+
+        _write_sentinel_alert(
+            "WARN",
+            _CONTEXT_BUDGET_EXCEEDED_CODE,
+            message,
+            sentinel_path=sentinel_path,
+        )
+    except Exception as exc:
+        print(
+            f"  ⚠ context budget: could not record sentinel alert "
+            f"({type(exc).__name__}: {exc})",
+            file=sys.stderr,
+        )
+
 
 
 # Verbose pytest output is resent as cache-hit input on every later tool
@@ -2974,7 +3002,8 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
                               task_sha256: Optional[str] = None,
                               instruction_file: Optional[str] = None,
                               role: Optional[str] = None,
-                              *, requires_gh_write: bool = False) -> str:
+                              *, requires_gh_write: bool = False,
+                              full_context: bool = False) -> str:
     """Returns a prompt formatted for the agent's preferred input style."""
     requires_gh_write = bool(
         requires_gh_write or _task_requires_gh_write(task)
@@ -3002,8 +3031,15 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
                 repo_root,
             )
     try:
-        from synlynk.pack import synthesize_context_pack
-        pack_text = synthesize_context_pack(repo_root, task_text=task, story_id=story_id)
+        if full_context:
+            from synlynk.pack import synthesize_context_pack
+            pack_text = synthesize_context_pack(repo_root, task_text=task, story_id=story_id)
+        else:
+            from synlynk.pack import synthesize_sub3k_context_pack
+            pack_text = synthesize_sub3k_context_pack(repo_root, task_text=task, story_id=story_id, max_tokens=3000)
+            if not pack_text:
+                from synlynk.pack import synthesize_context_pack
+                pack_text = synthesize_context_pack(repo_root, task_text=task, story_id=story_id, token_budget=3000)
         if pack_text:
             context_text = f"{context_text}\n\n{pack_text}" if context_text else pack_text
     except Exception as exc:
@@ -3025,6 +3061,10 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
         except Exception:
             # Keep legacy workspaces dispatchable before agent-store adoption.
             pass
+    if not full_context and context_text:
+        tokens_est = len(context_text) // 4
+        if tokens_est > 3000:
+            _warn_context_budget_exceeded(tokens_est, 3000, repo_root)
     story_ref = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
     gh_write_instruction = ""
     if requires_gh_write:
@@ -4546,7 +4586,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    routing_fallback: Optional[dict] = None,
                    local_pilot_receipt: Optional[dict] = None,
                    local_pilot_requested: bool = False,
-                   override: bool = False) -> dict:
+                   override: bool = False,
+                   full_context: bool = False) -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
@@ -5463,6 +5504,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             instruction_file=instruction_file,
             role=resolved_agent_role,
             requires_gh_write=requires_gh_write,
+            full_context=full_context,
         )
     except TypeError:
         prompt = format_prompt(agent, context_text, story_id or "", task, file_section, verify_section)
