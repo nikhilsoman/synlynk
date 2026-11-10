@@ -535,3 +535,28 @@ def test_overview_renders_groups_not_six_flat_rows():
     assert '"groups"' in snapshot
     listener = html.split("addEventListener('sentinel'", 1)[1].split("source.onerror", 1)[0]
     assert "payload.alerts" not in listener or "payload.groups" in html
+
+
+def test_overview_renders_alert_age_and_timestamps():
+    """Verify overview renders date/time and relative age badges (gh:#5194)."""
+    from synlynk.viz.overview import generate_overview_html
+
+    alerts = [{
+        "severity": "CRITICAL",
+        "pattern": "TOKEN_CIRCUIT_BREAKER_TRIPPED",
+        "message": "Job runaway 1M tokens",
+        "ts": "2026-11-10 07:02:51 UTC",
+        "resolved": False,
+        "occurrences": 3,
+        "first_seen": "2026-11-06 19:37:41 UTC",
+        "last_seen": "2026-11-10 07:02:51 UTC",
+    }]
+    html = generate_overview_html({
+        "workspace": {"name": "synlynk"},
+        "telemetry": {"sentinel_alerts": alerts},
+    }, 33333)
+
+    assert 'class="alert-age"' in html
+    assert 'class="alert-ts"' in html
+    assert "2026-11-10 07:02:51 UTC" in html
+    assert "formatAge" in html

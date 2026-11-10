@@ -171,3 +171,12 @@ def test_board_data_populates_goal_cards_and_links(tmp_path, monkeypatch):
     assert story_card["tracker"]["url"] == "https://github.com/acme/repo/issues/5175"
     assert story_card["pr_url"] == "https://github.com/acme/repo/pull/5180"
 
+    # Context-scoped assertions (used by /w/<slug>/api/board daemon)
+    from synlynk.vizor_daemon import WorkspaceContext
+    ctx = WorkspaceContext(slug="acme", repo_path=repo, db_path=db_path)
+    from synlynk.board import board_data_for_context
+    ctx_payload = board_data_for_context(ctx)
+    ctx_cards = ctx_payload["cards"]
+    assert any(c.get("is_goal") and c["story_id"] == "goal-autonomy" for c in ctx_cards)
+    assert "goal-autonomy" in ctx_payload["filters"]["goals"]
+

@@ -153,11 +153,36 @@ jobs:
           /tmp/clean-test-env/bin/synlynk --help
           /tmp/clean-test-env/bin/synlynk doctor || true
 
+  test-acceptance-testbed:
+    name: test-acceptance-testbed
+    needs: matrix-plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install -e .
+          python -m pip install pytest
+
+      - name: Run state.db WAL soak scenario
+        run: |
+          python3 -m synlynk.cli testbed run --scenario state_db_wal
+
+      - name: Run testbed unit and driver test suite
+        run: |
+          pytest tests/test_testbed_*.py -v
+
   # Same-workflow needs: is required — separate workflow files run in
   # parallel with no cross-file ordering, so a standalone qa-gate.yml
   # almost always saw the test matrix as pending and fail-closed.
   qa-gate:
-    needs: [test, test-package-e2e]
+    needs: [test, test-package-e2e, test-acceptance-testbed]
     if: >-
       github.event_name == 'pull_request' ||
       github.event_name == 'workflow_dispatch'

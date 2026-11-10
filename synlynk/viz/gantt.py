@@ -144,7 +144,7 @@ body { font-family:'SF Mono','JetBrains Mono',monospace; background:var(--bg); c
 .dcost.ok { color:#16a34a; }
 .dcost.over { color:#dc2626; }
 .dcost.na { color:var(--text3); }
-.dbars { position:relative;height:52px;display:flex;align-items:center; }
+.dbars { position:relative;height:52px;display:flex;align-items:center;overflow:hidden; }
 
 /* Stage bars — OVERVIEW */
 .sb {
@@ -152,6 +152,10 @@ body { font-family:'SF Mono','JetBrains Mono',monospace; background:var(--bg); c
   display:flex;align-items:center;padding:0 8px;
   font-size:10px;font-weight:600;gap:5px;
   cursor:pointer;transition:filter .15s,box-shadow .2s;border:1px solid;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:100%;
+}
+.sb-label {
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;
 }
 .sb:hover { filter:brightness(.92); box-shadow: 0 2px 8px rgba(0,0,0,.12); }
 [data-theme="dark"] .sb:hover { filter:brightness(1.2); }
@@ -531,7 +535,13 @@ function classForStage(stageKey) {
 
 function iconForStage(stageKey) {
   const key = String(stageKey || '').trim().toLowerCase();
-  return STAGE_ICON[key] || (stageKey ? escapeHtml(stageKey) : '○ Open');
+  if (STAGE_ICON[key]) return STAGE_ICON[key];
+  if (!stageKey) return '○ Open';
+  const raw = String(stageKey).trim();
+  if (raw.length > 28) {
+    return raw.slice(0, 25) + '…';
+  }
+  return raw;
 }
 
 function noteStateClass(state) {
@@ -756,7 +766,7 @@ function renderRelease(release) {
       const agentLabel = a === 'codex' ? 'Co' : a === 'grok' ? 'G' : a === 'claude' ? 'C' : 'A';
       return `<div class="aa ${agentClass}">${agentLabel}</div>`;
     }).join('')}</div>` : '';
-    return `<div class="sb sb-${cls} ${live}" id="sb-${release.id}-${stage.key}" style="left:${left}%;width:${width}%" onclick="zoomStage('${escapeHtml(release.id)}','${escapeHtml(stage.key)}',this)">${escapeHtml(iconForStage(stage.key))}${agentHtml}</div>`;
+    return `<div class="sb sb-${cls} ${live}" id="sb-${release.id}-${stage.key}" style="left:${left}%;width:${width}%" onclick="zoomStage('${escapeHtml(release.id)}','${escapeHtml(stage.key)}',this)"><span class="sb-label" title="${escapeHtml(stage.key || '')}">${escapeHtml(iconForStage(stage.key))}</span>${agentHtml}</div>`;
   }).join('');
 
   const goalBadge = release.goal_id ? `<span class="goal-pill" title="Goal: ${escapeHtml(release.goal_outcome || release.goal_id)}">🎯 ${escapeHtml(release.goal_id)}</span>` : '';

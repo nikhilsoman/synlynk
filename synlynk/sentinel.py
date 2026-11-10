@@ -290,7 +290,11 @@ def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path:
                 existing = f.read()
         existing = _migrate_sentinel_content(existing, now)
         alerts = _iter_sentinel_alerts(sentinel_file, active_only=False)
-        matching = [alert for alert in alerts if _alert_identity(alert) == identity]
+        match_code = code if code == "RUNTIME_REVISION_DRIFT" else None
+        if match_code:
+            matching = [alert for alert in alerts if alert.get("code") == match_code]
+        else:
+            matching = [alert for alert in alerts if _alert_identity(alert) == identity]
         if matching:
             first = min(
                 (a.get("first_seen_dt") or a.get("timestamp_dt") for a in matching if a.get("timestamp_dt")),
@@ -300,7 +304,7 @@ def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path:
             replacement = _format_sentinel_alert(
                 severity, code, message, occurrences, first, now,
             )
-            output = _rewrite_sentinel_alerts(existing, alerts, identity, replacement)
+            output = _rewrite_sentinel_alerts(existing, alerts, identity, replacement, match_code=match_code)
         else:
             output = existing
             if "# Sentinel Alerts" not in output:
@@ -339,14 +343,20 @@ def _format_sentinel_alert(severity, code, message, occurrences, first_seen, las
     return f"- [{severity}] [{stamp(last_seen)}] {code}: {message} {metadata}\n"
 
 
-def _rewrite_sentinel_alerts(existing, alerts, identity, replacement):
+def _rewrite_sentinel_alerts(existing, alerts, identity, replacement, match_code: Optional[str] = None):
     """Replace all matching legacy/canonical rows, retaining unrelated history."""
     lines = existing.splitlines(keepends=True)
     inserted = False
     output = []
     for line in lines:
         parsed = _parse_sentinel_alert(line.strip())
-        if parsed is not None and _alert_identity(parsed) == identity:
+        matches = False
+        if parsed is not None:
+            if match_code and parsed.get("code") == match_code:
+                matches = True
+            elif _alert_identity(parsed) == identity:
+                matches = True
+        if matches:
             if not inserted:
                 output.append(replacement)
                 inserted = True

@@ -21,7 +21,7 @@ __version__ = VERSION
 _IS_TESTING = "pytest" in sys.modules or any("pytest" in str(arg) for arg in sys.argv)
 _FAST_CLI = not _IS_TESTING and (
     os.environ.get("SYNLYNK_CLI_ENTRYPOINT") == "1" or (
-        os.path.basename(sys.argv[0]) in {"synlynk", "synlynk.py"}
+        os.path.basename(sys.argv[0]) in {"synlynk", "synlynk.py", "cli.py"}
         or (os.path.basename(sys.argv[0]) == "__main__.py" and "synlynk" in str(sys.argv[0]))
     ) or any(flag in sys.argv[1:] for flag in ("-h", "--help", "--version"))
 )
@@ -104,10 +104,6 @@ def _load_legacy_imports():
     globals()["cmd_ecosystem_status"] = _importlib.import_module("synlynk.status").cmd_status
     globals()["cmd_viz"] = _importlib.import_module("synlynk.viz").cmd_viz
     globals()["cmd_schedule"] = _importlib.import_module("synlynk.scheduler").cmd_schedule
-    globals()["main"], globals()["cmd_watch"] = (
-        _importlib.import_module("synlynk.cli").main,
-        _importlib.import_module("synlynk.cli").cmd_watch,
-    )
     db = _importlib.import_module("synlynk.db")
     globals().update({
         name: value
@@ -125,6 +121,11 @@ def main(argv=None):
         if run_fast_command(cli_tokens) is True:
             return None
     return _importlib.import_module("synlynk.cli").main(argv)
+
+
+def cmd_watch(*args, **kwargs):
+    """Lazy compatibility entry point for watch command."""
+    return _importlib.import_module("synlynk.cli").cmd_watch(*args, **kwargs)
 
 
 def __getattr__(name):
