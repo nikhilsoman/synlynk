@@ -17,6 +17,7 @@ VIEW_CATALOG = {
     "efficiency": ("efficiency.html", "TELEMETRY", "Efficiency"),
     "observatory": ("observatory.html", "TELEMETRY", "Observatory"),
     "roles": ("roles.html", "TELEMETRY", "Agent Roles"),
+    "organogram": ("organogram.html", "TOPOLOGIES", "Organogram"),
     "graphify": ("graphify.html", "TOPOLOGIES", "Graphify"),
 }
 

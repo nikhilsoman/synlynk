@@ -309,6 +309,19 @@ def evaluate_job_circuit_breaker(
             sentinel_file,
         )
 
+    # Automatic Sentinel-owned demotion (Binding Amendment 3)
+    agent_id = job.get("agent")
+    if agent_id:
+        try:
+            from synlynk.autonomy import demote_agent_autonomy
+            demote_agent_autonomy(
+                agent_id,
+                reason=f"TOKEN_CIRCUIT_BREAKER_TRIPPED: {reason}",
+                tripped_by="sentinel",
+            )
+        except Exception:
+            pass
+
     # 8. Structured Telemetry
     log_telemetry_event({
         "type": "circuit_breaker",

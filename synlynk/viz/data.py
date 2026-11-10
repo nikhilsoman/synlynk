@@ -491,6 +491,8 @@ def generate_viz_data(db_path: Optional[str] = None) -> dict:
             "costs": {"total_usd": 0.0, "total_usd_estimated": 0.0, "by_agent": {}, "by_stage": {}},
             "agents": {},
             "workspace_agents": _load_workspace_agents(),
+            "archetypes": _load_archetypes(),
+            "workflow_edges": _load_workflow_edges(),
             "capability_registry": _load_capability_registry(),
             "workspace_map": _load_workspace_map(),
             "file_tree": file_tree,
@@ -534,6 +536,41 @@ def generate_viz_data(db_path: Optional[str] = None) -> dict:
         return native_caps + local_caps
 
     _ENFORCED_AUTHORITIES = {"worktree_cleanup", "release_cut", "policy_sync", "approve_priority"}
+
+    def _load_archetypes() -> list:
+        try:
+            from synlynk.db import _get_db
+            from synlynk.archetypes import list_archetypes
+            conn = _get_db()
+            try:
+                return list_archetypes(conn)
+            finally:
+                conn.close()
+        except Exception:
+            return []
+
+    def _load_workflow_edges() -> list:
+        try:
+            from synlynk.db import _get_db
+            conn = _get_db()
+            try:
+                rows = conn.execute(
+                    "SELECT edge_id, source_agent_id, target_agent_id, edge_type, properties_json FROM agent_workflow_edges"
+                ).fetchall()
+                return [
+                    {
+                        "edge_id": r[0],
+                        "source_agent_id": r[1],
+                        "target_agent_id": r[2],
+                        "edge_type": r[3],
+                        "properties_json": r[4],
+                    }
+                    for r in rows
+                ]
+            finally:
+                conn.close()
+        except Exception:
+            return []
 
     def _load_workspace_agents() -> list:
         """Project the durable agent registry into the Vizor data shape."""

@@ -5,6 +5,7 @@ import os
 from typing import Dict
 
 from synlynk.approval_gate import raise_approval_ticket
+from synlynk.autonomy import AutonomyLevel, get_agent_autonomy_level
 from synlynk.backlog import ingest_backlog, triage_backlog
 from synlynk.db import _find_ticket, _insert_ticket, _mark_ticket_consumed
 from synlynk.dispatch import dispatch_agent
@@ -148,9 +149,21 @@ def run_tpm_wake_cycle() -> dict:
     finally:
         conn.close()
 
-    sweep_result = run_sweep_pass()
+    autonomy_level = get_agent_autonomy_level("tpm")
+
+    if autonomy_level == AutonomyLevel.L1_ADVISORY:
+        # In L1 Advisory: observe and propose only. Zero dispatch.
+        sweep_result = {
+            "status": "advisory_only",
+            "dispatched": 0,
+            "proposals": len(triaged_items),
+        }
+    else:
+        # In L2 Gated / L3 Autonomous: run sweep pass
+        sweep_result = run_sweep_pass()
 
     return {
+        "autonomy_level": autonomy_level.value,
         "triaged": len(triaged_items),
         "routed": routed,
         "sweep": sweep_result,
