@@ -233,6 +233,12 @@ def cmd_watch(args) -> None:
             need_refresh = not rendered_once or (now - last_refresh) >= refresh_seconds
 
             if need_refresh:
+                try:
+                    from synlynk.watch import check_and_refresh_ast_on_drift
+                    check_and_refresh_ast_on_drift(repo_root=os.getcwd())
+                except Exception:
+                    pass
+
                 rows, cols = _get_terminal_size()
                 buf.rows = rows
                 buf.cols = cols
