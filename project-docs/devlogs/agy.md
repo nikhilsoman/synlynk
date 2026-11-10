@@ -1483,3 +1483,23 @@
 - **Gate 5 (v0.27.4):** Developer Preview full acceptance test matrix, GOVERNS truth audit (0 unlinked stories, 0 shadow DBs), and sentinel health sweep (PR #5047, Issue #5036).
 - **Gate 6 (v0.27.5):** Developer Preview stable release gate, canonical VERSION bump to 0.27.5, documentation sync, git tag `v0.27.5`, and published release assets (PR #5048, Issue #5037, Epic #5038).
 [@agy, @nikhilsoman]
+
+### 2026-11-10: Horizon 2 Tier 1 Autonomous Delivery — Agent Studio & Local Silicon
+- **PR #5191 (Local Silicon Qualification):**
+  - Qualified local harness profiles and roster rebaseline (Ornith, Qwen2.5-Coder, Gemma4 serving-only).
+  - Verified 46/46 tests in `tests/test_local_agent.py`.
+  - Non-author QA review approved by `synlynk-synlynk-qa` (Codex).
+  - Clean squash-merge landed to `main` as commit `dfbddbfc`.
+- **PR #5190 (Agent Studio Full Delivery — goal-658aa384 / #5185):**
+  - Full delivery of Tasks 1 through 20 across Phases 1–8: 10-role taxonomy (`secops`, `infra-devops`, promoted `maintainer`), actor-attributed charter store, BAU charter editor, role deprecation & identity revocation, 5-step FTUE wizard, unified Capability Registry, third-party dedup gate, and TPM GitHub sync tool-use migration.
+  - Autonomously resolved 3 CI regressions caught by Codex QA: registered `identity revoke` in `COMMAND_TAXONOMY`, regenerated `docs/reference/commands.md`, and updated charter count assertions dynamically matching `len(SEED_CHARTERS)`.
+  - Full CI matrix passed 100% green (6/6 checks: `matrix-plan`, `test (3.10)`, `test (3.12)`, `test-package-e2e`, `release-docs`, `qa-gate`).
+  - Formally approved by `synlynk-synlynk-qa` and squash-merged to `main` as commit `bcbb863b`.
+- **PR #5192 (OpenRouter BYOK Wizard & Muse Capability Readiness — gh:#2076 / story-ec2802d6):**
+  - Added user-facing BYOK setup in `synlynk configure openrouter` with `--key`, `--models`, `--base-url`, `--disable`, and `--probe`.
+  - Implemented `configure_openrouter` and atomic `save_registry` in `synlynk/registry.py` and `cmd_configure_openrouter` in `synlynk/gateway.py`.
+  - Registered `configure openrouter` in `COMMAND_TAXONOMY` and regenerated reference docs (`docs/reference/commands.md` and `README.md`).
+  - Added full test suite in `tests/test_configure_openrouter.py` (6/6 passing).
+  - Verified Muse execution adapter and capability baseline profile (11/11 tests in `tests/test_muse_harness.py`).
+  - Passed all 6 CI checks 100% green; formally approved by `synlynk-synlynk-qa` (Codex) and squash-merged to `main` as commit `486bd1dc`.
+[@agy, @nikhilsoman]
