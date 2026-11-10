@@ -130,6 +130,20 @@ def execute_dispatch(job_id: str, harness: str, timeout: int = 300) -> DispatchR
   - Dependencies: `_provision_worktree` [synlynk/worktree.py:L104]
 ```
 
+### 4.4 Knowledge Graph Freshness & Zero-Drift Invariant
+
+The Sub-3k Context Packager depends fundamentally on the AST Knowledge Graph reflecting the true current state of the workspace. Previously, `_GRAPH_STALE_COMMIT_THRESHOLD = 25` allowed up to 25 commits of drift before auto-refreshing, leading to stale AST signatures and Vizor warnings (`⚠️ Graph Stale`).
+
+This design establishes a **Zero-Drift Graph Currency Contract**:
+1. **Zero-Drift Threshold (`_GRAPH_STALE_COMMIT_THRESHOLD = 0`)**:
+   In `synlynk/dispatch.py`, if `built_at_commit != git rev-parse HEAD`, the graph is treated as immediately stale.
+2. **Pre-Dispatch Just-In-Time Refresh**:
+   Before `synthesize_context_pack` executes, `dispatch.py` compares `built_at_commit` with HEAD. If mismatched, it triggers an incremental `_run_graphify_extract(repo_root)` (taking ~1–3s via Graphify's file-hash cache) so that dispatches **never** receive outdated signatures.
+3. **Dual Commit Stamping**:
+   `_run_graphify_extract` updates `built_at_commit` atomically in both `.synlynk/graphify-out/manifest.json` and `.synlynk/graphify-out/graph.json`, ensuring Vizor, packager, and discovery always agree on the current HEAD SHA.
+4. **Post-Merge & Watch Auto-Sweep**:
+   When PRs are merged via `synlynk pr merge` or when the background daemon (`synlynk watch`) detects HEAD movement, a non-blocking background graph extract is fired automatically.
+
 ---
 
 ## 5. CLI & Runtime Flag Semantics
