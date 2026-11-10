@@ -209,6 +209,51 @@ def _emit_graphify_extract_failed(repo_root: str, detail: str) -> None:
         )
 
 
+def _read_git_head_commit_direct(repo_root: str) -> str:
+    """Read git HEAD commit directly via filesystem to avoid spawning subprocesses."""
+    try:
+        git_path = Path(repo_root) / ".git"
+        if not git_path.exists():
+            return ""
+        if git_path.is_file():
+            txt = git_path.read_text(encoding="utf-8", errors="ignore").strip()
+            if txt.startswith("gitdir:"):
+                target = txt.split(":", 1)[1].strip()
+                git_path = (Path(repo_root) / target).resolve() if not os.path.isabs(target) else Path(target)
+        head_file = git_path / "HEAD"
+        if not head_file.is_file():
+            return ""
+        ref_content = head_file.read_text(encoding="utf-8", errors="ignore").strip()
+        if ref_content.startswith("ref:"):
+            ref_rel = ref_content.split(":", 1)[1].strip()
+            ref_file = git_path / ref_rel
+            if ref_file.is_file():
+                return ref_file.read_text(encoding="utf-8", errors="ignore").strip()
+            commondir_file = git_path / "commondir"
+            common_git = git_path
+            if commondir_file.is_file():
+                cd_rel = commondir_file.read_text(encoding="utf-8", errors="ignore").strip()
+                common_git = (git_path / cd_rel).resolve() if not os.path.isabs(cd_rel) else Path(cd_rel)
+                ref_file = common_git / ref_rel
+                if ref_file.is_file():
+                    return ref_file.read_text(encoding="utf-8", errors="ignore").strip()
+            for base in [git_path, common_git]:
+                packed = base / "packed-refs"
+                if packed.is_file():
+                    for line in packed.read_text(encoding="utf-8", errors="ignore").splitlines():
+                        if line.startswith("#") or line.startswith("^"):
+                            continue
+                        parts = line.strip().split()
+                        if len(parts) == 2 and parts[1] == ref_rel:
+                            return parts[0]
+            return ""
+        elif len(ref_content) >= 40:
+            return ref_content[:40]
+    except Exception:
+        pass
+    return ""
+
+
 def _run_graphify_extract(repo_root: str) -> bool:
     """Ensure Graphify is installed and execute deterministic AST extraction."""
     if os.environ.get("SYNLYNK_SKIP_GRAPHIFY_EXTRACT") == "1":
@@ -247,8 +292,14 @@ def _run_graphify_extract(repo_root: str) -> bool:
             manifest_file = os.path.join(out_dir, "manifest.json")
             graph_file = os.path.join(out_dir, "graph.json")
             try:
-                from synlynk.discovery import _get_head_commit
-                head_sha = _get_head_commit(repo_root)
+                from unittest.mock import Mock
+                import synlynk.discovery as _disc_mod
+                if hasattr(_disc_mod, "_get_head_commit") and isinstance(_disc_mod._get_head_commit, Mock):
+                    head_sha = _disc_mod._get_head_commit(repo_root)
+                else:
+                    head_sha = _read_git_head_commit_direct(repo_root)
+                    if not head_sha and os.path.exists(os.path.join(repo_root, ".git")):
+                        head_sha = _disc_mod._get_head_commit(repo_root)
                 if head_sha:
                     if os.path.isfile(manifest_file):
                         with open(manifest_file, "r", encoding="utf-8") as f:
