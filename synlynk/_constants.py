@@ -361,6 +361,7 @@ CORE_INSTRUCTION_FILES = {
 
 AGENT_PANEL_QUERY_TIMEOUT_SECONDS = {
     "codex": 300,
+    "grok": 300,
 }
 
 
