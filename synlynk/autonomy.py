@@ -110,8 +110,13 @@ def get_agent_autonomy_level(agent_id: str, conn: sqlite3.Connection | None = No
             try:
                 return AutonomyLevel(row[0])
             except ValueError:
-                return AutonomyLevel.L1_ADVISORY
-        return AutonomyLevel.L1_ADVISORY
+                pass
+        mode = get_autonomy_mode()
+        if mode == AutonomyMode.MANUAL:
+            return AutonomyLevel.L1_ADVISORY
+        elif mode == AutonomyMode.AUTONOMOUS:
+            return AutonomyLevel.L3_AUTONOMOUS
+        return AutonomyLevel.L2_GATED
     finally:
         if should_close:
             db.close()
