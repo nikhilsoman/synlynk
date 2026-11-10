@@ -119,6 +119,9 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `pm sweep` (primary) — execute
 - `tpm wake` (primary) — execute
 - `pm wake` (primary) — execute
+- `autonomy status` (secondary) — sustain
+- `autonomy promote` (secondary) — sustain
+- `autonomy demote` (secondary) — sustain
 - `governs sweep` (primary) — sustain
 - `release` (primary) — release
 - `marketing ceremony` (secondary) — release
