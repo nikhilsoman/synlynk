@@ -15,6 +15,7 @@ from synlynk.viz.canvases import generate_infra_html, generate_logical_html, gen
 from synlynk.viz.observatory import generate_observatory_html
 from synlynk.viz.overview import generate_overview_html
 from synlynk.viz.roles import generate_roles_html
+from synlynk.viz.organogram import generate_organogram_html
 from synlynk.viz.graphify import _enrich_graphify_html
 def _pkg():
     """Package namespace tests and the Vizor daemon rebind."""
@@ -37,6 +38,7 @@ def _write_cache(data: dict, port: int) -> None:
         "infra.html": generate_infra_html(data, port),
 
         "roles.html": generate_roles_html(data, port),
+        "organogram.html": generate_organogram_html(data, port),
         "journeys.html": (
             '<!DOCTYPE html><html><head><meta charset="UTF-8">'
             '<meta http-equiv="refresh" content="0; url=product.html">'
