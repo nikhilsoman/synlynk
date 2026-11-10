@@ -907,6 +907,27 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "--network-dep", action="append", default=[], metavar="HOST:PORT",
         help="Add a required network endpoint (repeatable)")
 
+    openrouter_configure_parser = configure_sub.add_parser(
+        "openrouter", help="Configure OpenRouter BYOK model gateway")
+    openrouter_configure_parser.add_argument(
+        "--key", "--api-key", dest="key", default=None,
+        help="OpenRouter API key (OPENROUTER_API_KEY)")
+    openrouter_configure_parser.add_argument(
+        "--models", default=None,
+        help="Comma-separated model IDs in attempt order (e.g. anthropic/claude-sonnet-4,openai/gpt-4o)")
+    openrouter_configure_parser.add_argument(
+        "--base-url", default=None,
+        help="Custom OpenAI-compatible base URL (default: https://openrouter.ai/api/v1)")
+    openrouter_configure_parser.add_argument(
+        "--disable", action="store_true",
+        help="Disable OpenRouter gateway dispatch")
+    openrouter_configure_parser.add_argument(
+        "--probe", action="store_true",
+        help="Probe gateway connectivity after configuring")
+    openrouter_configure_parser.add_argument(
+        "--config", default=".synlynk/registry.json",
+        help="Path to registry.json")
+
     identity_parser = subparsers.add_parser("identity", help="Manage synlynk agent identity")
     identity_sub = identity_parser.add_subparsers(dest="identity_action")
     identity_init_parser = identity_sub.add_parser("init", help="Create local Ed25519 identity key")
@@ -3919,6 +3940,16 @@ def main(argv=None) -> None:
                 flags[key] = val if sep else True
             envs = dict(item.split("=", 1) for item in args.env) if args.env else {}
             cmd_configure_agent(args.name, flags=flags, envs=envs, network_deps=args.network_dep)
+        elif getattr(args, "configure_target", None) == "openrouter":
+            from synlynk.gateway import cmd_configure_openrouter
+            sys.exit(cmd_configure_openrouter(
+                key=getattr(args, "key", None),
+                models=getattr(args, "models", None),
+                base_url=getattr(args, "base_url", None),
+                disable=getattr(args, "disable", False),
+                probe=getattr(args, "probe", False),
+                config_path=getattr(args, "config", ".synlynk/registry.json"),
+            ))
         else:
             help_parsers.get("configure", parser).print_help()
     elif args.command == "identity":

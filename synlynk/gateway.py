@@ -60,7 +60,7 @@ def _probe_gateway(name: str, cfg: dict) -> int:
     if model_ids:
         print(f"    top models: {', '.join(model_ids)}")
     if not cfg.get("dispatch_active", False):
-        print(f"  ⚠ {name}: dispatch integration not yet active (ships in v0.26.0)")
+        print(f"  ⚠ {name}: dispatch integration not yet active (enable with 'synlynk configure openrouter')")
     return 0
 
 
@@ -159,4 +159,69 @@ def cmd_gateway_dispatch(
         print(f"  ✗ openrouter: {exc}")
         return 1
     print(json.dumps(response, indent=2))
+    return 0
+
+
+def cmd_configure_openrouter(
+    key: str = None,
+    models: str = None,
+    base_url: str = None,
+    disable: bool = False,
+    probe: bool = False,
+    config_path: str = ".synlynk/registry.json",
+) -> int:
+    """Configure OpenRouter BYOK model gateway settings."""
+    from synlynk.registry import configure_openrouter
+
+    parsed_models = None
+    if isinstance(models, str) and models.strip():
+        parsed_models = [m.strip() for m in models.split(",") if m.strip()]
+
+    if key:
+        os.environ["OPENROUTER_API_KEY"] = key
+        env_path = ".env"
+        if os.path.exists(env_path):
+            try:
+                lines = []
+                replaced = False
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.startswith("OPENROUTER_API_KEY="):
+                            lines.append(f"OPENROUTER_API_KEY={key}\n")
+                            replaced = True
+                        else:
+                            lines.append(line)
+                if not replaced:
+                    lines.append(f"OPENROUTER_API_KEY={key}\n")
+                with open(env_path, "w", encoding="utf-8") as f:
+                    f.writelines(lines)
+            except OSError:
+                pass
+
+    registry = configure_openrouter(
+        api_key=key,
+        models=parsed_models,
+        base_url=base_url,
+        disable=disable,
+        config_path=config_path,
+    )
+
+    cfg = registry.get("gateways", {}).get("openrouter", {})
+    enabled = cfg.get("enabled", False)
+    dispatch_active = cfg.get("dispatch_active", False)
+    active_models = cfg.get("models", [])
+    active_base_url = cfg.get("base_url", "https://openrouter.ai/api/v1")
+    api_key_env = cfg.get("api_key_env", "OPENROUTER_API_KEY")
+    has_key = bool(os.environ.get(api_key_env))
+
+    status_str = "enabled, dispatch active" if (enabled and dispatch_active) else ("disabled" if not enabled else "enabled (dispatch inactive)")
+    print(f"  ✓ OpenRouter gateway configured ({config_path})")
+    print(f"    Status: {status_str}")
+    print(f"    Base URL: {active_base_url}")
+    print(f"    Models: {', '.join(active_models) if active_models else 'none'}")
+    print(f"    Key ({api_key_env}): {'set' if has_key else 'not set in environment'}")
+
+    if probe:
+        print("\n  Probing gateway connectivity...")
+        return cmd_gateway_probe(gateway="openrouter", config_path=config_path)
     return 0

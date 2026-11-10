@@ -28,6 +28,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `join` (primary) — open
 - `migrate` (secondary) — sustain
 - `configure agent` (secondary) — open
+- `configure openrouter` (secondary) — open
 - `harness add` (secondary) — open
 - `harness configure` (secondary) — open
 - `harness list` (secondary) — open
