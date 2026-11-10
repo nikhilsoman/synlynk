@@ -25,7 +25,7 @@ Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol, including the se
 
 <!-- synlynk:end -->
 
-<!-- synlynk:harness v0.155.1 verified:2026-10-02T02:52:46Z -->
+<!-- synlynk:harness v0.167.0 verified:2026-11-10T09:56:54Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## PR Review Discipline

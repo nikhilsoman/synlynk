@@ -9,6 +9,26 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.31.0] - 2026-11-10
+### Added
+- feat(fleet): Autonomous Fleet Orchestrator, Archetype Abstraction & Visual Organogram (Horizon 3) (#5195)
+### Fixed
+- fix(vizor): resolve runpy warning, board goals, sentinel alert ages, and gantt overlap (#5194)
+
+---
+
+## [v0.31.0] - 2026-11-10
+### Added
+- feat(fleet): implement 6 universal capability-neutral archetypes in SQLite schema with 1:N cardinality and secondary hats (#5195)
+- feat(domain_packs): introduce in-repo versioned domain packs (software, hitchcock, rxcc) with confirmation-gated tool baseline suggestions (#5195)
+- feat(autonomy): implement 3-tier autonomy evolutionary ladder (L1 Advisory -> L2 Gated -> L3 Autonomous) with human-only promotion and Sentinel-owned automatic demotion (#5195)
+- feat(tpm): integrate TPM wake cycle with earned autonomy ladder (zero dispatch in L1 Advisory, gated in L2, autonomous in L3) (#5195)
+- feat(viz): deliver offline-first SVG/HTML5 visual organogram canvas at `/w/<slug>/organogram.html` (#5195)
+- feat(cli): add `synlynk autonomy {status,promote,demote}` CLI surface (#5195)
+### Fixed
+- fix(taxonomy): add autonomy command surface to COMMAND_TAXONOMY and regenerate command reference docs (#5195)
+- fix(test): scope mock_job_cost_usd in test_circuit_breaker_live19 to prevent cross-worker test bleed (#5195)
+
 ## [v0.30.0] - 2026-11-10
 ### Added
 - feat(gateway): add synlynk configure openrouter BYOK wizard and CLI integration (#5192)

@@ -1,5 +1,25 @@
 # Agy Devlog
 
+## 2026-11-10 — Track 2 Horizon 3 (v0.31.0): Autonomous Fleet Governance, Universal Archetypes & Visual Organogram
+
+### Shipped & Verified Across Fleet
+- **Ratified Design Spec & 4-Harness Decide Panel (`dec-4a53a2ee`):**
+  - Design spec: `docs/superpowers/specs/2026-11-10-autonomous-fleet-orchestrator-and-organogram-designer-design.md`.
+  - Decide panel record: `project-docs/decisions/2026-11-10-decide-panel-autonomous-fleet-orchestrat.md`.
+  - Approved with 3 binding amendments: (1) capability-neutral universal archetypes, (2) human-confirmed tool baseline suggestions, (3) Sentinel-owned RSI reliability ledger with launch caps (`Rxcc` $\le$ L2, L3 restricted to TPM).
+- **Core Subsystems & Delivery ([PR #5195](https://github.com/nikhilsoman/synlynk/pull/5195)):**
+  - **Universal Archetypes Substrate (`synlynk/archetypes.py`, `synlynk/db.py`):** Added `agent_archetypes`, `agent_workflow_edges`, and `rsi_evaluations` tables with 6 capability-neutral archetypes (`orchestrator`, `strategist`, `director`, `creator`, `inspector`, `custodian`), 1:N cardinality, and secondary hats.
+  - **Domain Packs & Charter Validation (`synlynk/domain_packs.py`, `synlynk/domain_packs/*.json`, `synlynk/charter_schema.py`):** Added in-repo domain packs for `software`, `hitchcock` (film studio), and `rxcc` (clinical trials) with suggested tool baselines and confirmation boundaries.
+  - **3-Tier Autonomy Evolutionary Ladder (`synlynk/autonomy.py`, `synlynk/circuit_breaker.py`):** Implemented `L1_ADVISORY` $\to$ `L2_GATED` $\to$ `L3_AUTONOMOUS` with human-only promotion gate, domain caps, and automatic Sentinel tripwire demotion.
+  - **TPM Wake Cycle Autonomy (`synlynk/tpm_sweep.py`):** Integrated autonomy checks so L1 Advisory strictly observes/proposes with zero dispatch.
+  - **Visual Organogram Canvas (`synlynk/viz/organogram.py`):** Built interactive, offline-first SVG/HTML5 node-tree graph canvas at `/w/<slug>/organogram.html` with inspection drawer.
+  - **CLI & Taxonomy Surface (`synlynk/cli.py`, `synlynk/taxonomy.py`, `docs/reference/commands.md`):** Added `synlynk autonomy {status,promote,demote}`.
+- **Verification & Review:**
+  - 41 unit/integration/e2e tests verified 100% green; full CI matrix passed all 7 checks on GitHub Actions.
+  - Non-author QA verification and merge policy verified (`synlynk policy check-merge --role qa` returned 0).
+  - PR #5195 squashed and merged into `main`.
+[@agy, @nikhilsoman]
+
 ## 2026-11-06 — Day 5 "Genesis Gate" (v0.28.5): Greenfield Guided Onboarding & Progressive Fleet Assembly
 
 ### Shipped & Verified Across Fleet
