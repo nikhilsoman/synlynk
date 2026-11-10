@@ -1,0 +1,64 @@
+<h2>Proposed 10-role functional map</h2>
+<p class="subtitle">Grouped by function family. Arrows show escalation path (who a role calls when its own charter can't resolve something). secops carries its own policy/tooling and can veto across any lane.</p>
+
+<div class="section" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:20px">
+
+  <div>
+    <div class="label">Delivery</div>
+    <div class="mock-sidebar" style="margin-bottom:8px">pm<br><small>intake · priority · GOVERNS link</small></div>
+    <div class="mock-sidebar" style="margin-bottom:8px">architect<br><small>spec · design gate</small></div>
+    <div class="mock-sidebar" style="margin-bottom:8px">tpm<br><small>scheduling · cross-role coord</small></div>
+    <div class="mock-sidebar">dev<br><small>implement · open PR</small></div>
+  </div>
+
+  <div>
+    <div class="label">Quality &amp; Trust</div>
+    <div class="mock-sidebar" style="margin-bottom:8px">qa<br><small>review · merge gate ·<br>review-provenance check</small></div>
+    <div class="mock-sidebar" style="background:#3a1f1f;border-color:#6b2b2b">secops <b>★</b><br><small>own policy + tools<br>secret/credential/dep scan<br>veto any lane</small></div>
+  </div>
+
+  <div>
+    <div class="label">Platform</div>
+    <div class="mock-sidebar" style="margin-bottom:8px;background:#1f2e3a;border-color:#2b4a6b">maintainer <b>(promoted)</b><br><small>hygiene · release process ·<br>invariant enforcement ·<br>contribution triage</small></div>
+    <div class="mock-sidebar">infra/devops<br><small>CI health · daemon ops ·<br>deploy execution</small></div>
+  </div>
+
+  <div>
+    <div class="label">Experience</div>
+    <div class="mock-sidebar" style="margin-bottom:8px">designer<br><small>UI/content</small></div>
+    <div class="mock-sidebar">marketing<br><small>comms · release notes</small></div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:28px">
+  <div class="label">Escalation paths (on charter-defined trigger)</div>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>Escalates to maintainer</h4>
+      <ul>
+        <li>qa → review-provenance mismatch</li>
+        <li>infra/devops → daemon_crashloop, pipeline_down</li>
+        <li>dev/tpm → worktree/policy drift noticed mid-task</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>Escalates to human/pm (terminal)</h4>
+      <ul>
+        <li>maintainer → invariant_violation_detected unresolved, database_corruption_detected</li>
+        <li>secops → credential_leak_detected, critical_vulnerability_found (always terminal, never auto-remediated)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="options" style="margin-top:28px">
+  <div class="option" data-choice="good" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content"><h3>This grouping/escalation shape is right</h3><p>Move on to the configure-workflow screens</p></div>
+  </div>
+  <div class="option" data-choice="adjust" onclick="toggleSelect(this)">
+    <div class="letter">✎</div>
+    <div class="content"><h3>Something's off</h3><p>Tell me what in the terminal</p></div>
+  </div>
+</div>

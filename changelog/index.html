@@ -45,6 +45,22 @@
 Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
 <hr>
 <h2><a href="https://github.com/nikhilsoman/synlynk/compare/v0.3.0...HEAD">Unreleased</a></h2>
+<div class="changelog-version-header"><span class="changelog-version">vv0.30.0</span><span class="changelog-date">2026-11-10</span></div>
+<h3 class="tag-added">Added</h3>
+- feat(gateway): add synlynk configure openrouter BYOK wizard and CLI integration (#5192)
+- feat(viz): Vizor Agent Role Management (Agent Studio) full delivery (#5185) (#5190)
+- feat(local): add Gemma4 serving-only profile to qualified models roster (#5191)
+<h3 class="tag-fixed">Fixed</h3>
+- fix(vizor): populate Goal column from goals table and link cards to GitHub (#5175) (#5184)
+- fix(vizor): resolve VIZOR_DAEMON_CRASHLOOP and add auto-healing (#5170) (#5182)
+- fix(context): remove invalid description column query from pack and worktree queries (#5172)
+- fix(instructions): prevent instructions.json timestamp churn when SHAs unchanged (#5173)
+- fix(migrate): guard git rm cached in synlynk migrate against untracked project-docs (#5174)
+- fix(cli): guard synlynk status OperationalError when state.db missing on fresh repo (#5166) (#5177)
+<h3 class="tag-changed">Changed</h3>
+- docs(governs): land Vizor Agent Role Management (Agent Studio) spec, plan & revised roadmap (#5185) (#5189)
+- docs(governs): authoritative roadmap reconciliation, decide panel dec-71b3e9a5 & opt-in telemetry spec (#5176)
+<hr>
 <div class="changelog-version-header"><span class="changelog-version">vv0.29.0</span><span class="changelog-date">2026-11-07</span></div>
 ### Developer Preview Release — The Full-Stack Builder & Sovereign Genesis Engine
 - **Hermetic Packaging & LIVE-30 Resolution:** Hardened standalone wheel distribution and sandbox-isolated execution for `vizor_daemon` and `dispatch.py` (#5163).
