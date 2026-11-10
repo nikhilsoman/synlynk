@@ -149,6 +149,120 @@ def calculate_impact(
     }
 
 
+def slice_1hop_impact(
+    repo_root: str,
+    target: str,
+    max_callers: int = 5,
+    max_callees: int = 5,
+    max_tests: int = 5,
+) -> Dict[str, Any]:
+    """Calculate bounded 1-hop blast radius slice for a symbol or file.
+
+    Restricts inbound and outbound traversal to direct (1-hop) edges only,
+    capping caller, callee, and test arrays to keep the representation bounded.
+    """
+    empty_report = {
+        "target": target,
+        "target_nodes": [],
+        "inbound_callers": [],
+        "outbound_callees": [],
+        "associated_tests": [],
+    }
+
+    graph_path = Path(repo_root) / ".synlynk" / "graphify-out" / "graph.json"
+    if not graph_path.is_file():
+        return empty_report
+
+    try:
+        data = json.loads(graph_path.read_text(errors="ignore"))
+    except Exception:
+        return empty_report
+
+    nodes = [n for n in (data.get("nodes") or []) if isinstance(n, dict)]
+    edges = [e for e in (data.get("edges") or data.get("links") or []) if isinstance(e, dict)]
+
+    if not nodes:
+        return empty_report
+
+    node_by_id = {str(n.get("id")): n for n in nodes}
+
+    target_clean = target.strip()
+    target_lower = target_clean.lower()
+    matched_nodes = []
+    for n in nodes:
+        nid = str(n.get("id") or "")
+        label = str(n.get("label") or "")
+        file_path = str(n.get("file") or "")
+
+        if (
+            nid == target_clean
+            or label == target_clean
+            or file_path == target_clean
+            or nid.lower() == target_lower
+            or label.lower() == target_lower
+            or file_path.lower() == target_lower
+            or file_path.endswith("/" + target_clean)
+            or file_path.endswith(target_clean)
+        ):
+            matched_nodes.append(n)
+
+    if not matched_nodes:
+        for n in nodes:
+            label = str(n.get("label") or "").lower()
+            if target_lower in label:
+                matched_nodes.append(n)
+
+    if not matched_nodes:
+        return empty_report
+
+    target_ids = {str(n["id"]) for n in matched_nodes}
+
+    inbound_map: Dict[str, List[Dict[str, Any]]] = {}
+    outbound_map: Dict[str, List[Dict[str, Any]]] = {}
+
+    for e in edges:
+        src = str(e.get("source"))
+        tgt = str(e.get("target"))
+        if src in node_by_id and tgt in node_by_id:
+            inbound_map.setdefault(tgt, []).append(node_by_id[src])
+            outbound_map.setdefault(src, []).append(node_by_id[tgt])
+
+    inbound_callers: List[Dict[str, Any]] = []
+    associated_tests: List[Dict[str, Any]] = []
+    seen_inbound: Set[str] = set(target_ids)
+
+    for tid in target_ids:
+        for parent in inbound_map.get(tid, []):
+            pid = str(parent.get("id"))
+            if pid not in seen_inbound:
+                seen_inbound.add(pid)
+                if _is_test_node(parent):
+                    if len(associated_tests) < max_tests:
+                        associated_tests.append(parent)
+                else:
+                    if len(inbound_callers) < max_callers:
+                        inbound_callers.append(parent)
+
+    outbound_callees: List[Dict[str, Any]] = []
+    seen_outbound: Set[str] = set(target_ids)
+
+    for tid in target_ids:
+        for child in outbound_map.get(tid, []):
+            cid = str(child.get("id"))
+            if cid not in seen_outbound:
+                seen_outbound.add(cid)
+                if len(outbound_callees) < max_callees:
+                    outbound_callees.append(child)
+
+    return {
+        "target": target,
+        "target_nodes": matched_nodes,
+        "inbound_callers": inbound_callers,
+        "outbound_callees": outbound_callees,
+        "associated_tests": associated_tests,
+    }
+
+
 
 def export_topological_features(
     repo_root: str,
