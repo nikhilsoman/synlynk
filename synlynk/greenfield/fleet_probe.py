@@ -52,6 +52,13 @@ def probe_fleet() -> Dict[str, Any]:
             bin_found = bool(shutil.which("antigravity")) or bool(shutil.which("gemini"))
         if name == "local" and not bin_found:
             bin_found = bool(shutil.which("mlx_lm")) or bool(shutil.which("ollama"))
+            if not bin_found:
+                try:
+                    from synlynk.models import probe_local_runtimes
+
+                    bin_found = bool(probe_local_runtimes(timeout=0.5))
+                except Exception:
+                    pass
 
         discovered.append({
             **item,
