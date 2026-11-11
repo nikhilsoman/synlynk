@@ -9,6 +9,21 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.32.0] - 2026-11-11
+### Added
+- **Sub-3k Graph-Backed Context Packager & Zero-Drift Currency Engine (#5201):**
+  - Graph-backed contextual compression packing relevant AST clusters, dependencies, and interfaces into `<3,000` tokens for dispatch (`synlynk context pack`).
+  - Zero-drift knowledge graph currency engine checking `.synlynk/manifest.json` and `.synlynk/graph.json` against `git rev-parse HEAD`.
+  - Automatic fast-path AST re-indexing on dispatch, watch loops, and `synlynk pr check` when head commit diverges from graph version.
+- **Sovereign Silicon & OpenAI-Compatible Gateway Discovery (#5202):**
+  - Auto-discovery of OpenAI-compatible endpoints (`OPENAI_BASE_URL`, `SYNLYNK_LOCAL_AI_URL`, `VLLM_BASE_URL`) in `probe_local_runtimes()`.
+  - Native model discovery across NVIDIA DGX Spark clusters, Linux enterprise servers, local vLLM instances, and LiteLLM proxies.
+  - Automatic zero-cost local classification (`EntitlementTier.ZERO_COST_LOCAL`) with granular `discovery_source` provenance.
+  - Strict non-breaking release invariant protecting existing early adopter workflows, SQLite schemas, and configuration files.
+- **Governance & Master Roadmap Cadence:**
+  - Ratified DECIDE panel record `dec-9b41a7c3` formalizing the 4-tier roadmap cadence, anti-drift dual-lock framework, and Sovereign Silicon expansion.
+
+
 ## [v0.31.0] - 2026-11-10
 ### Added
 - feat(fleet): Autonomous Fleet Orchestrator, Archetype Abstraction & Visual Organogram (Horizon 3) (#5195)
