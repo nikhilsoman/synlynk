@@ -9,6 +9,24 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.32.1] - 2026-11-11
+### Added
+- **Document Sidecar Knowledge Graph (`.synlynk/docgraph.json`) (#5205):**
+  - Sub-2-second sidecar indexing of markdown documentation, specs, and project docs without polluting core AST code graph.
+  - Granular parsing for YAML frontmatter, header hierarchies, cross-document links, and code symbol references with a `reverse_code_index`.
+  - Integrated `ensure_docgraph()` into `synlynk scan` and watch loops to maintain sidecar graph currency at `HEAD`.
+- **Smart Auto-Update & Background Notification Engine (#5206):**
+  - Non-blocking remote version discovery with 24-hour cache TTL and background notification engine (`synlynk/upgrade.py`).
+  - Non-intrusive ANSI notification banner on interactive terminal commands.
+  - Background hourly update check and configurable `maybe_auto_upgrade()` routine for `synlynk daemon`.
+- **TPM L1_ADVISORY Release Proposals & Human Approval Gate (#5207):**
+  - Automated release proposal issue generator packaging milestone tasks, role groupings, cost projections, and situational book-ends (MTD/WTD/Earlier Today).
+  - Compact clickable issue formatting `[#Issue](url) (story_id)` preserving horizontal layout readability.
+  - Human-in-the-loop state mutation via comment commands (`/approve`, `/revise`, `/drop`, `/prioritize`, `/hold`).
+  - Configurable `max_active_proposals` gate to prevent issue clutter.
+- **OpenAI-Compatible Local Endpoint Discovery (#5207):**
+  - Automatic probing of active local runtimes (vLLM, Ollama, DGX Spark, LM Studio) during FTUE onboarding and periodic capability sweeps.
+
 ## [v0.32.0] - 2026-11-11
 ### Added
 - **Sub-3k Graph-Backed Context Packager & Zero-Drift Currency Engine (#5201):**
