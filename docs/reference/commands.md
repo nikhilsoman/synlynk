@@ -123,6 +123,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `autonomy promote` (secondary) — sustain
 - `autonomy demote` (secondary) — sustain
 - `governs sweep` (primary) — sustain
+- `spec lint` (primary) — goal
 - `release` (primary) — release
 - `marketing ceremony` (secondary) — release
 - `marketing sync-pr` (secondary) — release
