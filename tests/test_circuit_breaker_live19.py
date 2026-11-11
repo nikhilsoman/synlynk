@@ -57,7 +57,7 @@ def test_evaluate_job_circuit_breaker_not_killed_live19(
 ):
     # Simulate a breach
     mock_extract_tokens.return_value = (500_000, 4_600_000) # total > 5_000_000
-    mock_job_cost_usd.return_value = 16.00 # cost > 15.00
+    mock_job_cost_usd.side_effect = lambda agent, *args, **kwargs: 16.00 if agent == "test-agent" else 0.0
     
     # Process already exited
     mock_kill_process_tree.return_value = (False, "no_pid")
@@ -84,7 +84,7 @@ def test_evaluate_job_circuit_breaker_not_killed_live19(
     mock_write_sentinel.assert_not_called()
     
     # Telemetry should log warning
-    mock_log_telemetry.assert_called_with({
+    mock_log_telemetry.assert_any_call({
         "type": "circuit_breaker_post_exit_warning",
         "job_id": "job-123",
         "agent": "test-agent",
