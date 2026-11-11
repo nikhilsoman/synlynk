@@ -1,4 +1,6 @@
-"""PR check impact attestation verifier using Graphify AST graph."""
+"""PR check verifiers: impact attestation using Graphify and constitutional spec linting."""
+
+from __future__ import annotations
 
 import os
 import re
@@ -78,4 +80,124 @@ def check_pr_impact_attestation(repo_root: str = ".") -> Dict[str, Any]:
         "untested_symbols": [],
         "tested_symbols": tested,
         "message": f"All {len(tested)} modified symbols have associated test coverage in the knowledge graph.",
+    }
+
+
+def _get_changed_files_in_pr(repo_root: str = ".", pr_number: Optional[int] = None) -> List[str]:
+    """Get list of changed files relative to repo_root for a PR or active branch."""
+    if pr_number is not None:
+        try:
+            from synlynk.qa_gate import _gh_pr_changed_files
+            files = _gh_pr_changed_files(pr_number)
+            if files:
+                return files
+        except Exception:
+            pass
+
+    # Fallback to git diff
+    for cmd in (
+        ["git", "-C", repo_root, "diff", "--name-only", "origin/main...HEAD"],
+        ["git", "-C", repo_root, "diff", "--name-only", "main...HEAD"],
+        ["git", "-C", repo_root, "diff", "--name-only", "HEAD~1"],
+        ["git", "-C", repo_root, "diff", "--name-only", "HEAD"],
+    ):
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if res.returncode == 0 and res.stdout.strip():
+                return [line.strip() for line in res.stdout.splitlines() if line.strip()]
+        except Exception:
+            pass
+    return []
+
+
+def check_pr_spec_gate(
+    repo_root: str = ".",
+    pr_number: Optional[int] = None,
+    strict: bool = False,
+    changed_files: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Check that any specifications modified or added in this PR pass constitutional spec linting.
+
+    Returns a dict with:
+        passed: bool
+        specs_checked: List[str]
+        findings: List[Dict[str, Any]]
+        error: Optional[str]
+        message: Optional[str]
+    """
+    if changed_files is None:
+        changed_files = _get_changed_files_in_pr(repo_root, pr_number)
+
+    spec_files: List[str] = []
+    for f in (changed_files or []):
+        norm_f = f.replace("\\", "/").lstrip("./")
+        if norm_f.startswith("docs/superpowers/specs/") and norm_f.endswith(".md"):
+            spec_files.append(norm_f)
+
+    if not spec_files:
+        return {
+            "passed": True,
+            "specs_checked": [],
+            "findings": [],
+            "error": None,
+            "message": "No specifications modified in this PR.",
+        }
+
+    from synlynk.spec_lint import lint_spec_file, load_known_decision_ids, load_known_goal_ids
+
+    known_goals = load_known_goal_ids(repo_root=repo_root)
+    known_decisions = load_known_decision_ids(repo_root=repo_root)
+
+    all_findings: List[Dict[str, Any]] = []
+    errors_count = 0
+    checked_existing: List[str] = []
+
+    for spec_rel in spec_files:
+        full_path = os.path.join(repo_root, spec_rel)
+        if not os.path.exists(full_path):
+            continue
+        checked_existing.append(spec_rel)
+
+        findings = lint_spec_file(
+            full_path,
+            repo_root=repo_root,
+            known_goals=known_goals,
+            known_decisions=known_decisions,
+            strict=strict,
+        )
+        for f in findings:
+            all_findings.append({
+                "file": f.spec_path,
+                "rule": f.rule,
+                "severity": f.severity,
+                "message": f.message,
+                "line": f.line,
+            })
+            if f.severity == "ERROR" or (strict and f.severity == "WARN"):
+                errors_count += 1
+
+    if not checked_existing:
+        return {
+            "passed": True,
+            "specs_checked": [],
+            "findings": [],
+            "error": None,
+            "message": "No existing specifications modified in this PR.",
+        }
+
+    if errors_count > 0:
+        return {
+            "passed": False,
+            "specs_checked": checked_existing,
+            "findings": all_findings,
+            "error": f"Constitutional spec linting failed with {errors_count} error(s) across modified specifications.",
+            "message": f"{errors_count} error(s) detected in touched specifications.",
+        }
+
+    return {
+        "passed": True,
+        "specs_checked": checked_existing,
+        "findings": all_findings,
+        "error": None,
+        "message": f"All {len(checked_existing)} modified specification(s) passed constitutional linting.",
     }
