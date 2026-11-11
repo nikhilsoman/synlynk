@@ -333,7 +333,7 @@ _TOP_LEVEL_COMMANDS = (
     "instructions", "marketing", "roles", "release", "viz", "provenance",
     "backfill-capability-ratings",
     "board", "concierge", "addon", "autonomy", "context",
-    "gateway",
+    "gateway", "spec",
 )
 
 
@@ -512,6 +512,14 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     pack_parser.add_argument("target", help="Task description or story ID (e.g. story-1234)")
     pack_parser.add_argument("--budget", type=int, default=3000, help="Token budget ceiling (default: 3000)")
     pack_parser.add_argument("--inspect", action="store_true", help="Display token estimate breakdown by section")
+
+    spec_parser = subparsers.add_parser(
+        "spec", help="Validate and manage architecture specifications against constitutional rules"
+    )
+    spec_sub = spec_parser.add_subparsers(dest="spec_action")
+    spec_lint_parser = spec_sub.add_parser("lint", help="Lint specification frontmatter against constitutional rules")
+    spec_lint_parser.add_argument("spec_file", nargs="?", help="Specific spec markdown file to lint (optional)")
+    spec_lint_parser.add_argument("--strict", action="store_true", help="Treat warnings as errors (fail-closed)")
 
     connector_parser = subparsers.add_parser(
         "connector", help="Catalog a product-scoped outbound connector"
@@ -4159,6 +4167,9 @@ def main(argv=None) -> None:
                 auto_checkpoint=args.auto_checkpoint,
             )
             print(inject(content_pack))
+    elif args.command == "spec":
+        from synlynk.spec_lint import cmd_spec_lint
+        sys.exit(cmd_spec_lint(args))
     else:
         parser.print_help()
 
