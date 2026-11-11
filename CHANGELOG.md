@@ -9,6 +9,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.32.2] - 2026-11-11
+### Added
+- **TPM Autonomous Operations & Human-in-the-Loop Gate (Theme 4) (#5209):**
+  - Interactive comment commands grammar in `process_proposal_comments`: `/approve`, `/revise <instructions>`, `/drop <story_id>`, `/prioritize <story_id>`, `/hold`.
+  - Continuous background evaluation: connected `run_tpm_wake_cycle()` to `_autonomous_tick()` in `synlynk/daemon.py`.
+  - Asimov's Laws & Invariants Verification Engine (`evaluate_asimov_invariants`): verifies Laws 0 (Secrets & System Integrity), 1 (Human Sovereignty), 2 (Evidence Over Assertions), and 3 (Metered Self-Preservation / FinOps) before any task dispatch.
+  - Automated backlog hygiene: `archive_superseded_stories()` auto-retires obsolete backlog items tagged with `superseded_by='dec-4e81b29a'`.
+- **Roadmap Thematic Re-Prioritization & Asset Sweep (DECIDE dec-4e81b29a):**
+  - Ratified authoritative execution order: **Theme 4 $\rightarrow$ Theme 1 $\rightarrow$ Theme 3 $\rightarrow$ Theme 6 $\rightarrow$ Theme 2 $\rightarrow$ Theme 5 $\rightarrow$ Theme 7**.
+  - Formally retired 5 superseded specs and 2 stale strategy documents.
+
 ## [v0.32.1] - 2026-11-11
 ### Added
 - **Document Sidecar Knowledge Graph (`.synlynk/docgraph.json`) (#5205):**
