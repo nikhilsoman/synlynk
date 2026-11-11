@@ -6,15 +6,15 @@
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
 <p align="center">
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5553%20collected-brightgreen" alt="Tests"</a>
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.31.0-blue" alt="Version"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5575%20collected-brightgreen" alt="Tests"</a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.32.0-blue" alt="Version"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-Apache--2.0-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
 </p>
 
 Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. The Python CLI injects scoped project context into every dispatch, uses empirical harness allocation only after a harness has at least five completed, merged jobs for the relevant task type, and follows the documented interim policy until then. See the [empirical capability policy](docs/blog/244-chore-empirical-capability-policy.md) and [routing policy](.synlynk/policy.json). Synlynk also tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
-**v0.31.0:** Autonomous Fleet Governance & TPM Agent — 6 Universal Archetypes with 1:N cross-domain cardinality, in-repo domain profile packs (Software, Hitchcock, Rxcc), 3-Tier Autonomy Evolutionary Ladder (L1 Advisory -> L2 Gated -> L3 Autonomous) with Sentinel demotion tripwires, and interactive Visual Organogram Canvas.
+**v0.32.0:** Sub-3k Context Packager, Zero-Drift Currency & Sovereign Silicon Gateway Inception — Sub-3k token graph traversal context compression, AST knowledge graph currency verification against origin/main HEAD, and auto-discovery for NVIDIA DGX Spark, vLLM, and LiteLLM OpenAI-compatible endpoints.
 
 ## Documentation
 
