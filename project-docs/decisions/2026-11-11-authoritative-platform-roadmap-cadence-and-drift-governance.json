@@ -1,0 +1,94 @@
+{
+  "decision_id": "dec-9b41a7c3",
+  "topic": "Authoritative Master Roadmap Cadence (Daily Milestones, Weekly Themes, Monthly Expansions, Quarterly Arcs), Platform Vision Integration, Non-Breaking Incremental Release Invariant, and Sovereign Silicon Expansion (Apple Silicon, NVIDIA DGX Spark, and Linux AI Runtimes)",
+  "date": "2026-11-11",
+  "panel": ["claude", "agy", "codex", "grok"],
+  "status": "approved",
+  "primary_goal": "goal-2458-master-roadmap",
+  "governing_loop": "goal-eacab0dc",
+  "target_milestone": "v0.33.0",
+  "shipped_foundation": {
+    "v0.30.0": "Agent Studio full delivery (8 phases, 20 tasks, 10-role taxonomy, BAU charter editor, capability registry) - Commit 69689660 (#5190/#5193)",
+    "v0.31.0": "Autonomous Fleet Governance, Universal Archetypes (6 archetypes, 1:N cardinality), RSI Autonomy Ladder (L1/L2/L3), Domain Profile Packs (software, hitchcock, rxcc), Organogram Inspector View, and VS Code Extension Publication - Commit d118a782 (#5195/#5196)"
+  },
+  "ratified_cadence": {
+    "tier_1_daily_named_releases": [
+      {
+        "day": "Day 1 (Nov 11)",
+        "version": "v0.32.0",
+        "name": "Currency Crown & Gateway Inception",
+        "theme": "Tag v0.32.0, Sub-3k Packager & Zero-Drift Engine lock. Includes Approach 3: OpenAI-Compatible Gateway Discovery (OPENAI_BASE_URL, SYNLYNK_LOCAL_AI_URL, VLLM_BASE_URL auto-probing for NVIDIA DGX Spark, vLLM, LiteLLM, OpenRouter). 100% non-breaking."
+      },
+      {
+        "day": "Day 2 (Nov 12)",
+        "version": "v0.32.1",
+        "name": "Living Ledger",
+        "theme": "Document Sidecar Knowledge Graph in synlynk/scan.py & .synlynk/docgraph.json. Bi-directional AST-to-spec indexing across code, specs, and decisions."
+      },
+      {
+        "day": "Day 3 (Nov 13)",
+        "version": "v0.32.2",
+        "name": "Constitutional Gate",
+        "theme": "synlynk spec lint frontmatter gate in pr check (parent_goal, target_release, decision_id against state.db)."
+      },
+      {
+        "day": "Day 4 (Nov 14)",
+        "version": "v0.32.3",
+        "name": "Sovereign Silicon Deep Integration",
+        "theme": "Local dispatch execution engine for DGX Spark / vLLM streaming responses, Apple Silicon MLX driver, and multi-GPU load balancing."
+      },
+      {
+        "day": "Day 5 (Nov 15)",
+        "version": "v0.32.4",
+        "name": "Harness Inception & Multi-Gateway",
+        "theme": "Empirical cross-harness benchmark & OpenRouter / LiteLLM BYOK multi-key failover and provider rate-limit telemetry."
+      },
+      {
+        "day": "Day 6 (Nov 16)",
+        "version": "v0.32.5",
+        "name": "Cloud Wedge Shell",
+        "theme": "synlynk.com Phase 0: S3 + CloudFront dynamic shell with Lambda + API Gateway HTTP auth/registration endpoints."
+      },
+      {
+        "day": "Day 7 (Nov 17)",
+        "version": "v0.33.0",
+        "name": "Cloud Wedge GA",
+        "theme": "Full Sovereign Silicon Parity (Apple Silicon + NVIDIA DGX Spark), Document Sidecar Graph & synlynk.com Accounts Foundation."
+      }
+    ],
+    "tier_2_weekly_themes": [
+      {"week": "Week 1 (Nov 11 - Nov 17)", "theme": "The Sovereign Fleet & Gateway Inception (v0.32.0 - v0.33.0)"},
+      {"week": "Week 2 (Nov 18 - Nov 24)", "theme": "The Cloud Wedge & Hosted Dynamic Shell (v0.34.0)"},
+      {"week": "Week 3 (Nov 25 - Dec 01)", "theme": "Connected Vizor & Multi-Tenant Relay Hub (v0.35.0)"},
+      {"week": "Week 4 (Dec 02 - Dec 08)", "theme": "Mobile Command & Remote MCP (v0.36.0)"},
+      {"week": "Week 5 (Dec 09 - Dec 15)", "theme": "Elastic Cloud Swarms & Spot Runners (v0.37.0)"},
+      {"week": "Week 6 (Dec 16 - Dec 22)", "theme": "Synaptic AI Capability Index GTM (v0.38.0)"}
+    ],
+    "tier_3_monthly_expansions": [
+      {"month": "November 2026", "theme": "The Sovereign Engine & Cloud Wedge (v0.32.0 - v0.34.0)"},
+      {"month": "December 2026", "theme": "Connected Swarms & Public Capability Index (v0.35.0 - v0.38.0)"},
+      {"month": "January 2027", "theme": "Enterprise Multi-Agent Organisation GA (v1.0.0 - v1.1.0)"}
+    ],
+    "tier_4_quarterly_arcs": [
+      {"quarter": "Q4 2026", "arc": "The Sovereign Wedge & Cloud Core (Paradigm 2a Completion)"},
+      {"quarter": "Q1 2027", "arc": "Multi-Developer Teams & Elastic Swarms (Paradigm 2b Kickoff)"},
+      {"quarter": "Q2 2027", "arc": "The Autonomous Enterprise (Paradigm 2b GA)"}
+    ]
+  },
+  "non_breaking_release_invariant": {
+    "database_schema": "Strictly additive SQLite migrations; no column drops or renames without multi-release deprecation",
+    "cli_interface": "No flag or verb removals without 3-minor-release deprecation window",
+    "configuration_resilience": "Graceful fallback for missing config or policy keys; zero state wipeouts",
+    "automated_smoke_gate": "Clean sandbox FTUE first-win journey gated before any release"
+  },
+  "sovereign_silicon_matrix": {
+    "macos": "Apple Silicon M-series via MLX and oMLX unified memory driver",
+    "linux_enterprise": "NVIDIA DGX Spark / DGX SuperPOD / HGX via vLLM, TensorRT-LLM, and TGI",
+    "cross_platform": "Ollama local socket (http://localhost:11434) and generic local OpenAI endpoints"
+  },
+  "anti_drift_framework": {
+    "component_a": "Document Sidecar Knowledge Graph indexing docs/ and project-docs/ with cross-AST links to code",
+    "component_b": "Fail-closed frontmatter linter (synlynk spec lint) enforced in synlynk pr check",
+    "staging_quarantine": "docs/superpowers/specs/proposals/ for WIP drafts"
+  }
+}

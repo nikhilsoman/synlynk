@@ -753,23 +753,30 @@ def discovered_model_ids(harness: str) -> list[str]:
     return list(ids)
 
 
-def _probe_http(url: str, timeout: float = 1.5) -> list[str]:
+def _probe_http(url: str, timeout: float = 1.5, headers: dict | None = None) -> list[str]:
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as response:
+        req = urllib.request.Request(url, headers=headers or {})
+        with urllib.request.urlopen(req, timeout=timeout) as response:
             payload = json.loads(response.read().decode("utf-8"))
-        values = payload.get("models", []) if isinstance(payload, dict) else payload
-        return [str(item.get("name") or item.get("id")) for item in values if isinstance(item, dict) and (item.get("name") or item.get("id"))]
+        if isinstance(payload, dict):
+            values = payload.get("data") or payload.get("models") or []
+        else:
+            values = payload
+        return [str(item.get("id") or item.get("name")) for item in values if isinstance(item, dict) and (item.get("id") or item.get("name"))]
     except (OSError, ValueError, urllib.error.URLError):
         return []
 
 
 def probe_local_runtimes(timeout: float = 1.5) -> list[ModelSpec]:
     found: list[ModelSpec] = []
+    # 1. Probe standard Ollama socket
     ollama = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
     if not ollama.startswith("http"):
         ollama = "http://" + ollama
     for name in _probe_http(ollama + "/api/tags", timeout):
         found.append(ModelSpec(name, "discovered", "local", locality="on_device_local", entitlement_tier=EntitlementTier.ZERO_COST_LOCAL, discovered=True, discovery_source="ollama:/api/tags"))
+    
+    # 2. Probe oMLX Apple Silicon local socket
     base = os.environ.get("OMLX_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
     for path in ("/v1/models", "/api/models"):
         for name in _probe_http(base + path, timeout):
@@ -779,6 +786,29 @@ def probe_local_runtimes(timeout: float = 1.5) -> list[ModelSpec]:
         for path in model_dir.rglob("*"):
             if path.is_file() and path.suffix.lower() in {".gguf", ".safetensors", ".mlx"}:
                 found.append(ModelSpec(path.stem, "discovered", "local", locality="on_device_local", entitlement_tier=EntitlementTier.ZERO_COST_LOCAL, discovered=True, discovery_source="omlx:filesystem"))
+    
+    # 3. Probe OpenAI-compatible gateways: NVIDIA DGX Spark, vLLM, LiteLLM, or custom local OpenAI endpoint
+    # Checked via OPENAI_BASE_URL, SYNLYNK_LOCAL_AI_URL, or VLLM_BASE_URL
+    gateway_urls: list[tuple[str, str]] = []
+    for env_var, source_tag in (
+        ("OPENAI_BASE_URL", "openai_gateway"),
+        ("SYNLYNK_LOCAL_AI_URL", "local_ai"),
+        ("VLLM_BASE_URL", "vllm"),
+    ):
+        raw_val = os.environ.get(env_var, "").strip()
+        if raw_val:
+            if not raw_val.startswith("http"):
+                raw_val = "http://" + raw_val
+            gateway_urls.append((raw_val.rstrip("/"), source_tag))
+
+    api_key = os.environ.get("SYNLYNK_LOCAL_AI_KEY") or os.environ.get("OPENAI_API_KEY")
+    req_headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+
+    for g_url, source_tag in gateway_urls:
+        models_url = g_url if g_url.endswith("/models") else f"{g_url}/models"
+        for name in _probe_http(models_url, timeout, headers=req_headers):
+            found.append(ModelSpec(name, "discovered", "local", locality="on_device_local", entitlement_tier=EntitlementTier.ZERO_COST_LOCAL, discovered=True, discovery_source=f"{source_tag}:{models_url}"))
+
     return list({m.model_id: m for m in found}.values())
 
 
