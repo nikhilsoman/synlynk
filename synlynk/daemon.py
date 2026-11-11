@@ -656,6 +656,31 @@ class WatchDaemon:
             from synlynk.dispatch import _warn_context_build_failure
             _warn_context_build_failure("graph daemon refresh", str(exc), repo_root)
 
+    def _check_auto_update_and_upgrade(self) -> None:
+        """Periodic background update check & optional auto-upgrade."""
+        now = time.time()
+        if now - getattr(self, "_last_update_check_attempt", 0.0) < 3600.0:
+            return  # 1 hour cooldown
+
+        self._last_update_check_attempt = now
+        try:
+            from synlynk.upgrade import check_for_updates_cached, maybe_auto_upgrade
+
+            cfg_path = os.path.join(self.workspace_root, ".synlynk", "config.json")
+            cfg = {}
+            if os.path.isfile(cfg_path):
+                try:
+                    with open(cfg_path, "r", encoding="utf-8") as f:
+                        cfg = json.load(f)
+                except Exception:
+                    pass
+
+            check_for_updates_cached()
+            if cfg.get("auto_upgrade", False):
+                maybe_auto_upgrade(config=cfg)
+        except Exception:
+            pass
+
     def _run_loop(self) -> None:
         config = _pkg("load_config")()
         interval = config.get("watch_interval_seconds", 30)
@@ -665,6 +690,7 @@ class WatchDaemon:
         # in the same post-daemonization execution path as periodic refreshes.
         self._refresh_github_tokens()
         self._check_graph_staleness_and_refresh()
+        self._check_auto_update_and_upgrade()
         last_token_refresh = time.time()
         while True:
             time.sleep(interval)
@@ -678,6 +704,7 @@ class WatchDaemon:
                 _pkg("set_state")("watching")
                 last_mtimes = self._get_mtimes("project-docs")
             self._check_graph_staleness_and_refresh()
+            self._check_auto_update_and_upgrade()
             if time.time() - last_token_refresh >= self.token_refresh_interval_seconds:
                 self._refresh_github_tokens()
                 last_token_refresh = time.time()

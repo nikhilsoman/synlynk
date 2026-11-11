@@ -139,3 +139,25 @@ def test_ensure_docgraph_creates_sidecar(tmp_path):
     data = json.loads(docgraph_path.read_text(encoding="utf-8"))
     assert "docs/index.md" in data["nodes"]
 
+
+def test_docgraph_skips_transient_dirs(tmp_path):
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    (docs_dir / "valid.md").write_text("# Valid Doc", encoding="utf-8")
+
+    # Transient dirs that must be ignored
+    worktree_dir = tmp_path / "worktrees" / "nested"
+    worktree_dir.mkdir(parents=True, exist_ok=True)
+    (worktree_dir / "skip.md").write_text("# Should Skip", encoding="utf-8")
+
+    claude_dir = tmp_path / ".claude" / "transcripts"
+    claude_dir.mkdir(parents=True, exist_ok=True)
+    (claude_dir / "skip2.md").write_text("# Should Skip 2", encoding="utf-8")
+
+    graph = build_docgraph(str(tmp_path))
+    paths = list(graph.nodes.keys())
+    assert "docs/valid.md" in paths
+    assert not any("worktrees/" in p for p in paths)
+    assert not any(".claude/" in p for p in paths)
+
+

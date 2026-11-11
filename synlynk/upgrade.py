@@ -4,7 +4,11 @@ import json
 import os
 import subprocess
 import sys
+import threading
+import time
 import urllib.request
+from datetime import datetime, timezone
+from typing import Optional
 
 from synlynk._constants import VERSION
 from synlynk.scan import _run_graphify_extract
@@ -216,6 +220,177 @@ def _ensure_vizor_daemon_installed() -> None:
         pass
 
 
+def fetch_latest_remote_version(timeout: int = 5) -> Optional[str]:
+    """Query GitHub releases or PyPI for the latest published synlynk version."""
+    # 1. Try gh CLI
+    try:
+        result = subprocess.run(
+            ["gh", "api", "repos/nikhilsoman/synlynk/releases/latest", "--jq", ".tag_name"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        if result.returncode == 0:
+            tag = result.stdout.strip().lstrip("v")
+            if tag:
+                return tag
+    except Exception:
+        pass
+
+    # 2. Try unauthenticated GitHub releases API
+    url = "https://api.github.com/repos/nikhilsoman/synlynk/releases/latest"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": f"synlynk/{VERSION}"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode())
+        tag = data.get("tag_name", "").lstrip("v")
+        if tag:
+            return tag
+    except Exception:
+        pass
+
+    # 3. Fall back to PyPI API
+    pypi_url = "https://pypi.org/pypi/synlynk/json"
+    try:
+        req = urllib.request.Request(pypi_url, headers={"User-Agent": f"synlynk/{VERSION}"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode())
+        tag = data.get("info", {}).get("version", "").strip().lstrip("v")
+        if tag:
+            return tag
+    except Exception:
+        pass
+
+    return None
+
+
+def _default_update_cache_path() -> str:
+    home = os.path.expanduser("~/.synlynk")
+    os.makedirs(home, exist_ok=True)
+    return os.path.join(home, "update_check.json")
+
+
+def write_update_cache(
+    current_version: str,
+    latest_version: str,
+    update_available: bool,
+    cache_path: Optional[str] = None,
+) -> None:
+    path = cache_path or _default_update_cache_path()
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        data = {
+            "checked_at_ts": time.time(),
+            "checked_at_iso": datetime.now(timezone.utc).isoformat(),
+            "current_version": current_version,
+            "latest_version": latest_version,
+            "update_available": update_available,
+        }
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception:
+        pass
+
+
+def read_update_cache(cache_path: Optional[str] = None) -> Optional[dict]:
+    path = cache_path or _default_update_cache_path()
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
+def check_for_updates_cached(
+    current_version: Optional[str] = None,
+    cache_path: Optional[str] = None,
+    ttl_seconds: int = 86400,
+) -> dict:
+    cur = current_version or VERSION
+    cached = read_update_cache(cache_path=cache_path)
+    now = time.time()
+
+    if cached and (now - float(cached.get("checked_at_ts", 0))) < ttl_seconds:
+        return cached
+
+    latest = fetch_latest_remote_version()
+    if not latest:
+        return cached or {
+            "checked_at_ts": now,
+            "current_version": cur,
+            "latest_version": cur,
+            "update_available": False,
+        }
+
+    update_available = _ver_tuple(latest) > _ver_tuple(cur)
+    write_update_cache(
+        current_version=cur,
+        latest_version=latest,
+        update_available=update_available,
+        cache_path=cache_path,
+    )
+    return {
+        "checked_at_ts": now,
+        "current_version": cur,
+        "latest_version": latest,
+        "update_available": update_available,
+    }
+
+
+def check_for_updates_background(
+    current_version: Optional[str] = None,
+    cache_path: Optional[str] = None,
+    ttl_seconds: int = 86400,
+) -> None:
+    """Non-blocking background update check thread."""
+    thread = threading.Thread(
+        target=check_for_updates_cached,
+        kwargs={
+            "current_version": current_version,
+            "cache_path": cache_path,
+            "ttl_seconds": ttl_seconds,
+        },
+        daemon=True,
+    )
+    thread.start()
+
+
+def get_update_notice(cache_path: Optional[str] = None) -> Optional[str]:
+    """Return formatted update notification string if a newer version is available."""
+    cached = read_update_cache(cache_path=cache_path)
+    if not cached or not cached.get("update_available"):
+        return None
+
+    cur = cached.get("current_version", VERSION)
+    latest = cached.get("latest_version", "")
+    if not latest or _ver_tuple(latest) <= _ver_tuple(cur):
+        return None
+
+    return (
+        f"💡 A newer version of synlynk is available (v{cur} → v{latest}). "
+        f"Run 'synlynk upgrade' to update."
+    )
+
+
+def maybe_auto_upgrade(
+    config: Optional[dict] = None, cache_path: Optional[str] = None
+) -> bool:
+    """Safely execute automated upgrade if enabled in workspace config and an update exists."""
+    cfg = config or {}
+    if not cfg.get("auto_upgrade", False):
+        return False
+
+    cached = check_for_updates_cached(cache_path=cache_path)
+    if not cached.get("update_available"):
+        return False
+
+    upgrade(dry_run=False)
+    return True
+
+
 def upgrade(dry_run: bool = False) -> None:
     """Checks GitHub releases for a newer version and auto-installs if one is found."""
     print(f"Checking for updates... (current: v{VERSION})")
@@ -238,34 +413,23 @@ def upgrade(dry_run: bool = False) -> None:
         package, "_warn_stale_script_install", _warn_stale_script_install
     )
     try:
-        # Try gh CLI first — works for private repos and avoids unauthenticated rate limits.
-        try:
-            result = subprocess.run(
-                ["gh", "api", "repos/nikhilsoman/synlynk/releases/latest", "--jq", ".tag_name"],
-                capture_output=True, text=True
+        latest = fetch_latest_remote_version()
+        if latest and _ver_tuple(latest) > _ver_tuple(VERSION):
+            run_upgrade(latest)
+            write_update_cache(
+                current_version=latest,
+                latest_version=latest,
+                update_available=False,
             )
-            if result.returncode == 0:
-                latest = result.stdout.strip().lstrip("v")
-                if latest and _ver_tuple(latest) > _ver_tuple(VERSION):
-                    run_upgrade(latest)
-                else:
-                    print(f"  ✓ You are on the latest version (v{VERSION}).")
-                return
-        except Exception:
-            pass
-        # Fall back to unauthenticated GitHub API (works for public repos).
-        url = "https://api.github.com/repos/nikhilsoman/synlynk/releases/latest"
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": f"synlynk/{VERSION}"})
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                data = json.loads(resp.read().decode())
-            latest = data.get("tag_name", "").lstrip("v")
-            if latest and _ver_tuple(latest) > _ver_tuple(VERSION):
-                run_upgrade(latest)
-            else:
-                print(f"  ✓ You are on the latest version (v{VERSION}).")
-        except Exception as e:
-            print(f"  ⚠ Could not check for updates: {e}")
+        elif latest:
+            print(f"  ✓ You are on the latest version (v{VERSION}).")
+            write_update_cache(
+                current_version=VERSION,
+                latest_version=latest,
+                update_available=False,
+            )
+        else:
+            print(f"  ⚠ Could not check for updates.")
             print("  Check manually: https://github.com/nikhilsoman/synlynk/releases")
     finally:
         warn_stale_script_install()

@@ -2435,6 +2435,18 @@ def main(argv=None) -> None:
 
         print(f"synlynk {VERSION}")
         return
+
+    # Non-intrusive background update check
+    try:
+        from synlynk.upgrade import check_for_updates_background, get_update_notice
+
+        check_for_updates_background()
+        notice = get_update_notice()
+        if notice and sys.stderr.isatty() and not any(t in cli_tokens for t in ["--json", "pack", "--raw"]):
+            print(f"\n  {notice}\n", file=sys.stderr)
+    except Exception:
+        pass
+
     fast_entrypoint = _package._FAST_CLI
     selected_command = _command_from_argv(cli_tokens)
     if cli_tokens and cli_tokens[0] == "help":

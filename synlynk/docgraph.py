@@ -203,23 +203,41 @@ def extract_document_node(file_path: str, repo_root: str) -> DocumentNode:
     )
 
 
+_DOC_SKIP_DIRS = {
+    ".git",
+    ".synlynk",
+    ".worktrees",
+    "worktrees",
+    ".claude",
+    ".gemini",
+    ".codex",
+    ".grok",
+    ".superpowers",
+    "test_archive",
+    "test_context_output",
+    "node_modules",
+    "venv",
+    ".venv",
+    "env",
+    "dist",
+    "build",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".nyc_output",
+    ".next",
+    "out",
+    "target",
+    "vendor",
+    "tmp",
+}
+
+
 def _find_markdown_files(repo_root: str) -> List[str]:
     """Discover all non-ignored markdown files in the repository."""
-    skip_dirs = {
-        ".git",
-        ".synlynk",
-        ".worktrees",
-        "node_modules",
-        "venv",
-        ".venv",
-        "dist",
-        "build",
-        "__pycache__",
-        ".pytest_cache",
-    }
     md_files: List[str] = []
     for root, dirs, files in os.walk(repo_root):
-        dirs[:] = [d for d in dirs if d not in skip_dirs]
+        dirs[:] = [d for d in dirs if d not in _DOC_SKIP_DIRS and not d.startswith(".tmp")]
         for f in files:
             if f.endswith(".md"):
                 md_files.append(os.path.join(root, f))
