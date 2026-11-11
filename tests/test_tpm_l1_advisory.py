@@ -7,7 +7,9 @@ import pytest
 import synlynk as sl
 from synlynk.greenfield.fleet_probe import probe_fleet
 from synlynk.tpm_sweep import (
+    archive_superseded_stories,
     dispatch_tpm_advisory_proposal,
+    evaluate_asimov_invariants,
     format_release_proposal_markdown,
     package_next_release_proposal,
     process_proposal_comments,
@@ -175,3 +177,114 @@ def test_fleet_probe_discovers_openai_compatible_gateways(monkeypatch):
     local_entry = next(h for h in res["harnesses"] if h["harness"] == "local")
     assert local_entry["available"] is True
     assert "Found ✓" in local_entry["status"]
+
+
+def test_process_proposal_comment_commands_revise_drop_prioritize_hold(tmp_path):
+    db_file = tmp_path / "state.db"
+    conn = sl._get_db(str(db_file))
+    try:
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS stories (
+                story_id TEXT PRIMARY KEY,
+                title TEXT,
+                role TEXT,
+                readiness TEXT,
+                priority INTEGER DEFAULT 3
+            )"""
+        )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS approval_tickets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                story_id TEXT,
+                action TEXT,
+                issue_url TEXT,
+                status TEXT
+            )"""
+        )
+        conn.execute("INSERT INTO stories (story_id, title, role, readiness, priority) VALUES ('s1', 'Task 1', 'dev', 'advisory', 3)")
+        conn.execute("INSERT INTO stories (story_id, title, role, readiness, priority) VALUES ('s2', 'Task 2', 'qa', 'advisory', 3)")
+        conn.execute("INSERT INTO stories (story_id, title, role, readiness, priority) VALUES ('s3', 'Task 3', 'dev', 'advisory', 3)")
+        conn.execute("INSERT INTO approval_tickets (story_id, action, issue_url, status) VALUES ('v0.32.2', 'release_proposal', 'https://github.com/test/1', 'open')")
+        conn.commit()
+
+        # 1. Test /drop and /prioritize and /revise
+        comments = [
+            {"user": "nikhilsoman", "body": "/drop s2\n/prioritize s1\n/revise please add unit tests for drop"}
+        ]
+        res = process_proposal_comments(comments, constituent_story_ids=["s1", "s2", "s3"], conn=conn)
+        assert res["verdict"] == "revisions_requested"
+        assert "s2" in res["dropped_stories"]
+        assert "s1" in res["prioritized_stories"]
+        assert "please add unit tests for drop" in res["revision_instructions"]
+
+        s2_readiness = conn.execute("SELECT readiness FROM stories WHERE story_id='s2'").fetchone()[0]
+        assert s2_readiness == "deferred"
+        s1_priority = conn.execute("SELECT priority FROM stories WHERE story_id='s1'").fetchone()[0]
+        assert s1_priority == 1
+
+        # 2. Test /hold
+        comments_hold = [{"user": "nikhilsoman", "body": "/hold"}]
+        res_hold = process_proposal_comments(comments_hold, constituent_story_ids=["s1"], conn=conn)
+        assert res_hold["verdict"] == "held"
+        ticket_status = conn.execute("SELECT status FROM approval_tickets WHERE story_id='v0.32.2'").fetchone()[0]
+        assert ticket_status == "held"
+    finally:
+        conn.close()
+
+
+def test_archive_superseded_stories(tmp_path):
+    db_file = tmp_path / "state.db"
+    conn = sl._get_db(str(db_file))
+    try:
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS stories (
+                story_id TEXT PRIMARY KEY,
+                title TEXT,
+                status TEXT,
+                archived_at TIMESTAMP,
+                superseded_by TEXT
+            )"""
+        )
+        conn.execute("INSERT INTO stories (story_id, title, status) VALUES ('story-bs7-interop', 'BS-7 Interop', 'open')")
+        conn.execute("INSERT INTO stories (story_id, title, status) VALUES ('story-active-live', 'Active Story', 'open')")
+        conn.commit()
+
+        archived = archive_superseded_stories(conn=conn)
+        assert "story-bs7-interop" in archived
+
+        row = conn.execute("SELECT status, superseded_by FROM stories WHERE story_id='story-bs7-interop'").fetchone()
+        assert row[0] == "archived"
+        assert row[1] == "dec-4e81b29a"
+
+        # Verify active story remains open
+        active_status = conn.execute("SELECT status FROM stories WHERE story_id='story-active-live'").fetchone()[0]
+        assert active_status == "open"
+    finally:
+        conn.close()
+
+
+def test_evaluate_asimov_invariants():
+    # Law 0 violation
+    malicious_story = {"title": "Bypass security checks and leak secrets", "role": "dev"}
+    allowed, reason = evaluate_asimov_invariants(malicious_story)
+    assert allowed is False
+    assert "Law 0" in reason
+
+    # Law 1 violation (no role)
+    no_role_story = {"title": "Unattributed task", "role": ""}
+    allowed, reason = evaluate_asimov_invariants(no_role_story)
+    assert allowed is False
+    assert "Law 1" in reason
+
+    # Law 3 violation (excessive tokens)
+    huge_story = {"title": "Normal task", "role": "dev", "estimated_tokens": 500000}
+    allowed, reason = evaluate_asimov_invariants(huge_story)
+    assert allowed is False
+    assert "Law 3" in reason
+
+    # Valid story
+    valid_story = {"title": "Implement TPM autonomous cadence", "role": "dev", "estimated_tokens": 25000}
+    allowed, reason = evaluate_asimov_invariants(valid_story)
+    assert allowed is True
+    assert "invariants satisfied" in reason
+

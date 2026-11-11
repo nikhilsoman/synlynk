@@ -1374,9 +1374,9 @@ class SynlynkDaemon(WatchDaemon):
         """Run one bounded heal/TPM pass and leave an SRE heartbeat."""
         try:
             from synlynk.heal import cmd_heal
-            from synlynk.tpm_sweep import run_sweep_pass
+            from synlynk.tpm_sweep import run_tpm_wake_cycle
             cmd_heal(batch_size=1, auto_merge=False)
-            run_sweep_pass()
+            run_tpm_wake_cycle()
             log_telemetry_event({"event": "sre_heartbeat", "status": "ok", "component": "autonomous_loop"})
         except Exception as exc:
             log_telemetry_event({"event": "sre_heartbeat", "status": "degraded", "component": "autonomous_loop", "error": str(exc)})

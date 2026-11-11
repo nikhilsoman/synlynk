@@ -1,0 +1,35 @@
+{
+  "decision_id": "dec-4e81b29a",
+  "topic": "Authoritative Master Roadmap Thematic Prioritization (4 -> 1 -> 3 -> 6 -> 2 -> 5 -> 7), Comprehensive Spec/Plan/Backlog Sweep, and Stale/Superseded Asset Retirement",
+  "date": "2026-11-11",
+  "panel": ["claude", "agy", "codex", "grok"],
+  "status": "approved",
+  "primary_goal": "goal-2458-master-roadmap",
+  "governing_loop": "goal-eacab0dc",
+  "target_milestone": "v0.32.2",
+  "prioritized_theme_order": [4, 1, 3, 6, 2, 5, 7],
+  "theme_definitions": {
+    "theme_4": "TPM Autonomous Operations & Human-in-the-Loop Cadence",
+    "theme_1": "Zero-Drift Governance & Document Mesh",
+    "theme_3": "FinOps, Burn-Rate & Multi-Agent Telemetry",
+    "theme_6": "The Cloud Wedge & Swarm Infrastructure (synlynk.com)",
+    "theme_2": "Sovereign Silicon & Local Model Parity",
+    "theme_5": "Ambient Co-Pilot, Fenced Companion & Conversational DevEx (Companion v2.1)",
+    "theme_7": "Synaptic AI Capability Index & Global Pre-Flight Oracle"
+  },
+  "superseded_specs": [
+    "docs/superpowers/specs/2026-07-20-state-engine-tiered-design.md",
+    "docs/superpowers/specs/2026-06-27-bs8-harness-capability-awareness-loop-dispatch-design.md",
+    "docs/superpowers/specs/2026-06-21-synlynk-roadmap-realignment-design.md",
+    "docs/superpowers/specs/2026-08-31-agy-stitch-mcp-integration-design.md",
+    "docs/superpowers/specs/2026-09-04-distributed-sync-research.md"
+  ],
+  "stale_backlog_stories": [
+    "story-bs7-interop",
+    "story-ab6a0586",
+    "story-e3a3170a",
+    "story-fda756fd",
+    "story-360c0d73",
+    "story-dda00e7b"
+  ]
+}

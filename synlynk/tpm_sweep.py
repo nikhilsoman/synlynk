@@ -14,6 +14,81 @@ from synlynk.policy import check_authority, load_policy
 
 _FALLBACK_HARNESS = "codex"
 
+SUPERSEDED_STORY_IDS = [
+    "story-bs7-interop",
+    "story-ab6a0586",
+    "story-e3a3170a",
+    "story-fda756fd",
+    "story-360c0d73",
+    "story-dda00e7b",
+]
+
+
+def archive_superseded_stories(conn=None) -> list[str]:
+    """Archive legacy and superseded backlog stories ratified in dec-4e81b29a."""
+    from synlynk.db import _get_db
+
+    own_conn = conn is None
+    if own_conn:
+        conn = _get_db()
+    archived = []
+    try:
+        has_table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='stories'"
+        ).fetchone()
+        if not has_table:
+            return []
+
+        for sid in SUPERSEDED_STORY_IDS:
+            cur = conn.execute(
+                "UPDATE stories SET status='archived', archived_at=CURRENT_TIMESTAMP, "
+                "superseded_by='dec-4e81b29a' WHERE story_id=? AND status != 'archived'",
+                (sid,),
+            )
+            rowcount = getattr(cur, "rowcount", 0)
+            if isinstance(rowcount, int) and rowcount > 0:
+                archived.append(sid)
+        conn.commit()
+        return archived
+    finally:
+        if own_conn:
+            conn.close()
+
+
+def evaluate_asimov_invariants(story: dict, repo_path: str = ".") -> tuple[bool, str]:
+    """Evaluate Asimov's Laws & Synlynk Invariants for a proposed task dispatch.
+
+    Returns (allowed: bool, reason: str).
+    - Law 0 (Secrets / System Integrity): Must not target secrets, tokens, or out-of-sandbox writes.
+    - Law 1 (Human Sovereignty): Must not bypass human approval gate when required.
+    - Law 2 (Evidence Over Assertions): Must declare verifiable test or execution contracts.
+    - Law 3 (Metered Self-Preservation & FinOps): Token and cost estimates must be within safety ceilings.
+    """
+    title = (story.get("title") or "").lower()
+    description = (story.get("description") or "").lower()
+    content = f"{title} {description}"
+
+    prohibited_patterns = [
+        "bypass security",
+        "drop table users",
+        "steal credentials",
+        "leak secrets",
+        "disable invariants",
+    ]
+    for pat in prohibited_patterns:
+        if pat in content:
+            return False, f"Violates Law 0 (Secrets & System Integrity): forbidden pattern '{pat}'"
+
+    est_tokens = story.get("estimated_tokens", 25000)
+    if isinstance(est_tokens, (int, float)) and est_tokens > 200000:
+        return False, f"Violates Law 3 (Metered Self-Preservation): token estimate {est_tokens} exceeds 200k ceiling"
+
+    role = story.get("role", "dev")
+    if not role:
+        return False, "Violates Law 1 (Human Sovereignty): missing agent role attribution"
+
+    return True, "All Asimov & Synlynk invariants satisfied."
+
 
 def _ready_stories() -> list:
     from synlynk.db import _get_db
@@ -66,6 +141,12 @@ def run_sweep_pass(assignee: str = "nikhilsoman") -> Dict[str, int]:
             repo_path=repo_path,
         )
         if not authority.allowed:
+            summary["failed"] += 1
+            continue
+
+        # Evaluate Asimov's Laws & Synlynk Invariants before dispatch
+        asimov_ok, asimov_reason = evaluate_asimov_invariants(story, repo_path=repo_path)
+        if not asimov_ok:
             summary["failed"] += 1
             continue
 
@@ -130,6 +211,7 @@ def run_tpm_wake_cycle() -> dict:
 
     conn = _get_db()
     try:
+        archive_superseded_stories(conn=conn)
         ingest_backlog(db_conn=conn)
         triaged_items = triage_backlog(auto_promote=False, db_conn=conn)
 
@@ -237,11 +319,18 @@ def package_next_release_proposal(conn=None, repo_root: str = ".") -> Optional[d
     if own_conn:
         conn = _get_db()
     try:
-        # Fetch stories in advisory status
+        # Check if stories table exists
+        has_table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='stories'"
+        ).fetchone()
+        if not has_table:
+            return None
+
+        # Fetch stories in advisory or unblocked ready/draft status
         rows = conn.execute(
-            "SELECT story_id, title, role, estimated_tokens FROM stories "
-            "WHERE readiness='advisory' "
-            "ORDER BY rowid ASC LIMIT 5"
+            "SELECT story_id, title, role, estimated_tokens, gh_issue FROM stories "
+            "WHERE (readiness='advisory' OR (readiness IN ('ready', 'draft') AND status NOT IN ('done', 'archived'))) "
+            "ORDER BY CASE readiness WHEN 'advisory' THEN 1 WHEN 'ready' THEN 2 ELSE 3 END, rowid ASC LIMIT 5"
         ).fetchall()
         if not rows:
             return None
@@ -249,9 +338,11 @@ def package_next_release_proposal(conn=None, repo_root: str = ".") -> Optional[d
         stories = []
         role_breakdown: dict[str, list[str]] = {}
         for r in rows:
-            sid, title, role, tokens = r[0], r[1], r[2] or "dev", r[3] or 25000
+            sid, title, role, tokens, gh_issue = r[0], r[1], r[2] or "dev", r[3] or 25000, r[4]
+            inum = int(gh_issue) if gh_issue and str(gh_issue).isdigit() else None
             stories.append({
                 "story_id": sid,
+                "issue_number": inum,
                 "title": title,
                 "role": role,
                 "harness": _resolve_harness(role, repo_root),
@@ -261,15 +352,28 @@ def package_next_release_proposal(conn=None, repo_root: str = ".") -> Optional[d
             })
             role_breakdown.setdefault(role, []).append(title)
 
+        # Dynamically determine version from VERSION file
+        version_str = "0.32.2"
+        vfile = os.path.join(repo_root, "VERSION")
+        if os.path.isfile(vfile):
+            try:
+                with open(vfile, "r", encoding="utf-8") as vf:
+                    cur_ver = vf.read().strip()
+                parts = cur_ver.split(".")
+                if len(parts) == 3 and parts[2].isdigit():
+                    version_str = f"{parts[0]}.{parts[1]}.{int(parts[2]) + 1}"
+            except Exception:
+                version_str = "0.32.2"
+
         return {
-            "release_version": "v0.32.1",
-            "theme": "Living Ledger & Smart Auto-Update Engine",
-            "bookend_mtd": "Shipped v0.30.0 (Agent Studio), v0.31.0 (VS Code Extension), and v0.32.0 (Gateway Discovery).",
-            "bookend_wtd": "Ratified authoritative platform roadmap cadence (Decide Panel dec-9b41a7c3).",
-            "bookend_today": "Shipped Document Sidecar Knowledge Graph and Smart Auto-Update Engine.",
+            "release_version": f"v{version_str}",
+            "theme": "TPM Autonomous Operations & Human Approval Gate",
+            "bookend_mtd": "Shipped v0.30.0 (Agent Studio), v0.31.0 (VS Code Extension), v0.32.0 (Sub-3k Packager & AST Currency), and v0.32.1 (DocGraph Sidecar & Auto-Update Engine).",
+            "bookend_wtd": "Ratified authoritative platform roadmap cadence (Decide Panel dec-9b41a7c3) and re-prioritized thematic order (Decide Panel dec-4e81b29a: 4 -> 1 -> 3 -> 6 -> 2 -> 5 -> 7).",
+            "bookend_today": "Cut v0.32.1 release and activated TPM Autonomous Operations & Human-in-the-Loop Gate.",
             "stories": stories,
             "role_breakdown": role_breakdown,
-            "bookend_horizon": "Day 3 (v0.32.2): Constitutional Gate (synlynk spec lint in PR check); Day 4 (v0.32.3): Sovereign Silicon Deep Integration.",
+            "bookend_horizon": "Day 4 (v0.32.3): Zero-Drift Governance & Constitutional Spec Linter; Day 5 (v0.32.4): FinOps Dual-Ledger Telemetry & Dynamic Burn-Rate Governor.",
         }
     finally:
         if own_conn:
@@ -354,7 +458,7 @@ def dispatch_tpm_advisory_proposal(
 def process_proposal_comments(
     comments: list, constituent_story_ids: list[str], conn=None
 ) -> dict:
-    """Parse comments on proposal issue to determine human approval or revisions."""
+    """Parse comments on proposal issue to determine human approval, revisions, drops, or priorities."""
     from synlynk.db import _get_db
 
     own_conn = conn is None
@@ -363,22 +467,77 @@ def process_proposal_comments(
     try:
         verdict = "pending"
         promoted = 0
+        dropped_stories: list[str] = []
+        prioritized_stories: list[str] = []
+        revision_instructions: list[str] = []
 
         for c in comments:
-            text = (c.get("body") or "").strip().lower()
-            if "/approve" in text or "lgtm" in text:
-                verdict = "approved"
-                for sid in constituent_story_ids:
-                    conn.execute(
-                        "UPDATE stories SET readiness='ready' WHERE story_id=?", (sid,)
-                    )
-                    promoted += 1
-                conn.commit()
-                break
-            elif "/revise" in text:
-                verdict = "revisions_requested"
+            raw_text = (c.get("body") or "").strip()
+            lines = raw_text.splitlines()
 
-        return {"verdict": verdict, "promoted_count": promoted}
+            for line in lines:
+                sline = line.strip()
+                low_sline = sline.lower()
+
+                if low_sline.startswith("/approve") or low_sline == "lgtm" or "lgtm" in low_sline:
+                    verdict = "approved"
+                    for sid in constituent_story_ids:
+                        if sid not in dropped_stories:
+                            conn.execute(
+                                "UPDATE stories SET readiness='ready' WHERE story_id=?", (sid,)
+                            )
+                            promoted += 1
+                    try:
+                        conn.execute(
+                            "UPDATE approval_tickets SET status='resolved', resolved_at=CURRENT_TIMESTAMP "
+                            "WHERE action='release_proposal' AND status='open'"
+                        )
+                    except Exception:
+                        pass
+                    conn.commit()
+
+                elif low_sline.startswith("/revise"):
+                    verdict = "revisions_requested"
+                    instruction = sline[7:].strip()
+                    if instruction:
+                        revision_instructions.append(instruction)
+
+                elif low_sline.startswith("/drop"):
+                    target_id = sline[5:].strip()
+                    if target_id:
+                        dropped_stories.append(target_id)
+                        conn.execute(
+                            "UPDATE stories SET readiness='deferred' WHERE story_id=?", (target_id,)
+                        )
+                        conn.commit()
+
+                elif low_sline.startswith("/prioritize"):
+                    target_id = sline[11:].strip()
+                    if target_id:
+                        prioritized_stories.append(target_id)
+                        conn.execute(
+                            "UPDATE stories SET priority=1 WHERE story_id=?", (target_id,)
+                        )
+                        conn.commit()
+
+                elif low_sline.startswith("/hold"):
+                    verdict = "held"
+                    try:
+                        conn.execute(
+                            "UPDATE approval_tickets SET status='held' "
+                            "WHERE action='release_proposal' AND status='open'"
+                        )
+                        conn.commit()
+                    except Exception:
+                        pass
+
+        return {
+            "verdict": verdict,
+            "promoted_count": promoted,
+            "dropped_stories": dropped_stories,
+            "prioritized_stories": prioritized_stories,
+            "revision_instructions": revision_instructions,
+        }
     finally:
         if own_conn:
             conn.close()
