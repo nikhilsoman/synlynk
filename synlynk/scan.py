@@ -167,6 +167,7 @@ def ensure_graph_for_head(repo_root: str) -> bool:
     """Skeleton for greenfield. Extract for a missing or stale brownfield graph."""
     if classify_workspace(repo_root) == "greenfield":
         write_greenfield_skeleton(repo_root)
+        ensure_docgraph(repo_root)
         return True
     graph_path = os.path.join(repo_root, ".synlynk", "graphify-out", "graph.json")
     manifest = _read_graph_manifest(repo_root)
@@ -181,8 +182,34 @@ def ensure_graph_for_head(repo_root: str) -> bool:
         and manifest.get("lifecycle") != "greenfield"
         and stamp == head
     ):
+        ensure_docgraph(repo_root)
         return True
-    return _run_graphify_extract(repo_root)
+    res = _run_graphify_extract(repo_root)
+    ensure_docgraph(repo_root)
+    return res
+
+
+def ensure_docgraph(repo_root: str, force: bool = False) -> bool:
+    """Ensure .synlynk/docgraph.json exists and is synchronized with workspace docs."""
+    docgraph_path = os.path.join(repo_root, ".synlynk", "docgraph.json")
+    if not force and os.path.isfile(docgraph_path):
+        try:
+            head_sha = _read_git_head_commit_direct(repo_root)
+            with open(docgraph_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if head_sha and data.get("built_at_commit") == head_sha:
+                return True
+        except Exception:
+            pass
+
+    try:
+        from synlynk.docgraph import build_docgraph
+
+        build_docgraph(repo_root, output_path=docgraph_path)
+        return True
+    except Exception as exc:
+        print(f"  ⚠ docgraph generation failed: {exc}", file=sys.stderr)
+        return False
 
 
 def _emit_graphify_extract_failed(repo_root: str, detail: str) -> None:
