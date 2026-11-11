@@ -22,8 +22,8 @@
       {
         "day": "Day 2 (Nov 12)",
         "version": "v0.32.1",
-        "name": "Living Ledger",
-        "theme": "Document Sidecar Knowledge Graph in synlynk/scan.py & .synlynk/docgraph.json. Bi-directional AST-to-spec indexing across code, specs, and decisions."
+        "name": "Living Ledger & Auto-Update Engine",
+        "theme": "Document Sidecar Knowledge Graph in synlynk/scan.py & .synlynk/docgraph.json. Smart Auto-Update Check & Notification Engine (24h cached release check, status banner, opt-in auto-apply)."
       },
       {
         "day": "Day 3 (Nov 13)",
