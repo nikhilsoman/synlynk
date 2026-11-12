@@ -365,15 +365,44 @@ def package_next_release_proposal(conn=None, repo_root: str = ".") -> Optional[d
             except Exception:
                 version_str = "0.32.2"
 
+        rel_ver = f"v{version_str}"
+        roadmap_metadata = {
+            "v0.32.3": {
+                "theme": "Zero-Drift Governance & Constitutional Spec Linter (Theme 1)",
+                "bookend_today": "Cut v0.32.2 release and activated TPM Autonomous Operations & Human-in-the-Loop Gate.",
+                "bookend_horizon": "Day 5 (v0.32.4): FinOps Dual-Ledger Telemetry & Dynamic Burn-Rate Governor; Day 6 (v0.32.5): Cloud Wedge Shell.",
+            },
+            "v0.32.4": {
+                "theme": "FinOps Dual-Ledger Telemetry & Dynamic Burn-Rate Governor (Theme 3)",
+                "bookend_today": "Shipped v0.32.3 Constitutional Spec Linter & Dual-Lock Document Guard.",
+                "bookend_horizon": "Day 6 (v0.32.5): Cloud Wedge Shell; Day 7 (v0.33.0): Sovereign Silicon Deep Integration.",
+            },
+            "v0.32.5": {
+                "theme": "The Cloud Wedge Shell & Personal Relay Hub (Theme 6)",
+                "bookend_today": "Shipped v0.32.4 FinOps Dual-Ledger Telemetry.",
+                "bookend_horizon": "Day 7 (v0.33.0): Sovereign Silicon Deep Integration; Week 2 (v0.34.0): Ambient Co-Pilot Suite.",
+            },
+            "v0.33.0": {
+                "theme": "Sovereign Silicon Deep Local Model Parity (Theme 2)",
+                "bookend_today": "Shipped v0.32.5 Cloud Wedge Shell.",
+                "bookend_horizon": "Week 2 (v0.34.0): Ambient Co-Pilot & Fenced Companion v2.1 Suite.",
+            },
+        }
+        meta = roadmap_metadata.get(rel_ver, {
+            "theme": f"Milestone {rel_ver}",
+            "bookend_today": "Active cadence execution.",
+            "bookend_horizon": "Scheduled roadmap progression.",
+        })
+
         return {
-            "release_version": f"v{version_str}",
-            "theme": "TPM Autonomous Operations & Human Approval Gate",
-            "bookend_mtd": "Shipped v0.30.0 (Agent Studio), v0.31.0 (VS Code Extension), v0.32.0 (Sub-3k Packager & AST Currency), and v0.32.1 (DocGraph Sidecar & Auto-Update Engine).",
+            "release_version": rel_ver,
+            "theme": meta["theme"],
+            "bookend_mtd": "Shipped v0.30.0 (Agent Studio), v0.31.0 (VS Code Extension), v0.32.0 (Sub-3k Packager & AST Currency), v0.32.1 (DocGraph Sidecar), and v0.32.2 (TPM Autonomous Cadence).",
             "bookend_wtd": "Ratified authoritative platform roadmap cadence (Decide Panel dec-9b41a7c3) and re-prioritized thematic order (Decide Panel dec-4e81b29a: 4 -> 1 -> 3 -> 6 -> 2 -> 5 -> 7).",
-            "bookend_today": "Cut v0.32.1 release and activated TPM Autonomous Operations & Human-in-the-Loop Gate.",
+            "bookend_today": meta["bookend_today"],
             "stories": stories,
             "role_breakdown": role_breakdown,
-            "bookend_horizon": "Day 4 (v0.32.3): Zero-Drift Governance & Constitutional Spec Linter; Day 5 (v0.32.4): FinOps Dual-Ledger Telemetry & Dynamic Burn-Rate Governor.",
+            "bookend_horizon": meta["bookend_horizon"],
         }
     finally:
         if own_conn:

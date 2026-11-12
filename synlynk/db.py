@@ -3276,6 +3276,15 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
                 check=True,
             )
             print("  ✓ Committed")
+            # Lock generated 4-docs in workspace docs dir to prevent manual drift
+            for fname in ("todo.md", "roadmap.md", "memory.md", "costs.md"):
+                doc_path = os.path.join(docs_dir, fname)
+                if os.path.exists(doc_path):
+                    try:
+                        os.chmod(doc_path, 0o444)
+                    except Exception:
+                        pass
+            print("  ✓ Locked generated 4-docs (read-only projections)")
     except MigrationImportError:
         raise SystemExit(1)
 
@@ -3482,8 +3491,27 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
             reconciled_content = _reconcile(path, content)
             from synlynk.regen_guard import check_regen_write_guard
             check_regen_write_guard(path, reconciled_content, source_path=DB_PATH)
+
+            # Dual-lock support: if the file is locked read-only, temporarily unlock to write
+            was_locked = False
+            if os.path.exists(path):
+                mode = os.stat(path).st_mode
+                if not (mode & 0o200):  # owner write bit not set
+                    was_locked = True
+                    try:
+                        os.chmod(path, mode | 0o200 | 0o020)
+                    except Exception:
+                        pass
+
             with open(path, "w") as fh:
                 fh.write(reconciled_content)
+
+            # Re-lock if migrated or if it was previously locked
+            if _is_migrated() or was_locked:
+                try:
+                    os.chmod(path, 0o444)
+                except Exception:
+                    pass
         except (OSError, PermissionError):
             continue
     if _is_migrated():
