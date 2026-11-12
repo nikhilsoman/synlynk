@@ -203,6 +203,57 @@ def _existing_spec_verified_pr_numbers():
     return numbers
 
 
+def _sync_merged_pr_stories(pr_number: int, pr_title: str | None = None, pr_body: str | None = None) -> list[str]:
+    """Identify stories associated with a merged PR and transition them to done."""
+    from synlynk import _get_db
+    from synlynk.db import mark_story_done_after_merge
+
+    text = f"{pr_title or ''}\n{pr_body or ''}"
+    if not text.strip():
+        return []
+
+    # 1. Match explicit story IDs: story-[a-zA-Z0-9_\-]+
+    explicit_story_ids = set(re.findall(r"\b(story-[a-zA-Z0-9_\-]+)\b", text))
+
+    # 2. Match GitHub issues referenced: (?:closes|fixes|resolves)\s+#?(\d+)
+    issue_refs = set(re.findall(r"(?:closes|fixes|resolves)\s+#?(\d+)", text, re.IGNORECASE))
+
+    conn = _get_db()
+    candidate_story_ids = set(explicit_story_ids)
+
+    if issue_refs:
+        placeholders = ",".join("?" for _ in issue_refs)
+        try:
+            rows = conn.execute(
+                f"SELECT story_id FROM stories WHERE gh_issue IN ({placeholders}) AND status != 'done'",
+                tuple(issue_refs),
+            ).fetchall()
+            for r in rows:
+                candidate_story_ids.add(r[0])
+        except Exception:
+            pass
+
+    completed = []
+    for sid in candidate_story_ids:
+        try:
+            row = conn.execute(
+                "SELECT status FROM stories WHERE story_id=?", (sid,)
+            ).fetchone()
+            if row and row[0] != "done":
+                try:
+                    if mark_story_done_after_merge(sid, pr_number=pr_number):
+                        completed.append(sid)
+                except Exception:
+                    conn.execute("UPDATE stories SET status='done' WHERE story_id=?", (sid,))
+                    conn.commit()
+                    completed.append(sid)
+        except Exception:
+            pass
+
+    conn.close()
+    return completed
+
+
 def _scan_pr_completion(pr_number, pr_body):
     """Computes and emits a spec_verified event for pr_number, if its body
     references a spec/plan/issue and a verdict can be computed. Returns the
@@ -459,6 +510,10 @@ def scan_local_events(harness_name: str) -> None:
             completion_event_id = _scan_pr_completion(pr["number"], pr.get("body"))
             if completion_event_id is not None:
                 last_completion_event_id = completion_event_id
+        try:
+            _sync_merged_pr_stories(pr["number"], pr.get("title"), pr.get("body"))
+        except Exception:
+            pass
     if last_event_id is not None:
         advance_checkpoint(harness_name, "pr_merged", last_event_id)
     if last_review_event_id is not None:
