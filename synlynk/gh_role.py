@@ -15,6 +15,39 @@ from synlynk.dispatch import (
 from synlynk.gh_shim import record_host_auth_gh_call
 
 
+def get_role_gh_env(role: str) -> dict[str, str]:
+    """Return an isolated environment dictionary configured with the role App token."""
+    env = os.environ.copy()
+    token = _resolve_dispatch_gh_token(role)
+    if token:
+        env.pop("GH_TOKEN", None)
+        env.pop("GITHUB_TOKEN", None)
+        env["GH_TOKEN"] = token
+        env["GITHUB_TOKEN"] = token
+        env["GH_CONFIG_DIR"] = _isolated_gh_config_dir()
+    return env
+
+
+def run_gh_as_role(
+    role: str,
+    args: list[str],
+    capture_output: bool = True,
+    text: bool = True,
+    timeout: int | None = 15,
+    cwd: str | None = None,
+) -> subprocess.CompletedProcess:
+    """Run a gh CLI command under the specified role's GitHub App token."""
+    env = get_role_gh_env(role)
+    return subprocess.run(
+        ["gh"] + list(args),
+        capture_output=capture_output,
+        text=text,
+        timeout=timeout,
+        cwd=cwd,
+        env=env,
+    )
+
+
 def cmd_gh(role: str, gh_args: list) -> int:
     """Execute `gh` with the role App token. Fail closed if none is cached."""
     if not role:
@@ -34,30 +67,24 @@ def cmd_gh(role: str, gh_args: list) -> int:
         print("  usage: synlynk gh --role <role> -- <gh-args>", file=sys.stderr)
         raise SystemExit(1)
 
-    env = os.environ.copy()
-    token = _resolve_dispatch_gh_token(role)
-    if token:
-        env.pop("GH_TOKEN", None)
-        env.pop("GITHUB_TOKEN", None)
-        env["GH_TOKEN"] = token
-        env["GITHUB_TOKEN"] = token
-        env["GH_CONFIG_DIR"] = _isolated_gh_config_dir()
-    elif _gh_write_allow_host_auth():
-        print(
-            f"  ⚠ synlynk gh: no App token for role {role!r}; "
-            "SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH is set — using host gh keyring.",
-            file=sys.stderr,
-        )
-        record_host_auth_gh_call(args, env=env)
-    else:
-        print(
-            f"  synlynk gh refused: no role-scoped GitHub App token for {role!r}. "
-            f"Provision with: synlynk identity init --role {role} "
-            "(and ensure the daemon has refreshed the token cache). "
-            "Host gh (nikhilsoman) is not used unless SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1.",
-            file=sys.stderr,
-        )
-        raise SystemExit(1)
+    env = get_role_gh_env(role)
+    if not env.get("GH_TOKEN"):
+        if _gh_write_allow_host_auth():
+            print(
+                f"  ⚠ synlynk gh: no App token for role {role!r}; "
+                "SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH is set — using host gh keyring.",
+                file=sys.stderr,
+            )
+            record_host_auth_gh_call(args, env=env)
+        else:
+            print(
+                f"  synlynk gh refused: no role-scoped GitHub App token for {role!r}. "
+                f"Provision with: synlynk identity init --role {role} "
+                "(and ensure the daemon has refreshed the token cache). "
+                "Host gh (nikhilsoman) is not used unless SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1.",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
 
     try:
         result = subprocess.run(["gh"] + args, env=env)

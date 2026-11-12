@@ -282,7 +282,7 @@ def _classify_role_and_stage(title: str, body: str, labels: list[str]) -> tuple[
     """Returns (role, governs_stage, complexity_tier)."""
     norm_text = (title + " " + body + " " + " ".join(labels)).lower()
 
-    role = "dev"
+    role = None
     for lbl in labels:
         l = lbl.lower()
         if "role:qa" in l or l == "qa":
@@ -306,7 +306,30 @@ def _classify_role_and_stage(title: str, body: str, labels: list[str]) -> tuple[
         elif "role:dev" in l:
             role = "dev"
             break
-    else:
+
+    if not role:
+        # Check explicit @<role> call words or bot mentions in title and body
+        import re
+        text_to_check = f"{title} {body}".lower()
+        call_words = [
+            ("tpm", ["@tpm", "@synlynk-synlynk-tpm"]),
+            ("architect", ["@architect", "@synlynk-synlynk-architect"]),
+            ("dev", ["@dev", "@synlynk-synlynk-dev"]),
+            ("qa", ["@qa", "@synlynk-synlynk-qa"]),
+            ("pm", ["@pm", "@synlynk-synlynk-pm"]),
+            ("designer", ["@designer", "@synlynk-synlynk-designer"]),
+            ("marketing", ["@marketing", "@synlynk-synlynk-marketing"]),
+        ]
+        for r, triggers in call_words:
+            for trig in triggers:
+                pattern = r'(?<!\w)' + re.escape(trig) + r'(?!\w)'
+                if re.search(pattern, text_to_check):
+                    role = r
+                    break
+            if role:
+                break
+
+    if not role:
         if any(w in norm_text for w in ["test fixture", "reproduction test", "flake", "qa gate", "unit test", "regression test", "audit check", "verify test", "test_"]):
             role = "qa"
         elif any(w in norm_text for w in ["architecture", "spec design", "rfb", "rfc", "protocol design", "data model", "ontological"]):

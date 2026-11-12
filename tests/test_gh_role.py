@@ -65,3 +65,38 @@ def test_cmd_gh_rejects_unknown_role():
     with pytest.raises(SystemExit) as exc:
         gh_role.cmd_gh("not-a-role", ["pr", "view", "1"])
     assert exc.value.code == 1
+
+
+def test_get_role_gh_env(monkeypatch):
+    import synlynk.gh_role as gh_role
+
+    monkeypatch.setattr(gh_role, "_resolve_dispatch_gh_token", lambda role: "ghs_tpm_secret" if role == "tpm" else None)
+    monkeypatch.setattr(gh_role, "_isolated_gh_config_dir", lambda: "/tmp/synlynk-tpm-config")
+
+    env = gh_role.get_role_gh_env("tpm")
+    assert env["GH_TOKEN"] == "ghs_tpm_secret"
+    assert env["GITHUB_TOKEN"] == "ghs_tpm_secret"
+    assert env["GH_CONFIG_DIR"] == "/tmp/synlynk-tpm-config"
+
+
+def test_run_gh_as_role(monkeypatch):
+    import synlynk.gh_role as gh_role
+
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["env"] = kwargs.get("env") or {}
+        return subprocess.CompletedProcess(cmd, 0, stdout="https://github.com/test/issues/1\n", stderr="")
+
+    monkeypatch.setattr(gh_role.subprocess, "run", fake_run)
+    monkeypatch.setattr(gh_role, "_resolve_dispatch_gh_token", lambda role: "ghs_tpm_secret" if role == "tpm" else None)
+    monkeypatch.setattr(gh_role, "_isolated_gh_config_dir", lambda: "/tmp/synlynk-tpm-config")
+
+    res = gh_role.run_gh_as_role("tpm", ["issue", "create", "--title", "Hello"])
+    assert res.returncode == 0
+    assert captured["cmd"] == ["gh", "issue", "create", "--title", "Hello"]
+    assert captured["env"]["GH_TOKEN"] == "ghs_tpm_secret"
+    assert captured["env"]["GITHUB_TOKEN"] == "ghs_tpm_secret"
+    assert captured["env"]["GH_CONFIG_DIR"] == "/tmp/synlynk-tpm-config"
+

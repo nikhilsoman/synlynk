@@ -442,21 +442,20 @@ def dispatch_tpm_advisory_proposal(
         body = format_release_proposal_markdown(proposal)
         title = f"[Proposal] {proposal['release_version']}: {proposal['theme']}"
 
-        # Attempt to file GitHub issue via gh CLI
+        # Attempt to file GitHub issue via gh CLI as the TPM agent role
         issue_url = None
         try:
-            import subprocess
+            from synlynk.gh_role import run_gh_as_role
 
-            res = subprocess.run(
+            res = run_gh_as_role(
+                "tpm",
                 [
-                    "gh", "issue", "create",
+                    "issue", "create",
                     "--title", title,
                     "--body", body,
                     "--assignee", assignee,
                     "--label", "tpm-advisory,release-proposal",
                 ],
-                capture_output=True,
-                text=True,
                 timeout=15,
             )
             if res.returncode == 0:

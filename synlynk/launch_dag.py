@@ -51,14 +51,15 @@ def raise_escalation_ticket(
         f"Reply with the selected option or comment directly on this issue to unblock."
     )
     cmd = [
-        "gh", "issue", "create",
+        "issue", "create",
         "--title", title,
         "--body", body,
         "--assignee", assignee,
         "--label", "escalation",
     ]
     try:
-        res = subprocess.run(cmd, capture_output=True, text=True, check=False, cwd=repo_path)
+        from synlynk.gh_role import run_gh_as_role
+        res = run_gh_as_role("synlynk-bot", cmd, cwd=repo_path)
         if res.returncode == 0 and res.stdout.strip():
             return res.stdout.strip()
     except Exception:

@@ -288,3 +288,37 @@ def test_evaluate_asimov_invariants():
     assert allowed is True
     assert "invariants satisfied" in reason
 
+
+def test_dispatch_tpm_advisory_proposal_uses_tpm_role(monkeypatch, tmp_path):
+    import synlynk.tpm_sweep as tpm_mod
+    import synlynk as sl
+    from unittest.mock import MagicMock
+
+    db_file = tmp_path / "state.db"
+    conn = sl._get_db(str(db_file))
+    try:
+        conn.execute("CREATE TABLE IF NOT EXISTS approval_tickets (id INTEGER PRIMARY KEY, story_id TEXT, action TEXT, issue_url TEXT, status TEXT)")
+        conn.commit()
+
+        captured_role = []
+        def fake_run_gh_as_role(role, args, **kwargs):
+            captured_role.append(role)
+            mock = MagicMock()
+            mock.returncode = 0
+            mock.stdout = "https://github.com/nikhilsoman/synlynk/issues/9999"
+            return mock
+
+        monkeypatch.setattr("synlynk.gh_role.run_gh_as_role", fake_run_gh_as_role)
+        monkeypatch.setattr(tpm_mod, "package_next_release_proposal", lambda **kw: {
+            "release_version": "v0.32.4",
+            "theme": "FinOps",
+            "constituent_stories": [],
+        })
+
+        url = tpm_mod.dispatch_tpm_advisory_proposal(conn=conn, max_active_proposals=5, assignee="nikhilsoman")
+        assert url == "https://github.com/nikhilsoman/synlynk/issues/9999"
+        assert "tpm" in captured_role
+    finally:
+        conn.close()
+
+
