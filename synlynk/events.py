@@ -247,6 +247,12 @@ def _sync_merged_pr_stories(pr_number: int, pr_title: str | None = None, pr_body
                     conn.execute("UPDATE stories SET status='done' WHERE story_id=?", (sid,))
                     conn.commit()
                     completed.append(sid)
+
+                try:
+                    from synlynk.tpm_sweep import post_proposal_interim_rollup
+                    post_proposal_interim_rollup(sid, pr_number=pr_number, pr_title=pr_title or "", status="merged", conn=conn)
+                except Exception:
+                    pass
         except Exception:
             pass
 

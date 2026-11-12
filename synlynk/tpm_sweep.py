@@ -483,6 +483,64 @@ def dispatch_tpm_advisory_proposal(
             conn.close()
 
 
+def post_proposal_interim_rollup(
+    story_id: str,
+    pr_number: int | str,
+    pr_title: str = "",
+    status: str = "merged",
+    conn=None,
+) -> Optional[str]:
+    """Post an interim progress rollup comment on the active milestone proposal issue."""
+    from synlynk.db import _get_db
+
+    own_conn = conn is None
+    if own_conn:
+        conn = _get_db()
+    try:
+        row = conn.execute(
+            "SELECT story_id, issue_url FROM approval_tickets "
+            "WHERE action='release_proposal' AND status='open' "
+            "ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if not row or not row[1]:
+            return None
+
+        milestone_ver = row[0]
+        issue_url = row[1]
+        import re
+        match = re.search(r"/issues/(\d+)", issue_url)
+        if not match:
+            return None
+        issue_number = match.group(1)
+
+        # Calculate completed vs remaining constituent stories
+        stories = conn.execute(
+            "SELECT status, COUNT(*) FROM stories WHERE readiness='ready' GROUP BY status"
+        ).fetchall()
+        done_count = sum(c for s, c in stories if s in ("done", "closed", "resolved"))
+        total_count = sum(c for _, c in stories)
+        pct = int((done_count / total_count * 100)) if total_count > 0 else 0
+
+        comment_body = (
+            f"### ⚡ Milestone Progress Update ({milestone_ver})\n\n"
+            f"• **Event:** PR #{pr_number} ({pr_title}) {status}.\n"
+            f"• **Task:** `{story_id}` marked completed in canonical `state.db`.\n"
+            f"• **Milestone Velocity:** {done_count}/{total_count} ready tasks finished (~{pct}%).\n\n"
+            "Autonomous execution is continuing without delay."
+        )
+
+        from synlynk.gh_role import run_gh_as_role
+        res = run_gh_as_role("tpm", ["issue", "comment", issue_number, "--body", comment_body])
+        if res.returncode == 0:
+            return res.stdout.strip()
+        return None
+    except Exception:
+        return None
+    finally:
+        if own_conn:
+            conn.close()
+
+
 def process_proposal_comments(
     comments: list, constituent_story_ids: list[str], conn=None
 ) -> dict:
