@@ -499,7 +499,7 @@ def post_proposal_interim_rollup(
     try:
         row = conn.execute(
             "SELECT story_id, issue_url FROM approval_tickets "
-            "WHERE action='release_proposal' AND status='open' "
+            "WHERE action='release_proposal' AND status IN ('open', 'resolved') "
             "ORDER BY id DESC LIMIT 1"
         ).fetchone()
         if not row or not row[1]:
