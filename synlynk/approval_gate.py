@@ -20,9 +20,11 @@ def raise_approval_ticket(
         "Reply `approve` on this issue, or take the equivalent action directly on "
         "GitHub, to let the sweep proceed."
     )
-    result = subprocess.run(
+    from synlynk.gh_role import run_gh_as_role
+
+    result = run_gh_as_role(
+        "synlynk-bot",
         [
-            "gh",
             "issue",
             "create",
             "--title",
@@ -32,8 +34,6 @@ def raise_approval_ticket(
             "--assignee",
             assignee,
         ],
-        capture_output=True,
-        text=True,
     )
     if result.returncode != 0:
         print(f"WARNING: failed to raise approval ticket for {story_id}: {result.stderr[:500]}")

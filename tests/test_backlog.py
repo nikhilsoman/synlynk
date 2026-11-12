@@ -178,6 +178,39 @@ def test_synthesize_story_from_issue_roles_and_tiers():
     assert doc_story["stage"] == "notify" or doc_story["stage"] == "open"
 
 
+def test_classify_role_and_stage_call_words():
+    from synlynk.backlog import _classify_role_and_stage
+
+    # 1. Test @tpm in title
+    role, stage, tier = _classify_role_and_stage("Investigate release cadence @tpm", "Details here", [])
+    assert role == "tpm"
+
+    # 2. Test @tpm in body
+    role, stage, tier = _classify_role_and_stage("Autonomous cadence stall", "Please investigate this @tpm", [])
+    assert role == "tpm"
+
+    # 3. Test @synlynk-synlynk-tpm bot mention
+    role, stage, tier = _classify_role_and_stage("Autonomous cadence stall", "cc @synlynk-synlynk-tpm", [])
+    assert role == "tpm"
+
+    # 4. Test @architect in title or body
+    role, stage, tier = _classify_role_and_stage("Daemon crash investigation", "Need architecture review @architect", [])
+    assert role == "architect"
+
+    # 5. Test @dev in body
+    role, stage, tier = _classify_role_and_stage("Fix typo in readme", "Assigning to @dev", [])
+    assert role == "dev"
+
+    # 6. Test @qa in body
+    role, stage, tier = _classify_role_and_stage("Verify flake rate", "Please run regression pass @qa", [])
+    assert role == "qa"
+
+    # 7. Test @pm in body
+    role, stage, tier = _classify_role_and_stage("Competitive pricing update", "Assigning to @pm", [])
+    assert role == "pm"
+
+
+
 def test_synthesize_story_from_issue_returns_none_goal_below_threshold():
     issue = {
         "title": "Fix typo in README",
