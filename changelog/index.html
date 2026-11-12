@@ -45,6 +45,22 @@
 Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
 <hr>
 <h2><a href="https://github.com/nikhilsoman/synlynk/compare/v0.3.0...HEAD">Unreleased</a></h2>
+<div class="changelog-version-header"><span class="changelog-version">vv0.32.3</span><span class="changelog-date">2026-11-12</span></div>
+<h3 class="tag-added">Added</h3>
+- **Constitutional Spec Linter CLI (`synlynk spec lint`) (Theme 1) (#5213):**
+  - Full CLI command `synlynk spec lint [--target-release <rel>] [--strict] [--json] [<path>]` enforcing frontmatter, section structure, target release alignment, and Asimov invariant checks across all living specifications.
+  - Granular validation engine (`check_spec_constitutional_integrity`) evaluating YAML frontmatter, target release consistency, required sections, and constitutional boundary markers.
+- **Fail-Closed Spec Gate in `synlynk pr check` (#5214):**
+  - Automated pre-merge gate (`check_pr_spec_gate`) requiring every feature PR (`feat/*`) or story-linked PR to accompany an approved, lint-clean specification in `docs/superpowers/specs/`.
+  - Non-zero failure blocking unauthorized drift prior to PR approval and merge.
+- **Dual-Lock Document Guard for Projected 4-Docs (#5216):**
+  - Automatic `0o444` read-only locking on generated workspace 4-docs (`project-docs/todo.md`, `roadmap.md`, `memory.md`, `costs.md`) post-migration to prevent accidental out-of-band edits.
+  - Dual-write safety in `_write_generated_project_doc`: temporarily relaxes permissions to write reconciled projections from canonical `state.db` and restores strict `0o444` read-only protection.
+- **Automated Post-Merge Story Completion Sync (#5217):**
+  - Continuous event reconciliation in `_sync_merged_pr_stories` detecting story identifiers and `Closes #<issue>` directives upon PR merge.
+  - Transitions matched stories to `status='done'` in canonical `state.db` and synchronizes markdown task projections without manual operator intervention.
+- **Autonomous TPM Execution Loop Latency & Turn-Stall RCA (#5215):**
+  - Root-cause analysis identifying turn-taking idle wait states (~92% of elapsed time) in autonomous TPM cadence; instituted high-velocity pipelined task allocation.
 <div class="changelog-version-header"><span class="changelog-version">vv0.32.2</span><span class="changelog-date">2026-11-11</span></div>
 <h3 class="tag-added">Added</h3>
 - **TPM Autonomous Operations & Human-in-the-Loop Gate (Theme 4) (#5209):**
