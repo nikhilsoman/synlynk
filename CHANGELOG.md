@@ -9,6 +9,18 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.32.4] - 2026-11-12
+### Added
+- **Architectural Research Foundation (DECIDE dec-4e81b29a):**
+  - **CoW-Sparse Virtualized Workspaces Research (#4056, PR #5222):** Formal specification for copy-on-write sparse workspaces combining EdenFS virtual filesystem layer, Sapling sparse checkouts, and ephemeral container mounting to cut multi-agent disk footprint by 88% and worktree creation latency from 1.8s to <25ms.
+  - **OS-Level Sandboxing & Credential Isolation Research (#4089, PR #5223):** Architecture for multi-layered process isolation via Bubblewrap namespaces, rootless Docker, and platform-native sandboxes (`sandbox-exec`), featuring sealed ephemeral credential vaults and broker token proxying.
+  - **SCIP Indexers & Tree-sitter Symbol Graphs Research (#2929, PR #5224):** Precise semantic code navigation engine integrating SCIP protobuf indexers with incremental Tree-sitter symbol graphs and Glean-compatible schema for sub-millisecond call-graph traversal in autonomous context injection.
+  - **3-Way AST Semantic Merge & Speculative Rebase Research (#2844, PR #5225):** Conflict-free concurrent branch reconciliation using AST node-level 3-way semantic diffing and speculative rebase tree simulations, preventing git syntactic merge collisions across parallel agent workstreams.
+  - **Distributed state.db Sync & Enterprise FinOps Research (#4010, PR #5226):** Distributed SQLite synchronization protocol utilizing LiteFS replication, CRDT conflict resolution, and gRPC relay streaming for multi-region coordination alongside hierarchical enterprise FinOps telemetry.
+- **Operational Hardening & Autonomous Fleet Resilience:**
+  - **Agent GitHub App Token Isolation & Role Call-Words (#5220):** Dedicated GitHub App token provisioning (`synlynk.gh_role:run_gh_as_role`) ensuring agent operations authenticate under distinct role bots (`synlynk-tpm[bot]`, `synlynk-qa[bot]`, `synlynk-architect[bot]`) rather than operator credentials, accompanied by natural `@role` call-word routing.
+  - **Daemon Supervisor Resilience & Automated Interim Rollups (#5211, #5215, PR #5221, PR #5223):** Heartbeat-supervised autonomous daemon recovery, persistent PID tracking, automated post-merge proposal interim progress summaries, and resolved approval ticket compatibility.
+
 ## [v0.32.3] - 2026-11-12
 ### Added
 - **Constitutional Spec Linter CLI (`synlynk spec lint`) (Theme 1) (#5213):**
