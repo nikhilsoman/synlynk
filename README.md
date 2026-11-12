@@ -6,15 +6,15 @@
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
 <p align="center">
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5597%20collected-brightgreen" alt="Tests"</a>
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.32.2-blue" alt="Version"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5618%20collected-brightgreen" alt="Tests"</a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.32.3-blue" alt="Version"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-Apache--2.0-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
 </p>
 
 Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. The Python CLI injects scoped project context into every dispatch, uses empirical harness allocation only after a harness has at least five completed, merged jobs for the relevant task type, and follows the documented interim policy until then. See the [empirical capability policy](docs/blog/244-chore-empirical-capability-policy.md) and [routing policy](.synlynk/policy.json). Synlynk also tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
-**v0.32.2:** TPM Autonomous Operations & Human-in-the-Loop Gate — Autonomous TPM wake cycle, comment commands (`/approve`, `/revise`, `/drop`, `/prioritize`, `/hold`), Asimov invariants verification, and authoritative roadmap re-prioritization (`dec-4e81b29a`).
+**v0.32.3:** Constitutional Spec Linter & Zero-Drift Governance — Constitutional spec lint CLI (`synlynk spec lint`), fail-closed PR check gate, dual-lock document guard for projected 4-docs (`0o444`), and automated post-merge story state sync.
 
 ## Documentation
 
