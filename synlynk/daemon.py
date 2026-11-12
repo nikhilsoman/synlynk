@@ -11,6 +11,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback as _traceback
 from typing import NamedTuple, Optional
 
 from synlynk._lazy import pkg as _pkg
@@ -1699,6 +1700,25 @@ class SynlynkDaemon(WatchDaemon):
         if degraded:
             print("    (pidfile missing — reporting degraded evidence)")
 
+    def _record_heartbeat(self) -> None:
+        """Write current timestamp to heartbeat file for dead-man's switch."""
+        hb_path = self.pidfile.replace(".pid", ".heartbeat") if self.pidfile else None
+        if hb_path:
+            try:
+                with open(hb_path, "w", encoding="utf-8") as f:
+                    f.write(str(time.time()))
+            except Exception:
+                pass
+
+    def _safe_autonomous_tick(self) -> bool:
+        """Run autonomous tick inside robust exception boundary."""
+        try:
+            self._autonomous_tick()
+            return True
+        except Exception:
+            _traceback.print_exc()
+            return False
+
     def _run_loop(self) -> None:
         import threading as _threading
         import http.server as _http_server
@@ -1745,56 +1765,75 @@ class SynlynkDaemon(WatchDaemon):
         # Defer the initial refresh until the detached daemon has completed
         # its setup. The caller of daemon start must not wait for
         # openssl signing or a GitHub API request.
-        self._refresh_github_tokens()
+        try:
+            self._refresh_github_tokens()
+        except Exception:
+            _traceback.print_exc()
         last_token_refresh = time.time()
         last_quota_poll = 0.0
         while True:
-            time.sleep(interval)
-            current_mtimes = self._get_mtimes("project-docs")
-            changed = [f for f in current_mtimes
-                       if current_mtimes[f] != last_mtimes.get(f)]
-            if changed:
-                time.sleep(self.settle_seconds)
+            try:
+                time.sleep(interval)
+                self._record_heartbeat()
+                current_mtimes = self._get_mtimes("project-docs")
+                changed = [f for f in current_mtimes
+                           if current_mtimes[f] != last_mtimes.get(f)]
+                if changed:
+                    time.sleep(self.settle_seconds)
+                    try:
+                        with self._context_lock:
+                            self.on_change(changed[0])
+                    except Exception:
+                        _traceback.print_exc()
+                    last_mtimes = self._get_mtimes("project-docs")
+                if self.autonomous and time.time() - self._last_autonomous_run >= max(interval, 60):
+                    self._safe_autonomous_tick()
+                    self._last_autonomous_run = time.time()
                 try:
-                    with self._context_lock:
-                        self.on_change(changed[0])
+                    self._run_capability_watch_tick(config)
                 except Exception:
                     _traceback.print_exc()
-                last_mtimes = self._get_mtimes("project-docs")
-            if self.autonomous and time.time() - self._last_autonomous_run >= max(interval, 60):
-                self._autonomous_tick()
-                self._last_autonomous_run = time.time()
-            self._run_capability_watch_tick(config)
-            self._run_quota_calibration_tick(config)
-            try:
-                _reconcile_daemon_jobs()
-                launched = _dispatch_ready_jobs(max_parallel=max_parallel)
+                try:
+                    self._run_quota_calibration_tick(config)
+                except Exception:
+                    _traceback.print_exc()
+                try:
+                    _reconcile_daemon_jobs()
+                    launched = _dispatch_ready_jobs(max_parallel=max_parallel)
+                except Exception:
+                    _traceback.print_exc()
+                    launched = 0
+                try:
+                    self._maybe_run_autonomy_pass(launched)
+                except Exception:
+                    _traceback.print_exc()
+                current_rev = _current_repo_revision(self.workspace_root)
+                if self.start_revision and current_rev and current_rev != self.start_revision:
+                    try:
+                        _write_sentinel_alert(
+                            "WARN",
+                            "RUNTIME_REVISION_DRIFT",
+                            f"Daemon was started at commit {self.start_revision[:8]}, but repo HEAD is at {current_rev[:8]}. "
+                            "Restart daemon (synlynk watch restart) to load latest code.",
+                            self.sentinel_path,
+                        )
+                    except Exception:
+                        pass
+                if time.time() - last_token_refresh >= self.token_refresh_interval_seconds:
+                    try:
+                        self._refresh_github_tokens()
+                    except Exception:
+                        _traceback.print_exc()
+                    last_token_refresh = time.time()
+                if time.time() - last_quota_poll >= 900:
+                    try:
+                        from synlynk.quota_capture import poll_once
+                        poll_once()
+                    except Exception:
+                        _traceback.print_exc()
+                    last_quota_poll = time.time()
             except Exception:
                 _traceback.print_exc()
-                launched = 0
-            self._maybe_run_autonomy_pass(launched)
-            current_rev = _current_repo_revision(self.workspace_root)
-            if self.start_revision and current_rev and current_rev != self.start_revision:
-                try:
-                    _write_sentinel_alert(
-                        "WARN",
-                        "RUNTIME_REVISION_DRIFT",
-                        f"Daemon was started at commit {self.start_revision[:8]}, but repo HEAD is at {current_rev[:8]}. "
-                        "Restart daemon (synlynk watch restart) to load latest code.",
-                        self.sentinel_path,
-                    )
-                except Exception:
-                    pass
-            if time.time() - last_token_refresh >= self.token_refresh_interval_seconds:
-                self._refresh_github_tokens()
-                last_token_refresh = time.time()
-            if time.time() - last_quota_poll >= 900:
-                try:
-                    from synlynk.quota_capture import poll_once
-                    poll_once()
-                except Exception:
-                    _traceback.print_exc()
-                last_quota_poll = time.time()
 
 
 Daemon = SynlynkDaemon
@@ -1878,6 +1917,23 @@ def check_daemon_health(sentinel_path: Optional[str] = None) -> None:
 
     synlynk_pidfile = _daemon_state_path("daemon.pid")
     synlynk_health = _probe_pidfile_health(synlynk_pidfile)
+    hb_file = synlynk_pidfile.replace(".pid", ".heartbeat") if synlynk_pidfile else None
+    if hb_file and os.path.exists(hb_file) and synlynk_health == "running":
+        try:
+            with open(hb_file, encoding="utf-8") as f:
+                last_hb = float(f.read().strip())
+            age = time.time() - last_hb
+            if age > 120:
+                _write_sentinel_alert(
+                    "CRITICAL", "DAEMON_FLATLINE",
+                    f"Synlynk daemon is running but heartbeat flatlined ({age:.0f}s > 120s threshold). "
+                    "Process may be hung. Run: synlynk daemon restart",
+                    sentinel_path=sentinel_path,
+                )
+                print(f"  🚨 [DAEMON_FLATLINE] Synlynk daemon heartbeat flatlined ({age:.0f}s) — run: synlynk daemon restart")
+        except Exception:
+            pass
+
     if synlynk_health == "zombie":
         _write_sentinel_alert(
             "CRITICAL", "ZOMBIE_SYNLYNK_DAEMON",
