@@ -84,7 +84,7 @@ def load_known_decision_ids(repo_root: str = ".") -> Set[str]:
     return dec_ids
 
 
-def load_known_goal_ids(conn=None) -> Set[str]:
+def load_known_goal_ids(conn=None, repo_root: Optional[str] = None) -> Set[str]:
     """Load valid goal IDs from canonical state.db goals table."""
     from synlynk.db import _get_db
 
@@ -226,6 +226,10 @@ def lint_spec_file(
             )
 
     return findings
+
+
+# Convenient alias
+lint_specification_file = lint_spec_file
 
 
 def lint_specs(

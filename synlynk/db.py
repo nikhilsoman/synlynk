@@ -5623,6 +5623,23 @@ def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
             raise SystemExit(1)
         print(f"  {_GREEN}✓{_RESET} Impact attestation passed — {res.get('message')}")
 
+    from synlynk.pr_check import check_pr_spec_gate
+    spec_gate_res = check_pr_spec_gate(repo_root=".", pr_number=pr_number)
+    if not spec_gate_res.get("passed"):
+        print(f"\n  🚫 [PR CHECK BLOCKED] Spec lint gate failed: {spec_gate_res.get('error')}\n")
+        for finding in spec_gate_res.get("findings", []):
+            sev = finding.get("severity", "ERROR")
+            fpath = finding.get("file", "")
+            fline = finding.get("line", 1)
+            fmsg = finding.get("message", "")
+            frule = finding.get("rule", "")
+            print(f"    - [{sev}] [{frule}] {fpath}:{fline} — {fmsg}")
+        print("\n  Specs modified in PR must conform to the constitutional contract (dec-9b41a7c3).")
+        print("  Run: synlynk spec lint [spec_file] to diagnose and fix.\n")
+        raise SystemExit(1)
+    if spec_gate_res.get("specs_checked"):
+        print(f"  {_GREEN}✓{_RESET} Spec gate passed — {spec_gate_res.get('message')}")
+
     detect_hand_edit = globals().get("_detect_hand_edit")
     if callable(detect_hand_edit):
         for fname in ("todo.md", "roadmap.md", "memory.md", "costs.md"):
