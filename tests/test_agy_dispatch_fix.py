@@ -47,7 +47,18 @@ def _dispatch_git_worktree_job(monkeypatch):
             raise ProcessLookupError()
         return real_kill(p, sig)
 
+    real_waitpid = os.waitpid
+
+    def _mock_waitpid(p, opts):
+        if p == 4242:
+            raise ChildProcessError()
+        return real_waitpid(p, opts)
+
+    import synlynk.jobs as jobs_mod
+
     monkeypatch.setattr(os, "kill", _mock_kill)
+    monkeypatch.setattr(os, "waitpid", _mock_waitpid)
+    monkeypatch.setattr(jobs_mod.os, "waitpid", _mock_waitpid)
     monkeypatch.setattr(dispatch_mod, "process_identity_check", lambda pid, expected: "safe to kill")
     sl._save_jobs([job])
     return job
