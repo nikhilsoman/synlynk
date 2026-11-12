@@ -3506,8 +3506,14 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
             with open(path, "w") as fh:
                 fh.write(reconciled_content)
 
-            # Re-lock if migrated or if it was previously locked
-            if _is_migrated() or was_locked:
+            # Re-lock if the file was previously locked, or if this is the workspace docs_dir in a migrated repo
+            is_workspace_doc = False
+            if docs_dir:
+                try:
+                    is_workspace_doc = os.path.realpath(path) == os.path.realpath(os.path.join(docs_dir, filename))
+                except Exception:
+                    pass
+            if was_locked or (_is_migrated() and is_workspace_doc):
                 try:
                     os.chmod(path, 0o444)
                 except Exception:
