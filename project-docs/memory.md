@@ -7,6 +7,10 @@
 - **Directories:** bin, docs, project-docs, synlynk, tests, website
 
 ## Decisions
+- **2026-11-12 [v0.32.4: Architectural Research Foundation & Operational Resilience (Theme 3 & Operational Hardening)]:**
+  Milestone v0.32.4 shipped autonomously via approved proposal #5219 (approval ticket 11), delivering fundamental multi-agent architecture research specs and production operational hardening across 7 pull requests:
+  (1) Research Foundations (DECIDE dec-4e81b29a): Shipped constitutional research specifications for CoW-Sparse Virtualized Workspaces (#4056, PR #5222), OS Sandboxing & Credential Isolation (#4089, PR #5223), SCIP & Tree-sitter Code Intelligence (#2929, PR #5224), 3-Way AST Semantic Merge & Speculative Rebase (#2844, PR #5225), and Distributed state.db Sync & Enterprise FinOps (#4010, PR #5226).
+  (2) Operational Fleet Resilience: Shipped agent GitHub App token isolation (`synlynk.gh_role:run_gh_as_role`) to eliminate personal operator identity leakage in autonomous PRs/reviews/comments and added `@role` call-words (#5220). Resolved autonomous daemon supervisor heartbeat and turn-latency stalls with automated interim progress rollups (#5221, #5223). [@agy, @nikhilsoman]
 - **2026-11-10 [Track 2 Horizon 3 (v0.31.0): Autonomous Fleet Governance, Universal Archetypes & Visual Organogram]:**
   Unanimously approved via 4-Harness Decide Panel (`dec-4a53a2ee`, `claude`, `agy`, `codex`, `grok`) and shipped via PR #5195:
   (1) 6 Universal Archetypes: Implemented capability-neutral archetypes (`orchestrator`, `strategist`, `director`, `creator`, `inspector`, `custodian`) in `synlynk/archetypes.py` with 1:N cardinality and secondary hats, decoupling agent definitions from software-specific mechanics (TDD, git, worktrees moved to domain packs).
