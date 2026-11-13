@@ -201,3 +201,40 @@ def check_pr_spec_gate(
         "error": None,
         "message": f"All {len(checked_existing)} modified specification(s) passed constitutional linting.",
     }
+
+
+def check_pr_roadmap_gate(
+    conn,
+    repo_root: str = ".",
+    pr_number: Optional[int] = None,
+    changed_files: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Check roadmap drift when a PR touches decision records."""
+    if changed_files is None:
+        changed_files = _get_changed_files_in_pr(repo_root, pr_number)
+
+    decision_files: List[str] = []
+    for f in changed_files or []:
+        norm_f = f.replace("\\", "/").lstrip("./")
+        if norm_f.startswith("project-docs/decisions/") and norm_f.endswith(".md"):
+            decision_files.append(norm_f)
+
+    if not decision_files:
+        return {
+            "passed": True,
+            "triggered": False,
+            "findings": [],
+            "message": "No decision records modified in this PR.",
+        }
+
+    from synlynk.roadmap_drift import classify_roadmap_drift, find_roadmap_drift
+
+    findings = find_roadmap_drift(conn)
+    status, detail = classify_roadmap_drift(findings)
+
+    return {
+        "passed": status == "pass",
+        "triggered": True,
+        "findings": findings,
+        "message": detail,
+    }
