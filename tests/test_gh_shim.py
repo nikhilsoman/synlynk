@@ -170,6 +170,145 @@ def test_gh_shim_picks_up_refreshed_daemon_token(monkeypatch):
     assert calls[0][2]["GH_TOKEN"] == "refreshed-daemon-token"
 
 
+def _receipt_env(tmp_path, log_text, **extra):
+    log = tmp_path / "job.log"
+    log.write_text(log_text)
+    env = {
+        "PATH": "/usr/bin",
+        "SYNLYNK_HARNESS": "1",
+        "GH_TOKEN": "app-token",
+        "SYNLYNK_EXPECTED_INSTRUCTION_VERSION": "0.23.0-dev",
+        "SYNLYNK_JOB_LOG": str(log),
+        "SYNLYNK_JOB_ID": "job-abc45907",
+    }
+    env.update(extra)
+    return env
+
+
+def _capture_exec(monkeypatch):
+    from synlynk import gh_shim
+
+    calls = []
+
+    def fake_exec(binary, args, env):
+        calls.append((binary, args, env))
+        raise RuntimeError("exec captured")
+
+    monkeypatch.setattr(gh_shim.os, "execvpe", fake_exec)
+    monkeypatch.setattr(gh_shim, "_real_gh_path", lambda env, shim_dir: "/usr/bin/gh")
+    return gh_shim, calls
+
+
+def test_shim_blocks_pr_merge_when_instruction_receipt_is_none(tmp_path, monkeypatch, capsys):
+    """gh:#5236: status=none must stop gh pr merge, not only warn after the job."""
+    gh_shim, calls = _capture_exec(monkeypatch)
+    env = _receipt_env(
+        tmp_path,
+        "SYNLYNK_TASK_RECEIVED: abc\nSYNLYNK_INSTRUCTION_VERSION: none\n",
+    )
+    rc = gh_shim.run_shim(
+        ["pr", "merge", "5232", "--squash"],
+        env=env,
+        shim_dir="/tmp/shim",
+    )
+    assert rc == 1
+    assert calls == []
+    err = capsys.readouterr().err
+    assert "unattended completion/merge blocked" in err
+    assert "status='none'" in err
+    assert "0.23.0-dev" in err
+
+
+def test_shim_blocks_pr_review_approve_when_instruction_receipt_is_none(tmp_path, monkeypatch, capsys):
+    gh_shim, calls = _capture_exec(monkeypatch)
+    env = _receipt_env(tmp_path, "SYNLYNK_INSTRUCTION_VERSION: none\n")
+    rc = gh_shim.run_shim(
+        ["pr", "review", "5232", "--approve"],
+        env=env,
+        shim_dir="/tmp/shim",
+    )
+    assert rc == 1
+    assert calls == []
+    assert "unattended completion/merge blocked" in capsys.readouterr().err
+
+
+def test_shim_blocks_pr_merge_when_instruction_receipt_log_is_empty(tmp_path, monkeypatch, capsys):
+    gh_shim, calls = _capture_exec(monkeypatch)
+    env = _receipt_env(tmp_path, "")
+    rc = gh_shim.run_shim(["pr", "merge", "5232"], env=env, shim_dir="/tmp/shim")
+    assert rc == 1
+    assert calls == []
+    assert "unattended completion/merge blocked" in capsys.readouterr().err
+
+
+def test_shim_allows_pr_merge_when_instruction_receipt_matches(tmp_path, monkeypatch):
+    gh_shim, calls = _capture_exec(monkeypatch)
+    env = _receipt_env(
+        tmp_path,
+        "SYNLYNK_TASK_RECEIVED: abc\nSYNLYNK_INSTRUCTION_VERSION: 0.23.0-dev\n",
+    )
+    try:
+        gh_shim.run_shim(["pr", "merge", "5232", "--squash"], env=env, shim_dir="/tmp/shim")
+    except RuntimeError as exc:
+        assert str(exc) == "exec captured"
+    assert len(calls) == 1
+    assert calls[0][1][1:] == ["pr", "merge", "5232", "--squash"]
+
+
+def test_shim_allows_non_merge_gh_when_instruction_receipt_is_none(tmp_path, monkeypatch):
+    gh_shim, calls = _capture_exec(monkeypatch)
+    env = _receipt_env(tmp_path, "SYNLYNK_INSTRUCTION_VERSION: none\n")
+    try:
+        gh_shim.run_shim(["pr", "comment", "5232", "--body", "note"], env=env, shim_dir="/tmp/shim")
+    except RuntimeError as exc:
+        assert str(exc) == "exec captured"
+    assert len(calls) == 1
+
+
+def test_shim_waiver_does_not_allow_status_none_merge(tmp_path, monkeypatch, capsys):
+    gh_shim, calls = _capture_exec(monkeypatch)
+    env = _receipt_env(
+        tmp_path,
+        "SYNLYNK_INSTRUCTION_VERSION: none\n",
+        SYNLYNK_INSTRUCTION_RECEIPT_WAIVER="operator verified legacy harness",
+    )
+    rc = gh_shim.run_shim(["pr", "merge", "5232"], env=env, shim_dir="/tmp/shim")
+    assert rc == 1
+    assert calls == []
+    assert "unattended completion/merge blocked" in capsys.readouterr().err
+
+
+def test_shim_reads_receipt_file_ahead_of_buffered_log(tmp_path, monkeypatch):
+    gh_shim, calls = _capture_exec(monkeypatch)
+    receipt = tmp_path / "receipt.txt"
+    receipt.write_text("SYNLYNK_INSTRUCTION_VERSION: 0.23.0-dev\n")
+    env = _receipt_env(tmp_path, "", SYNLYNK_INSTRUCTION_RECEIPT_FILE=str(receipt))
+    try:
+        gh_shim.run_shim(["pr", "merge", "5232"], env=env, shim_dir="/tmp/shim")
+    except RuntimeError as exc:
+        assert str(exc) == "exec captured"
+    assert len(calls) == 1
+
+
+def test_internal_runner_blocks_pr_merge_when_instruction_receipt_is_none(tmp_path, monkeypatch, capsys):
+    from synlynk import gh_shim
+
+    def boom(*_args, **_kwargs):
+        raise AssertionError("real gh must not run")
+
+    monkeypatch.setattr(gh_shim.subprocess, "run", boom)
+    log = tmp_path / "job.log"
+    log.write_text("SYNLYNK_INSTRUCTION_VERSION: none\n")
+    env = {
+        "SYNLYNK_HARNESS": "1",
+        "GH_TOKEN": "app-token",
+        "SYNLYNK_EXPECTED_INSTRUCTION_VERSION": "0.23.0-dev",
+        "SYNLYNK_JOB_LOG": str(log),
+    }
+    result = gh_shim.run_gh(["pr", "merge", "5232", "--squash"], env=env, capture_output=True, text=True)
+    assert result.returncode == 1
+    assert "unattended completion/merge blocked" in result.stderr
+
 
 def test_gh_shim_engages_under_login_shell(tmp_path):
     import shutil

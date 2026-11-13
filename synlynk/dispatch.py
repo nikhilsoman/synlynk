@@ -1652,6 +1652,24 @@ def _dispatch_context() -> str:
         return "headless"
 
 
+def _grok_dispatch_rules_flags(*roots: Optional[str]) -> list:
+    """Return ``--rules <GROK.md>`` from the first root that has the file.
+
+    ``synlynk exec grok`` already appends this flag. Headless ``dispatch``
+    did not, so a Grok job's initial context omitted GROK.md and the model
+    correctly printed ``SYNLYNK_INSTRUCTION_VERSION: none`` (gh:#5236).
+    Prefer the job worktree, then the dispatcher checkout, so a sparse
+    worktree that left GROK.md behind still injects the file.
+    """
+    for root in roots:
+        if not root:
+            continue
+        path = os.path.join(root, "GROK.md")
+        if os.path.isfile(path):
+            return ["--rules", os.path.abspath(path)]
+    return []
+
+
 def _inject_grok_rules(cmd_args: list) -> list:
     """Adds Grok rules flags when invoking grok and the rule files exist."""
     if not cmd_args or cmd_args[0] != "grok":
@@ -2731,7 +2749,12 @@ def _render_instruction_receipt_instruction(instruction_file: Optional[str]) -> 
         "SYNLYNK_INSTRUCTION_VERSION: <version>\n"
         "where <version> is the version string from your instruction file (e.g. from `synlynk:start version=\"...\"` or `synlynk:harness ...`).\n"
         "If no instruction file is loaded, print:\n"
-        "SYNLYNK_INSTRUCTION_VERSION: none\n\n"
+        "SYNLYNK_INSTRUCTION_VERSION: none\n"
+        "Before any `gh pr review --approve` or `gh pr merge`, write that same "
+        "SYNLYNK_INSTRUCTION_VERSION line and nothing else to "
+        "`$SYNLYNK_INSTRUCTION_RECEIPT_FILE` when that variable is set. "
+        "Those GitHub commands are refused while the receipt is missing, `none`, "
+        "or a version other than the instruction file's version.\n\n"
     )
 
 
@@ -3003,14 +3026,23 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
                               instruction_file: Optional[str] = None,
                               role: Optional[str] = None,
                               *, requires_gh_write: bool = False,
-                              full_context: bool = False) -> str:
+                              full_context: bool = False,
+                              instruction_body: Optional[str] = None) -> str:
     """Returns a prompt formatted for the agent's preferred input style."""
     requires_gh_write = bool(
         requires_gh_write or _task_requires_gh_write(task)
     )
     receipt_instruction = _render_task_receipt_instruction(task_sha256)
     instruction_receipt = _render_instruction_receipt_instruction(instruction_file)
-    headers = f"{receipt_instruction}{instruction_receipt}"
+    instruction_section = ""
+    if instruction_body and instruction_file:
+        instruction_section = (
+            f"## Project Instruction File ({instruction_file})\n"
+            "This file is loaded as part of your initial dispatch context. "
+            "Take SYNLYNK_INSTRUCTION_VERSION from its synlynk:start version.\n\n"
+            f"{instruction_body.strip()}\n\n"
+        )
+    headers = f"{receipt_instruction}{instruction_receipt}{instruction_section}"
 
     repo_root = cwd_hint or os.getcwd()
     graph_file = os.path.join(repo_root, ".synlynk", "graphify-out", "graph.json")
@@ -5392,6 +5424,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     base_sha = worktree_info["base_sha"]
     if agent == "grok" and worktree_path and "--cwd" not in flags:
         flags = flags + ["--cwd", worktree_path]
+    if agent == "grok":
+        flags = flags + _grok_dispatch_rules_flags(worktree_path, os.getcwd())
     if agent == "codex" and worktree_path and "-C" not in flags and "--cd" not in flags:
         flags = flags + ["-C", worktree_path]
     if agent == "muse" and worktree_path and "--workspace" not in flags:
@@ -5474,6 +5508,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     instruction_file = get_instruction_file_for_agent(agent)
     expected_instruction_version = None
+    instruction_body = None
     if instruction_file:
         instr_path = os.path.join(worktree_path or os.getcwd(), instruction_file)
         if not os.path.exists(instr_path):
@@ -5481,7 +5516,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         if os.path.exists(instr_path):
             try:
                 with open(instr_path, "r", encoding="utf-8") as _f:
-                    expected_instruction_version = extract_instruction_version(_f.read())
+                    instruction_text = _f.read()
+                expected_instruction_version = extract_instruction_version(instruction_text)
+                # Grok does not auto-load GROK.md. Put the file in the prompt
+                # so the receipt has a real version to echo (gh:#5236).
+                if agent == "grok":
+                    instruction_body = instruction_text
             except Exception:
                 pass
 
@@ -5505,6 +5545,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             role=resolved_agent_role,
             requires_gh_write=requires_gh_write,
             full_context=full_context,
+            instruction_body=instruction_body,
         )
     except TypeError:
         prompt = format_prompt(agent, context_text, story_id or "", task, file_section, verify_section)
@@ -5617,6 +5658,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         or None
     )
     proc_env["SYNLYNK_JOB_ID"] = job_id
+    if expected_instruction_version:
+        proc_env["SYNLYNK_EXPECTED_INSTRUCTION_VERSION"] = expected_instruction_version
+    proc_env["SYNLYNK_JOB_LOG"] = log_file
+    proc_env["SYNLYNK_INSTRUCTION_RECEIPT_FILE"] = os.path.join(
+        os.path.dirname(log_file), f"{job_id}.instruction-receipt"
+    )
     if parent_job_id:
         proc_env["SYNLYNK_PARENT_JOB_ID"] = parent_job_id
     else:

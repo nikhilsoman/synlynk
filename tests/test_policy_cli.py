@@ -17,6 +17,16 @@ def test_cmd_policy_check_merge_exits_zero_for_authorized_role(tmp_path, monkeyp
     assert "cleared to merge" in capsys.readouterr().out
 
 
+def test_cmd_policy_check_merge_blocks_untrusted_instruction_receipt(tmp_path, monkeypatch, capsys):
+    log = tmp_path / "job.log"
+    log.write_text("SYNLYNK_INSTRUCTION_VERSION: none\n")
+    monkeypatch.setenv("SYNLYNK_EXPECTED_INSTRUCTION_VERSION", "0.23.0-dev")
+    monkeypatch.setenv("SYNLYNK_JOB_LOG", str(log))
+    exit_code = cmd_policy_check_merge(role="qa")
+    assert exit_code == 1
+    assert "unattended completion/merge blocked" in capsys.readouterr().out
+
+
 def test_cmd_policy_check_merge_exits_nonzero_for_unauthorized_role(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("HOME", str(tmp_path))
     repo = tmp_path / "repo"
