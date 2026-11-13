@@ -517,6 +517,33 @@ def repair_roadmap_merge_parity() -> int:
     return len(stale)
 
 
+def _hc_roadmap_decision_drift() -> HealthCheck:
+    """Warn when decision, goal, and roadmap-arc records have drifted."""
+    try:
+        conn = _pkg("_get_db")()
+        from synlynk.roadmap_drift import (
+            classify_roadmap_drift,
+            find_roadmap_drift,
+        )
+
+        findings = find_roadmap_drift(conn)
+    except Exception as exc:
+        return HealthCheck(
+            "roadmap_decision_drift",
+            "warn",
+            f"roadmap drift check unavailable: {exc}",
+        )
+    status, detail = classify_roadmap_drift(findings)
+    if status == "pass":
+        return HealthCheck("roadmap_decision_drift", "ok", detail)
+    return HealthCheck(
+        "roadmap_decision_drift",
+        "warn",
+        detail,
+        fix="Review with: synlynk roadmap check",
+    )
+
+
 def _hc_identity_key() -> HealthCheck:
     key_path = os.path.join(os.path.expanduser("~/.synlynk"), "identity.key")
     if os.path.exists(key_path):
@@ -1554,6 +1581,7 @@ HEALTH_CHECKS = [
     _hc_docs_dir,
     _hc_todo_drift,
     _hc_roadmap_merge_parity,
+    _hc_roadmap_decision_drift,
     _hc_identity_key,
     _hc_identity_roles,
     _hc_identity_file_perms,

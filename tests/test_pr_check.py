@@ -185,3 +185,50 @@ def test_pr_check_no_pr_message_names_branch(project_dir, capsys):
     captured = capsys.readouterr()
     assert "dispatch/codex/job-7945916e" in captured.out
     assert "cannot verify" in captured.out
+
+
+def test_pr_check_blocks_on_roadmap_drift_when_decisions_changed(project_dir, capsys):
+    triggered_fail = {
+        "passed": False,
+        "triggered": True,
+        "findings": [
+            {
+                "kind": "DECISION_GOAL_UNPLACED",
+                "decision_id": "dec-x",
+                "goal_id": "goal-x",
+                "detail": (
+                    "decision dec-x links goal goal-x, but that goal's "
+                    "placement_status is 'unplaced'"
+                ),
+            }
+        ],
+        "message": (
+            "decision dec-x links goal goal-x, but that goal's "
+            "placement_status is 'unplaced'"
+        ),
+    }
+    with patch("synlynk.pr_multiplier._is_github_remote", return_value=False), patch(
+        "synlynk.db.check_pr_roadmap_gate", return_value=triggered_fail
+    ):
+        with pytest.raises(SystemExit) as exc_info:
+            cmd_pr_check()
+    assert exc_info.value.code == 1
+    assert "dec-x" in capsys.readouterr().out
+
+
+def test_pr_check_passes_when_roadmap_gate_not_triggered(project_dir, capsys):
+    not_triggered = {
+        "passed": True,
+        "triggered": False,
+        "findings": [],
+        "message": "No decision records modified in this PR.",
+    }
+    with patch("synlynk.pr_multiplier._is_github_remote", return_value=False), patch(
+        "synlynk.db.check_pr_roadmap_gate", return_value=not_triggered
+    ):
+        cmd_pr_check()
+    captured = capsys.readouterr()
+    assert (
+        "roadmap drift" not in captured.out.lower()
+        or "no decision records" in captured.out.lower()
+    )
