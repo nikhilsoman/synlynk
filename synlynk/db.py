@@ -4538,6 +4538,28 @@ def cmd_roadmap_update(
     print(f"  {_GREEN}✓{_RESET} Roadmap phase updated — ID {row[0]} ({new_arc}): {new_title}")
 
 
+def cmd_roadmap_check() -> int:
+    """Report decision, goal, and roadmap-arc drift without changing state."""
+    from synlynk import _get_db
+    from synlynk.roadmap_drift import classify_roadmap_drift, find_roadmap_drift
+
+    conn = _get_db()
+    try:
+        findings = find_roadmap_drift(conn)
+    finally:
+        conn.close()
+
+    status, detail = classify_roadmap_drift(findings)
+    if status == "pass":
+        print(f"  ✓ {detail}")
+        return 0
+
+    print(f"  ⚠ roadmap drift detected ({len(findings)} finding(s)):")
+    for finding in findings:
+        print(f"    - [{finding['kind']}] {finding['detail']}")
+    return 1
+
+
 def cmd_story_list() -> None:
     """Prints all stories in state.db."""
     from synlynk import _get_db
