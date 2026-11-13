@@ -65,6 +65,97 @@ _ORG_ROLE_TO_BASELINE_ROLE = {
 
 _STARTUP_FAILOVER_ORDER = ("codex", "agy", "claude")
 _CODEX_REVIEW_WRITABLE_ROOTS = "sandbox_workspace_write.writable_roots=[]"
+DISPATCH_GROK_SANDBOX_PROFILE = "synlynk-dispatch"
+_GROK_SANDBOX_MARK_START = "# synlynk-dispatch-sandbox:start"
+_GROK_SANDBOX_MARK_END = "# synlynk-dispatch-sandbox:end"
+
+
+def default_sandbox_writable_paths() -> list[str]:
+    """Extra directories a dispatch sandbox may write outside the worktree.
+
+    ``~/.synlynk/gh-shim`` is where ``install_shim()`` / ``write_shim()`` place
+    the durable ``gh`` guard. Without this grant, a job that self-installs the
+    shim hits ``PermissionError: [Errno 1] Operation not permitted`` (gh:#5242).
+    """
+    return [os.path.expanduser("~/.synlynk/gh-shim")]
+
+
+def sandbox_writable_allows(path: str, roots: Optional[Sequence[str]] = None) -> bool:
+    """Return whether ``path`` is the same as or under a sandbox writable root."""
+    candidate = os.path.normcase(os.path.realpath(os.path.expanduser(path)))
+    allowed = list(roots) if roots is not None else default_sandbox_writable_paths()
+    for root in allowed:
+        base = os.path.normcase(os.path.realpath(os.path.expanduser(root)))
+        if candidate == base or candidate.startswith(base + os.sep):
+            return True
+    return False
+
+
+def render_grok_dispatch_sandbox_profile(paths: Optional[Sequence[str]] = None) -> str:
+    """Render a Grok sandbox profile that extends workspace with the allowlist."""
+    roots = list(paths) if paths is not None else default_sandbox_writable_paths()
+    rendered = ", ".join(json.dumps(path) for path in roots)
+    return (
+        f"{_GROK_SANDBOX_MARK_START}\n"
+        f"[profiles.{DISPATCH_GROK_SANDBOX_PROFILE}]\n"
+        'extends = "workspace"\n'
+        f"read_write = [{rendered}]\n"
+        f"{_GROK_SANDBOX_MARK_END}\n"
+    )
+
+
+def ensure_grok_dispatch_sandbox(worktree_path: str) -> str:
+    """Write the dispatch sandbox profile into the job worktree and return its name."""
+    grok_dir = os.path.join(worktree_path, ".grok")
+    os.makedirs(grok_dir, mode=0o755, exist_ok=True)
+    path = os.path.join(grok_dir, "sandbox.toml")
+    block = render_grok_dispatch_sandbox_profile()
+    existing = ""
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8") as handle:
+            existing = handle.read()
+    start = existing.find(_GROK_SANDBOX_MARK_START)
+    end = existing.find(_GROK_SANDBOX_MARK_END)
+    if start != -1 and end != -1 and end >= start:
+        end = end + len(_GROK_SANDBOX_MARK_END)
+        if end < len(existing) and existing[end] == "\n":
+            end += 1
+        updated = existing[:start] + block + existing[end:]
+    else:
+        prefix = existing.rstrip() + "\n\n" if existing.strip() else ""
+        updated = prefix + block
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(updated)
+    return DISPATCH_GROK_SANDBOX_PROFILE
+
+
+def codex_sandbox_writable_root_flags(read_only: bool = False) -> list[str]:
+    """Codex ``-c`` overrides that add the default writable-path allowlist.
+
+    Review dispatches keep ``writable_roots=[]`` so this returns nothing when
+    ``read_only`` is set.
+    """
+    if read_only:
+        return []
+    roots = default_sandbox_writable_paths()
+    if not roots:
+        return []
+    rendered = "[" + ",".join(json.dumps(path) for path in roots) + "]"
+    return ["-c", f"sandbox_workspace_write.writable_roots={rendered}"]
+
+
+def _install_durable_gh_shim() -> Optional[str]:
+    """Install ``~/.synlynk/gh-shim`` from the dispatcher, before the job sandbox applies.
+
+    The parent is outside the job sandbox, so this is the path that does not
+    need a one-off grant. A sandboxed parent that cannot write the directory
+    leaves installation to the job, which holds the writable-path grant.
+    """
+    try:
+        from synlynk.gh_shim import install_shim
+        return install_shim()
+    except OSError:
+        return None
 _LOCAL_PILOT_RECEIPT_KEY = secrets.token_bytes(32)
 
 
@@ -1564,6 +1655,7 @@ def _build_subprocess_env(
                 "Or set SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1 to opt into host `gh` auth "
                 "(uses personal keyring — not recommended; see #569)."
             )
+    _install_durable_gh_shim()
     shim_dir, shim_env_vars = _create_dispatch_shims()
     proc_env["SYNLYNK_HARNESS"] = "1"
     proc_env["SYNLYNK_SHIM_DIR"] = shim_env_vars["SYNLYNK_SHIM_DIR"]
@@ -5344,6 +5436,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     flags = flags + ["--add-dir", git_common_dir]
         except Exception:
             pass
+        if task_type != "review":
+            flags = flags + codex_sandbox_writable_root_flags(read_only=False)
     if agent == "muse":
         if "--json" not in flags:
             flags = flags + ["--json"]
@@ -5392,6 +5486,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     base_sha = worktree_info["base_sha"]
     if agent == "grok" and worktree_path and "--cwd" not in flags:
         flags = flags + ["--cwd", worktree_path]
+    if agent == "grok" and worktree_path:
+        ensure_grok_dispatch_sandbox(worktree_path)
+        if "--sandbox" not in flags:
+            flags = flags + ["--sandbox", DISPATCH_GROK_SANDBOX_PROFILE]
     if agent == "codex" and worktree_path and "-C" not in flags and "--cd" not in flags:
         flags = flags + ["-C", worktree_path]
     if agent == "muse" and worktree_path and "--workspace" not in flags:

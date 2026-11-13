@@ -1087,7 +1087,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     gh_parser.add_argument(
         "--shim-env",
         action="store_true",
-        help="Install the raw-gh harness shim and print a PATH export",
+        help="Install the raw-gh harness shim and print PATH and SYNLYNK_GH_ROLE exports",
     )
     gh_parser.add_argument(
         "--shim-install",
@@ -2663,7 +2663,7 @@ def main(argv=None) -> None:
         if getattr(args, "shim_env", False) or getattr(args, "shim_install", False):
             from synlynk import gh_shim
             if getattr(args, "shim_env", False):
-                print(gh_shim.shim_env())
+                print(gh_shim.shim_env(role=getattr(args, "role", None)))
             else:
                 print(f"Installed gh shim in {gh_shim.install_shim()}")
             sys.exit(0)

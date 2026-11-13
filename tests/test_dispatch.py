@@ -2542,6 +2542,98 @@ def test_grok_permission_flags_empty_permissions_never_raises():
     assert _grok_permission_flags(None, skip_permissions=False) == []
 
 
+def test_default_sandbox_writable_paths_cover_gh_shim():
+    """Dispatch jobs must be able to install the durable gh shim (gh:#5242)."""
+    import os
+
+    from synlynk.dispatch import default_sandbox_writable_paths, sandbox_writable_allows
+
+    shim_dir = os.path.expanduser("~/.synlynk/gh-shim")
+    paths = default_sandbox_writable_paths()
+    assert sandbox_writable_allows(shim_dir, paths)
+    assert sandbox_writable_allows(os.path.join(shim_dir, "gh"), paths)
+    assert not sandbox_writable_allows(os.path.expanduser("~/.ssh"), paths)
+
+
+def test_grok_dispatch_sandbox_profile_grants_gh_shim(tmp_path):
+    import os
+
+    from synlynk.dispatch import (
+        DISPATCH_GROK_SANDBOX_PROFILE,
+        ensure_grok_dispatch_sandbox,
+    )
+
+    profile = ensure_grok_dispatch_sandbox(str(tmp_path))
+    text = (tmp_path / ".grok" / "sandbox.toml").read_text(encoding="utf-8")
+    assert profile == DISPATCH_GROK_SANDBOX_PROFILE
+    assert f"[profiles.{DISPATCH_GROK_SANDBOX_PROFILE}]" in text
+    assert 'extends = "workspace"' in text
+    assert os.path.expanduser("~/.synlynk/gh-shim") in text
+    again = ensure_grok_dispatch_sandbox(str(tmp_path))
+    assert again == profile
+    assert (tmp_path / ".grok" / "sandbox.toml").read_text(encoding="utf-8").count(
+        f"[profiles.{DISPATCH_GROK_SANDBOX_PROFILE}]"
+    ) == 1
+
+
+def test_codex_writable_root_flags_include_gh_shim_except_for_review():
+    import os
+
+    from synlynk.dispatch import codex_sandbox_writable_root_flags
+
+    flags = codex_sandbox_writable_root_flags(read_only=False)
+    rendered = " ".join(flags)
+    assert "sandbox_workspace_write.writable_roots=" in rendered
+    assert os.path.expanduser("~/.synlynk/gh-shim") in rendered
+    assert codex_sandbox_writable_root_flags(read_only=True) == []
+
+
+def test_grok_dispatch_launches_with_gh_shim_sandbox_profile(project_dir, monkeypatch):
+    import os
+
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+
+    def fake_popen(command, *args, **kwargs):
+        captured["command"] = command
+
+        class FakeProc:
+            pid = 12345
+
+        return FakeProc()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(dispatch_mod, "_preflight_dispatch", lambda *a, **kw: {"passed": True})
+    monkeypatch.setattr(
+        dispatch_mod, "_dispatch_flags_for_agent",
+        lambda agent, skip_permissions=False: ["--always-approve"],
+    )
+
+    dispatch_mod.dispatch_agent(
+        agent="grok",
+        task="install the gh shim",
+        grants=["run:shell"],
+        force_agent=True,
+        skip_preflight=True,
+        context_mode="none",
+        skip_permissions=True,
+    )
+
+    shell = captured["command"][2]
+    assert "--sandbox" in shell
+    assert dispatch_mod.DISPATCH_GROK_SANDBOX_PROFILE in shell
+    shim = os.path.expanduser("~/.synlynk/gh-shim")
+    found = False
+    for root, _dirs, files in os.walk(project_dir):
+        if "sandbox.toml" in files and os.path.basename(root) == ".grok":
+            with open(os.path.join(root, "sandbox.toml"), encoding="utf-8") as handle:
+                if shim in handle.read():
+                    found = True
+                    break
+    assert found
+
+
 def test_dispatch_flags_for_agent_grok_adds_always_approve_only_when_skipped():
     from synlynk.dispatch import _dispatch_flags_for_agent
 

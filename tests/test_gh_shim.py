@@ -124,6 +124,9 @@ def test_internal_gh_runner_refuses_host_auth_in_harness(monkeypatch):
     monkeypatch.setenv("SYNLYNK_HARNESS", "1")
     monkeypatch.delenv("GH_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    # A dispatched job exports SYNLYNK_GH_ROLE. This test asserts the
+    # no-token, no-role refusal, so the parent role must not leak in.
+    monkeypatch.delenv("SYNLYNK_GH_ROLE", raising=False)
     result = gh_shim.run_gh(["pr", "view", "1"], capture_output=True, text=True)
     assert result.returncode == 1
     assert gh_shim.REFUSAL in result.stderr
@@ -136,6 +139,54 @@ def test_gh_shim_cli_prints_installable_environment(tmp_path, monkeypatch, capsy
     assert gh_shim.install_shim() == str(tmp_path / ".synlynk" / "gh-shim")
     assert (tmp_path / ".synlynk" / "gh-shim" / "gh").exists()
     assert gh_shim.shim_env() == f'export PATH="{tmp_path / ".synlynk" / "gh-shim"}:$PATH"'
+
+
+def test_shim_env_without_role_omits_synlynk_gh_role(tmp_path, monkeypatch):
+    from synlynk import gh_shim
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    text = gh_shim.shim_env()
+    assert text == f'export PATH="{tmp_path / ".synlynk" / "gh-shim"}:$PATH"'
+    assert "SYNLYNK_GH_ROLE" not in text
+
+
+def test_shim_env_with_role_exports_synlynk_gh_role(tmp_path, monkeypatch):
+    from synlynk import gh_shim
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    text = gh_shim.shim_env(role="dev")
+    shim_dir = tmp_path / ".synlynk" / "gh-shim"
+    assert f'export PATH="{shim_dir}:$PATH"' in text
+    assert "export SYNLYNK_GH_ROLE=dev" in text
+    assert "SYNLYNK_GH_ROLE=''" not in text
+
+
+def test_shim_env_quotes_role_for_shell(tmp_path, monkeypatch):
+    from synlynk import gh_shim
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    text = gh_shim.shim_env(role="dev;rm")
+    assert "export SYNLYNK_GH_ROLE='dev;rm'" in text
+
+
+def test_gh_cli_shim_env_prints_role_only_when_given(tmp_path, monkeypatch, capsys):
+    import pytest
+    from synlynk.cli import main
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    with pytest.raises(SystemExit) as without_role:
+        main(["gh", "--shim-env"])
+    assert without_role.value.code == 0
+    bare = capsys.readouterr().out
+    assert "export PATH=" in bare
+    assert "SYNLYNK_GH_ROLE" not in bare
+
+    with pytest.raises(SystemExit) as with_role:
+        main(["gh", "--role", "dev", "--shim-env"])
+    assert with_role.value.code == 0
+    exported = capsys.readouterr().out
+    assert "export PATH=" in exported
+    assert "export SYNLYNK_GH_ROLE=dev" in exported
 
 
 def test_gh_shim_picks_up_refreshed_daemon_token(monkeypatch):
