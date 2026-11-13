@@ -1807,6 +1807,9 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     roadmap_reassign_parser.add_argument("--role", default="pm")
     roadmap_render_parser = roadmap_sub.add_parser("render", help="Render roadmap.md from state.db")
     roadmap_render_parser.add_argument("--role", default="pm")
+    roadmap_sub.add_parser(
+        "check", help="Report decision<->goal<->roadmap-arc drift"
+    )
 
     policy_parser = subparsers.add_parser("policy", help="Check policy authority")
     policy_subparsers = policy_parser.add_subparsers(dest="policy_command")
@@ -2532,6 +2535,7 @@ def main(argv=None) -> None:
         cmd_marketing_sync_pr,
         cmd_repair,
         cmd_roadmap_add,
+        cmd_roadmap_check,
         cmd_roadmap_update,
         cmd_roles,
         cmd_run_trio,
@@ -3416,6 +3420,8 @@ def main(argv=None) -> None:
             from synlynk.db import _generate_roadmap_md
             _generate_roadmap_md()
             print("Rendered roadmap.md from state.db")
+        elif args.roadmap_action == "check":
+            sys.exit(cmd_roadmap_check())
     elif args.command == "backlog":
         if args.backlog_action == "capture":
             from synlynk.backlog import stage_discovered_work

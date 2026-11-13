@@ -81,6 +81,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `roadmap update` (secondary) — sustain
 - `roadmap reassign` (secondary) — sustain
 - `roadmap render` (secondary) — sustain
+- `roadmap check` (secondary) — sustain
 - `open` (primary) — open
 - `launch` (primary) — open
 - `roles` (secondary) — open

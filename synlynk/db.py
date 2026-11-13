@@ -40,6 +40,12 @@ def _gh_pr_changed_files(pr_number) -> list:
     return changed_files(pr_number)
 
 
+def check_pr_roadmap_gate(*args, **kwargs) -> dict:
+    from synlynk.pr_check import check_pr_roadmap_gate as check_gate
+
+    return check_gate(*args, **kwargs)
+
+
 def _is_github_remote() -> bool:
     from synlynk.pr_multiplier import _is_github_remote as is_github_remote
 
@@ -4532,6 +4538,28 @@ def cmd_roadmap_update(
     print(f"  {_GREEN}✓{_RESET} Roadmap phase updated — ID {row[0]} ({new_arc}): {new_title}")
 
 
+def cmd_roadmap_check() -> int:
+    """Report decision, goal, and roadmap-arc drift without changing state."""
+    from synlynk import _get_db
+    from synlynk.roadmap_drift import classify_roadmap_drift, find_roadmap_drift
+
+    conn = _get_db()
+    try:
+        findings = find_roadmap_drift(conn)
+    finally:
+        conn.close()
+
+    status, detail = classify_roadmap_drift(findings)
+    if status == "pass":
+        print(f"  ✓ {detail}")
+        return 0
+
+    print(f"  ⚠ roadmap drift detected ({len(findings)} finding(s)):")
+    for finding in findings:
+        print(f"    - [{finding['kind']}] {finding['detail']}")
+    return 1
+
+
 def cmd_story_list() -> None:
     """Prints all stories in state.db."""
     from synlynk import _get_db
@@ -5726,6 +5754,46 @@ def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
             raise SystemExit(1)
     else:
         print(f"  {_GREEN}✓{_RESET} GOVERNS linkage passed — {governs_eval.message}")
+
+    roadmap_gate_res = check_pr_roadmap_gate(
+        conn,
+        repo_root=".",
+        pr_number=pr_number,
+    )
+    if roadmap_gate_res.get("triggered"):
+        roadmap_eval = _evaluate_gate(
+            conn,
+            pr_number=pr_number,
+            gate="roadmap_drift",
+            mode_key="require_linked_goal_mode",
+            verdict=(
+                ("pass", roadmap_gate_res["message"])
+                if roadmap_gate_res.get("passed")
+                else ("warn", roadmap_gate_res["message"])
+            ),
+            policy_section="governs_authority",
+        )
+        if roadmap_eval.verdict != "pass":
+            label = (
+                "🚫 [PR CHECK BLOCKED]"
+                if roadmap_eval.should_block
+                else "⚠ [PR CHECK]"
+            )
+            print(f"\n  {label} roadmap drift detected: {roadmap_eval.message}")
+            print("  Review with: synlynk roadmap check\n")
+            if roadmap_eval.should_block:
+                conn.close()
+                raise SystemExit(1)
+        else:
+            print(
+                f"  {_GREEN}✓{_RESET} Roadmap drift check passed — "
+                f"{roadmap_eval.message}"
+            )
+    else:
+        print(
+            f"  {_GREEN}✓{_RESET} Roadmap drift check skipped — "
+            f"{roadmap_gate_res.get('message')}"
+        )
 
     if _is_github_remote():
         owner, repo = detect_remote_owner_repo()
