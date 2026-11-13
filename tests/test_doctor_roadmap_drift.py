@@ -36,3 +36,46 @@ def test_doctor_warns_and_repairs_merged_pr_phase_drift(tmp_path, monkeypatch):
     finally:
         conn.close()
     assert regenerated == [True]
+
+
+def test_doctor_warns_on_roadmap_decision_drift(tmp_path, monkeypatch):
+    import synlynk
+    import synlynk.doctor as doctor
+
+    db_path = tmp_path / "state.db"
+    monkeypatch.setattr(synlynk, "DB_PATH", str(db_path))
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+
+    conn = synlynk._get_db()
+    try:
+        conn.execute(
+            "INSERT INTO goals (goal_id, outcome, criterion, placement_status) "
+            "VALUES ('goal-drift-1', 'ship Z', 'Z ships', 'unplaced')"
+        )
+        conn.execute(
+            "INSERT INTO decisions (decision_id, topic, date, panel, status, inputs, synthesis, decision_text, goal_id) "
+            "VALUES ('dec-drift-1', 'topic', '2026-11-13', 'pm', 'approved', 'in', 'syn', 'text', 'goal-drift-1')"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    result = doctor._hc_roadmap_decision_drift()
+    assert result.status == "warn"
+    assert "dec-drift-1" in result.message
+    assert "goal-drift-1" in result.message
+
+
+def test_doctor_passes_when_no_roadmap_decision_drift(tmp_path, monkeypatch):
+    import synlynk
+    import synlynk.doctor as doctor
+
+    db_path = tmp_path / "state.db"
+    monkeypatch.setattr(synlynk, "DB_PATH", str(db_path))
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+
+    conn = synlynk._get_db()
+    conn.close()
+
+    result = doctor._hc_roadmap_decision_drift()
+    assert result.status == "ok"
