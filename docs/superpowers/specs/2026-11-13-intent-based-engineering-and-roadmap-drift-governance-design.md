@@ -132,7 +132,7 @@ Referenced by both the drift gate (as the thing it enforces) and by Intent Captu
 
 **Resolved 2026-11-13:**
 - `story-ca8afaf8` fixed via `synlynk story done story-ca8afaf8` (PR #2596 confirmed merged 2026-10-24).
-- `dec-9b41a7c3` / `dec-4e81b29a`: exhaustively searched (repo + `~/.synlynk`, both filesystem and `decisions` table) — confirmed not to exist anywhere. Legacy residue from the original takeover-brief review; no further action, no row to repair.
+- `dec-9b41a7c3` / `dec-4e81b29a`: correction to the prior finding below — both IDs are missing only from the `decisions` table in `state.db`, not from the repo. Both exist on `origin/main` as **approved decision files**: `dec-9b41a7c3` at `project-docs/decisions/2026-11-11-authoritative-platform-roadmap-cadence-and-drift-governance.md`/`.json`, and `dec-4e81b29a` at `project-docs/decisions/2026-11-11-decide-panel-roadmap-prioritization-and-backlog-sweep.md`/`.json`. Both carry `status: approved` and `primary_goal: goal-2458-master-roadmap`. The earlier "confirmed not to exist anywhere" claim checked only the `decisions` table and a filesystem search that missed `project-docs/decisions/`; this is a table/file sync gap, not an orphaned reference — found via cross-harness review (Grok, PR #5241) and independently verified against `origin/main`. No goal-linkage repair is needed (both files already point at `goal-2458-master-roadmap`); whether these approved decision files should also be ingested into the `decisions` table is a separate, not-yet-filed follow-up, out of scope for this task.
 
 ---
 
