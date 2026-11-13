@@ -506,6 +506,70 @@ def test_format_prompt_for_agent_includes_instruction_receipt_instruction():
         assert "SYNLYNK_INSTRUCTION_VERSION: <version>" in prompt
         assert "AGENTS.md" in prompt
         assert "do the thing" in prompt
+        assert "SYNLYNK_INSTRUCTION_RECEIPT_FILE" in prompt
+
+
+def test_format_prompt_for_grok_embeds_instruction_file_body():
+    import synlynk.dispatch as dispatch_mod
+
+    body = '<!-- synlynk:start version="0.23.0-dev" tool="grok" -->\n# Grok rules\n'
+    prompt = dispatch_mod._format_prompt_for_agent(
+        "grok", "context", "story-1", "do the thing", "", "",
+        task_sha256="deadbeef",
+        instruction_file="GROK.md",
+        instruction_body=body,
+    )
+    assert 'version="0.23.0-dev"' in prompt
+    assert "Project Instruction File (GROK.md)" in prompt
+    assert prompt.index("## Task Receipt (required)") < prompt.index("Project Instruction File")
+
+
+def test_grok_dispatch_injects_rules_and_receipt_env(project_dir, monkeypatch):
+    """GROK.md must be on the grok command and the child env must carry the receipt gate."""
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+
+    def fake_popen(command, *args, **kwargs):
+        captured["command"] = command
+        captured["env"] = kwargs.get("env") or {}
+
+        class FakeProc:
+            pid = 12345
+
+        return FakeProc()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(dispatch_mod, "_preflight_dispatch", lambda *a, **kw: {"passed": True})
+    (project_dir / "GROK.md").write_text(
+        '<!-- synlynk:start version="0.23.0-dev" tool="grok" -->\n# Grok rules\n'
+    )
+
+    job = dispatch_mod.dispatch_agent(
+        agent="grok",
+        task="approve and merge the pull request",
+        role="qa",
+        force_agent=True,
+        skip_preflight=True,
+        skip_permissions=True,
+        context_mode="none",
+    )
+
+    shell_cmd = captured["command"][2]
+    assert "--rules" in shell_cmd
+    assert "GROK.md" in shell_cmd
+    single_pos = shell_cmd.index("--single")
+    rules_pos = shell_cmd.index("--rules")
+    assert rules_pos < single_pos
+    env = captured["env"]
+    assert env.get("SYNLYNK_EXPECTED_INSTRUCTION_VERSION")
+    assert env.get("SYNLYNK_JOB_LOG")
+    assert env.get("SYNLYNK_INSTRUCTION_RECEIPT_FILE")
+    assert env.get("SYNLYNK_JOB_ID") == job["id"]
+    prompt_path = os.path.join(job["worktree_path"], ".synlynk", "prompts", f"{job['id']}.md")
+    prompt = open(prompt_path, encoding="utf-8").read()
+    assert "synlynk:start" in prompt
+    assert "GROK.md" in prompt
 
 
 def test_format_prompt_for_agent_extracts_graph_when_missing(tmp_path, no_stub_graphify_extract):

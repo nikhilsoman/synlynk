@@ -44,6 +44,25 @@ def test_cmd_gh_strips_leading_double_dash(monkeypatch):
     assert captured["cmd"] == ["gh", "pr", "create", "--title", "t"]
 
 
+def test_cmd_gh_blocks_merge_when_instruction_receipt_is_none(tmp_path, monkeypatch, capsys):
+    import synlynk.gh_role as gh_role
+
+    log = tmp_path / "job.log"
+    log.write_text("SYNLYNK_INSTRUCTION_VERSION: none\n")
+    monkeypatch.setenv("SYNLYNK_EXPECTED_INSTRUCTION_VERSION", "0.23.0-dev")
+    monkeypatch.setenv("SYNLYNK_JOB_LOG", str(log))
+    monkeypatch.setattr(gh_role, "_resolve_dispatch_gh_token", lambda role: "ghs_qa")
+    monkeypatch.setattr(gh_role, "_isolated_gh_config_dir", lambda: "/tmp/x")
+
+    def boom(*_a, **_k):
+        raise AssertionError("gh pr merge must not run when the instruction receipt is untrusted")
+
+    monkeypatch.setattr(gh_role.subprocess, "run", boom)
+    rc = gh_role.cmd_gh("qa", ["pr", "merge", "5232", "--squash"])
+    assert rc == 1
+    assert "unattended completion/merge blocked" in capsys.readouterr().err
+
+
 def test_cmd_gh_fails_closed_without_token(monkeypatch):
     import synlynk.gh_role as gh_role
 

@@ -210,6 +210,7 @@ HARNESS_CAPABILITY_BASELINES = {
                 "--permission-mode",
                 "--output-format",
                 "--model",
+                "--rules",
                 "--single",
             ],
             "invalid_flags": ["--yes", "--dangerously-skip-permissions", "--print", "--non-interactive"],
