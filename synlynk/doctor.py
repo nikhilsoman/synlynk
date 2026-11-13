@@ -521,15 +521,12 @@ def _hc_roadmap_decision_drift() -> HealthCheck:
     """Warn when decision, goal, and roadmap-arc records have drifted."""
     try:
         conn = _pkg("_get_db")()
-        try:
-            from synlynk.roadmap_drift import (
-                classify_roadmap_drift,
-                find_roadmap_drift,
-            )
+        from synlynk.roadmap_drift import (
+            classify_roadmap_drift,
+            find_roadmap_drift,
+        )
 
-            findings = find_roadmap_drift(conn)
-        finally:
-            conn.close()
+        findings = find_roadmap_drift(conn)
     except Exception as exc:
         return HealthCheck(
             "roadmap_decision_drift",
