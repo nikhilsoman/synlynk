@@ -130,6 +130,10 @@ Referenced by both the drift gate (as the thing it enforces) and by Intent Captu
 1. `story-ca8afaf8` ("Review + merge PR #2596: synlynk.com platform vision spec") shows `status: open, readiness: draft` despite the spec file already existing on disk. Reconcile its status to reflect reality.
 2. Whichever goal(s) the original "takeover brief" review actually intended to reference under the (non-existent) `dec-9b41a7c3`/`dec-4e81b29a` IDs — resolve during Task 0/1 of the implementation plan by locating the correct decision records (JSON files on disk, if not yet table rows) and repointing/creating goal linkage accordingly, rather than assuming a specific goal ID in advance.
 
+**Resolved 2026-11-13:**
+- `story-ca8afaf8` fixed via `synlynk story done story-ca8afaf8` (PR #2596 confirmed merged 2026-10-24).
+- `dec-9b41a7c3` / `dec-4e81b29a`: exhaustively searched (repo + `~/.synlynk`, both filesystem and `decisions` table) — confirmed not to exist anywhere. Legacy residue from the original takeover-brief review; no further action, no row to repair.
+
 ---
 
 ## Deferred (explicitly out of scope for this spec)
