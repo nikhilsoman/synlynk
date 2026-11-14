@@ -48,6 +48,51 @@ CAPABILITIES: Dict[str, Capability] = {
         category="core",
         note="Local dispatch across worktrees within workspace",
     ),
+    "governs_engine": Capability(
+        name="governs_engine",
+        category="core",
+        note="GOVERNS invariant tracking, state.db schemas, and policy verification",
+    ),
+    "context_packager": Capability(
+        name="context_packager",
+        category="core",
+        note="Sub-3k context packager and AST graph minimizer",
+    ),
+    "doctor_diagnostics": Capability(
+        name="doctor_diagnostics",
+        category="core",
+        note="System diagnostics and passive health checks",
+    ),
+    "finops_dual_ledger": Capability(
+        name="finops_dual_ledger",
+        category="core",
+        note="Local token and cost ledger accounting in SQLite",
+    ),
+    "spec_linter": Capability(
+        name="spec_linter",
+        category="core",
+        note="Constitutional spec frontmatter and schema verification",
+    ),
+    "autonomous_tpm_daemon": Capability(
+        name="autonomous_tpm_daemon",
+        category="core",
+        note="Local background daemon wake cycle and story triage",
+    ),
+    "organogram_canvas": Capability(
+        name="organogram_canvas",
+        category="core",
+        note="Visual organogram SVG graph renderer and archetype viewer",
+    ),
+    "domain_packs": Capability(
+        name="domain_packs",
+        category="core",
+        note="Industry domain definitions and charter profiles",
+    ),
+    "greenfield_genesis": Capability(
+        name="greenfield_genesis",
+        category="core",
+        note="Interactive project bootstrapping and progressive fleet initialization",
+    ),
     # Opt-in capabilities (User bears credentials/infrastructure cost)
     "github_app_auth": Capability(
         name="github_app_auth",
@@ -58,6 +103,16 @@ CAPABILITIES: Dict[str, Capability] = {
         name="relay_local",
         category="opt_in",
         note="Peer-to-peer relay broker running on user-provided host",
+    ),
+    "vizor_local": Capability(
+        name="vizor_local",
+        category="opt_in",
+        note="Interactive web overview canvas and inspection dashboard",
+    ),
+    "mcp_server_local": Capability(
+        name="mcp_server_local",
+        category="opt_in",
+        note="Local MCP server tools and sidecar integration",
     ),
     # Hosted capabilities (Synlynk bears cloud infra/operational cost)
     "hosted_relay": Capability(
