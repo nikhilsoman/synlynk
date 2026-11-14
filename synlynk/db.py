@@ -1876,8 +1876,8 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                 cache_read_tokens INTEGER,
                 story_id          TEXT REFERENCES stories(story_id),
                 type_id           TEXT,
-                epic_id           INTEGER REFERENCES roadmap_arcs(id),
-                phase_id          INTEGER REFERENCES roadmap_phases(id),
+                epic_id           INTEGER,
+                phase_id          INTEGER,
                 total_cost_usd    REAL,
                 api_equivalent_usd REAL,
                 actual_usd        REAL,
@@ -1992,8 +1992,8 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
         cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
         for col, typedef in [
             ("story_id", "TEXT REFERENCES stories(story_id)"),
-            ("epic_id", "INTEGER REFERENCES roadmap_arcs(id)"),
-            ("phase_id", "INTEGER REFERENCES roadmap_phases(id)"),
+            ("epic_id", "INTEGER"),
+            ("phase_id", "INTEGER"),
         ]:
             if col not in cost_cols:
                 try:
@@ -2021,8 +2021,8 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                     cache_read_tokens INTEGER,
                     story_id          TEXT REFERENCES stories(story_id),
                     type_id           TEXT,
-                    epic_id           INTEGER REFERENCES roadmap_arcs(id),
-                    phase_id          INTEGER REFERENCES roadmap_phases(id),
+                    epic_id           INTEGER,
+                    phase_id          INTEGER,
                     total_cost_usd    REAL,
                     api_equivalent_usd REAL,
                     actual_usd        REAL,
@@ -2408,7 +2408,7 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
         conn,
         table="goals",
         column="phase_id",
-        definition="INTEGER REFERENCES roadmap_phases(id)",
+        definition="INTEGER",
     )
     _add_column_if_missing(
         conn,
@@ -2420,6 +2420,36 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
         conn,
         table="goals",
         column="placement_reason",
+        definition="TEXT",
+    )
+    _add_column_if_missing(
+        conn,
+        table="goals",
+        column="arc_version",
+        definition="TEXT",
+    )
+    _add_column_if_missing(
+        conn,
+        table="goals",
+        column="phase_title",
+        definition="TEXT",
+    )
+    _add_column_if_missing(
+        conn,
+        table="goals",
+        column="roadmap_priority",
+        definition="TEXT",
+    )
+    _add_column_if_missing(
+        conn,
+        table="goals",
+        column="story_id",
+        definition="TEXT",
+    )
+    _add_column_if_missing(
+        conn,
+        table="goals",
+        column="notes",
         definition="TEXT",
     )
 
@@ -2454,12 +2484,47 @@ def _add_column_if_missing(
         conn.commit()
 
 
+def _migrate_remove_roadmap_foreign_keys(conn: sqlite3.Connection) -> None:
+    """Safely drop legacy FK references to roadmap_arcs and roadmap_phases without losing data."""
+    conn.commit()
+    fk_res = conn.execute("PRAGMA foreign_keys").fetchone()
+    fk_on = bool(fk_res and fk_res[0])
+    if fk_on:
+        conn.execute("PRAGMA foreign_keys = OFF")
+
+    try:
+        sql_goals = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'goals' AND type = 'table'").fetchone()
+        if sql_goals and sql_goals[0] and "REFERENCES roadmap_phases" in sql_goals[0]:
+            conn.execute("CREATE TABLE IF NOT EXISTS _goals_bak AS SELECT id, phase_id FROM goals")
+            conn.execute("ALTER TABLE goals DROP COLUMN phase_id")
+            conn.execute("ALTER TABLE goals ADD COLUMN phase_id INTEGER")
+            conn.execute("UPDATE goals SET phase_id = (SELECT phase_id FROM _goals_bak WHERE _goals_bak.id = goals.id)")
+            conn.execute("DROP TABLE IF EXISTS _goals_bak")
+
+        sql_costs = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'cost_entries' AND type = 'table'").fetchone()
+        if sql_costs and sql_costs[0] and ("REFERENCES roadmap_phases" in sql_costs[0] or "REFERENCES roadmap_arcs" in sql_costs[0]):
+            conn.execute("CREATE TABLE IF NOT EXISTS _costs_bak AS SELECT id, epic_id, phase_id FROM cost_entries")
+            conn.execute("ALTER TABLE cost_entries DROP COLUMN epic_id")
+            conn.execute("ALTER TABLE cost_entries DROP COLUMN phase_id")
+            conn.execute("ALTER TABLE cost_entries ADD COLUMN epic_id INTEGER")
+            conn.execute("ALTER TABLE cost_entries ADD COLUMN phase_id INTEGER")
+            conn.execute("UPDATE cost_entries SET epic_id = (SELECT epic_id FROM _costs_bak WHERE _costs_bak.id = cost_entries.id), phase_id = (SELECT phase_id FROM _costs_bak WHERE _costs_bak.id = cost_entries.id)")
+            conn.execute("DROP TABLE IF EXISTS _costs_bak")
+
+        conn.commit()
+    finally:
+        if fk_on:
+            conn.execute("PRAGMA foreign_keys = ON")
+
+
 def _migrate_db(conn: sqlite3.Connection) -> None:
     """Thin entry point: legacy versions 1-15, then the versioned runner
     for version 16+. See synlynk/migrations/runner.py."""
     _run_legacy_migration_and_repairs(conn)
     run_pending_migrations(conn)
     _migrate_archetype_schema(conn)
+    from synlynk.db_schema import ensure_derived_roadmap_views
+    ensure_derived_roadmap_views(conn)
 
 
 def _migrate_archetype_schema(conn: sqlite3.Connection) -> None:
@@ -2800,6 +2865,12 @@ def _insert_cost_row(
         conn.close()
 
 
+def repoint_cost_entries_phase_id(conn: sqlite3.Connection, old_phase_id: int, new_goal_id: int) -> int:
+    """Repoint cost_entries.phase_id from a legacy phase id to a goal id."""
+    res = conn.execute("UPDATE cost_entries SET phase_id = ? WHERE phase_id = ?", (new_goal_id, old_phase_id))
+    return res.rowcount
+
+
 def get_costs_by_harness(conn: sqlite3.Connection = None) -> dict[str, float]:
     """Return total cost USD grouped by compute harness."""
     from synlynk import _get_db
@@ -2912,7 +2983,7 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
                         "INSERT OR IGNORE INTO roadmap_arcs (version, title, status, goal_id) VALUES (?,?,?,?)",
                         (a["version"], a["title"], a["status"], a.get("goal_id")),
                     )
-                    if getattr(cursor, "rowcount", 0) > 0:
+                    if getattr(cursor, "rowcount", 0) > 0 or conn.execute("SELECT 1 FROM roadmap_arcs WHERE version=?", (a["version"],)).fetchone():
                         inserted_counts["roadmap_arcs"] += 1
                 except Exception as e:
                     print(f"  ⚠ roadmap arc skipped: {e}")
@@ -2932,7 +3003,7 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
                         "(arc_version, phase_title, status, priority) VALUES (?,?,?,?)",
                         (p["arc_version"], p["phase_title"], p["status"], p["priority"]),
                     )
-                    if getattr(cursor, "rowcount", 0) > 0:
+                    if getattr(cursor, "rowcount", 0) > 0 or conn.execute("SELECT 1 FROM roadmap_phases WHERE arc_version=? AND phase_title=?", (p["arc_version"], p["phase_title"])).fetchone():
                         inserted_counts["roadmap_phases"] += 1
                 except Exception as e:
                     print(f"  ⚠ roadmap phase skipped: {e}")
@@ -4170,7 +4241,8 @@ def _write_decision_record_md(decision_id: str) -> str:
 
 def cmd_decision_record(decision_id: str, topic: str, date: str, panel: list,
                          inputs: dict, synthesis: str, decision_text: str,
-                         goal_id: str = None, story_id: str = None) -> str:
+                         goal_id: str = None, story_id: str = None,
+                         arc: str = None, phase: str = None, priority: int = None) -> str:
     """Insert a decision row into state.db, then write through to the flat file pair."""
     from synlynk import _dr_sync, _get_db, _is_migrated
     from synlynk.team import _sign_capability_rating
@@ -4231,6 +4303,19 @@ def cmd_decision_record(decision_id: str, topic: str, date: str, panel: list,
             (decision_id, topic, date, json.dumps(panel), "approved", json.dumps(inputs),
              synthesis, decision_text, signature)
         )
+    if goal_id and (arc or phase):
+        try:
+            conn.execute(
+                "UPDATE goals SET "
+                "arc_version = COALESCE(?, arc_version), "
+                "phase_title = COALESCE(?, phase_title), "
+                "roadmap_priority = COALESCE(?, roadmap_priority), "
+                "placement_status = 'placed' "
+                "WHERE goal_id = ? OR id = CAST(? AS INTEGER)",
+                (arc, phase, priority, goal_id, goal_id)
+            )
+        except Exception:
+            pass
     conn.commit()
     conn.close()
 
@@ -4619,10 +4704,13 @@ def cmd_story_ready(story_id, all_stories: bool = False) -> None:
         "UPDATE roadmap_phases SET status='in_progress' WHERE story_id=? AND status='planned'",
         (story_id,),
     )
+    has_phase = phase_cur.rowcount > 0 or bool(
+        conn.execute("SELECT 1 FROM goals WHERE story_id=?", (story_id,)).fetchone()
+    )
     conn.commit()
     _record_goal_link_status(conn, story_id)
     conn.close()
-    if phase_cur.rowcount:
+    if has_phase:
         _generate_roadmap_md()
     print(f"  {_GREEN}✓{_RESET} Story {story_id} marked ready")
 
@@ -4707,6 +4795,9 @@ def cmd_story_done(story_id: str, conn=None) -> None:
         "UPDATE roadmap_phases SET status='done' WHERE story_id=? AND status != 'done'",
         (story_id,),
     )
+    has_phase = phase_result.rowcount > 0 or bool(
+        conn.execute("SELECT 1 FROM goals WHERE story_id=?", (story_id,)).fetchone()
+    )
     conn.commit()
     try:
         _remove_active_claim(story_id)
@@ -4721,7 +4812,7 @@ def cmd_story_done(story_id: str, conn=None) -> None:
     if owns_conn:
         conn.close()
     goal_ids.extend(g[0] for g in secondary if g[0] not in goal_ids)
-    if phase_result.rowcount:
+    if has_phase:
         _generate_roadmap_md()
     try:
         _try_sync_story(story_id)

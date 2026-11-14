@@ -801,6 +801,9 @@ def cmd_decide(
     record: bool = False,
     audit: bool = False,
     model: str | None = None,
+    arc: str | None = None,
+    phase: str | None = None,
+    priority: int | None = None,
 ) -> None:
     """Convene a multi-agent panel on topic and optionally record the Decision."""
     if audit:
@@ -899,7 +902,8 @@ def cmd_decide(
     today = time.strftime("%Y-%m-%d")
 
     record_slug = _pkg("cmd_decision_record")(
-        decision_id, topic, today, panel, inputs, synthesis, decision_text
+        decision_id, topic, today, panel, inputs, synthesis, decision_text,
+        arc=arc, phase=phase, priority=priority
     )
 
     print(f"  {_GREEN}✓{_RESET} Decision recorded: {today}-{record_slug}")

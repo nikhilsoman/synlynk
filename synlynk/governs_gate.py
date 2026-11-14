@@ -27,10 +27,14 @@ def story_governs_linkage(conn, story_id: str | None) -> dict[str, Any]:
     if goal_id and goal_id != "none":
         goal_cols = _table_columns(conn, "goals")
         if {"phase_id", "placement_status"}.issubset(goal_cols):
+            cols_to_select = ["phase_id", "placement_status"]
+            if "arc_version" in goal_cols:
+                cols_to_select.append("arc_version")
             placement = conn.execute(
-                "SELECT phase_id, placement_status FROM goals WHERE goal_id=?", (goal_id,)
+                f"SELECT {', '.join(cols_to_select)} FROM goals WHERE goal_id=?", (goal_id,)
             ).fetchone()
-            phase_placed = bool(placement and placement[0] and placement[1] == "placed")
+            has_phase = bool(placement and (placement[0] or (len(placement) > 2 and placement[2])))
+            phase_placed = bool(has_phase and placement[1] == "placed")
             return {
                 "linked": True,
                 "phase_placed": phase_placed,

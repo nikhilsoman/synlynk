@@ -70,17 +70,34 @@ def cmd_governs_start(
         else:
             if not conn.execute("SELECT 1 FROM roadmap_arcs WHERE version=?", (version,)).fetchone():
                 raise ValueError(f"no roadmap arc with version={version!r}")
-            conn.execute(
-                "INSERT INTO roadmap_phases (arc_version, phase_title, status, priority, notes) "
-                "VALUES (?, ?, 'planned', 'P0', ?)",
-                (version, phase_title, f"GOVERNS goal: {goal_id}"),
-            )
-            phase_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-            conn.execute(
-                "INSERT INTO goals (goal_id, outcome, criterion, deadline, kind, phase_id, placement_status) "
-                "VALUES (?, ?, ?, ?, ?, ?, 'placed')",
-                (goal_id, outcome, criterion, deadline, kind, phase_id),
-            )
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(goals)")}
+            if "arc_version" in cols:
+                conn.execute(
+                    "INSERT INTO goals (goal_id, outcome, criterion, deadline, kind, placement_status, arc_version, phase_title) "
+                    "VALUES (?, ?, ?, ?, ?, 'placed', ?, ?)",
+                    (goal_id, outcome, criterion, deadline, kind, version, phase_title),
+                )
+                phase_row = conn.execute(
+                    "SELECT id FROM roadmap_phases WHERE arc_version=? AND phase_title=?",
+                    (version, phase_title),
+                ).fetchone()
+                phase_id = phase_row[0] if phase_row else 1
+                conn.execute(
+                    "UPDATE goals SET phase_id=? WHERE goal_id=?",
+                    (phase_id, goal_id),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO roadmap_phases (arc_version, phase_title, status, priority, notes) "
+                    "VALUES (?, ?, 'planned', 'P0', ?)",
+                    (version, phase_title, f"GOVERNS goal: {goal_id}"),
+                )
+                phase_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+                conn.execute(
+                    "INSERT INTO goals (goal_id, outcome, criterion, deadline, kind, phase_id, placement_status) "
+                    "VALUES (?, ?, ?, ?, ?, ?, 'placed')",
+                    (goal_id, outcome, criterion, deadline, kind, phase_id),
+                )
         conn.commit()
     except Exception:
         conn.rollback()
