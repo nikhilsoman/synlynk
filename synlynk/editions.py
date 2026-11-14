@@ -237,3 +237,75 @@ def check_hosted(config: Dict[str, Any], capability_name: str) -> Tuple[bool, st
         return True, ""
 
     return False, f"Hosted capability '{cap.hosted_key}' is not enabled in config['hosted']"
+
+
+def cmd_edition_show() -> int:
+    """Show current edition and enabled hosted capabilities."""
+    import json
+    import os
+
+    config_path = os.path.join(".synlynk", "config.json")
+    config = {}
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+        except Exception:
+            config = {}
+
+    edition = config.get("edition", "personal")
+    hosted = config.get("hosted", [])
+    print(f"Synlynk Edition: {edition}")
+    if hosted and isinstance(hosted, list):
+        print("Enabled Hosted Capabilities:")
+        for h in hosted:
+            print(f"  - {h}")
+    else:
+        print("Enabled Hosted Capabilities: none")
+    return 0
+
+
+def cmd_edition_set(tier: str) -> int:
+    """Set the Synlynk edition tier and apply default hosted presets."""
+    import json
+    import os
+    import sys
+
+    tier = tier.strip().lower()
+    if tier not in EDITION_ORDER:
+        print(f"error: invalid edition tier '{tier}'. Must be one of: {', '.join(EDITION_ORDER)}", file=sys.stderr)
+        return 2
+
+    config_path = os.path.join(".synlynk", "config.json")
+    config = {}
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+        except Exception:
+            config = {}
+
+    config["edition"] = tier
+    current_hosted = config.get("hosted", [])
+    if not isinstance(current_hosted, list):
+        current_hosted = []
+
+    # Additive default preset
+    defaults = DEFAULT_HOSTED_BY_EDITION.get(tier, [])
+    for d in defaults:
+        if d not in current_hosted:
+            current_hosted.append(d)
+
+    config["hosted"] = current_hosted
+    parent_dir = os.path.dirname(config_path)
+    if parent_dir:
+        os.makedirs(parent_dir, exist_ok=True)
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
+        f.write("\n")
+
+    print(f"Synlynk edition set to '{tier}'.")
+    if current_hosted:
+        print(f"Active hosted capabilities: {', '.join(current_hosted)}")
+    return 0
+

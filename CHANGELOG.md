@@ -9,6 +9,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.33.0] - 2026-11-14
+### Added
+- **Synlynk Editions Registry & Gating Primitives (Track 1 / Spec #9) (#5245):**
+  - Modular classification engine in `synlynk/editions.py` formalizing capability boundaries across Core, Opt-in, and Hosted categories by marginal cost-bearer.
+  - Ordinal edition check `check_edition(config, capability_name)` across `personal` < `team` < `enterprise`.
+  - Membership check `check_hosted(config, capability_name)` for cloud infrastructure bolt-ons.
+  - Soft advisory configuration surface in `.synlynk/config.json` supporting additive `edition` and `hosted` keys with zero migration overhead.
+  - Passive health check `_hc_editions_config` in `synlynk/doctor.py` warning on unrecognized edition tiers or unknown hosted capability keys.
+  - CLI management surface `synlynk edition {show,set}` with automated default preset bundling (`DEFAULT_HOSTED_BY_EDITION`).
+  - Full module and capability inventory artifacts in `docs/strategy/editions-inventory.md` and `docs/strategy/editions-inventory.json`.
+
 ## [v0.32.4] - 2026-11-12
 ### Added
 - **Architectural Research Foundation (DECIDE dec-4e81b29a):**
