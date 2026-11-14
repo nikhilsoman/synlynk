@@ -661,3 +661,87 @@ FROM capability_ratings
 WHERE split_model = 0
 GROUP BY agent, model_version, discipline, engg_domain, org_domain, role, stage, industry, phase;
 """
+
+_ROADMAP_ARCS_VIEW = """
+CREATE VIEW IF NOT EXISTS roadmap_arcs AS
+SELECT
+  ROW_NUMBER() OVER (ORDER BY arc_version) AS id,
+  arc_version AS version,
+  arc_version AS title,
+  CASE
+    WHEN MAX(CASE WHEN status != 'done' THEN 1 ELSE 0 END) = 0 THEN 'shipped'
+    WHEN MAX(CASE WHEN status = 'active' THEN 1 ELSE 0 END) = 1 THEN 'in_progress'
+    ELSE 'planned'
+  END AS status,
+  MIN(deadline) AS target_date,
+  (SELECT GROUP_CONCAT(d.decision_text, ' / ')
+     FROM decisions d WHERE d.goal_id IN (
+       SELECT CAST(id AS TEXT) FROM goals g2 WHERE g2.arc_version = goals.arc_version
+       UNION
+       SELECT goal_id FROM goals g2 WHERE g2.arc_version = goals.arc_version
+     )) AS notes
+FROM goals
+WHERE placement_status = 'placed' AND arc_version IS NOT NULL
+GROUP BY arc_version;
+"""
+
+_ROADMAP_PHASES_VIEW = """
+CREATE VIEW IF NOT EXISTS roadmap_phases AS
+SELECT
+  ROW_NUMBER() OVER (ORDER BY arc_version, phase_title) AS id,
+  arc_version,
+  phase_title,
+  CASE
+    WHEN MAX(CASE WHEN status != 'done' THEN 1 ELSE 0 END) = 0 THEN 'shipped'
+    WHEN MAX(CASE WHEN status = 'active' THEN 1 ELSE 0 END) = 1 THEN 'in_progress'
+    ELSE 'planned'
+  END AS status,
+  MIN(roadmap_priority) AS priority,
+  (SELECT GROUP_CONCAT(d.decision_text, ' / ')
+     FROM decisions d WHERE d.goal_id IN (
+       SELECT CAST(id AS TEXT) FROM goals g2
+       WHERE g2.arc_version = goals.arc_version AND g2.phase_title = goals.phase_title
+       UNION
+       SELECT goal_id FROM goals g2
+       WHERE g2.arc_version = goals.arc_version AND g2.phase_title = goals.phase_title
+     )) AS notes
+FROM goals
+WHERE placement_status = 'placed' AND arc_version IS NOT NULL
+GROUP BY arc_version, phase_title;
+"""
+
+
+def ensure_derived_roadmap_views(conn) -> None:
+    """Ensure goals table has placement columns and instantiate derived roadmap views."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(goals)")}
+    if "arc_version" not in cols:
+        conn.execute("ALTER TABLE goals ADD COLUMN arc_version TEXT")
+    if "phase_title" not in cols:
+        conn.execute("ALTER TABLE goals ADD COLUMN phase_title TEXT")
+    if "roadmap_priority" not in cols:
+        conn.execute("ALTER TABLE goals ADD COLUMN roadmap_priority INTEGER")
+
+    # If roadmap_arcs or roadmap_phases exist as tables, safely migrate and drop
+    for tbl in ("roadmap_arcs", "roadmap_phases"):
+        cur = conn.execute("SELECT type FROM sqlite_master WHERE name = ?", (tbl,))
+        row = cur.fetchone()
+        if row and row[0] == "table":
+            if tbl == "roadmap_arcs":
+                try:
+                    conn.execute("""
+                        UPDATE goals
+                        SET arc_version = (SELECT ra.version FROM roadmap_arcs ra JOIN roadmap_phases rp ON rp.arc_version = ra.version WHERE rp.id = goals.phase_id),
+                            phase_title = (SELECT rp.phase_title FROM roadmap_phases rp WHERE rp.id = goals.phase_id),
+                            placement_status = 'placed'
+                        WHERE phase_id IS NOT NULL AND arc_version IS NULL
+                    """)
+                except Exception:
+                    pass
+            try:
+                conn.execute(f"DROP TABLE IF EXISTS {tbl}")
+            except Exception:
+                pass
+
+    conn.execute(_ROADMAP_ARCS_VIEW)
+    conn.execute(_ROADMAP_PHASES_VIEW)
+

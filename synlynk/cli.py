@@ -591,6 +591,9 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "--model", help="Explicit model identifier passed to every panel harness"
     )
     decide_parser.add_argument("--audit", action="store_true", help="Write an executive architecture audit brief")
+    decide_parser.add_argument("--arc", help="Roadmap arc version (e.g. v0.35.0)")
+    decide_parser.add_argument("--phase", help="Roadmap phase title (e.g. 'Phase 1 - Core')")
+    decide_parser.add_argument("--priority", type=int, help="Ordering priority within the roadmap phase")
 
     heal_parser = subparsers.add_parser("heal", help="Scan, remediate, verify, and optionally merge fixes")
     heal_parser.add_argument("--auto-merge", action="store_true", help="Merge verified pull requests")
@@ -3686,6 +3689,9 @@ def main(argv=None) -> None:
             record=args.record,
             audit=args.audit,
             model=args.model,
+            arc=getattr(args, "arc", None),
+            phase=getattr(args, "phase", None),
+            priority=getattr(args, "priority", None),
         )
     elif args.command == "gc":
         from synlynk.gc_cmd import cmd_gc

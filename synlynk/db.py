@@ -2422,6 +2422,26 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
         column="placement_reason",
         definition="TEXT",
     )
+    _add_column_if_missing(
+        conn,
+        table="goals",
+        column="arc_version",
+        definition="TEXT",
+    )
+    _add_column_if_missing(
+        conn,
+        table="goals",
+        column="phase_title",
+        definition="TEXT",
+    )
+    _add_column_if_missing(
+        conn,
+        table="goals",
+        column="roadmap_priority",
+        definition="INTEGER",
+    )
+    from synlynk.db_schema import ensure_derived_roadmap_views
+    ensure_derived_roadmap_views(conn)
 
     _migrate_onboarding_sessions(conn)
     _migrate_greenfield_sessions(conn)
@@ -4170,7 +4190,8 @@ def _write_decision_record_md(decision_id: str) -> str:
 
 def cmd_decision_record(decision_id: str, topic: str, date: str, panel: list,
                          inputs: dict, synthesis: str, decision_text: str,
-                         goal_id: str = None, story_id: str = None) -> str:
+                         goal_id: str = None, story_id: str = None,
+                         arc: str = None, phase: str = None, priority: int = None) -> str:
     """Insert a decision row into state.db, then write through to the flat file pair."""
     from synlynk import _dr_sync, _get_db, _is_migrated
     from synlynk.team import _sign_capability_rating
@@ -4231,6 +4252,19 @@ def cmd_decision_record(decision_id: str, topic: str, date: str, panel: list,
             (decision_id, topic, date, json.dumps(panel), "approved", json.dumps(inputs),
              synthesis, decision_text, signature)
         )
+    if goal_id and (arc or phase):
+        try:
+            conn.execute(
+                "UPDATE goals SET "
+                "arc_version = COALESCE(?, arc_version), "
+                "phase_title = COALESCE(?, phase_title), "
+                "roadmap_priority = COALESCE(?, roadmap_priority), "
+                "placement_status = 'placed' "
+                "WHERE goal_id = ? OR id = CAST(? AS INTEGER)",
+                (arc, phase, priority, goal_id, goal_id)
+            )
+        except Exception:
+            pass
     conn.commit()
     conn.close()
 
