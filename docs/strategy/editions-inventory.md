@@ -63,3 +63,5 @@ Hosted capabilities require cloud infrastructure managed and operated by Synlynk
 | `rbac` | Enterprise | `rbac` | Fine-grained role-based access control. Blocked on Platform Vision Phase 1. |
 | `data_residency` | Enterprise | `data_residency` | Guaranteed regional data storage compliance. Blocked on Platform Vision Phase 1. |
 | `swarm_cloud_provisioning` | Any (Add-on) | `swarm_cloud_provisioning` | Elastic cloud compute orchestration for fleet swarms (Phase 4). |
+| `ibpd_tier2_assisted` | Any (Add-on) | `ibpd_tier2_assisted` | Assisted Self-Serve: role-charter playbooks & decide-panel consulting (Master Roadmap Phase 3). |
+| `ibpd_tier3_managed` | Any (Add-on) | `ibpd_tier3_managed` | Fully Managed: outcome-based delivery executed by synlynk operator fleet (Master Roadmap Phase 3). |
