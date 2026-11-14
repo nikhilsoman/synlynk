@@ -667,7 +667,11 @@ CREATE VIEW IF NOT EXISTS roadmap_arcs AS
 SELECT
   ROW_NUMBER() OVER (ORDER BY arc_version) AS id,
   arc_version AS version,
-  arc_version AS title,
+  COALESCE(
+    (SELECT outcome FROM goals g WHERE g.arc_version = goals.arc_version AND g.phase_title IS NULL ORDER BY g.id LIMIT 1),
+    MIN(outcome),
+    arc_version
+  ) AS title,
   CASE
     WHEN MAX(CASE WHEN status != 'done' THEN 1 ELSE 0 END) = 0 THEN 'shipped'
     WHEN MAX(CASE WHEN status = 'active' THEN 1 ELSE 0 END) = 1 THEN 'in_progress'
@@ -679,7 +683,10 @@ SELECT
     ELSE 'planned'
   END AS computed_status,
   MIN(deadline) AS target_date,
-  MIN(goal_id) AS goal_id,
+  COALESCE(
+    (SELECT goal_id FROM goals g WHERE g.arc_version = goals.arc_version AND g.phase_title IS NULL ORDER BY g.id LIMIT 1),
+    MIN(goal_id)
+  ) AS goal_id,
   1 AS is_milestone_eligible,
   (SELECT GROUP_CONCAT(d.decision_text, ' / ')
      FROM decisions d WHERE d.goal_id IN (
@@ -710,7 +717,7 @@ SELECT
     WHEN MAX(CASE WHEN status = 'deferred' THEN 1 ELSE 0 END) = 1 THEN 'deferred'
     ELSE 'planned'
   END AS computed_status,
-  COALESCE('P' || MIN(roadmap_priority), 'P0') AS priority,
+  COALESCE(MIN(roadmap_priority), 'P0') AS priority,
   MIN(story_id) AS story_id,
   COALESCE(
     MIN(notes),
@@ -741,7 +748,11 @@ BEGIN
     NEW.version,
     'placed'
   )
-  ON CONFLICT(goal_id) DO UPDATE SET arc_version = excluded.arc_version, placement_status = 'placed';
+  ON CONFLICT(goal_id) DO UPDATE SET
+    arc_version = excluded.arc_version,
+    placement_status = 'placed',
+    status = excluded.status,
+    outcome = CASE WHEN excluded.outcome != excluded.arc_version THEN excluded.outcome ELSE goals.outcome END;
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_roadmap_arcs_update
@@ -769,7 +780,7 @@ BEGIN
     CASE WHEN NEW.status = 'in_progress' THEN 'active' ELSE COALESCE(NEW.status, 'active') END,
     NEW.arc_version,
     NEW.phase_title,
-    CASE WHEN NEW.priority LIKE 'P%' THEN CAST(SUBSTR(NEW.priority, 2) AS INTEGER) ELSE CAST(COALESCE(NEW.priority, 0) AS INTEGER) END,
+    COALESCE(NEW.priority, 'P0'),
     NEW.story_id,
     NEW.notes,
     'placed'
@@ -783,7 +794,7 @@ BEGIN
   SET status = CASE WHEN NEW.status = 'done' THEN 'done' WHEN NEW.status = 'in_progress' THEN 'active' ELSE NEW.status END,
       arc_version = NEW.arc_version,
       phase_title = NEW.phase_title,
-      roadmap_priority = CASE WHEN NEW.priority LIKE 'P%' THEN CAST(SUBSTR(NEW.priority, 2) AS INTEGER) ELSE CAST(COALESCE(NEW.priority, 0) AS INTEGER) END,
+      roadmap_priority = COALESCE(NEW.priority, OLD.priority, 'P0'),
       story_id = NEW.story_id,
       notes = NEW.notes
   WHERE (arc_version = OLD.arc_version AND phase_title = OLD.phase_title)
@@ -808,7 +819,7 @@ def ensure_derived_roadmap_views(conn) -> None:
     if "phase_title" not in cols:
         conn.execute("ALTER TABLE goals ADD COLUMN phase_title TEXT")
     if "roadmap_priority" not in cols:
-        conn.execute("ALTER TABLE goals ADD COLUMN roadmap_priority INTEGER")
+        conn.execute("ALTER TABLE goals ADD COLUMN roadmap_priority TEXT")
     if "story_id" not in cols:
         conn.execute("ALTER TABLE goals ADD COLUMN story_id TEXT")
     if "notes" not in cols:

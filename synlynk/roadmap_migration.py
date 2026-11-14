@@ -66,13 +66,11 @@ def backfill_cost_entries_goals(conn: sqlite3.Connection) -> Dict[str, Any]:
                 "candidate_goal_ids": goal_ids,
             })
 
+    from synlynk.db import repoint_cost_entries_phase_id
+
     migrated_count = 0
     for old_pid, new_gid in phase_to_goal_map.items():
-        res = conn.execute(
-            "UPDATE cost_entries SET phase_id = ? WHERE phase_id = ?",
-            (new_gid, old_pid)
-        )
-        migrated_count += res.rowcount
+        migrated_count += repoint_cost_entries_phase_id(conn, old_pid, new_gid)
 
     conn.commit()
 

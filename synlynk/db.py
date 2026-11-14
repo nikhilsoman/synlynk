@@ -2820,6 +2820,12 @@ def _insert_cost_row(
         conn.close()
 
 
+def repoint_cost_entries_phase_id(conn: sqlite3.Connection, old_phase_id: int, new_goal_id: int) -> int:
+    """Repoint cost_entries.phase_id from a legacy phase id to a goal id."""
+    res = conn.execute("UPDATE cost_entries SET phase_id = ? WHERE phase_id = ?", (new_goal_id, old_phase_id))
+    return res.rowcount
+
+
 def get_costs_by_harness(conn: sqlite3.Connection = None) -> dict[str, float]:
     """Return total cost USD grouped by compute harness."""
     from synlynk import _get_db

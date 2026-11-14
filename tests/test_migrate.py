@@ -12,7 +12,7 @@ def test_migrate_db_creates_new_tables(tmp_path, monkeypatch):
     (tmp_path / ".synlynk").mkdir()
     conn = synlynk._get_db()
     tables = {row[0] for row in conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table'"
+        "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
     ).fetchall()}
     conn.close()
     assert "memory_entries" in tables
