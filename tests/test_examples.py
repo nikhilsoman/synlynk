@@ -1,4 +1,4 @@
-from synlynk.examples import active_items, greet
+from synlynk.examples import active_items, clamp, greet
 
 
 def test_greet_returns_a_friendly_message():
@@ -112,3 +112,29 @@ def test_greet_handles_an_empty_name():
 
 def test_greet_preserves_punctuation_in_a_name():
     assert greet("O'Connor") == "Hello, O'Connor!"
+
+
+def test_clamp_returns_value_when_inside_bounds():
+    assert clamp(5, 0, 10) == 5
+
+
+def test_clamp_returns_low_when_value_is_below_bounds():
+    assert clamp(-3, 0, 10) == 0
+
+
+def test_clamp_returns_high_when_value_is_above_bounds():
+    assert clamp(21, 0, 10) == 10
+
+
+def test_clamp_returns_bound_when_value_equals_low_or_high():
+    assert clamp(0, 0, 10) == 0
+    assert clamp(10, 0, 10) == 10
+
+
+def test_clamp_raises_when_low_is_greater_than_high():
+    try:
+        clamp(1, 10, 0)
+    except ValueError as exc:
+        assert "low" in str(exc).lower()
+        return
+    raise AssertionError("expected ValueError when low > high")
