@@ -20,6 +20,12 @@ _CANONICAL_VERSION = "v1.0.0"
 
 
 def _up(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT type FROM sqlite_master WHERE name = 'roadmap_arcs'"
+    ).fetchone()
+    if row and row[0] == "view":
+        return
+
     conn.execute(
         """CREATE TABLE IF NOT EXISTS roadmap_arcs (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,

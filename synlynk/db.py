@@ -2440,8 +2440,6 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
         column="roadmap_priority",
         definition="INTEGER",
     )
-    from synlynk.db_schema import ensure_derived_roadmap_views
-    ensure_derived_roadmap_views(conn)
 
     _migrate_onboarding_sessions(conn)
     _migrate_greenfield_sessions(conn)
@@ -2480,6 +2478,8 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
     _run_legacy_migration_and_repairs(conn)
     run_pending_migrations(conn)
     _migrate_archetype_schema(conn)
+    from synlynk.db_schema import ensure_derived_roadmap_views
+    ensure_derived_roadmap_views(conn)
 
 
 def _migrate_archetype_schema(conn: sqlite3.Connection) -> None:
