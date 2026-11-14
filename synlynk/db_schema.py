@@ -701,16 +701,19 @@ SELECT
   CASE
     WHEN MAX(CASE WHEN status != 'done' THEN 1 ELSE 0 END) = 0 THEN 'done'
     WHEN MAX(CASE WHEN status = 'active' THEN 1 ELSE 0 END) = 1 THEN 'in_progress'
+    WHEN MAX(CASE WHEN status = 'deferred' THEN 1 ELSE 0 END) = 1 THEN 'deferred'
     ELSE 'planned'
   END AS status,
   CASE
     WHEN MAX(CASE WHEN status != 'done' THEN 1 ELSE 0 END) = 0 THEN 'shipped'
     WHEN MAX(CASE WHEN status = 'active' THEN 1 ELSE 0 END) = 1 THEN 'in_progress'
+    WHEN MAX(CASE WHEN status = 'deferred' THEN 1 ELSE 0 END) = 1 THEN 'deferred'
     ELSE 'planned'
   END AS computed_status,
-  MIN(roadmap_priority) AS priority,
+  COALESCE('P' || MIN(roadmap_priority), 'P0') AS priority,
   MIN(story_id) AS story_id,
   COALESCE(
+    MIN(notes),
     (SELECT GROUP_CONCAT(d.decision_text, ' / ')
        FROM decisions d WHERE d.goal_id IN (
          SELECT CAST(id AS TEXT) FROM goals g2
@@ -718,8 +721,7 @@ SELECT
          UNION
          SELECT goal_id FROM goals g2
          WHERE g2.arc_version = goals.arc_version AND g2.phase_title = goals.phase_title
-       )),
-    MIN(notes)
+       ))
   ) AS notes
 FROM goals
 WHERE placement_status = 'placed' AND arc_version IS NOT NULL AND phase_title IS NOT NULL
@@ -767,7 +769,7 @@ BEGIN
     CASE WHEN NEW.status = 'in_progress' THEN 'active' ELSE COALESCE(NEW.status, 'active') END,
     NEW.arc_version,
     NEW.phase_title,
-    COALESCE(NEW.priority, 1),
+    CASE WHEN NEW.priority LIKE 'P%' THEN CAST(SUBSTR(NEW.priority, 2) AS INTEGER) ELSE CAST(COALESCE(NEW.priority, 0) AS INTEGER) END,
     NEW.story_id,
     NEW.notes,
     'placed'
@@ -778,10 +780,16 @@ CREATE TRIGGER IF NOT EXISTS trg_roadmap_phases_update
 INSTEAD OF UPDATE ON roadmap_phases
 BEGIN
   UPDATE goals
-  SET status = CASE WHEN NEW.status = 'done' THEN 'done' WHEN NEW.status = 'in_progress' THEN 'active' ELSE NEW.status END
+  SET status = CASE WHEN NEW.status = 'done' THEN 'done' WHEN NEW.status = 'in_progress' THEN 'active' ELSE NEW.status END,
+      arc_version = NEW.arc_version,
+      phase_title = NEW.phase_title,
+      roadmap_priority = CASE WHEN NEW.priority LIKE 'P%' THEN CAST(SUBSTR(NEW.priority, 2) AS INTEGER) ELSE CAST(COALESCE(NEW.priority, 0) AS INTEGER) END,
+      story_id = NEW.story_id,
+      notes = NEW.notes
   WHERE (arc_version = OLD.arc_version AND phase_title = OLD.phase_title)
      OR (OLD.story_id IS NOT NULL AND story_id = OLD.story_id)
-     OR (NEW.story_id IS NOT NULL AND story_id = NEW.story_id);
+     OR (NEW.story_id IS NOT NULL AND story_id = NEW.story_id)
+     OR (phase_id = OLD.id);
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_roadmap_phases_delete

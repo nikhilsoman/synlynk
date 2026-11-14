@@ -8,7 +8,8 @@ def test_goals_table_created():
     assert cols == {
         "id", "goal_id", "product_id", "outcome", "criterion", "deadline",
         "status", "created_at", "kind", "phase_id", "placement_status",
-        "placement_reason",
+        "placement_reason", "arc_version", "phase_title", "roadmap_priority",
+        "story_id", "notes",
     }
     conn.close()
 
