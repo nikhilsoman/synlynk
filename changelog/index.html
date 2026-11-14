@@ -45,6 +45,16 @@
 Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
 <hr>
 <h2><a href="https://github.com/nikhilsoman/synlynk/compare/v0.3.0...HEAD">Unreleased</a></h2>
+<div class="changelog-version-header"><span class="changelog-version">vv0.33.0</span><span class="changelog-date">2026-11-14</span></div>
+<h3 class="tag-added">Added</h3>
+- **Synlynk Editions Registry & Gating Primitives (Track 1 / Spec #9) (#5245):**
+  - Modular classification engine in `synlynk/editions.py` formalizing capability boundaries across Core, Opt-in, and Hosted categories by marginal cost-bearer.
+  - Ordinal edition check `check_edition(config, capability_name)` across `personal` < `team` < `enterprise`.
+  - Membership check `check_hosted(config, capability_name)` for cloud infrastructure bolt-ons.
+  - Soft advisory configuration surface in `.synlynk/config.json` supporting additive `edition` and `hosted` keys with zero migration overhead.
+  - Passive health check `_hc_editions_config` in `synlynk/doctor.py` warning on unrecognized edition tiers or unknown hosted capability keys.
+  - CLI management surface `synlynk edition {show,set}` with automated default preset bundling (`DEFAULT_HOSTED_BY_EDITION`).
+  - Full module and capability inventory artifacts in `docs/strategy/editions-inventory.md` and `docs/strategy/editions-inventory.json`.
 <div class="changelog-version-header"><span class="changelog-version">vv0.32.4</span><span class="changelog-date">2026-11-12</span></div>
 <h3 class="tag-added">Added</h3>
 - **Architectural Research Foundation (DECIDE dec-4e81b29a):**
