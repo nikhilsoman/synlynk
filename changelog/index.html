@@ -45,6 +45,15 @@
 Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
 <hr>
 <h2><a href="https://github.com/nikhilsoman/synlynk/compare/v0.3.0...HEAD">Unreleased</a></h2>
+<div class="changelog-version-header"><span class="changelog-version">vv0.35.0</span><span class="changelog-date">2026-11-14</span></div>
+<h3 class="tag-added">Added</h3>
+- **Fully-Derived Roadmap: Approach C Architecture (Track 3 / Spec #11) (#5245):**
+  - Eliminated structural roadmap drift by converting `roadmap_arcs` and `roadmap_phases` from static tables into dynamic SQLite VIEWs in `synlynk/db_schema.py`.
+  - Moved roadmap placement identity (`arc_version`, `phase_title`, `roadmap_priority`) directly onto `goals` table with automatic dual-write migration.
+  - Dynamically computes arc and phase statuses (`shipped`, `in_progress`, `planned`), target dates (`MIN(deadline)`), and narrative notes (`GROUP_CONCAT(decision_text)`).
+  - Retargeted foreign keys and backfilled legacy `cost_entries.phase_id` mappings to `goals(id)` via `synlynk/roadmap_migration.py`.
+  - Established `decide --record` with `--arc`, `--phase`, and `--priority` as the single authoritative writer for roadmap placement.
+  - Deprecated and removed manual CLI writers (`synlynk roadmap add`, `synlynk roadmap update`) and redundant drift checks (`synlynk roadmap check`).
 <div class="changelog-version-header"><span class="changelog-version">vv0.34.0</span><span class="changelog-date">2026-11-14</span></div>
 <h3 class="tag-added">Added</h3>
 - **Synlynk Constitution & Charter Governance (Track 2 / Spec #10) (#5245):**
