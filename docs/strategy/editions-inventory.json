@@ -1,0 +1,163 @@
+[
+  {
+    "name": "capability_tracking",
+    "category": "core",
+    "min_edition": null,
+    "hosted_key": null,
+    "note": "Local self-measurement of dispatch history across model catalog"
+  },
+  {
+    "name": "local_pilot",
+    "category": "core",
+    "min_edition": null,
+    "hosted_key": null,
+    "note": "Single-operator orchestration and local Wingman runtime"
+  },
+  {
+    "name": "quota_tracking",
+    "category": "core",
+    "min_edition": null,
+    "hosted_key": null,
+    "note": "Tracking token and request usage against user's local API keys"
+  },
+  {
+    "name": "swarm_local",
+    "category": "core",
+    "min_edition": null,
+    "hosted_key": null,
+    "note": "Local dispatch across worktrees within workspace"
+  },
+  {
+    "name": "governs_engine",
+    "category": "core",
+    "min_edition": null,
+    "hosted_key": null,
+    "note": "GOVERNS invariant tracking, state.db schemas, and policy verification"
+  },
+  {
+    "name": "context_packager",
+    "category": "core",
+    "min_edition": null,
+    "hosted_key": null,
+    "note": "Sub-3k context packager and AST graph minimizer"
+  },
+  {
+    "name": "doctor_diagnostics",
+    "category": "core",
+    "min_edition": null,
+    "hosted_key": null,
+    "note": "System diagnostics and passive health checks"
+  },
+  {
+    "name": "finops_dual_ledger",
+    "category": "core",
+    "min_edition": null,
+    "hosted_key": null,
+    "note": "Local token and cost ledger accounting in SQLite"
+  },
+  {
+    "name": "spec_linter",
+    "category": "core",
+    "min_edition": null,
+    "hosted_key": null,
+    "note": "Constitutional spec frontmatter and schema verification"
+  },
+  {
+    "name": "autonomous_tpm_daemon",
+    "category": "core",
+    "min_edition": null,
+    "hosted_key": null,
+    "note": "Local background daemon wake cycle and story triage"
+  },
+  {
+    "name": "organogram_canvas",
+    "category": "core",
+    "min_edition": null,
+    "hosted_key": null,
+    "note": "Visual organogram SVG graph renderer and archetype viewer"
+  },
+  {
+    "name": "domain_packs",
+    "category": "core",
+    "min_edition": null,
+    "hosted_key": null,
+    "note": "Industry domain definitions and charter profiles"
+  },
+  {
+    "name": "greenfield_genesis",
+    "category": "core",
+    "min_edition": null,
+    "hosted_key": null,
+    "note": "Interactive project bootstrapping and progressive fleet initialization"
+  },
+  {
+    "name": "github_app_auth",
+    "category": "opt_in",
+    "min_edition": null,
+    "hosted_key": null,
+    "note": "Workspace-scoped GitHub App tokens provided by the user"
+  },
+  {
+    "name": "relay_local",
+    "category": "opt_in",
+    "min_edition": null,
+    "hosted_key": null,
+    "note": "Peer-to-peer relay broker running on user-provided host"
+  },
+  {
+    "name": "vizor_local",
+    "category": "opt_in",
+    "min_edition": null,
+    "hosted_key": null,
+    "note": "Interactive web overview canvas and inspection dashboard"
+  },
+  {
+    "name": "mcp_server_local",
+    "category": "opt_in",
+    "min_edition": null,
+    "hosted_key": null,
+    "note": "Local MCP server tools and sidecar integration"
+  },
+  {
+    "name": "hosted_relay",
+    "category": "hosted",
+    "min_edition": null,
+    "hosted_key": "hosted_relay",
+    "note": "Synlynk-hosted cloud broker for distributed multi-seat relay"
+  },
+  {
+    "name": "audit_retention",
+    "category": "hosted",
+    "min_edition": "enterprise",
+    "hosted_key": "audit_retention",
+    "note": "Durable cloud audit log retention and export (Platform Vision Phase 1)"
+  },
+  {
+    "name": "sso",
+    "category": "hosted",
+    "min_edition": "enterprise",
+    "hosted_key": "sso",
+    "note": "SAML / OIDC centralized authentication (Platform Vision Phase 1)"
+  },
+  {
+    "name": "rbac",
+    "category": "hosted",
+    "min_edition": "enterprise",
+    "hosted_key": "rbac",
+    "note": "Role-based access control across enterprise accounts (Platform Vision Phase 1)"
+  },
+  {
+    "name": "data_residency",
+    "category": "hosted",
+    "min_edition": "enterprise",
+    "hosted_key": "data_residency",
+    "note": "Regional compliance data residency controls (Platform Vision Phase 1)"
+  },
+  {
+    "name": "swarm_cloud_provisioning",
+    "category": "hosted",
+    "min_edition": null,
+    "hosted_key": "swarm_cloud_provisioning",
+    "note": "Dynamic cloud infrastructure provisioning for elastic swarms (Phase 4)"
+  }
+]

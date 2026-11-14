@@ -544,6 +544,59 @@ def _hc_roadmap_decision_drift() -> HealthCheck:
     )
 
 
+def _hc_editions_config(config: dict = None) -> HealthCheck:
+    """Validate that .synlynk/config.json edition and hosted keys are recognized."""
+    try:
+        from synlynk.editions import CAPABILITIES, EDITION_ORDER
+
+        if config is None:
+            config_path = os.path.join(".synlynk", "config.json")
+            if not os.path.exists(config_path):
+                return HealthCheck("editions_config", "ok", "no .synlynk/config.json (defaults applied)")
+            with open(config_path) as f:
+                config = json.load(f)
+
+        edition = config.get("edition")
+        if edition is not None and edition not in EDITION_ORDER:
+            return HealthCheck(
+                "editions_config",
+                "warn",
+                f"unrecognized edition '{edition}'; must be one of: {', '.join(EDITION_ORDER)}",
+                fix=f"Set valid edition with: synlynk edition set <{'|'.join(EDITION_ORDER)}>",
+            )
+
+        hosted = config.get("hosted")
+        if hosted is not None:
+            if not isinstance(hosted, list):
+                return HealthCheck(
+                    "editions_config",
+                    "warn",
+                    "'hosted' in .synlynk/config.json must be a list of keys",
+                    fix="Fix 'hosted' field in .synlynk/config.json",
+                )
+            known_hosted_keys = {
+                cap.hosted_key for cap in CAPABILITIES.values() if cap.hosted_key
+            }
+            unknown_keys = [k for k in hosted if k not in known_hosted_keys]
+            if unknown_keys:
+                return HealthCheck(
+                    "editions_config",
+                    "warn",
+                    f"unknown hosted capability key(s): {', '.join(unknown_keys)}",
+                    fix=f"Known hosted keys: {', '.join(sorted(known_hosted_keys))}",
+                )
+
+        current_edition = edition or "personal (default)"
+        hosted_count = len(hosted) if isinstance(hosted, list) else 0
+        return HealthCheck(
+            "editions_config",
+            "ok",
+            f"edition: {current_edition}, {hosted_count} hosted key(s)",
+        )
+    except Exception as exc:
+        return HealthCheck("editions_config", "warn", f"editions config check error: {exc}")
+
+
 def _hc_identity_key() -> HealthCheck:
     key_path = os.path.join(os.path.expanduser("~/.synlynk"), "identity.key")
     if os.path.exists(key_path):
@@ -1582,6 +1635,7 @@ HEALTH_CHECKS = [
     _hc_todo_drift,
     _hc_roadmap_merge_parity,
     _hc_roadmap_decision_drift,
+    _hc_editions_config,
     _hc_identity_key,
     _hc_identity_roles,
     _hc_identity_file_perms,

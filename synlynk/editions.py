@@ -1,0 +1,311 @@
+"""Synlynk Editions classification engine and gating primitives.
+
+Classifies capabilities by who bears their marginal cost of existing:
+- Core: nobody extra bears the cost; local runtime execution.
+- Opt-in: the user bears the cost via their own config or credentials.
+- Hosted: Synlynk bears the cost via hosted infra or services.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
+
+EDITION_ORDER: Tuple[str, ...] = ("personal", "team", "enterprise")
+
+
+@dataclass(frozen=True)
+class Capability:
+    """Represents a discrete Synlynk capability and its gating requirements."""
+
+    name: str
+    category: str  # "core" | "opt_in" | "hosted"
+    min_edition: Optional[str] = None  # None for core / opt_in
+    hosted_key: Optional[str] = None  # Non-empty str if category == "hosted"
+    note: str = ""
+
+
+# Baseline capabilities catalog
+CAPABILITIES: Dict[str, Capability] = {
+    # Core capabilities (Local execution, no marginal hosting cost)
+    "capability_tracking": Capability(
+        name="capability_tracking",
+        category="core",
+        note="Local self-measurement of dispatch history across model catalog",
+    ),
+    "local_pilot": Capability(
+        name="local_pilot",
+        category="core",
+        note="Single-operator orchestration and local Wingman runtime",
+    ),
+    "quota_tracking": Capability(
+        name="quota_tracking",
+        category="core",
+        note="Tracking token and request usage against user's local API keys",
+    ),
+    "swarm_local": Capability(
+        name="swarm_local",
+        category="core",
+        note="Local dispatch across worktrees within workspace",
+    ),
+    "governs_engine": Capability(
+        name="governs_engine",
+        category="core",
+        note="GOVERNS invariant tracking, state.db schemas, and policy verification",
+    ),
+    "context_packager": Capability(
+        name="context_packager",
+        category="core",
+        note="Sub-3k context packager and AST graph minimizer",
+    ),
+    "doctor_diagnostics": Capability(
+        name="doctor_diagnostics",
+        category="core",
+        note="System diagnostics and passive health checks",
+    ),
+    "finops_dual_ledger": Capability(
+        name="finops_dual_ledger",
+        category="core",
+        note="Local token and cost ledger accounting in SQLite",
+    ),
+    "spec_linter": Capability(
+        name="spec_linter",
+        category="core",
+        note="Constitutional spec frontmatter and schema verification",
+    ),
+    "autonomous_tpm_daemon": Capability(
+        name="autonomous_tpm_daemon",
+        category="core",
+        note="Local background daemon wake cycle and story triage",
+    ),
+    "organogram_canvas": Capability(
+        name="organogram_canvas",
+        category="core",
+        note="Visual organogram SVG graph renderer and archetype viewer",
+    ),
+    "domain_packs": Capability(
+        name="domain_packs",
+        category="core",
+        note="Industry domain definitions and charter profiles",
+    ),
+    "greenfield_genesis": Capability(
+        name="greenfield_genesis",
+        category="core",
+        note="Interactive project bootstrapping and progressive fleet initialization",
+    ),
+    # Opt-in capabilities (User bears credentials/infrastructure cost)
+    "github_app_auth": Capability(
+        name="github_app_auth",
+        category="opt_in",
+        note="Workspace-scoped GitHub App tokens provided by the user",
+    ),
+    "relay_local": Capability(
+        name="relay_local",
+        category="opt_in",
+        note="Peer-to-peer relay broker running on user-provided host",
+    ),
+    "vizor_local": Capability(
+        name="vizor_local",
+        category="opt_in",
+        note="Interactive web overview canvas and inspection dashboard",
+    ),
+    "mcp_server_local": Capability(
+        name="mcp_server_local",
+        category="opt_in",
+        note="Local MCP server tools and sidecar integration",
+    ),
+    # Hosted capabilities (Synlynk bears cloud infra/operational cost)
+    "hosted_relay": Capability(
+        name="hosted_relay",
+        category="hosted",
+        hosted_key="hosted_relay",
+        note="Synlynk-hosted cloud broker for distributed multi-seat relay",
+    ),
+    "audit_retention": Capability(
+        name="audit_retention",
+        category="hosted",
+        min_edition="enterprise",
+        hosted_key="audit_retention",
+        note="Durable cloud audit log retention and export (Platform Vision Phase 1)",
+    ),
+    "sso": Capability(
+        name="sso",
+        category="hosted",
+        min_edition="enterprise",
+        hosted_key="sso",
+        note="SAML / OIDC centralized authentication (Platform Vision Phase 1)",
+    ),
+    "rbac": Capability(
+        name="rbac",
+        category="hosted",
+        min_edition="enterprise",
+        hosted_key="rbac",
+        note="Role-based access control across enterprise accounts (Platform Vision Phase 1)",
+    ),
+    "data_residency": Capability(
+        name="data_residency",
+        category="hosted",
+        min_edition="enterprise",
+        hosted_key="data_residency",
+        note="Regional compliance data residency controls (Platform Vision Phase 1)",
+    ),
+    "swarm_cloud_provisioning": Capability(
+        name="swarm_cloud_provisioning",
+        category="hosted",
+        hosted_key="swarm_cloud_provisioning",
+        note="Dynamic cloud infrastructure provisioning for elastic swarms (Phase 4)",
+    ),
+}
+
+DEFAULT_HOSTED_BY_EDITION: Dict[str, List[str]] = {
+    "personal": [],
+    "team": ["hosted_relay"],
+    "enterprise": [
+        "hosted_relay",
+        "audit_retention",
+        "sso",
+        "rbac",
+        "data_residency",
+    ],
+}
+
+
+def check_edition(config: Dict[str, Any], capability_name: str) -> Tuple[bool, str]:
+    """Check if the configured edition satisfies the capability's minimum edition.
+
+    Args:
+        config: Dict representing .synlynk/config.json content.
+        capability_name: The registered capability name to check.
+
+    Returns:
+        (True, "") if allowed.
+        (False, reason_string) if denied.
+
+    Raises:
+        KeyError: If capability_name is not registered in CAPABILITIES.
+    """
+    if capability_name not in CAPABILITIES:
+        raise KeyError(f"Unknown capability '{capability_name}'")
+
+    cap = CAPABILITIES[capability_name]
+    if cap.min_edition is None:
+        return True, ""
+
+    cfg_edition = config.get("edition", "personal")
+    if cfg_edition not in EDITION_ORDER:
+        cfg_edition = "personal"
+
+    try:
+        current_rank = EDITION_ORDER.index(cfg_edition)
+        required_rank = EDITION_ORDER.index(cap.min_edition)
+    except ValueError:
+        return False, f"Invalid edition comparison: '{cfg_edition}' vs '{cap.min_edition}'"
+
+    if current_rank >= required_rank:
+        return True, ""
+
+    return False, f"Capability '{capability_name}' requires edition '{cap.min_edition}' or higher (configured: '{cfg_edition}')"
+
+
+def check_hosted(config: Dict[str, Any], capability_name: str) -> Tuple[bool, str]:
+    """Check if a hosted capability key is enabled in config['hosted'].
+
+    Args:
+        config: Dict representing .synlynk/config.json content.
+        capability_name: The registered hosted capability name to check.
+
+    Returns:
+        (True, "") if enabled.
+        (False, reason_string) if not enabled.
+
+    Raises:
+        KeyError: If capability_name is not registered.
+        ValueError: If capability_name is not of category 'hosted'.
+    """
+    if capability_name not in CAPABILITIES:
+        raise KeyError(f"Unknown capability '{capability_name}'")
+
+    cap = CAPABILITIES[capability_name]
+    if cap.category != "hosted":
+        raise ValueError(f"Capability '{capability_name}' is not a 'hosted' capability (category: '{cap.category}')")
+
+    hosted_list = config.get("hosted", [])
+    if not isinstance(hosted_list, list):
+        hosted_list = []
+
+    if cap.hosted_key in hosted_list:
+        return True, ""
+
+    return False, f"Hosted capability '{cap.hosted_key}' is not enabled in config['hosted']"
+
+
+def cmd_edition_show() -> int:
+    """Show current edition and enabled hosted capabilities."""
+    import json
+    import os
+
+    config_path = os.path.join(".synlynk", "config.json")
+    config = {}
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+        except Exception:
+            config = {}
+
+    edition = config.get("edition", "personal")
+    hosted = config.get("hosted", [])
+    print(f"Synlynk Edition: {edition}")
+    if hosted and isinstance(hosted, list):
+        print("Enabled Hosted Capabilities:")
+        for h in hosted:
+            print(f"  - {h}")
+    else:
+        print("Enabled Hosted Capabilities: none")
+    return 0
+
+
+def cmd_edition_set(tier: str) -> int:
+    """Set the Synlynk edition tier and apply default hosted presets."""
+    import json
+    import os
+    import sys
+
+    tier = tier.strip().lower()
+    if tier not in EDITION_ORDER:
+        print(f"error: invalid edition tier '{tier}'. Must be one of: {', '.join(EDITION_ORDER)}", file=sys.stderr)
+        return 2
+
+    config_path = os.path.join(".synlynk", "config.json")
+    config = {}
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+        except Exception:
+            config = {}
+
+    config["edition"] = tier
+    current_hosted = config.get("hosted", [])
+    if not isinstance(current_hosted, list):
+        current_hosted = []
+
+    # Additive default preset
+    defaults = DEFAULT_HOSTED_BY_EDITION.get(tier, [])
+    for d in defaults:
+        if d not in current_hosted:
+            current_hosted.append(d)
+
+    config["hosted"] = current_hosted
+    parent_dir = os.path.dirname(config_path)
+    if parent_dir:
+        os.makedirs(parent_dir, exist_ok=True)
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
+        f.write("\n")
+
+    print(f"Synlynk edition set to '{tier}'.")
+    if current_hosted:
+        print(f"Active hosted capabilities: {', '.join(current_hosted)}")
+    return 0
+

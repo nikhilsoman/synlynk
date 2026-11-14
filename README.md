@@ -6,13 +6,15 @@
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
 <p align="center">
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5626%20collected-brightgreen" alt="Tests"></a>
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.32.4-blue" alt="Version"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5673%20collected-brightgreen" alt="Tests"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.33.0-blue" alt="Version"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-Apache--2.0-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
 </p>
 
 Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. The Python CLI injects scoped project context into every dispatch, uses empirical harness allocation only after a harness has at least five completed, merged jobs for the relevant task type, and follows the documented interim policy until then. See the [empirical capability policy](docs/blog/244-chore-empirical-capability-policy.md) and [routing policy](.synlynk/policy.json). Synlynk also tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
+
+**v0.33.0:** Synlynk Editions Registry & Gating Mechanics (Track 1) — Marginal cost-bearer capability classification engine, ordinal tier hierarchy, hosted infra gating, and doctor diagnostics (#5245, #5266).
 
 **v0.32.4:** Architectural Research Foundation & Operational Resilience — CoW-sparse virtualized workspaces (#4056), OS sandboxing & credential isolation (#4089), SCIP & Tree-sitter code intelligence (#2929), 3-way AST semantic merge & speculative rebase (#2844), distributed state.db sync & enterprise FinOps (#4010), agent GitHub App token isolation (#5220), and autonomous daemon supervisor resilience (#5221).
 
