@@ -82,6 +82,10 @@ def cmd_governs_start(
                     (version, phase_title),
                 ).fetchone()
                 phase_id = phase_row[0] if phase_row else 1
+                conn.execute(
+                    "UPDATE goals SET phase_id=? WHERE goal_id=?",
+                    (phase_id, goal_id),
+                )
             else:
                 conn.execute(
                     "INSERT INTO roadmap_phases (arc_version, phase_title, status, priority, notes) "

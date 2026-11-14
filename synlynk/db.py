@@ -1876,8 +1876,8 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                 cache_read_tokens INTEGER,
                 story_id          TEXT REFERENCES stories(story_id),
                 type_id           TEXT,
-                epic_id           INTEGER REFERENCES roadmap_arcs(id),
-                phase_id          INTEGER REFERENCES roadmap_phases(id),
+                epic_id           INTEGER,
+                phase_id          INTEGER,
                 total_cost_usd    REAL,
                 api_equivalent_usd REAL,
                 actual_usd        REAL,
@@ -1992,8 +1992,8 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
         cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
         for col, typedef in [
             ("story_id", "TEXT REFERENCES stories(story_id)"),
-            ("epic_id", "INTEGER REFERENCES roadmap_arcs(id)"),
-            ("phase_id", "INTEGER REFERENCES roadmap_phases(id)"),
+            ("epic_id", "INTEGER"),
+            ("phase_id", "INTEGER"),
         ]:
             if col not in cost_cols:
                 try:
@@ -2021,8 +2021,8 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                     cache_read_tokens INTEGER,
                     story_id          TEXT REFERENCES stories(story_id),
                     type_id           TEXT,
-                    epic_id           INTEGER REFERENCES roadmap_arcs(id),
-                    phase_id          INTEGER REFERENCES roadmap_phases(id),
+                    epic_id           INTEGER,
+                    phase_id          INTEGER,
                     total_cost_usd    REAL,
                     api_equivalent_usd REAL,
                     actual_usd        REAL,
@@ -2408,7 +2408,7 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
         conn,
         table="goals",
         column="phase_id",
-        definition="INTEGER REFERENCES roadmap_phases(id)",
+        definition="INTEGER",
     )
     _add_column_if_missing(
         conn,
@@ -2932,7 +2932,7 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
                         "INSERT OR IGNORE INTO roadmap_arcs (version, title, status, goal_id) VALUES (?,?,?,?)",
                         (a["version"], a["title"], a["status"], a.get("goal_id")),
                     )
-                    if getattr(cursor, "rowcount", 0) > 0:
+                    if getattr(cursor, "rowcount", 0) > 0 or conn.execute("SELECT 1 FROM roadmap_arcs WHERE version=?", (a["version"],)).fetchone():
                         inserted_counts["roadmap_arcs"] += 1
                 except Exception as e:
                     print(f"  ⚠ roadmap arc skipped: {e}")
@@ -2952,7 +2952,7 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
                         "(arc_version, phase_title, status, priority) VALUES (?,?,?,?)",
                         (p["arc_version"], p["phase_title"], p["status"], p["priority"]),
                     )
-                    if getattr(cursor, "rowcount", 0) > 0:
+                    if getattr(cursor, "rowcount", 0) > 0 or conn.execute("SELECT 1 FROM roadmap_phases WHERE arc_version=? AND phase_title=?", (p["arc_version"], p["phase_title"])).fetchone():
                         inserted_counts["roadmap_phases"] += 1
                 except Exception as e:
                     print(f"  ⚠ roadmap phase skipped: {e}")

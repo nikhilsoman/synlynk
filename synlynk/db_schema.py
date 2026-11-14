@@ -710,16 +710,19 @@ SELECT
   END AS computed_status,
   MIN(roadmap_priority) AS priority,
   MIN(story_id) AS story_id,
-  (SELECT GROUP_CONCAT(d.decision_text, ' / ')
-     FROM decisions d WHERE d.goal_id IN (
-       SELECT CAST(id AS TEXT) FROM goals g2
-       WHERE g2.arc_version = goals.arc_version AND g2.phase_title = goals.phase_title
-       UNION
-       SELECT goal_id FROM goals g2
-       WHERE g2.arc_version = goals.arc_version AND g2.phase_title = goals.phase_title
-     )) AS notes
+  COALESCE(
+    (SELECT GROUP_CONCAT(d.decision_text, ' / ')
+       FROM decisions d WHERE d.goal_id IN (
+         SELECT CAST(id AS TEXT) FROM goals g2
+         WHERE g2.arc_version = goals.arc_version AND g2.phase_title = goals.phase_title
+         UNION
+         SELECT goal_id FROM goals g2
+         WHERE g2.arc_version = goals.arc_version AND g2.phase_title = goals.phase_title
+       )),
+    MIN(notes)
+  ) AS notes
 FROM goals
-WHERE placement_status = 'placed' AND arc_version IS NOT NULL
+WHERE placement_status = 'placed' AND arc_version IS NOT NULL AND phase_title IS NOT NULL
 GROUP BY arc_version, phase_title;
 """
 
@@ -735,7 +738,8 @@ BEGIN
     CASE WHEN NEW.status = 'in_progress' THEN 'active' ELSE COALESCE(NEW.status, 'active') END,
     NEW.version,
     'placed'
-  );
+  )
+  ON CONFLICT(goal_id) DO UPDATE SET arc_version = excluded.arc_version, placement_status = 'placed';
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_roadmap_arcs_update
@@ -755,7 +759,7 @@ END;
 CREATE TRIGGER IF NOT EXISTS trg_roadmap_phases_insert
 INSTEAD OF INSERT ON roadmap_phases
 BEGIN
-  INSERT INTO goals (goal_id, outcome, criterion, status, arc_version, phase_title, roadmap_priority, story_id, placement_status)
+  INSERT INTO goals (goal_id, outcome, criterion, status, arc_version, phase_title, roadmap_priority, story_id, notes, placement_status)
   VALUES (
     'phase-goal-' || hex(randomblob(4)),
     NEW.phase_title,
@@ -765,6 +769,7 @@ BEGIN
     NEW.phase_title,
     COALESCE(NEW.priority, 1),
     NEW.story_id,
+    NEW.notes,
     'placed'
   );
 END;
@@ -798,6 +803,8 @@ def ensure_derived_roadmap_views(conn) -> None:
         conn.execute("ALTER TABLE goals ADD COLUMN roadmap_priority INTEGER")
     if "story_id" not in cols:
         conn.execute("ALTER TABLE goals ADD COLUMN story_id TEXT")
+    if "notes" not in cols:
+        conn.execute("ALTER TABLE goals ADD COLUMN notes TEXT")
 
     # If roadmap_arcs or roadmap_phases exist as tables, safely migrate and drop
     for tbl in ("roadmap_arcs", "roadmap_phases"):
@@ -820,9 +827,13 @@ def ensure_derived_roadmap_views(conn) -> None:
             except Exception:
                 pass
 
-    conn.execute("DROP VIEW IF EXISTS roadmap_arcs")
-    conn.execute("DROP VIEW IF EXISTS roadmap_phases")
-    conn.execute(_ROADMAP_ARCS_VIEW)
-    conn.execute(_ROADMAP_PHASES_VIEW)
+    arcs_type = conn.execute("SELECT type FROM sqlite_master WHERE name = 'roadmap_arcs'").fetchone()
+    if not arcs_type or arcs_type[0] != "view":
+        conn.execute("DROP TABLE IF EXISTS roadmap_arcs")
+        conn.execute(_ROADMAP_ARCS_VIEW)
+    phases_type = conn.execute("SELECT type FROM sqlite_master WHERE name = 'roadmap_phases'").fetchone()
+    if not phases_type or phases_type[0] != "view":
+        conn.execute("DROP TABLE IF EXISTS roadmap_phases")
+        conn.execute(_ROADMAP_PHASES_VIEW)
     conn.executescript(_ROADMAP_TRIGGERS)
 
