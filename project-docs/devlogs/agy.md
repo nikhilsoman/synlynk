@@ -1523,3 +1523,23 @@
   - Verified Muse execution adapter and capability baseline profile (11/11 tests in `tests/test_muse_harness.py`).
   - Passed all 6 CI checks 100% green; formally approved by `synlynk-synlynk-qa` (Codex) and squash-merged to `main` as commit `486bd1dc`.
 [@agy, @nikhilsoman]
+
+### 2026-11-14: Master Roadmap Pivot Execution — Tracks 1 through 4 (v0.33.0 to v0.36.0) (#5247)
+- **Track 1 (v0.33.0 Editions Registry & Gating Mechanics — PR #5266):**
+  - Implemented marginal cost-bearer capability classification engine in `synlynk/editions.py` (`core`, `opt_in`, `hosted`).
+  - Added CLI verbs (`synlynk edition show`, `synlynk edition set`), doctor diagnostics, and test suite `tests/test_editions.py`.
+  - Non-author QA review approved by `synlynk-synlynk-qa` and merged to `main` as `89282089`.
+- **Track 2 (v0.34.0 Constitution & Charter Governance — PR #5267):**
+  - Established canonical normative law registry (`synlynk/constitution.py`) formalizing Asimov Laws 0–3 and the Intent-Based Engineering invariant across Delivery Tiers (Prose, Cited, Injected).
+  - Integrated bearings card session injection, citation drift gate, and Sentinel/RCA law telemetry (`tests/test_constitution.py`).
+  - Approved by `synlynk-synlynk-qa` and merged to `main` as `485855ba`.
+- **Track 3 (v0.35.0 Fully-Derived Roadmap / Approach C — PR #5268):**
+  - Eliminated structural roadmap drift by converting `roadmap_arcs` and `roadmap_phases` into dynamic SQLite VIEWs in `synlynk/db_schema.py`.
+  - Added INSTEAD OF triggers for transparent backward compatibility, decoupled foreign keys on `goals` and `cost_entries`, and routed cost tracking to `goals.id`.
+  - Approved by `synlynk-synlynk-qa` and merged to `main` as `e04779ea`.
+- **Track 4 (v0.36.0 Intent-Based Product Development Engine — PR #5269):**
+  - Implemented Master Roadmap Phase 3 Self-Serve Tiered Delivery Ladder (Tier 1 Self-Serve, Tier 2 Assisted Self-Serve, Tier 3 Fully Managed) in `synlynk/ibpd.py`.
+  - Bound IBPD capabilities to Editions registry under `category: "hosted"`.
+  - Added CLI verbs (`synlynk ibpd status`, `synlynk ibpd tiers`, `synlynk ibpd quote`) with full `--json` support and test suite `tests/test_ibpd.py`.
+  - Approved by `synlynk-synlynk-qa` and merged to `main` as `1f00ceff`.
+[@agy, @nikhilsoman]
