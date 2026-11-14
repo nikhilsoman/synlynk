@@ -815,6 +815,12 @@ def ensure_derived_roadmap_views(conn) -> None:
     """Ensure goals table has placement columns and instantiate derived roadmap views."""
     import sqlite3
 
+    try:
+        from synlynk.db import _migrate_remove_roadmap_foreign_keys
+        _migrate_remove_roadmap_foreign_keys(conn)
+    except Exception:
+        pass
+
     cols = {row[1] for row in conn.execute("PRAGMA table_info(goals)")}
     for col, defn in (
         ("arc_version", "TEXT"),
@@ -831,27 +837,33 @@ def ensure_derived_roadmap_views(conn) -> None:
                     raise
 
     # If roadmap_arcs or roadmap_phases exist as tables, safely migrate and drop
-    for tbl in ("roadmap_arcs", "roadmap_phases"):
-        cur = conn.execute("SELECT type FROM sqlite_master WHERE name = ?", (tbl,))
-        row = cur.fetchone()
-        if row and row[0] == "table":
-            if tbl == "roadmap_arcs":
-                try:
-                    conn.execute("""
-                        UPDATE goals
-                        SET arc_version = (SELECT ra.version FROM roadmap_arcs ra JOIN roadmap_phases rp ON rp.arc_version = ra.version WHERE rp.id = goals.phase_id),
-                            phase_title = (SELECT rp.phase_title FROM roadmap_phases rp WHERE rp.id = goals.phase_id),
-                            placement_status = 'placed'
-                        WHERE phase_id IS NOT NULL AND arc_version IS NULL
-                    """)
-                except Exception:
-                    pass
-            try:
-                conn.execute(f"DROP TABLE IF EXISTS {tbl}")
-            except Exception:
-                pass
+    conn.commit()
+    fk_res = conn.execute("PRAGMA foreign_keys").fetchone()
+    fk_on = bool(fk_res and fk_res[0])
+    if fk_on:
+        conn.execute("PRAGMA foreign_keys = OFF")
 
     try:
+        for tbl in ("roadmap_arcs", "roadmap_phases"):
+            cur = conn.execute("SELECT type FROM sqlite_master WHERE name = ?", (tbl,))
+            row = cur.fetchone()
+            if row and row[0] == "table":
+                if tbl == "roadmap_arcs":
+                    try:
+                        conn.execute("""
+                            UPDATE goals
+                            SET arc_version = (SELECT ra.version FROM roadmap_arcs ra JOIN roadmap_phases rp ON rp.arc_version = ra.version WHERE rp.id = goals.phase_id),
+                                phase_title = (SELECT rp.phase_title FROM roadmap_phases rp WHERE rp.id = goals.phase_id),
+                                placement_status = 'placed'
+                            WHERE phase_id IS NOT NULL AND arc_version IS NULL
+                        """)
+                    except Exception:
+                        pass
+                try:
+                    conn.execute(f"DROP TABLE IF EXISTS {tbl}")
+                except Exception:
+                    pass
+
         arcs_type = conn.execute("SELECT type FROM sqlite_master WHERE name = 'roadmap_arcs'").fetchone()
         if not arcs_type or arcs_type[0] != "view":
             conn.execute("DROP TABLE IF EXISTS roadmap_arcs")
@@ -861,6 +873,10 @@ def ensure_derived_roadmap_views(conn) -> None:
             conn.execute("DROP TABLE IF EXISTS roadmap_phases")
             conn.execute(_ROADMAP_PHASES_VIEW)
         conn.executescript(_ROADMAP_TRIGGERS)
+        conn.commit()
     except sqlite3.OperationalError:
         pass
+    finally:
+        if fk_on:
+            conn.execute("PRAGMA foreign_keys = ON")
 

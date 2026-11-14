@@ -2484,6 +2484,39 @@ def _add_column_if_missing(
         conn.commit()
 
 
+def _migrate_remove_roadmap_foreign_keys(conn: sqlite3.Connection) -> None:
+    """Safely drop legacy FK references to roadmap_arcs and roadmap_phases without losing data."""
+    conn.commit()
+    fk_res = conn.execute("PRAGMA foreign_keys").fetchone()
+    fk_on = bool(fk_res and fk_res[0])
+    if fk_on:
+        conn.execute("PRAGMA foreign_keys = OFF")
+
+    try:
+        sql_goals = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'goals' AND type = 'table'").fetchone()
+        if sql_goals and sql_goals[0] and "REFERENCES roadmap_phases" in sql_goals[0]:
+            conn.execute("CREATE TABLE IF NOT EXISTS _goals_bak AS SELECT id, phase_id FROM goals")
+            conn.execute("ALTER TABLE goals DROP COLUMN phase_id")
+            conn.execute("ALTER TABLE goals ADD COLUMN phase_id INTEGER")
+            conn.execute("UPDATE goals SET phase_id = (SELECT phase_id FROM _goals_bak WHERE _goals_bak.id = goals.id)")
+            conn.execute("DROP TABLE IF EXISTS _goals_bak")
+
+        sql_costs = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'cost_entries' AND type = 'table'").fetchone()
+        if sql_costs and sql_costs[0] and ("REFERENCES roadmap_phases" in sql_costs[0] or "REFERENCES roadmap_arcs" in sql_costs[0]):
+            conn.execute("CREATE TABLE IF NOT EXISTS _costs_bak AS SELECT id, epic_id, phase_id FROM cost_entries")
+            conn.execute("ALTER TABLE cost_entries DROP COLUMN epic_id")
+            conn.execute("ALTER TABLE cost_entries DROP COLUMN phase_id")
+            conn.execute("ALTER TABLE cost_entries ADD COLUMN epic_id INTEGER")
+            conn.execute("ALTER TABLE cost_entries ADD COLUMN phase_id INTEGER")
+            conn.execute("UPDATE cost_entries SET epic_id = (SELECT epic_id FROM _costs_bak WHERE _costs_bak.id = cost_entries.id), phase_id = (SELECT phase_id FROM _costs_bak WHERE _costs_bak.id = cost_entries.id)")
+            conn.execute("DROP TABLE IF EXISTS _costs_bak")
+
+        conn.commit()
+    finally:
+        if fk_on:
+            conn.execute("PRAGMA foreign_keys = ON")
+
+
 def _migrate_db(conn: sqlite3.Connection) -> None:
     """Thin entry point: legacy versions 1-15, then the versioned runner
     for version 16+. See synlynk/migrations/runner.py."""
