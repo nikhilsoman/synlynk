@@ -9,6 +9,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.34.0] - 2026-11-14
+### Added
+- **Synlynk Constitution & Charter Governance (Track 2 / Spec #10) (#5245):**
+  - Canonical normative law registry in `synlynk/constitution.py` formalizing Asimov Laws 0–3 and the Intent-Based Engineering invariant across Delivery Tiers (Prose, Cited, Injected).
+  - High-stakes Session Bearings Generator in `synlynk/bearings.py` single-sourcing session card injection from Tier 3 constitutional laws (`tpm wake`, `dispatch --as-agent`, Evidence Over Assertions).
+  - Constitutional Citation Drift Gate (`check_constitution_gate` in `synlynk/constitution_gate.py` and `synlynk/pr_check.py`) auditing instruction files (`CLAUDE.md`, `GEMINI.md`, `AI_INSTRUCTIONS.md`, `AGENTS.md`) and role charters for `<!-- constitution: law-N -->` citations.
+  - Policy toggle `constitution_authority.require_citation_mode` in `.synlynk/policy.json` (`observe` / `enforce`).
+  - Sentinel alert and Sev1 RCA telemetry integration in `synlynk/sentinel.py` capturing `constitution_law` metadata for empirical RSI-driven instruction effectiveness scoring.
+
 ## [v0.33.0] - 2026-11-14
 ### Added
 - **Synlynk Editions Registry & Gating Primitives (Track 1 / Spec #9) (#5245):**

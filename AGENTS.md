@@ -2,6 +2,7 @@
 # synlynk Codex Instructions
 
 ## Identity & Attribution
+<!-- constitution: law-1 -->
 - **Engine:** openai-codex
 - **Commit trailer:** `Co-Authored-By: Codex <noreply@openai.com>`
 - **Branch prefix:** `feat/codex/` or `fix/codex/`
@@ -29,6 +30,7 @@ Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol, including the se
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## PR Review Discipline
+<!-- constitution: law-2 -->
 1. Assign a non-authoring agent to review the PR.
 2. From within the PR's own checked-out worktree/branch, the reviewer must run `synlynk pr check` so it can auto-detect the PR via git/gh context.
 3. The reviewer alone must merge the PR.
@@ -40,6 +42,7 @@ Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol, including the se
 **Merge authority is enforced from `.synlynk/policy.json` (`merge_authority`)** — a reviewer must run `synlynk policy check-merge --role <role>` before `gh pr merge`; a non-zero exit means do not merge.
 
 ## Multi-Task & Multi-Goal Series Tracking Protocol
+<!-- constitution: intent-invariant -->
 1. **Parent GitHub Issue Mandate:** Every multi-task, multi-goal series or epic must have a dedicated parent tracking issue created on GitHub prior to or immediately upon kickoff.
 2. **Standard Structure:** The parent issue body must lead with:
    - **Intent:** The high-level strategic driver and rationale.
@@ -104,8 +107,10 @@ This table is generated from `.synlynk/config.json` so it tracks the repo's own 
 - Valid: -c --model --sandbox
 - Invalid (do not use): --dangerously-bypass-approvals-and-sandbox --dangerously-skip-permissions --print --approval-policy
 ## Network Dependencies
+<!-- constitution: law-0 -->
 - None required
 ## Cost Visibility
+<!-- constitution: law-3 -->
 1. Log estimated_cost in the job context header before dispatch.
 2. Check `synlynk status` for current burn rate.
 3. Confirm all work is captured via telemetry and manual/PM work is logged via `synlynk cost log`.

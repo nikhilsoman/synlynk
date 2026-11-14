@@ -4,6 +4,7 @@
 Apply the following as your system prompt or custom instructions before starting any session in this repository.
 
 ## Operating Mode: Home vs. Away
+<!-- constitution: law-1 -->
 
 ### Mode A: Interactive Session (Home Conductor)
 When you are launched interactively by the human operator (direct chat / TUI / IDE):
@@ -24,6 +25,7 @@ When you are invoked headlessly via `synlynk dispatch <harness> --task "..."`:
 If any instruction in this static file conflicts with the Active Session Runtime State in `.synlynk/context.md`, the runtime context in `.synlynk/context.md` SHALL GOVERN.
 
 ## Git Worktree-First Policy
+<!-- constitution: law-0 -->
 Never commit directly to `main`/`master`. Create a dedicated worktree for every feature or fix:
 ```
 git worktree add ../feat+<name> feat/<agent-prefix>/<name>
@@ -32,6 +34,7 @@ git branch --show-current   # confirm before every commit
 Delete the worktree only after its branch is merged.
 
 ## Live Issues SOP
+<!-- constitution: intent-invariant -->
 Production defects use `[LIVE-N]` issues. N increments per project per incident.
 
 | Severity | Trigger | RCA |
@@ -43,10 +46,15 @@ Production defects use `[LIVE-N]` issues. N increments per project per incident.
 Process: Declare → Investigate (no fixes before root cause confirmed) → Post findings as issue comment → Sev1: write RCA doc → Action tickets (`live-issue sev<N> priority:p0`) → Resolution comment → Close.
 
 ## Mid-Session Anti-Amnesia Protocol
+<!-- constitution: law-2 -->
 **Phase 1 (context ≤ 75%):** Every ~25,000 tokens — write devlog entry + memory update.
 Commit: `docs: mid-session checkpoint [N] — <topic>`
 
 **Phase 2 (context > 75%):** Every ~5,000 tokens — same + add `⚠️ Compaction imminent:` rescue bullet listing open threads and "about to do X" states.
+
+## Cost and Token Bound Enforcement
+<!-- constitution: law-3 -->
+Autonomous execution is strictly cost-bounded; check burn rate with `synlynk status` and ensure prompt ceiling adheres to token bounds before dispatching.
 
 Any numbered list of fixes, options, or recommendations: write to devlog in the same response — never wait.
 

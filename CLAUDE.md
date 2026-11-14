@@ -3,6 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Identity & Attribution
+<!-- constitution: law-1 -->
 - **Harness:** Claude (execution backend for Workspace Agents)
 - **Commit trailer:** `Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`
 - In a harness/session shell, prepend the synlynk gh shim: `eval "$(synlynk gh --shim-env)"` (or equivalent PATH prepend of `~/.synlynk/gh-shim`).
@@ -195,6 +196,7 @@ Rationale: a July 2026 audit found 30 stale worktrees/branches accumulated becau
 5. **Cadence:** fold into a `synlynk capability report` pull every ~25 jobs or monthly (same cadence as the superseded protocol above), but reading the measured tables, not re-litigating heuristics.
 
 ## Hardened PR Review Policy (2026-10-04)
+<!-- constitution: law-0 -->
 
 1. **100% GOVERNS adherence.** No dispatched job may proceed without a linked GOVERNS goal/story. `synlynk pr check` and dispatch preflight enforce this gate; the PR-check gate may run in `observe` mode via `.synlynk/policy.json`'s `require_linked_goal_mode`, per `docs/superpowers/specs/2026-10-07-policy-enforcement-maturity-design.md`.
 2. **Personal GitHub token is strictly off-limits to every agent/harness.** Verified 2026-10-04: `synlynk dispatch`'s subprocess env builder does not pass `SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH` to spawned jobs (not in the env allowlist) and only reads it from the *dispatching* process's own shell — a dispatched job cannot see or set it to self-grant host auth. The fallback remains a manual, explicit, per-invocation operator opt-in (`synlynk identity init --role <role>` is the correct fix instead). New requirement: every exercise of this fallback must emit an audited log event (gh:#1992), so a one-off human override is distinguishable from routine traffic.
@@ -228,6 +230,7 @@ pm, review, deploy
 > ⚠️ **SUSPENDED (reassessment, 2026-10-04):** this role lock is explicitly under empirical reassessment per the Empirical Capability Assessment Policy above — Nikhil's own framing ("Agy & Codex are as good and Grok + Muse haven't had the opportunity yet") includes this lock, not just the Capability-Based Task Allocation table below. Deploy specifically must be re-validated through the Infra agent role, not assumed from historical Pulumi/rxcc/vdowrx precedent. Treat `pm, review, deploy` as the *current interim default*, not a fixed grant, until ≥5 merged-job samples exist for an alternative harness on each task type.
 
 ## PR Review Discipline
+<!-- constitution: law-2 -->
 1. Assign a non-authoring agent to review the PR.
 2. From within the PR's own checked-out worktree/branch, the reviewer must run `synlynk pr check` so it can auto-detect the PR via git/gh context.
 3. **The reviewer's own dispatched (headless) job performs the merge itself, as the final step of the same dispatch that posted the approval — not the interactive "home" session of whichever harness is acting as PM for this project.** Rationale (RCA'd 2026-10-09, PR #2149): an interactive home session (any harness, not just Claude) can carry its own nondeterministic auto-mode/guardrail layer that denies an already-authorized, policy-cleared action with no stated reason — observed directly with Claude Code's "auto mode classifier" denying `gh pr merge` despite `synlynk policy check-merge` and `synlynk pr check` both passing, then letting an unmodified retry through minutes later. Headless dispatch contracts for every harness (`HARNESS_CAPABILITY_BASELINES` in `synlynk/_constants.py`) are built to run deterministically with no such layer — e.g. Codex's `exec` sets `approval:never`, Agy/Claude support an explicit skip-permissions flag, Grok uses `--always-approve` — so keeping the merge inside the reviewer's dispatch avoids this risk class regardless of which harness is home. This is not yet empirically confirmed for every harness's *interactive* mode (only Claude's has actually executed a merge interactively in this repo so far); see gh:#2150 for tracking.
@@ -242,6 +245,7 @@ pm, review, deploy
 **Merge authority is enforced from `.synlynk/policy.json` (`merge_authority`)** — a reviewer must run `synlynk policy check-merge --role <role>` before `gh pr merge`; a non-zero exit means do not merge.
 
 ## Multi-Task & Multi-Goal Series Tracking Protocol
+<!-- constitution: intent-invariant -->
 1. **Parent GitHub Issue Mandate:** Every multi-task, multi-goal series or epic must have a dedicated parent tracking issue created on GitHub prior to or immediately upon kickoff.
 2. **Standard Structure:** The parent issue body must lead with:
    - **Intent:** The high-level strategic driver and rationale.
@@ -287,6 +291,7 @@ Do not start a task outside your role column without explicit approval from Clau
 This table is generated from `.synlynk/config.json` so it tracks the repo's own routing rather than synlynk's default fleet assumptions.
 
 ## Cost Visibility
+<!-- constitution: law-3 -->
 1. Log estimated_cost in the job context header before dispatch.
 2. Check `synlynk status` for current burn rate.
 3. Confirm all work is captured via telemetry and manual/PM work is logged via `synlynk cost log`.

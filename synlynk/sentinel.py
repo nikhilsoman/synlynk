@@ -42,8 +42,22 @@ DEFAULT_SENTINEL_ACTIVE_TTL_SECONDS = {
 
 _ALERT_METADATA_RE = re.compile(
     r"\s+\[occurrences: (?P<count>\d+); first seen: (?P<first>[^;]+); "
-    r"last seen: (?P<last>[^\]]+)\]$"
+    r"last seen: (?P<last>[^;\]]+)(?:;\s*constitution_law:\s*(?P<law>[^\]]+))?\]$"
 )
+
+CODE_TO_CONSTITUTION_LAW = {
+    "TOKEN_BLOAT": "law-3",
+    "CIRCUIT_BREAKER": "law-3",
+    "COST_INFLATION": "law-3",
+    "VERIFY_SKIP": "law-2",
+    "FAILED_NOOP_DENIED": "law-2",
+    "SECRET_EXPOSURE": "law-0",
+    "SANDBOX_DENIAL": "law-0",
+    "UNAUTHORIZED_TOKEN": "law-1",
+    "ATTRIBUTION_MISSING": "law-1",
+    "UNLINKED_GOAL": "intent-invariant",
+    "ROADMAP_DRIFT": "intent-invariant",
+}
 
 
 def _sentinel_policy() -> dict:
@@ -122,11 +136,14 @@ def _parse_sentinel_alert(line: str) -> Optional[dict]:
     count = 1
     first_seen = groups.get("timestamp")
     last_seen = groups.get("timestamp")
+    constitution_law = CODE_TO_CONSTITUTION_LAW.get(groups.get("code"))
     if metadata:
         message = message[:metadata.start()].rstrip()
         count = int(metadata.group("count"))
         first_seen = metadata.group("first").strip()
         last_seen = metadata.group("last").strip()
+        if metadata.group("law"):
+            constitution_law = metadata.group("law").strip()
     return {
         "raw_line": raw,
         "line": raw,
@@ -143,6 +160,7 @@ def _parse_sentinel_alert(line: str) -> Optional[dict]:
         "code": groups["code"],
         "message": message,
         "legacy": legacy,
+        "constitution_law": constitution_law,
     }
 
 
@@ -335,11 +353,14 @@ def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path:
             "occurrences": occurrences if matching else 1}
 
 
-def _format_sentinel_alert(severity, code, message, occurrences, first_seen, last_seen):
+def _format_sentinel_alert(severity, code, message, occurrences, first_seen, last_seen, constitution_law=None):
     """Render the durable counted representation used for new and migrated rows."""
     def stamp(value):
         return value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    metadata = f"[occurrences: {occurrences}; first seen: {stamp(first_seen)}; last seen: {stamp(last_seen)}]"
+    if not constitution_law:
+        constitution_law = CODE_TO_CONSTITUTION_LAW.get(code)
+    law_part = f"; constitution_law: {constitution_law}" if constitution_law else ""
+    metadata = f"[occurrences: {occurrences}; first seen: {stamp(first_seen)}; last seen: {stamp(last_seen)}{law_part}]"
     return f"- [{severity}] [{stamp(last_seen)}] {code}: {message} {metadata}\n"
 
 
