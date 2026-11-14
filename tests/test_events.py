@@ -11,7 +11,7 @@ def test_approval_tickets_table_exists(project_dir):
     conn.close()
     assert cols == {
         "id", "story_id", "action", "issue_url", "status",
-        "opened_at", "resolved_at", "consumed_at",
+        "opened_at", "resolved_at", "consumed_at", "constituent_story_ids",
     }
 
 

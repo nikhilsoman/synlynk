@@ -1,8 +1,10 @@
 """Run one policy-gated autonomous TPM sweep pass."""
 from __future__ import annotations
 
+import json
+import logging
 import os
-from typing import Dict
+from typing import Dict, Optional
 
 from synlynk.approval_gate import raise_approval_ticket
 from synlynk.autonomy import AutonomyLevel, get_agent_autonomy_level
@@ -11,6 +13,8 @@ from synlynk.db import _find_ticket, _insert_ticket, _mark_ticket_consumed
 from synlynk.dispatch import dispatch_agent
 from synlynk.events import emit_awaiting_approval
 from synlynk.policy import check_authority, load_policy
+
+logger = logging.getLogger(__name__)
 
 _FALLBACK_HARNESS = "codex"
 
@@ -233,6 +237,9 @@ def run_tpm_wake_cycle() -> dict:
 
     autonomy_level = get_agent_autonomy_level("tpm")
 
+    # Poll comments on any open release-proposal issue and act on verdicts
+    comment_result = poll_and_process_proposal_comments()
+
     if autonomy_level == AutonomyLevel.L1_ADVISORY:
         # In L1 Advisory: package release-scale proposal and file tracking issue for human gate
         proposal_url = dispatch_tpm_advisory_proposal()
@@ -251,7 +258,133 @@ def run_tpm_wake_cycle() -> dict:
         "triaged": len(triaged_items),
         "routed": routed,
         "sweep": sweep_result,
+        "proposal_comment_verdict": comment_result.get("verdict") if comment_result else None,
     }
+
+
+def poll_and_process_proposal_comments(conn=None) -> Optional[dict]:
+    """Fetch comments on the currently-open release_proposal issue and process verdicts.
+
+    This is the production caller for ``process_proposal_comments`` — it:
+    1. Finds the most recent open release_proposal in ``approval_tickets``.
+    2. Extracts the GitHub issue number from its ``issue_url``.
+    3. Fetches comments via ``gh issue view <N> --json comments``.
+    4. Reads back the snapshotted constituent story IDs from ``approval_tickets``
+       (falling back to live stories query if the column is NULL or missing).
+    5. Delegates to ``process_proposal_comments`` for verdict handling.
+
+    Returns the verdict dict, or None if there is no open proposal or fetching fails.
+    """
+    import json
+    import re
+
+    from synlynk.db import _get_db
+
+    own_conn = conn is None
+    if own_conn:
+        conn = _get_db()
+    try:
+        # Find the most-recent open release_proposal
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(approval_tickets)")}
+        has_constituent_col = "constituent_story_ids" in cols
+
+        if has_constituent_col:
+            row = conn.execute(
+                "SELECT story_id, issue_url, constituent_story_ids FROM approval_tickets "
+                "WHERE action='release_proposal' AND status='open' "
+                "ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT story_id, issue_url FROM approval_tickets "
+                "WHERE action='release_proposal' AND status='open' "
+                "ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+
+        if not row or not row[1]:
+            return None
+
+        release_version = row[0]
+        issue_url = row[1]
+        raw_constituent_ids = row[2] if has_constituent_col else None
+
+        match = re.search(r"/issues/(\d+)", issue_url)
+        if not match:
+            logger.debug(
+                "Cannot extract issue number from proposal URL: %s", issue_url,
+            )
+            return None
+        issue_number = match.group(1)
+
+        # Fetch comments from GitHub
+        try:
+            from synlynk.gh_role import run_gh_as_role
+
+            res = run_gh_as_role(
+                "tpm",
+                ["issue", "view", issue_number, "--json", "comments"],
+                timeout=15,
+            )
+            if res.returncode != 0:
+                logger.warning(
+                    "gh issue view %s failed (rc=%d)", issue_number, res.returncode,
+                )
+                return None
+            data = json.loads(res.stdout)
+            comments = data.get("comments", [])
+        except Exception as exc:
+            logger.warning("Failed to fetch proposal comments for #%s: %s", issue_number, exc)
+            return None
+
+        if not comments:
+            return None
+
+        # Resolve constituent story IDs for the release
+        constituent_story_ids = None
+        if raw_constituent_ids:
+            try:
+                parsed = json.loads(raw_constituent_ids)
+                if isinstance(parsed, list):
+                    constituent_story_ids = parsed
+                else:
+                    logger.warning(
+                        "constituent_story_ids on approval ticket for %s is not a list: %r",
+                        release_version, raw_constituent_ids,
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to decode constituent_story_ids JSON for %s: %s",
+                    release_version, exc,
+                )
+
+        if constituent_story_ids is None:
+            logger.warning(
+                "constituent_story_ids is NULL on approval ticket for %s; "
+                "falling back to live stories query",
+                release_version,
+            )
+            try:
+                story_rows = conn.execute(
+                    "SELECT story_id FROM stories "
+                    "WHERE (readiness='advisory' OR (readiness IN ('ready', 'draft') "
+                    "AND status NOT IN ('done', 'archived'))) "
+                    "ORDER BY rowid ASC LIMIT 5"
+                ).fetchall()
+                constituent_story_ids = [r[0] for r in story_rows]
+            except Exception as exc:
+                logger.warning("Failed to resolve constituent stories: %s", exc)
+                constituent_story_ids = []
+
+        if not constituent_story_ids:
+            return None
+
+        return process_proposal_comments(comments, constituent_story_ids, conn=conn)
+    except Exception as exc:
+        logger.error("poll_and_process_proposal_comments failed: %s", exc)
+        return None
+    finally:
+        if own_conn:
+            conn.close()
 
 
 def format_release_proposal_markdown(proposal: dict) -> str:
@@ -415,21 +548,29 @@ def dispatch_tpm_advisory_proposal(
     assignee: str = "nikhilsoman",
     repo_root: str = ".",
 ) -> Optional[str]:
-    """Create a single-release proposal issue assigned to the operator if under max limit."""
+    """Create a single-release proposal issue assigned to the operator if under max limit.
+
+    Dedup guards:
+    1. Global cap: no more than ``max_active_proposals`` open release_proposal
+       tickets may exist at once.
+    2. Per-version dedup: if an open (or held) proposal already exists for the
+       same ``release_version``, skip filing a duplicate.
+    """
     from synlynk.db import _get_db
 
     own_conn = conn is None
     if own_conn:
         conn = _get_db()
     try:
-        # Check active unapproved proposals
+        # Check active unapproved proposals (global cap)
         try:
             count_row = conn.execute(
                 "SELECT COUNT(*) FROM approval_tickets WHERE action='release_proposal' AND status='open'"
             ).fetchone()
             val = count_row[0] if count_row else 0
             active_count = int(val) if isinstance(val, (int, float, str)) and str(val).isdigit() else 0
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to query active proposal count: %s", exc)
             active_count = 0
 
         if active_count >= max_active_proposals:
@@ -439,8 +580,26 @@ def dispatch_tpm_advisory_proposal(
         if not proposal:
             return None
 
+        rel_ver = proposal["release_version"]
+
+        # Per-version dedup: skip if an open or held proposal already exists for this version
+        try:
+            existing = conn.execute(
+                "SELECT issue_url FROM approval_tickets "
+                "WHERE action='release_proposal' AND story_id=? AND status IN ('open', 'held')",
+                (rel_ver,),
+            ).fetchone()
+            if existing:
+                logger.info(
+                    "Skipping duplicate proposal for %s — already tracked at %s",
+                    rel_ver, existing[0],
+                )
+                return existing[0]
+        except Exception as exc:
+            logger.warning("Per-version dedup check failed: %s", exc)
+
         body = format_release_proposal_markdown(proposal)
-        title = f"[Proposal] {proposal['release_version']}: {proposal['theme']}"
+        title = f"[Proposal] {rel_ver}: {proposal['theme']}"
 
         # Attempt to file GitHub issue via gh CLI as the TPM agent role
         issue_url = None
@@ -460,22 +619,41 @@ def dispatch_tpm_advisory_proposal(
             )
             if res.returncode == 0:
                 issue_url = res.stdout.strip()
-        except Exception:
+            else:
+                logger.error(
+                    "gh issue create for %s failed (rc=%d): %s",
+                    rel_ver, res.returncode, res.stderr.strip() if hasattr(res, 'stderr') else "",
+                )
+        except Exception as exc:
+            logger.error("gh issue create for %s raised: %s", rel_ver, exc)
             issue_url = None
 
         if not issue_url:
             issue_url = f"https://github.com/nikhilsoman/synlynk/issues/simulated-{int(os.getpid())}"
 
         # Record in approval_tickets table
+        constituent_ids = [s["story_id"] for s in proposal.get("stories", [])]
+        constituent_ids_json = json.dumps(constituent_ids)
         try:
-            conn.execute(
-                "INSERT INTO approval_tickets (story_id, action, issue_url, status) "
-                "VALUES (?, 'release_proposal', ?, 'open')",
-                (proposal["release_version"], issue_url),
-            )
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(approval_tickets)")}
+            if "constituent_story_ids" in cols:
+                conn.execute(
+                    "INSERT INTO approval_tickets (story_id, action, issue_url, status, constituent_story_ids) "
+                    "VALUES (?, 'release_proposal', ?, 'open', ?)",
+                    (rel_ver, issue_url, constituent_ids_json),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO approval_tickets (story_id, action, issue_url, status) "
+                    "VALUES (?, 'release_proposal', ?, 'open')",
+                    (rel_ver, issue_url),
+                )
             conn.commit()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.error(
+                "Failed to insert approval_ticket for %s (%s): %s",
+                rel_ver, issue_url, exc,
+            )
 
         return issue_url
     finally:

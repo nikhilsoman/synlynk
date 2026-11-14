@@ -318,3 +318,59 @@ def test_m0019_is_idempotent(tmp_path):
     MIGRATION.up(conn)
     MIGRATION.up(conn)
     conn.commit()
+
+
+def test_migration_0032_adds_approval_tickets_constituent_story_ids(tmp_path, monkeypatch):
+    import sqlite3
+    from synlynk.migrations import runner
+    from synlynk.migrations.m0032_approval_tickets_constituent_stories import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        """CREATE TABLE approval_tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            story_id TEXT,
+            action TEXT,
+            issue_url TEXT,
+            status TEXT
+        )"""
+    )
+    conn.execute("PRAGMA user_version = 31")
+    conn.commit()
+
+    monkeypatch.setattr(runner, "MIGRATIONS", [MIGRATION])
+    runner.run_pending_migrations(conn)
+
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(approval_tickets)")}
+    assert "constituent_story_ids" in cols
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 32
+
+    # Re-running against an already-migrated db is a no-op, not a crash.
+    runner.run_pending_migrations(conn)
+    cols_after = {row[1] for row in conn.execute("PRAGMA table_info(approval_tickets)")}
+    assert cols_after == cols
+    conn.close()
+
+
+def test_m0032_is_idempotent(tmp_path):
+    import sqlite3
+    from synlynk.migrations.m0032_approval_tickets_constituent_stories import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        """CREATE TABLE approval_tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            story_id TEXT,
+            action TEXT,
+            issue_url TEXT,
+            status TEXT
+        )"""
+    )
+    MIGRATION.up(conn)
+    MIGRATION.up(conn)
+    conn.commit()
+
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(approval_tickets)")}
+    assert "constituent_story_ids" in cols
+    conn.close()
+
