@@ -4653,10 +4653,13 @@ def cmd_story_ready(story_id, all_stories: bool = False) -> None:
         "UPDATE roadmap_phases SET status='in_progress' WHERE story_id=? AND status='planned'",
         (story_id,),
     )
+    has_phase = phase_cur.rowcount > 0 or bool(
+        conn.execute("SELECT 1 FROM goals WHERE story_id=?", (story_id,)).fetchone()
+    )
     conn.commit()
     _record_goal_link_status(conn, story_id)
     conn.close()
-    if phase_cur.rowcount:
+    if has_phase:
         _generate_roadmap_md()
     print(f"  {_GREEN}✓{_RESET} Story {story_id} marked ready")
 
@@ -4741,6 +4744,9 @@ def cmd_story_done(story_id: str, conn=None) -> None:
         "UPDATE roadmap_phases SET status='done' WHERE story_id=? AND status != 'done'",
         (story_id,),
     )
+    has_phase = phase_result.rowcount > 0 or bool(
+        conn.execute("SELECT 1 FROM goals WHERE story_id=?", (story_id,)).fetchone()
+    )
     conn.commit()
     try:
         _remove_active_claim(story_id)
@@ -4755,7 +4761,7 @@ def cmd_story_done(story_id: str, conn=None) -> None:
     if owns_conn:
         conn.close()
     goal_ids.extend(g[0] for g in secondary if g[0] not in goal_ids)
-    if phase_result.rowcount:
+    if has_phase:
         _generate_roadmap_md()
     try:
         _try_sync_story(story_id)

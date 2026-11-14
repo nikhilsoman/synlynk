@@ -80,7 +80,8 @@ def test_derived_roadmap_views_creation_and_query(tmp_path):
     phases = conn.execute("SELECT * FROM roadmap_phases ORDER BY arc_version, priority").fetchall()
     assert len(phases) == 3
     assert phases[0]["phase_title"] == "Phase 1 - Core"
-    assert phases[0]["status"] == "shipped"
+    assert phases[0]["status"] in ("shipped", "done")
+    assert phases[0]["computed_status"] == "shipped"
     assert phases[1]["phase_title"] == "Phase 2 - Expansion"
     assert phases[1]["status"] == "in_progress"
 

@@ -458,7 +458,7 @@ CREATE TABLE IF NOT EXISTS goals (
     deadline    TEXT,
     status      TEXT NOT NULL DEFAULT 'active',
     kind        TEXT NOT NULL DEFAULT 'feature',
-    phase_id    INTEGER REFERENCES roadmap_phases(id),
+    phase_id    INTEGER,
     placement_status TEXT NOT NULL DEFAULT 'unplaced',
     placement_reason TEXT,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -673,7 +673,14 @@ SELECT
     WHEN MAX(CASE WHEN status = 'active' THEN 1 ELSE 0 END) = 1 THEN 'in_progress'
     ELSE 'planned'
   END AS status,
+  CASE
+    WHEN MAX(CASE WHEN status != 'done' THEN 1 ELSE 0 END) = 0 THEN 'shipped'
+    WHEN MAX(CASE WHEN status = 'active' THEN 1 ELSE 0 END) = 1 THEN 'in_progress'
+    ELSE 'planned'
+  END AS computed_status,
   MIN(deadline) AS target_date,
+  MIN(goal_id) AS goal_id,
+  1 AS is_milestone_eligible,
   (SELECT GROUP_CONCAT(d.decision_text, ' / ')
      FROM decisions d WHERE d.goal_id IN (
        SELECT CAST(id AS TEXT) FROM goals g2 WHERE g2.arc_version = goals.arc_version
@@ -692,11 +699,17 @@ SELECT
   arc_version,
   phase_title,
   CASE
-    WHEN MAX(CASE WHEN status != 'done' THEN 1 ELSE 0 END) = 0 THEN 'shipped'
+    WHEN MAX(CASE WHEN status != 'done' THEN 1 ELSE 0 END) = 0 THEN 'done'
     WHEN MAX(CASE WHEN status = 'active' THEN 1 ELSE 0 END) = 1 THEN 'in_progress'
     ELSE 'planned'
   END AS status,
+  CASE
+    WHEN MAX(CASE WHEN status != 'done' THEN 1 ELSE 0 END) = 0 THEN 'shipped'
+    WHEN MAX(CASE WHEN status = 'active' THEN 1 ELSE 0 END) = 1 THEN 'in_progress'
+    ELSE 'planned'
+  END AS computed_status,
   MIN(roadmap_priority) AS priority,
+  MIN(story_id) AS story_id,
   (SELECT GROUP_CONCAT(d.decision_text, ' / ')
      FROM decisions d WHERE d.goal_id IN (
        SELECT CAST(id AS TEXT) FROM goals g2
@@ -710,6 +723,69 @@ WHERE placement_status = 'placed' AND arc_version IS NOT NULL
 GROUP BY arc_version, phase_title;
 """
 
+_ROADMAP_TRIGGERS = """
+CREATE TRIGGER IF NOT EXISTS trg_roadmap_arcs_insert
+INSTEAD OF INSERT ON roadmap_arcs
+BEGIN
+  INSERT INTO goals (goal_id, outcome, criterion, status, arc_version, placement_status)
+  VALUES (
+    COALESCE(NEW.goal_id, 'arc-goal-' || hex(randomblob(4))),
+    COALESCE(NEW.title, NEW.version),
+    'Outcome for ' || NEW.version,
+    CASE WHEN NEW.status = 'in_progress' THEN 'active' ELSE COALESCE(NEW.status, 'active') END,
+    NEW.version,
+    'placed'
+  );
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_roadmap_arcs_update
+INSTEAD OF UPDATE ON roadmap_arcs
+BEGIN
+  UPDATE goals
+  SET status = CASE WHEN NEW.status = 'in_progress' THEN 'active' ELSE NEW.status END
+  WHERE arc_version = OLD.version;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_roadmap_arcs_delete
+INSTEAD OF DELETE ON roadmap_arcs
+BEGIN
+  DELETE FROM goals WHERE arc_version = OLD.version;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_roadmap_phases_insert
+INSTEAD OF INSERT ON roadmap_phases
+BEGIN
+  INSERT INTO goals (goal_id, outcome, criterion, status, arc_version, phase_title, roadmap_priority, story_id, placement_status)
+  VALUES (
+    'phase-goal-' || hex(randomblob(4)),
+    NEW.phase_title,
+    'Outcome for ' || NEW.phase_title,
+    CASE WHEN NEW.status = 'in_progress' THEN 'active' ELSE COALESCE(NEW.status, 'active') END,
+    NEW.arc_version,
+    NEW.phase_title,
+    COALESCE(NEW.priority, 1),
+    NEW.story_id,
+    'placed'
+  );
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_roadmap_phases_update
+INSTEAD OF UPDATE ON roadmap_phases
+BEGIN
+  UPDATE goals
+  SET status = CASE WHEN NEW.status = 'done' THEN 'done' WHEN NEW.status = 'in_progress' THEN 'active' ELSE NEW.status END
+  WHERE (arc_version = OLD.arc_version AND phase_title = OLD.phase_title)
+     OR (OLD.story_id IS NOT NULL AND story_id = OLD.story_id)
+     OR (NEW.story_id IS NOT NULL AND story_id = NEW.story_id);
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_roadmap_phases_delete
+INSTEAD OF DELETE ON roadmap_phases
+BEGIN
+  DELETE FROM goals WHERE arc_version = OLD.arc_version AND phase_title = OLD.phase_title;
+END;
+"""
+
 
 def ensure_derived_roadmap_views(conn) -> None:
     """Ensure goals table has placement columns and instantiate derived roadmap views."""
@@ -720,6 +796,8 @@ def ensure_derived_roadmap_views(conn) -> None:
         conn.execute("ALTER TABLE goals ADD COLUMN phase_title TEXT")
     if "roadmap_priority" not in cols:
         conn.execute("ALTER TABLE goals ADD COLUMN roadmap_priority INTEGER")
+    if "story_id" not in cols:
+        conn.execute("ALTER TABLE goals ADD COLUMN story_id TEXT")
 
     # If roadmap_arcs or roadmap_phases exist as tables, safely migrate and drop
     for tbl in ("roadmap_arcs", "roadmap_phases"):
@@ -742,6 +820,9 @@ def ensure_derived_roadmap_views(conn) -> None:
             except Exception:
                 pass
 
+    conn.execute("DROP VIEW IF EXISTS roadmap_arcs")
+    conn.execute("DROP VIEW IF EXISTS roadmap_phases")
     conn.execute(_ROADMAP_ARCS_VIEW)
     conn.execute(_ROADMAP_PHASES_VIEW)
+    conn.executescript(_ROADMAP_TRIGGERS)
 
