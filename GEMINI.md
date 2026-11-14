@@ -8,6 +8,7 @@ synlynk is a Python CLI with a modular architecture across the `synlynk/` packag
 # synlynk AGY (AntiGravity) Instructions
 
 ## Identity & Attribution
+<!-- constitution: law-1 -->
 - **Engine:** agy-2.x
 - **Commit trailer:** `Co-Authored-By: AGY <noreply@antigravity.dev>`
 - **Branch prefix:** `feat/agy/` or `fix/agy/`
@@ -42,9 +43,11 @@ Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol, including the se
 - Valid: --print --model --add-dir --sandbox --dangerously-skip-permissions --print-timeout --mode
 - Invalid (do not use): --always-approve --non-interactive
 ## Network Dependencies
+<!-- constitution: law-0 -->
 - Required: generativelanguage.googleapis.com:443
 - Required: oauth2.googleapis.com:443
 ## PR Review Discipline
+<!-- constitution: law-2 -->
 1. Assign a non-authoring agent to review the PR.
 2. From within the PR's own checked-out worktree/branch, the reviewer must run `synlynk pr check` so it can auto-detect the PR via git/gh context.
 3. The reviewer alone must merge the PR.
@@ -56,6 +59,7 @@ Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol, including the se
 **Merge authority is enforced from `.synlynk/policy.json` (`merge_authority`)** — a reviewer must run `synlynk policy check-merge --role <role>` before `gh pr merge`; a non-zero exit means do not merge.
 
 ## Multi-Task & Multi-Goal Series Tracking Protocol
+<!-- constitution: intent-invariant -->
 1. **Parent GitHub Issue Mandate:** Every multi-task, multi-goal series or epic must have a dedicated parent tracking issue created on GitHub prior to or immediately upon kickoff.
 2. **Standard Structure:** The parent issue body must lead with:
    - **Intent:** The high-level strategic driver and rationale.
@@ -99,6 +103,7 @@ Do not start a task outside your role column without explicit approval from Clau
 This table is generated from `.synlynk/config.json` so it tracks the repo's own routing rather than synlynk's default fleet assumptions.
 
 ## Cost Visibility
+<!-- constitution: law-3 -->
 1. Log estimated_cost in the job context header before dispatch.
 2. Check `synlynk status` for current burn rate.
 3. Confirm all work is captured via telemetry and manual/PM work is logged via `synlynk cost log`.

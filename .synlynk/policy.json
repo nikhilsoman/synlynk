@@ -196,6 +196,11 @@
       "require_linked_goal_mode": "observe",
       "note": "100% GOVERNS adherence required per Nikhil's 2026-10-04 hardening \u2014 every dispatched job must link a GOVERNS goal/story. Hard-fail enforcement shipped via PR #2029 (gh:#1990, closed 2026-10-05). require_linked_goal_mode set to observe 2026-10-07 pending a 100-pass clean streak \u2014 see docs/superpowers/specs/2026-10-07-policy-enforcement-maturity-design.md."
     },
+    "constitution_authority": {
+      "require_citation": true,
+      "require_citation_mode": "observe",
+      "note": "Constitutional citation drift gate per docs/superpowers/specs/2026-11-13-synlynk-constitution-charter-governance-design.md. Starts in observe mode."
+    },
     "host_auth_fallback": {
       "audit_log_required": true,
       "note": "SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH verified 2026-10-04 to require an explicit, manual, per-shell operator opt-in (not in the dispatch subprocess env allowlist, cannot be self-granted by a dispatched job). Every exercise of this fallback must now emit an audit-log event (gh:#1992, not yet built)."

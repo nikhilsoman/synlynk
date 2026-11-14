@@ -238,3 +238,25 @@ def check_pr_roadmap_gate(
         "findings": findings,
         "message": detail,
     }
+
+
+def check_pr_constitution_gate(
+    repo_root: str = ".",
+    policy: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Check constitutional law citations across instruction files."""
+    from synlynk.constitution_gate import check_constitution_gate
+    import json
+
+    if policy is None:
+        pol_file = os.path.join(repo_root, ".synlynk", "policy.json")
+        policy = {}
+        if os.path.isfile(pol_file):
+            try:
+                with open(pol_file, "r", encoding="utf-8") as f:
+                    policy = json.load(f)
+            except Exception:
+                policy = {}
+
+    return check_constitution_gate(repo_root, policy)
+
