@@ -1811,6 +1811,12 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "check", help="Report decision<->goal<->roadmap-arc drift"
     )
 
+    edition_parser = subparsers.add_parser("edition", help="View or manage Synlynk edition and hosted capabilities")
+    edition_sub = edition_parser.add_subparsers(dest="edition_action")
+    edition_sub.add_parser("show", help="Show current edition and enabled hosted capabilities")
+    edition_set_parser = edition_sub.add_parser("set", help="Set the Synlynk edition tier")
+    edition_set_parser.add_argument("tier", help="Edition tier to set (personal, team, enterprise)")
+
     policy_parser = subparsers.add_parser("policy", help="Check policy authority")
     policy_subparsers = policy_parser.add_subparsers(dest="policy_command")
     policy_subparsers.add_parser("show", help="Show the resolved policy")
@@ -3422,6 +3428,12 @@ def main(argv=None) -> None:
             print("Rendered roadmap.md from state.db")
         elif args.roadmap_action == "check":
             sys.exit(cmd_roadmap_check())
+    elif args.command == "edition":
+        from synlynk.editions import cmd_edition_set, cmd_edition_show
+        if args.edition_action == "set":
+            sys.exit(cmd_edition_set(args.tier))
+        else:
+            sys.exit(cmd_edition_show())
     elif args.command == "backlog":
         if args.backlog_action == "capture":
             from synlynk.backlog import stage_discovered_work
