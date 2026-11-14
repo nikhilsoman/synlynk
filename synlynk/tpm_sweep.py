@@ -1,6 +1,7 @@
 """Run one policy-gated autonomous TPM sweep pass."""
 from __future__ import annotations
 
+import json
 import logging
 import os
 from typing import Dict, Optional
@@ -268,7 +269,8 @@ def poll_and_process_proposal_comments(conn=None) -> Optional[dict]:
     1. Finds the most recent open release_proposal in ``approval_tickets``.
     2. Extracts the GitHub issue number from its ``issue_url``.
     3. Fetches comments via ``gh issue view <N> --json comments``.
-    4. Resolves constituent story IDs from the ``stories`` table.
+    4. Reads back the snapshotted constituent story IDs from ``approval_tickets``
+       (falling back to live stories query if the column is NULL or missing).
     5. Delegates to ``process_proposal_comments`` for verdict handling.
 
     Returns the verdict dict, or None if there is no open proposal or fetching fails.
@@ -283,16 +285,28 @@ def poll_and_process_proposal_comments(conn=None) -> Optional[dict]:
         conn = _get_db()
     try:
         # Find the most-recent open release_proposal
-        row = conn.execute(
-            "SELECT story_id, issue_url FROM approval_tickets "
-            "WHERE action='release_proposal' AND status='open' "
-            "ORDER BY id DESC LIMIT 1"
-        ).fetchone()
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(approval_tickets)")}
+        has_constituent_col = "constituent_story_ids" in cols
+
+        if has_constituent_col:
+            row = conn.execute(
+                "SELECT story_id, issue_url, constituent_story_ids FROM approval_tickets "
+                "WHERE action='release_proposal' AND status='open' "
+                "ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT story_id, issue_url FROM approval_tickets "
+                "WHERE action='release_proposal' AND status='open' "
+                "ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+
         if not row or not row[1]:
             return None
 
         release_version = row[0]
         issue_url = row[1]
+        raw_constituent_ids = row[2] if has_constituent_col else None
 
         match = re.search(r"/issues/(\d+)", issue_url)
         if not match:
@@ -326,17 +340,40 @@ def poll_and_process_proposal_comments(conn=None) -> Optional[dict]:
             return None
 
         # Resolve constituent story IDs for the release
-        try:
-            story_rows = conn.execute(
-                "SELECT story_id FROM stories "
-                "WHERE (readiness='advisory' OR (readiness IN ('ready', 'draft') "
-                "AND status NOT IN ('done', 'archived'))) "
-                "ORDER BY rowid ASC LIMIT 5"
-            ).fetchall()
-            constituent_story_ids = [r[0] for r in story_rows]
-        except Exception as exc:
-            logger.warning("Failed to resolve constituent stories: %s", exc)
-            constituent_story_ids = []
+        constituent_story_ids = None
+        if raw_constituent_ids:
+            try:
+                parsed = json.loads(raw_constituent_ids)
+                if isinstance(parsed, list):
+                    constituent_story_ids = parsed
+                else:
+                    logger.warning(
+                        "constituent_story_ids on approval ticket for %s is not a list: %r",
+                        release_version, raw_constituent_ids,
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to decode constituent_story_ids JSON for %s: %s",
+                    release_version, exc,
+                )
+
+        if constituent_story_ids is None:
+            logger.warning(
+                "constituent_story_ids is NULL on approval ticket for %s; "
+                "falling back to live stories query",
+                release_version,
+            )
+            try:
+                story_rows = conn.execute(
+                    "SELECT story_id FROM stories "
+                    "WHERE (readiness='advisory' OR (readiness IN ('ready', 'draft') "
+                    "AND status NOT IN ('done', 'archived'))) "
+                    "ORDER BY rowid ASC LIMIT 5"
+                ).fetchall()
+                constituent_story_ids = [r[0] for r in story_rows]
+            except Exception as exc:
+                logger.warning("Failed to resolve constituent stories: %s", exc)
+                constituent_story_ids = []
 
         if not constituent_story_ids:
             return None
@@ -595,12 +632,22 @@ def dispatch_tpm_advisory_proposal(
             issue_url = f"https://github.com/nikhilsoman/synlynk/issues/simulated-{int(os.getpid())}"
 
         # Record in approval_tickets table
+        constituent_ids = [s["story_id"] for s in proposal.get("stories", [])]
+        constituent_ids_json = json.dumps(constituent_ids)
         try:
-            conn.execute(
-                "INSERT INTO approval_tickets (story_id, action, issue_url, status) "
-                "VALUES (?, 'release_proposal', ?, 'open')",
-                (rel_ver, issue_url),
-            )
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(approval_tickets)")}
+            if "constituent_story_ids" in cols:
+                conn.execute(
+                    "INSERT INTO approval_tickets (story_id, action, issue_url, status, constituent_story_ids) "
+                    "VALUES (?, 'release_proposal', ?, 'open', ?)",
+                    (rel_ver, issue_url, constituent_ids_json),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO approval_tickets (story_id, action, issue_url, status) "
+                    "VALUES (?, 'release_proposal', ?, 'open')",
+                    (rel_ver, issue_url),
+                )
             conn.commit()
         except Exception as exc:
             logger.error(

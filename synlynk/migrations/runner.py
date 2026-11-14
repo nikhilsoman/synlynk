@@ -23,6 +23,7 @@ from synlynk.migrations.m0028_deprecate_execution_log_models import MIGRATION as
 from synlynk.migrations.m0029_roadmap_arcs_milestone_eligibility import MIGRATION as M0029
 from synlynk.migrations.m0030_github_sync_map import MIGRATION as M0030
 from synlynk.migrations.m0031_quota_burn_rate_weights import MIGRATION as M0031
+from synlynk.migrations.m0032_approval_tickets_constituent_stories import MIGRATION as M0032
 from synlynk.wal_ledger import write_transaction
 
 # Static, explicitly-imported registry. Append future Migration entries here
@@ -30,6 +31,7 @@ from synlynk.wal_ledger import write_transaction
 MIGRATIONS: list[Migration] = [
     M0016, M0017, M0018, M0019, M0020, M0021, M0022, M0023,
     M0024, M0025, M0026, M0027, M0028, M0029, M0030, M0031,
+    M0032,
 ]
 
 

@@ -516,7 +516,8 @@ CREATE TABLE IF NOT EXISTS approval_tickets (
     status        TEXT NOT NULL DEFAULT 'open',
     opened_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     resolved_at   TIMESTAMP,
-    consumed_at   TIMESTAMP
+    consumed_at   TIMESTAMP,
+    constituent_story_ids TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_approval_tickets_story_action ON approval_tickets(story_id, action, status);
 

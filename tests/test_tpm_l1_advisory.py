@@ -354,7 +354,8 @@ def _seed_full_schema(conn):
             issue_url TEXT,
             status TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            resolved_at TIMESTAMP
+            resolved_at TIMESTAMP,
+            constituent_story_ids TEXT
         )"""
     )
     conn.commit()
@@ -679,3 +680,129 @@ def test_wake_cycle_includes_comment_verdict(monkeypatch, tmp_path):
     result = tpm_mod.run_tpm_wake_cycle()
     assert "proposal_comment_verdict" in result
     assert result["proposal_comment_verdict"] == "approved"
+
+
+def test_approve_promotes_snapshotted_stories_not_live_requery(monkeypatch, tmp_path):
+    """A mutation in stories table between proposal filing and human /approve
+    must NOT affect which stories get promoted. /approve must promote the
+    snapshotted constituent stories, not a live re-queried set."""
+    db_file = tmp_path / "state.db"
+    conn = sl._get_db(str(db_file))
+    try:
+        _seed_full_schema(conn)
+
+        # 1. Seed two eligible stories for the proposal
+        conn.execute(
+            "INSERT INTO stories (story_id, title, role, readiness, status) "
+            "VALUES ('s-snap-1', 'Snap Task 1', 'dev', 'advisory', 'open')"
+        )
+        conn.execute(
+            "INSERT INTO stories (story_id, title, role, readiness, status) "
+            "VALUES ('s-snap-2', 'Snap Task 2', 'dev', 'advisory', 'open')"
+        )
+        conn.commit()
+
+        # Mock gh issue create and gh issue view
+        def fake_gh(role, args, **kwargs):
+            m = MagicMock()
+            m.returncode = 0
+            if "create" in args:
+                m.stdout = "https://github.com/nikhilsoman/synlynk/issues/7777"
+            elif "view" in args:
+                m.stdout = json.dumps({
+                    "comments": [{"body": "/approve please ship"}]
+                })
+            return m
+
+        monkeypatch.setattr("synlynk.gh_role.run_gh_as_role", fake_gh)
+
+        version_file = tmp_path / "VERSION"
+        version_file.write_text("0.99.0\n")
+
+        # 2. File proposal via dispatch_tpm_advisory_proposal
+        proposal_url = dispatch_tpm_advisory_proposal(
+            conn=conn, max_active_proposals=5,
+            assignee="nikhilsoman", repo_root=str(tmp_path),
+        )
+        assert proposal_url == "https://github.com/nikhilsoman/synlynk/issues/7777"
+
+        # 3. Mutate the stories table:
+        # - Archive s-snap-1 (so live query would omit it)
+        # - Add s-snap-new (which is advisory/open, so live query would pick it up)
+        conn.execute(
+            "UPDATE stories SET status='archived' WHERE story_id='s-snap-1'"
+        )
+        conn.execute(
+            "INSERT INTO stories (story_id, title, role, readiness, status) "
+            "VALUES ('s-snap-new', 'New Task', 'dev', 'advisory', 'open')"
+        )
+        conn.commit()
+
+        # 4. Process comments via poll_and_process_proposal_comments
+        res = poll_and_process_proposal_comments(conn=conn)
+        assert res is not None
+        assert res["verdict"] == "approved"
+
+        # 5. Assert:
+        # Snapshotted stories (s-snap-1, s-snap-2) should have been acted on:
+        # s-snap-1 was in the proposal, so its readiness should be updated to 'ready'
+        # s-snap-2 was in the proposal, so its readiness should be 'ready'
+        # s-snap-new was NOT in the proposal, so its readiness must remain 'advisory'
+        r1 = conn.execute("SELECT readiness FROM stories WHERE story_id='s-snap-1'").fetchone()[0]
+        r2 = conn.execute("SELECT readiness FROM stories WHERE story_id='s-snap-2'").fetchone()[0]
+        r_new = conn.execute("SELECT readiness FROM stories WHERE story_id='s-snap-new'").fetchone()[0]
+
+        assert r1 == "ready", "Snapshotted story s-snap-1 should have been promoted"
+        assert r2 == "ready", "Snapshotted story s-snap-2 should have been promoted"
+        assert r_new == "advisory", "Unsnapshotted new story s-snap-new must NOT be promoted"
+    finally:
+        conn.close()
+
+
+def test_poll_and_process_falls_back_when_constituent_story_ids_is_null(monkeypatch, tmp_path, caplog):
+    """When an approval ticket has NULL constituent_story_ids (legacy row),
+    poll_and_process_proposal_comments must fall back to the live query and
+    log a warning."""
+    import logging
+
+    db_file = tmp_path / "state.db"
+    conn = sl._get_db(str(db_file))
+    try:
+        _seed_full_schema(conn)
+
+        # Seed an approval ticket with NULL constituent_story_ids
+        conn.execute(
+            "INSERT INTO approval_tickets (story_id, action, issue_url, status) "
+            "VALUES ('v0.99.1', 'release_proposal', "
+            "'https://github.com/nikhilsoman/synlynk/issues/8888', 'open')"
+        )
+        conn.execute(
+            "INSERT INTO stories (story_id, title, role, readiness, status) "
+            "VALUES ('s-legacy-1', 'Legacy Task', 'dev', 'advisory', 'open')"
+        )
+        conn.commit()
+
+        def fake_gh(role, args, **kwargs):
+            m = MagicMock()
+            m.returncode = 0
+            m.stdout = json.dumps({
+                "comments": [{"body": "/approve ship it"}]
+            })
+            return m
+
+        monkeypatch.setattr("synlynk.gh_role.run_gh_as_role", fake_gh)
+
+        with caplog.at_level(logging.WARNING):
+            res = poll_and_process_proposal_comments(conn=conn)
+
+        assert res is not None
+        assert res["verdict"] == "approved"
+        # Check story was promoted via fallback
+        r = conn.execute("SELECT readiness FROM stories WHERE story_id='s-legacy-1'").fetchone()[0]
+        assert r == "ready"
+        # Check fallback warning was logged
+        assert any("falling back to live stories query" in rec.message for rec in caplog.records)
+    finally:
+        conn.close()
+
+
