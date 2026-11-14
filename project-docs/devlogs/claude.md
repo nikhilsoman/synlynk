@@ -508,3 +508,30 @@ chase the `pr_number`-NULL pattern as a broader dispatch pipeline bug.
   issue (gh:#4986#issuecomment-6545548566); the issue had already auto-closed via PR #4987's
   "Fixes #4986" text.
 [@claude]
+
+## 2026-11-14 — LIVE-31 incident worked end-to-end; handoff prepared for Agy to resume conductor
+
+- Root-caused and remediated LIVE-31 (dispatched job posted a GitHub review under the operator's
+  personal identity via raw `gh`, which then blocked PR #5248's otherwise-clean merge via GitHub's
+  per-reviewer `reviewDecision` semantics). Dismissed the stale review under role identity,
+  re-merged PR #5248 (`25806322`). Wrote the Sev1 RCA
+  (`docs/rca/2026-11-14-LIVE-31-dispatched-job-raw-gh-personal-identity.md`), filed 4 tracking
+  issues (#5249 structural fix, #5250 adjacent policy-config gap, #5251/#5252 the RCA's own action
+  items 3/4) — **all 4 remain OPEN**, not closed by anything this session did.
+- Shipped the RCA doc itself via PR #5253 (cross-harness reviewed agy-on-codex, merged
+  `6cd36ee4`), backfilling missing cost provenance per the Cost Capture Protocol along the way.
+  Worktree Hygiene swept all 3 nested dispatch worktrees for that chain.
+- Found the parent worktree dirty (stray staged cost-archive rollup, pre-existing, unrelated to
+  #5253) during the hygiene sweep — flagged rather than silently deleting a dirty worktree.
+  Committed it, then caught that the commit would be orphaned (branch already merged, no remote
+  copy) before deleting anything; pushed it instead and opened PR #5254, which is now
+  cross-harness **approved** (role identity `synlynk-synlynk-qa`) but **not yet merged** —
+  cost provenance for this native-session commit also still needs backfilling.
+- At Nikhil's request, wrote a full chronological handoff doc for the next conductor —
+  `project-docs/devlogs/session-handoff-2026-11-14-live31.md` — since he's resuming the session
+  with **Agy in Home Conductor mode** next (live test of the Default Agent Role reassessment,
+  same as the 2026-10-25 v0.25.5 handoff precedent). That doc has the full chronology, every
+  issue/PR number, and the explicit immediate-next-steps list (finish PR #5254's cost log +
+  merge, sweep the parent worktree/branch including its now-existing remote copy, then pick up
+  #5249/#5251/#5252 as real backlog — #5250 is the smaller one).
+[@claude]
