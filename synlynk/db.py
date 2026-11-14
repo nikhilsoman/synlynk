@@ -2438,7 +2438,19 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
         conn,
         table="goals",
         column="roadmap_priority",
-        definition="INTEGER",
+        definition="TEXT",
+    )
+    _add_column_if_missing(
+        conn,
+        table="goals",
+        column="story_id",
+        definition="TEXT",
+    )
+    _add_column_if_missing(
+        conn,
+        table="goals",
+        column="notes",
+        definition="TEXT",
     )
 
     _migrate_onboarding_sessions(conn)

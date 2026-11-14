@@ -813,17 +813,22 @@ END;
 
 def ensure_derived_roadmap_views(conn) -> None:
     """Ensure goals table has placement columns and instantiate derived roadmap views."""
+    import sqlite3
+
     cols = {row[1] for row in conn.execute("PRAGMA table_info(goals)")}
-    if "arc_version" not in cols:
-        conn.execute("ALTER TABLE goals ADD COLUMN arc_version TEXT")
-    if "phase_title" not in cols:
-        conn.execute("ALTER TABLE goals ADD COLUMN phase_title TEXT")
-    if "roadmap_priority" not in cols:
-        conn.execute("ALTER TABLE goals ADD COLUMN roadmap_priority TEXT")
-    if "story_id" not in cols:
-        conn.execute("ALTER TABLE goals ADD COLUMN story_id TEXT")
-    if "notes" not in cols:
-        conn.execute("ALTER TABLE goals ADD COLUMN notes TEXT")
+    for col, defn in (
+        ("arc_version", "TEXT"),
+        ("phase_title", "TEXT"),
+        ("roadmap_priority", "TEXT"),
+        ("story_id", "TEXT"),
+        ("notes", "TEXT"),
+    ):
+        if col not in cols:
+            try:
+                conn.execute(f"ALTER TABLE goals ADD COLUMN {col} {defn}")
+            except sqlite3.OperationalError as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    raise
 
     # If roadmap_arcs or roadmap_phases exist as tables, safely migrate and drop
     for tbl in ("roadmap_arcs", "roadmap_phases"):
@@ -846,13 +851,16 @@ def ensure_derived_roadmap_views(conn) -> None:
             except Exception:
                 pass
 
-    arcs_type = conn.execute("SELECT type FROM sqlite_master WHERE name = 'roadmap_arcs'").fetchone()
-    if not arcs_type or arcs_type[0] != "view":
-        conn.execute("DROP TABLE IF EXISTS roadmap_arcs")
-        conn.execute(_ROADMAP_ARCS_VIEW)
-    phases_type = conn.execute("SELECT type FROM sqlite_master WHERE name = 'roadmap_phases'").fetchone()
-    if not phases_type or phases_type[0] != "view":
-        conn.execute("DROP TABLE IF EXISTS roadmap_phases")
-        conn.execute(_ROADMAP_PHASES_VIEW)
-    conn.executescript(_ROADMAP_TRIGGERS)
+    try:
+        arcs_type = conn.execute("SELECT type FROM sqlite_master WHERE name = 'roadmap_arcs'").fetchone()
+        if not arcs_type or arcs_type[0] != "view":
+            conn.execute("DROP TABLE IF EXISTS roadmap_arcs")
+            conn.execute(_ROADMAP_ARCS_VIEW)
+        phases_type = conn.execute("SELECT type FROM sqlite_master WHERE name = 'roadmap_phases'").fetchone()
+        if not phases_type or phases_type[0] != "view":
+            conn.execute("DROP TABLE IF EXISTS roadmap_phases")
+            conn.execute(_ROADMAP_PHASES_VIEW)
+        conn.executescript(_ROADMAP_TRIGGERS)
+    except sqlite3.OperationalError:
+        pass
 
