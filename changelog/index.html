@@ -45,6 +45,13 @@
 Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
 <hr>
 <h2><a href="https://github.com/nikhilsoman/synlynk/compare/v0.3.0...HEAD">Unreleased</a></h2>
+<div class="changelog-version-header"><span class="changelog-version">vv0.36.0</span><span class="changelog-date">2026-11-14</span></div>
+<h3 class="tag-added">Added</h3>
+- **Intent-Based Product Development (IBPD) Engine (Track 4 / Spec #12) (#5247):**
+  - Implemented Master Roadmap Phase 3 Self-Serve Tiered Delivery Ladder in `synlynk/ibpd.py` formalizing trust progression across Tier 1 (Self-Serve), Tier 2 (Assisted Self-Serve), and Tier 3 (Fully Managed).
+  - Registered `ibpd_tier2_assisted` and `ibpd_tier3_managed` in the Editions capability registry (`synlynk/editions.py`) classified under `category: "hosted"`.
+  - Added CLI surface: `synlynk ibpd status`, `synlynk ibpd tiers`, and `synlynk ibpd quote` with machine-readable `--json` output and engagement evaluation.
+  - Formulated outcome-based commercial model and hardened governance guarantees (cross-harness review, zero personal token prohibition, 100% linked GOVERNS goal adherence).
 <div class="changelog-version-header"><span class="changelog-version">vv0.35.0</span><span class="changelog-date">2026-11-14</span></div>
 <h3 class="tag-added">Added</h3>
 - **Fully-Derived Roadmap: Approach C Architecture (Track 3 / Spec #11) (#5245):**
