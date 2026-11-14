@@ -108,6 +108,9 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `models show` (secondary) — sustain
 - `models discover` (secondary) — sustain
 - `heal` (primary) — sustain
+- `ibpd status` (primary) — sustain
+- `ibpd tiers` (secondary) — sustain
+- `ibpd quote` (secondary) — sustain
 - `dispatch` (primary) — execute
 - `backfill-capability-ratings` (secondary) — execute
 - `charters adapt` (secondary) — sustain

@@ -149,6 +149,18 @@ CAPABILITIES: Dict[str, Capability] = {
         hosted_key="data_residency",
         note="Regional compliance data residency controls (Platform Vision Phase 1)",
     ),
+    "ibpd_tier2_assisted": Capability(
+        name="ibpd_tier2_assisted",
+        category="hosted",
+        hosted_key="ibpd_tier2_assisted",
+        note="Assisted Self-Serve: role-charter playbooks & decide-panel consulting (Master Roadmap Phase 3)",
+    ),
+    "ibpd_tier3_managed": Capability(
+        name="ibpd_tier3_managed",
+        category="hosted",
+        hosted_key="ibpd_tier3_managed",
+        note="Fully Managed: outcome-based delivery executed by synlynk operator fleet (Master Roadmap Phase 3)",
+    ),
     "swarm_cloud_provisioning": Capability(
         name="swarm_cloud_provisioning",
         category="hosted",
@@ -237,6 +249,52 @@ def check_hosted(config: Dict[str, Any], capability_name: str) -> Tuple[bool, st
         return True, ""
 
     return False, f"Hosted capability '{cap.hosted_key}' is not enabled in config['hosted']"
+
+
+def get_active_edition(config: Optional[Dict[str, Any]] = None) -> str:
+    """Return the currently configured edition tier (defaults to personal)."""
+    import json
+    import os
+
+    if config is None:
+        config_path = os.path.join(".synlynk", "config.json")
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+            except Exception:
+                config = {}
+        else:
+            config = {}
+    return config.get("edition", "personal")
+
+
+def is_capability_enabled(capability_name: str, config: Optional[Dict[str, Any]] = None) -> bool:
+    """Return True if capability is allowed and enabled under current config."""
+    import json
+    import os
+
+    if config is None:
+        config_path = os.path.join(".synlynk", "config.json")
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+            except Exception:
+                config = {}
+        else:
+            config = {}
+
+    if capability_name not in CAPABILITIES:
+        return False
+    cap = CAPABILITIES[capability_name]
+    ok_ed, _ = check_edition(config, capability_name)
+    if not ok_ed:
+        return False
+    if cap.category == "hosted":
+        ok_host, _ = check_hosted(config, capability_name)
+        return ok_host
+    return True
 
 
 def cmd_edition_show() -> int:

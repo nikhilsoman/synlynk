@@ -1820,6 +1820,18 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     edition_set_parser = edition_sub.add_parser("set", help="Set the Synlynk edition tier")
     edition_set_parser.add_argument("tier", help="Edition tier to set (personal, team, enterprise)")
 
+    ibpd_parser = subparsers.add_parser("ibpd", help="Intent-Based Product Development (Master Roadmap Phase 3)")
+    ibpd_sub = ibpd_parser.add_subparsers(dest="ibpd_action")
+    ibpd_status_p = ibpd_sub.add_parser("status", help="Show workspace IBPD delivery ladder and governance status")
+    ibpd_status_p.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+    ibpd_tiers_p = ibpd_sub.add_parser("tiers", help="List Master Roadmap Phase 3 self-serve delivery tiers")
+    ibpd_tiers_p.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+    ibpd_quote_p = ibpd_sub.add_parser("quote", help="Evaluate an engagement quote for a delivery tier")
+    ibpd_quote_p.add_argument("--tier", type=int, default=1, help="Delivery tier id (1, 2, or 3)")
+    ibpd_quote_p.add_argument("--repo", default=".", help="Target repository path")
+    ibpd_quote_p.add_argument("--stories", type=int, default=1, help="Estimated story count")
+    ibpd_quote_p.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+
     policy_parser = subparsers.add_parser("policy", help="Check policy authority")
     policy_subparsers = policy_parser.add_subparsers(dest="policy_command")
     policy_subparsers.add_parser("show", help="Show the resolved policy")
@@ -3437,6 +3449,23 @@ def main(argv=None) -> None:
             sys.exit(cmd_edition_set(args.tier))
         else:
             sys.exit(cmd_edition_show())
+    elif args.command == "ibpd":
+        from synlynk.ibpd import (
+            cmd_ibpd_status,
+            cmd_ibpd_tiers,
+            cmd_ibpd_quote,
+        )
+        if args.ibpd_action == "tiers":
+            sys.exit(cmd_ibpd_tiers(as_json=getattr(args, "json", False)))
+        elif args.ibpd_action == "quote":
+            sys.exit(cmd_ibpd_quote(
+                tier_id=getattr(args, "tier", 1),
+                repo_path=getattr(args, "repo", "."),
+                stories_count=getattr(args, "stories", 1),
+                as_json=getattr(args, "json", False),
+            ))
+        else:
+            sys.exit(cmd_ibpd_status(as_json=getattr(args, "json", False)))
     elif args.command == "backlog":
         if args.backlog_action == "capture":
             from synlynk.backlog import stage_discovered_work

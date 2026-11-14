@@ -9,6 +9,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.36.0] - 2026-11-14
+### Added
+- **Intent-Based Product Development (IBPD) Engine (Track 4 / Spec #12) (#5247):**
+  - Implemented Master Roadmap Phase 3 Self-Serve Tiered Delivery Ladder in `synlynk/ibpd.py` formalizing trust progression across Tier 1 (Self-Serve), Tier 2 (Assisted Self-Serve), and Tier 3 (Fully Managed).
+  - Registered `ibpd_tier2_assisted` and `ibpd_tier3_managed` in the Editions capability registry (`synlynk/editions.py`) classified under `category: "hosted"`.
+  - Added CLI surface: `synlynk ibpd status`, `synlynk ibpd tiers`, and `synlynk ibpd quote` with machine-readable `--json` output and engagement evaluation.
+  - Formulated outcome-based commercial model and hardened governance guarantees (cross-harness review, zero personal token prohibition, 100% linked GOVERNS goal adherence).
+
+
 ## [v0.35.0] - 2026-11-14
 ### Added
 - **Fully-Derived Roadmap: Approach C Architecture (Track 3 / Spec #11) (#5245):**

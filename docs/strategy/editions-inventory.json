@@ -159,5 +159,19 @@
     "min_edition": null,
     "hosted_key": "swarm_cloud_provisioning",
     "note": "Dynamic cloud infrastructure provisioning for elastic swarms (Phase 4)"
+  },
+  {
+    "name": "ibpd_tier2_assisted",
+    "category": "hosted",
+    "min_edition": null,
+    "hosted_key": "ibpd_tier2_assisted",
+    "note": "Assisted Self-Serve: role-charter playbooks & decide-panel consulting (Master Roadmap Phase 3)"
+  },
+  {
+    "name": "ibpd_tier3_managed",
+    "category": "hosted",
+    "min_edition": null,
+    "hosted_key": "ibpd_tier3_managed",
+    "note": "Fully Managed: outcome-based delivery executed by synlynk operator fleet (Master Roadmap Phase 3)"
   }
 ]
