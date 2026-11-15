@@ -700,9 +700,9 @@ def generate_efficiency_html(data: dict, port: int) -> str:
         if not baseline_cap:
             baseline_cap = {"read_budget_tokens": 1, "write_budget_tokens": 1, "tool_budget_count": 1}
 
-        read_budget = agent_cap.get("read_budget_tokens", 0)
-        write_budget = agent_cap.get("write_budget_tokens", 0)
-        tool_budget = agent_cap.get("tool_budget_count", 0)
+        read_budget = agent_cap.get("read_budget_tokens") or 0
+        write_budget = agent_cap.get("write_budget_tokens") or 0
+        tool_budget = agent_cap.get("tool_budget_count") or 0
 
         base_read = baseline_cap.get("read_budget_tokens", 1) or 1
         base_write = baseline_cap.get("write_budget_tokens", 1) or 1
