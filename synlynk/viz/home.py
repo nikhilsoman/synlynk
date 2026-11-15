@@ -432,6 +432,10 @@ def generate_index_html(data: dict, port: int) -> str:
                 <span class="nav-icon">📅</span>
                 <span class="nav-label">Gantt</span>
               </a>
+              <a class="nav-link" href="roadmap_studio.html" data-view="roadmap_studio" data-cat="STATUS" data-label="Roadmap Studio">
+                <span class="nav-icon">🗂</span>
+                <span class="nav-label">Roadmap Studio</span>
+              </a>
 
               <div class="nav-category-header">TOPOLOGIES</div>
               <a class="nav-link" href="tube.html" data-view="tube" data-cat="TOPOLOGIES" data-label="Architect Map">
