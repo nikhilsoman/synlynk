@@ -2611,7 +2611,12 @@ def main(argv=None) -> None:
     from synlynk.viz import cmd_viz
     from synlynk.scheduler import cmd_schedule
     from synlynk.db import cmd_credit_grant
-    if os.path.exists(".synlynk/config.json") or os.path.exists(".synlynk/workspace.json"):
+    _cmd_name = None
+    for tok in cli_tokens:
+        if not tok.startswith("-"):
+            _cmd_name = tok
+            break
+    if _cmd_name != "init":
         _reconcile_jobs()
         try:
             from synlynk.capability_watch import spawn_staleness_check_thread

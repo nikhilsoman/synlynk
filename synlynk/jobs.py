@@ -266,13 +266,9 @@ def _reconciliation_lock():
     """Serialize flat-file reconciliation across concurrent CLI processes."""
     jobs_file = _pkg("JOBS_FILE")
     lock_path = f"{jobs_file}.reconcile.lock"
-    lock_dir = os.path.dirname(lock_path)
-    if not os.path.exists(lock_dir):
-        yield
-        return
     handle = None
     try:
-        os.makedirs(lock_dir, exist_ok=True)
+        os.makedirs(os.path.dirname(lock_path), exist_ok=True)
         handle = open(lock_path, "a+")
     except OSError as exc:
         print(
@@ -3289,9 +3285,6 @@ def _reconcile_jobs_unlocked() -> None:
 
 def _reconcile_jobs() -> None:
     """Reconcile jobs while preventing concurrent flat-file lost updates."""
-    jobs_file = _pkg("JOBS_FILE")
-    if not jobs_file or not os.path.exists(jobs_file):
-        return
     with _reconciliation_lock():
         _reconcile_jobs_unlocked()
 
