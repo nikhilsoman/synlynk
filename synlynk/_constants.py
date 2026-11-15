@@ -100,7 +100,12 @@ HARNESS_CAPABILITY_BASELINES = {
             ],
         },
         "roles": ["architect", "pm"],
-        "env_passthrough": [],
+        "env_passthrough": [
+            "ANTHROPIC_BASE_URL",
+            "ANTHROPIC_AUTH_TOKEN",
+            "ANTHROPIC_API_KEY",
+            "CLAUDE_CONFIG_DIR",
+        ],
         "strengths": ["long context", "reasoning", "code review", "planning"],
     },
     "codex": {

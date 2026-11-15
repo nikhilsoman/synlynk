@@ -89,8 +89,21 @@ def _output_says_authenticated(harness_name: str, output: str, returncode: int) 
 
 def _auth_config_path(harness_name: str) -> Path | None:
     home = Path.home()
+    claude_cfg = os.environ.get("CLAUDE_CONFIG_DIR")
+    claude_path = home / ".claude.json"
+    if claude_cfg:
+        expanded = Path(os.path.expanduser(claude_cfg))
+        if (expanded / ".claude.json").exists():
+            claude_path = expanded / ".claude.json"
+        elif (expanded / "config.json").exists():
+            claude_path = expanded / "config.json"
+        elif expanded.is_file():
+            claude_path = expanded
+        else:
+            claude_path = expanded / ".claude.json"
+
     auth_paths = {
-        "claude": home / ".claude.json",
+        "claude": claude_path,
         "codex": home / ".codex" / "config.json",
         "agy": home / ".gemini" / "antigravity-cli",
         "grok": home / ".grok" / "config.json",

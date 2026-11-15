@@ -205,8 +205,7 @@ def cmd_start() -> None:
     """Entry point for `synlynk start` -- see spec's "synlynk start EXACT FLOW"."""
     workspace_exists = os.path.exists(".synlynk/workspace.json")
     config_exists = os.path.exists(".synlynk/config.json")
-    dir_exists = os.path.isdir(".synlynk")
-    already_initialized = workspace_exists or config_exists or dir_exists
+    already_initialized = workspace_exists or config_exists
     if already_initialized:
         if workspace_exists:
             what_exists = ".synlynk/workspace.json"

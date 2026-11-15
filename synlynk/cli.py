@@ -2611,15 +2611,16 @@ def main(argv=None) -> None:
     from synlynk.viz import cmd_viz
     from synlynk.scheduler import cmd_schedule
     from synlynk.db import cmd_credit_grant
-    _reconcile_jobs()
-    try:
-        from synlynk.capability_watch import spawn_staleness_check_thread
-        from synlynk import _get_db, load_config
+    if os.path.exists(".synlynk/config.json") or os.path.exists(".synlynk/workspace.json"):
+        _reconcile_jobs()
+        try:
+            from synlynk.capability_watch import spawn_staleness_check_thread
+            from synlynk import _get_db, load_config
 
-        _watch_conn = _get_db()
-        spawn_staleness_check_thread(_watch_conn, load_config())
-    except Exception:
-        pass  # staleness checks are best-effort; never block a real command on this
+            _watch_conn = _get_db()
+            spawn_staleness_check_thread(_watch_conn, load_config())
+        except Exception:
+            pass  # staleness checks are best-effort; never block a real command on this
     parser = build_parser(selected_command=selected_command if fast_entrypoint else None)
     args = parser.parse_args(cli_tokens)
     help_parsers = getattr(parser, "_synlynk_help_parsers", {})
