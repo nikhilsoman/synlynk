@@ -257,11 +257,20 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json_ok(payload)
             return
 
+        if path == "/api/roadmap_studio":
+            from synlynk.roadmap_studio import studio_data
+            try:
+                payload = studio_data()
+            except FileNotFoundError:
+                payload = {"tickets": [], "backlog": []}
+            self._send_json_ok(payload)
+            return
+
         super().do_GET()
 
     def do_OPTIONS(self):
         clean_path = self.path.split("?")[0]
-        valid_paths = ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref", "/roles/create", "/roles/charter/update", "/worktrees/clean", "/tools/install", "/api/tools/install", "/api/board/status", "/api/board/stage", "/graph/refresh", "/api/graph/refresh", "/api/v1/graph/refresh")
+        valid_paths = ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref", "/roles/create", "/roles/charter/update", "/worktrees/clean", "/tools/install", "/api/tools/install", "/api/board/status", "/api/board/stage", "/graph/refresh", "/api/graph/refresh", "/api/v1/graph/refresh", "/api/roadmap_studio/approve", "/api/roadmap_studio/hold", "/api/roadmap_studio/revise", "/api/roadmap_studio/drop", "/api/roadmap_studio/reorder", "/api/roadmap_studio/pin")
         if clean_path not in valid_paths and not clean_path.endswith("/api/graph/refresh") and not clean_path.endswith("/api/tools/install"):
             self.send_error(404)
             return
@@ -298,6 +307,18 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_board_status_request()
         elif clean_path == "/api/board/stage" or clean_path.endswith("/api/board/stage"):
             self._handle_board_stage_request()
+        elif clean_path == "/api/roadmap_studio/approve" or clean_path.endswith("/api/roadmap_studio/approve"):
+            self._handle_roadmap_studio_approve_request()
+        elif clean_path == "/api/roadmap_studio/hold" or clean_path.endswith("/api/roadmap_studio/hold"):
+            self._handle_roadmap_studio_hold_request()
+        elif clean_path == "/api/roadmap_studio/revise" or clean_path.endswith("/api/roadmap_studio/revise"):
+            self._handle_roadmap_studio_revise_request()
+        elif clean_path == "/api/roadmap_studio/drop" or clean_path.endswith("/api/roadmap_studio/drop"):
+            self._handle_roadmap_studio_drop_request()
+        elif clean_path == "/api/roadmap_studio/reorder" or clean_path.endswith("/api/roadmap_studio/reorder"):
+            self._handle_roadmap_studio_reorder_request()
+        elif clean_path == "/api/roadmap_studio/pin" or clean_path.endswith("/api/roadmap_studio/pin"):
+            self._handle_roadmap_studio_pin_request()
         elif clean_path in ("/graph/refresh", "/api/graph/refresh", "/api/v1/graph/refresh") or clean_path.endswith("/api/graph/refresh"):
             self._handle_graph_refresh_request()
         else:
@@ -495,6 +516,120 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             payload = self._read_json_body()
             from synlynk.board import update_stage
             result = update_stage(payload.get("story_id"), payload.get("stage"))
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            self.send_error(400, str(exc) or "Invalid JSON")
+            return
+        except KeyError as exc:
+            self.send_error(404, str(exc))
+            return
+        except FileNotFoundError as exc:
+            self.send_error(404, str(exc))
+            return
+        except Exception as exc:
+            self.send_error(500, str(exc))
+            return
+        self._send_json_ok(result)
+
+    def _handle_roadmap_studio_approve_request(self):
+        try:
+            payload = self._read_json_body()
+            from synlynk.roadmap_studio import approve_ticket
+            result = approve_ticket(payload.get("ticket_id"))
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            self.send_error(400, str(exc) or "Invalid JSON")
+            return
+        except KeyError as exc:
+            self.send_error(404, str(exc))
+            return
+        except FileNotFoundError as exc:
+            self.send_error(404, str(exc))
+            return
+        except Exception as exc:
+            self.send_error(500, str(exc))
+            return
+        self._send_json_ok(result)
+
+    def _handle_roadmap_studio_hold_request(self):
+        try:
+            payload = self._read_json_body()
+            from synlynk.roadmap_studio import hold_ticket
+            result = hold_ticket(payload.get("ticket_id"))
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            self.send_error(400, str(exc) or "Invalid JSON")
+            return
+        except KeyError as exc:
+            self.send_error(404, str(exc))
+            return
+        except FileNotFoundError as exc:
+            self.send_error(404, str(exc))
+            return
+        except Exception as exc:
+            self.send_error(500, str(exc))
+            return
+        self._send_json_ok(result)
+
+    def _handle_roadmap_studio_revise_request(self):
+        try:
+            payload = self._read_json_body()
+            from synlynk.roadmap_studio import revise_ticket
+            result = revise_ticket(payload.get("ticket_id"), payload.get("instructions", ""))
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            self.send_error(400, str(exc) or "Invalid JSON")
+            return
+        except KeyError as exc:
+            self.send_error(404, str(exc))
+            return
+        except FileNotFoundError as exc:
+            self.send_error(404, str(exc))
+            return
+        except Exception as exc:
+            self.send_error(500, str(exc))
+            return
+        self._send_json_ok(result)
+
+    def _handle_roadmap_studio_drop_request(self):
+        try:
+            payload = self._read_json_body()
+            from synlynk.roadmap_studio import drop_story
+            result = drop_story(payload.get("story_id"))
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            self.send_error(400, str(exc) or "Invalid JSON")
+            return
+        except KeyError as exc:
+            self.send_error(404, str(exc))
+            return
+        except FileNotFoundError as exc:
+            self.send_error(404, str(exc))
+            return
+        except Exception as exc:
+            self.send_error(500, str(exc))
+            return
+        self._send_json_ok(result)
+
+    def _handle_roadmap_studio_reorder_request(self):
+        try:
+            payload = self._read_json_body()
+            from synlynk.roadmap_studio import reorder_stories
+            result = reorder_stories(payload.get("ticket_id"), payload.get("ordered_story_ids") or [])
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            self.send_error(400, str(exc) or "Invalid JSON")
+            return
+        except KeyError as exc:
+            self.send_error(404, str(exc))
+            return
+        except FileNotFoundError as exc:
+            self.send_error(404, str(exc))
+            return
+        except Exception as exc:
+            self.send_error(500, str(exc))
+            return
+        self._send_json_ok(result)
+
+    def _handle_roadmap_studio_pin_request(self):
+        try:
+            payload = self._read_json_body()
+            from synlynk.roadmap_studio import pin_story
+            result = pin_story(payload.get("ticket_id"), payload.get("story_id"))
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
             self.send_error(400, str(exc) or "Invalid JSON")
             return

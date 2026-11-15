@@ -806,3 +806,61 @@ def test_poll_and_process_falls_back_when_constituent_story_ids_is_null(monkeypa
         conn.close()
 
 
+def test_approve_hold_helpers_are_ticket_scoped_when_given_a_ticket_id(tmp_path):
+    import sqlite3
+    import synlynk as sl
+    from synlynk.tpm_sweep import _apply_approve, _apply_hold
+
+    db_file = tmp_path / "state.db"
+    conn = sl._get_db(str(db_file))
+    try:
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS stories (
+                story_id TEXT PRIMARY KEY,
+                title TEXT,
+                readiness TEXT
+            )"""
+        )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS approval_tickets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                story_id TEXT,
+                action TEXT,
+                issue_url TEXT,
+                status TEXT,
+                resolved_at TIMESTAMP,
+                constituent_story_ids TEXT
+            )"""
+        )
+        conn.execute("INSERT INTO stories (story_id, title, readiness) VALUES ('s1', 'Task 1', 'advisory')")
+        conn.execute("INSERT INTO stories (story_id, title, readiness) VALUES ('s2', 'Task 2', 'advisory')")
+        conn.execute(
+            "INSERT INTO approval_tickets (id, story_id, action, issue_url, status) "
+            "VALUES (1, 'v0.33.0', 'release_proposal', 'https://github.com/test/1', 'open')"
+        )
+        conn.execute(
+            "INSERT INTO approval_tickets (id, story_id, action, issue_url, status) "
+            "VALUES (2, 'v0.33.1', 'release_proposal', 'https://github.com/test/2', 'open')"
+        )
+        conn.commit()
+
+        # Ticket-scoped hold only touches ticket id=1, leaving id=2 open.
+        _apply_hold(conn, ticket_id=1)
+        rows = {r[0]: r[1] for r in conn.execute("SELECT id, status FROM approval_tickets").fetchall()}
+        assert rows[1] == "held"
+        assert rows[2] == "open"
+
+        # Ticket-scoped approve only resolves ticket id=2 and only promotes s1.
+        promoted = _apply_approve(conn, constituent_story_ids=["s1"], dropped_stories=[], ticket_id=2)
+        assert promoted == 1
+        rows_after = {r[0]: r[1] for r in conn.execute("SELECT id, status FROM approval_tickets").fetchall()}
+        assert rows_after[2] == "resolved"
+        assert rows_after[1] == "held"
+        s1_readiness = conn.execute("SELECT readiness FROM stories WHERE story_id='s1'").fetchone()[0]
+        assert s1_readiness == "ready"
+        s2_readiness = conn.execute("SELECT readiness FROM stories WHERE story_id='s2'").fetchone()[0]
+        assert s2_readiness == "advisory"
+    finally:
+        conn.close()
+
+

@@ -3,6 +3,12 @@
 WRITE_ROUTES = {
     "board/stage": "keep",
     "board/status": "keep",
+    "roadmap_studio/approve": "keep",
+    "roadmap_studio/hold": "keep",
+    "roadmap_studio/revise": "keep",
+    "roadmap_studio/drop": "keep",
+    "roadmap_studio/reorder": "keep",
+    "roadmap_studio/pin": "keep",
     "note": "proxy",
     "sentinel/ack": "keep",
     "sentinel/issue": "keep",
