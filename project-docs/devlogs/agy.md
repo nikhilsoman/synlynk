@@ -1574,3 +1574,25 @@
   - **CLI & Taxonomy:** Exposed `synlynk maintainer burndown` CLI verb and registered it in `synlynk/taxonomy.py`.
   - **Testing & Verification:** Comprehensive test suite in `tests/test_phase6_backlog_burndown.py` (5/5 passing; all 49 related tests green). Approved via `architect` App token, squash-merged to `main` as `f1b2dd1d`. Closed master proposal #5272 as fully delivered.
 [@agy, @nikhilsoman]
+
+### 2026-11-15: FTUE & Onboarding Deep Dive — Tasks 1–6 Complete (gh:#5302, PR #5303)
+- **Task 1: Fix FTUE Wizard `[unknown]` Job ID Resolution (#5297):**
+  - Resolved `job_id = (job.get("id") or job.get("job_id") or "unknown")` in `synlynk/wizard.py:226`.
+  - Added unit test `tests/test_wizard_job_id.py` verifying real job ID output and absence of `[unknown]` marker.
+- **Task 2: Claude Subprocess Environment Passthrough for Gateways (#5298):**
+  - Whitelisted `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY`, and `CLAUDE_CONFIG_DIR` in `synlynk/_constants.py` under `claude` baseline.
+  - Updated `synlynk/probe_binding.py` to honor `CLAUDE_CONFIG_DIR`.
+  - Verified with `tests/test_claude_env_passthrough.py` (2/2 passing).
+- **Task 3: Hermetic Coldstart, Lazy Reconcile Lock & Canonical Init Marker (#5299):**
+  - Updated `synlynk/cli.py` to bypass startup `_reconcile_jobs()` and staleness check thread strictly on `init` invocations.
+  - Replaced raw `.synlynk` folder check in `synlynk/__init__.py:3458` with canonical config markers `.synlynk/config.json` / `workspace.json`.
+  - Updated instruction template model baseline to `claude-sonnet-5`.
+  - Verified with `tests/test_init_clean_coldstart.py` (2/2 passing: zero traces on `--dry-run`, clean init on fresh repos).
+- **Task 4: Universal Provider Mock Matrix & Discovery Engine:**
+  - Implemented `tests/testbed_mocks/gateway_mock.py` simulating LiteLLM (:4000) and Ollama (:11434).
+  - Added `tests/test_provider_discovery_matrix.py` asserting `synlynk.models.probe_local_runtimes()` auto-detects endpoints.
+- **Task 5: Full Vizor Visual & Route Audit Crawler:**
+  - Implemented `tests/test_vizor_e2e_audit.py` exercising all 16 primary Vizor HTML generators (`generate_index_html`, `generate_overview_html`, `generate_gantt_html`, canvases, onboarding, board, etc.).
+- **Task 6: End-to-End VM Acceptance Test:**
+  - Implemented `tests/test_ftue_vm_acceptance.py` validating `synlynk.testbed.driver.OrbDriver` provisioning, file push, install ladder, and clean teardown.
+[@agy, @nikhilsoman]
