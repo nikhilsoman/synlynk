@@ -1316,6 +1316,16 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "--refresh-graph", action="store_true",
         help="Rebuild the graph for HEAD. Without this flag, sweep only prints the plan.",
     )
+    maintainer_burndown_parser = maintainer_sub.add_parser(
+        "burndown", help="Execute backlog burndown sweep to close remediated issues and cluster remaining work")
+    maintainer_burndown_parser.add_argument(
+        "--dry-run", action="store_true", default=False,
+        help="Dry run without closing issues on GitHub",
+    )
+    maintainer_burndown_parser.add_argument(
+        "--limit", type=int, default=50,
+        help="Max open issues to inspect",
+    )
 
     dispatch_parser = subparsers.add_parser(
         "dispatch", help="Dispatch a harness to run a task in the background")
@@ -2926,9 +2936,15 @@ def main(argv=None) -> None:
         else:
             sentinel_list()  # default: list
     elif args.command == "maintainer":
-        from synlynk.maintainer import cmd_maintainer_sweep, triage_sentinel_alerts, probe_reproduction
+        from synlynk.maintainer import cmd_maintainer_sweep, triage_sentinel_alerts, probe_reproduction, cmd_maintainer_burndown
         action = getattr(args, "maintainer_action", None)
-        if action == "sweep":
+        if action == "burndown":
+            raise SystemExit(cmd_maintainer_burndown(
+                repo_root=os.getcwd(),
+                dry_run=bool(getattr(args, "dry_run", False)),
+                limit=int(getattr(args, "limit", 50)),
+            ))
+        elif action == "sweep":
             raise SystemExit(cmd_maintainer_sweep(
                 repo_root=os.getcwd(),
                 refresh_graph=bool(getattr(args, "refresh_graph", False)),

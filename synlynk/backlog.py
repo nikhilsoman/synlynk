@@ -461,6 +461,8 @@ def ingest_backlog(
     sync_github: bool = False,
     limit: int = 100,
     db_conn=None,
+    mine_specs: bool = False,
+    repo_root: str = ".",
 ) -> dict:
     """Ingest open GitHub issues into state.db backlog_items with deduplication."""
     issues = fetch_open_github_issues(limit=limit)
@@ -542,12 +544,185 @@ def ingest_backlog(
                 "fingerprint": story_meta["fingerprint"],
             })
 
+    mined_items = []
+    if mine_specs:
+        mined_items = mine_specs_and_decisions(repo_root=repo_root, db_conn=conn, limit=limit)
+
     return {
         "fetched": len(issues),
         "ingested": len(ingested),
+        "mined": len(mined_items),
         "duplicates": duplicates,
-        "items": ingested,
+        "items": ingested + mined_items,
     }
+
+
+def mine_specs_and_decisions(
+    repo_root: str = ".",
+    db_conn=None,
+    limit: int = 50,
+) -> list[dict]:
+    """Mine committed specs, plans, and decisions for ungrounded tasks and stage into backlog_items."""
+    import os
+    conn = _get_connection(db_conn)
+    mined = []
+
+    # 1. Mine specs and plans from docs/superpowers/specs and docs/superpowers/plans
+    search_dirs = [
+        os.path.join(repo_root, "docs", "superpowers", "specs"),
+        os.path.join(repo_root, "docs", "superpowers", "plans"),
+    ]
+    for sdir in search_dirs:
+        if not os.path.isdir(sdir):
+            continue
+        for fname in sorted(os.listdir(sdir)):
+            if not fname.endswith(".md"):
+                continue
+            fpath = os.path.join(sdir, fname)
+            rel_path = os.path.relpath(fpath, repo_root)
+            try:
+                with open(fpath, "r", encoding="utf-8") as f:
+                    content = f.read()
+            except Exception:
+                continue
+
+            task_lines = re.findall(r"^-\s*\[\s*\]\s+(.+)$", content, re.MULTILINE)
+            header_tasks = re.findall(r"^###\s+Task\s+\d+:\s*(.+)$", content, re.MULTILINE)
+            candidates = task_lines[:10] + header_tasks[:10]
+
+            stem = os.path.splitext(fname)[0]
+            clean_stem = re.sub(r"^\d{4}-\d{2}-\d{2}-", "", stem)
+
+            for cand in candidates:
+                cand_clean = cand.strip()
+                if len(cand_clean) < 10 or cand_clean.lower().startswith("reproduction test committed"):
+                    continue
+
+                title = f"[Spec: {clean_stem}] {cand_clean[:120]}"
+                fp = compute_fingerprint(title, rel_path)
+                item_id = f"backlog-spec-{fp}"
+
+                if conn is not None:
+                    exists_backlog = conn.execute(
+                        "SELECT 1 FROM backlog_items WHERE item_id = ? OR fingerprint = ?",
+                        (item_id, fp),
+                    ).fetchone()
+                    if exists_backlog:
+                        continue
+                    exists_story = conn.execute(
+                        "SELECT 1 FROM stories WHERE fingerprint = ? OR title = ?",
+                        (fp, title),
+                    ).fetchone()
+                    if exists_story:
+                        continue
+
+                    role, stage, tier = _classify_role_and_stage(title, cand_clean, ["spec-mined"])
+                    try:
+                        conn.execute(
+                            """INSERT INTO backlog_items (
+                                item_id, title, body, fingerprint, role, stage,
+                                governs_stage, complexity_tier, goal_id,
+                                acceptance_criteria, status
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'staged')
+                            ON CONFLICT(item_id) DO NOTHING""",
+                            (
+                                item_id,
+                                title,
+                                f"Mined from {rel_path}:\n\n{cand_clean}",
+                                fp,
+                                role,
+                                stage,
+                                stage,
+                                tier,
+                                DEFAULT_BACKLOG_GOAL_ID,
+                                json.dumps([f"Implement spec task: {cand_clean}"]),
+                            ),
+                        )
+                        conn.commit()
+                        mined.append({
+                            "item_id": item_id,
+                            "title": title,
+                            "source_ref": rel_path,
+                            "source_type": "spec",
+                        })
+                    except Exception:
+                        pass
+                else:
+                    mined.append({
+                        "item_id": item_id,
+                        "title": title,
+                        "source_ref": rel_path,
+                        "source_type": "spec",
+                    })
+
+                if len(mined) >= limit:
+                    break
+            if len(mined) >= limit:
+                break
+
+    # 2. Mine approved decisions from decisions table
+    if conn is not None and len(mined) < limit:
+        try:
+            has_decisions = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='decisions'"
+            ).fetchone()
+            if has_decisions:
+                rows = conn.execute(
+                    "SELECT decision_id, decision_text, rationale, goal_id FROM decisions "
+                    "WHERE status IN ('approved', 'ratified') ORDER BY rowid DESC LIMIT 50"
+                ).fetchall()
+                for dec_id, dec_text, rationale, dec_goal in rows:
+                    if not dec_text:
+                        continue
+                    title = f"[Decision: {dec_id}] {dec_text.strip()[:120]}"
+                    fp = compute_fingerprint(title, f"decision:{dec_id}")
+                    item_id = f"backlog-dec-{dec_id}"
+
+                    exists = conn.execute(
+                        "SELECT 1 FROM backlog_items WHERE item_id = ? OR fingerprint = ?",
+                        (item_id, fp),
+                    ).fetchone()
+                    if exists:
+                        continue
+                    exists_story = conn.execute(
+                        "SELECT 1 FROM stories WHERE fingerprint = ? OR title = ?",
+                        (fp, title),
+                    ).fetchone()
+                    if exists_story:
+                        continue
+
+                    try:
+                        conn.execute(
+                            """INSERT INTO backlog_items (
+                                item_id, title, body, fingerprint, role, stage,
+                                governs_stage, complexity_tier, goal_id,
+                                acceptance_criteria, status
+                            ) VALUES (?, ?, ?, ?, 'architect', 'design', 'design', 2, ?, ?, 'staged')
+                            ON CONFLICT(item_id) DO NOTHING""",
+                            (
+                                item_id,
+                                title,
+                                f"Actionable decision {dec_id}:\n{dec_text}\n\nRationale:\n{rationale or ''}",
+                                fp,
+                                dec_goal or DEFAULT_BACKLOG_GOAL_ID,
+                                json.dumps([f"Execute ratified decision {dec_id}"]),
+                            ),
+                        )
+                        conn.commit()
+                        mined.append({
+                            "item_id": item_id,
+                            "title": title,
+                            "source_ref": f"decision:{dec_id}",
+                            "source_type": "decision",
+                        })
+                    except Exception:
+                        pass
+                    if len(mined) >= limit:
+                        break
+        except Exception:
+            pass
+
+    return mined
 
 
 def triage_backlog(

@@ -158,6 +158,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `maintainer triage` (secondary) — sustain
 - `maintainer probe` (secondary) — sustain
 - `maintainer sweep` (secondary) — sustain
+- `maintainer burndown` (secondary) — sustain
 - `cost log` (secondary) — sustain
 - `cost true-up` (secondary) — sustain
 - `cost billing` (secondary) — sustain
