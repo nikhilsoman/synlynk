@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import sqlite3
 import pytest
 from unittest.mock import patch, MagicMock
@@ -84,6 +85,33 @@ def test_capacity_table_renders_all_agents():
     assert "grok" in html_str.lower()
     # Check that capacity table headers or classes exist
     assert "capacity table" in html_str.lower()
+
+
+def test_null_agent_capacity_budgets_render_zero_percent_bars():
+    data = {
+        "workspace": {"name": "test-ws"},
+        "agents": {"muse": {}},
+        "ecosystem": {
+            "headless_efficiency": 3.5,
+            "fleet": {"attached": 1, "total": 5, "dispatch_mode": "daily-grind"},
+            "agents": {},
+            "cycle_capability": {},
+            "capacity": {
+                "muse": {
+                    "ctx_window_tokens": None,
+                    "read_budget_tokens": None,
+                    "write_budget_tokens": None,
+                    "tool_budget_count": None,
+                },
+            },
+            "sentinels_active": 0,
+        },
+    }
+
+    html_str = generate_efficiency_html(data, port=8721)
+
+    assert "muse" in html_str.lower()
+    assert len(re.findall(r'<div class="rwt-fill(?: [^"]*)?" style="width:0%"></div>', html_str)) == 3
 
 # (3) cycle matrix renders all 7 cycles (goal, open, visualize, execute, release, notify, sustain)
 def test_cycle_matrix_renders_all_cycles():
