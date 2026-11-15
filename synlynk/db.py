@@ -3701,8 +3701,22 @@ def _generate_todo_md() -> None:
             return
 
     conn = _get_db()
-    active_arcs = ("v1.0.0-preview", "v1.1.0")
-    active_goals = ("goal-eacab0dc", "goal-20bb3987", "goal-aa48c456")
+    # Ensure goal_contributions table exists if minimal schema
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS goal_contributions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            goal_id TEXT NOT NULL,
+            story_id TEXT NOT NULL,
+            link_status TEXT NOT NULL DEFAULT 'linked',
+            skip_reason TEXT,
+            resolution_reason TEXT,
+            resolved_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(goal_id, story_id)
+        )
+        """
+    )
     rows = conn.execute(
         """
         SELECT s.story_id, s.title, s.engg_domain, s.status, s.created_at,
@@ -3711,23 +3725,25 @@ def _generate_todo_md() -> None:
                    SELECT 1 FROM roadmap_phases rp
                    JOIN roadmap_arcs ra ON ra.version=rp.arc_version
                    WHERE rp.story_id=s.story_id
-                     AND rp.arc_version IN (?, ?)
                      AND ra.status IN ('in_progress', 'active', 'ready')
                      AND s.status IN ('in_progress', 'claimed', 'ready')
                  ) THEN 0
-                 WHEN s.goal_id IN (?, ?, ?)
-                   OR EXISTS (
-                     SELECT 1 FROM goal_contributions gc
-                     WHERE gc.story_id=s.story_id
-                       AND gc.goal_id IN (?, ?, ?)
-                   ) THEN 1
+                 WHEN EXISTS (
+                   SELECT 1 FROM goals g
+                   WHERE (g.goal_id = s.goal_id
+                          OR EXISTS (
+                            SELECT 1 FROM goal_contributions gc
+                            WHERE gc.story_id=s.story_id AND gc.goal_id = g.goal_id
+                          ))
+                     AND g.status IN ('active', 'in_progress')
+                     AND (g.placement_status = 'placed' OR g.kind = 'feature')
+                 ) THEN 1
                  ELSE 2
                END AS priority_group
         FROM stories s
         WHERE s.archived_at IS NULL
         ORDER BY priority_group ASC, s.created_at DESC, s.story_id ASC
-        """,
-        (*active_arcs, *active_goals, *active_goals),
+        """
     ).fetchall()
     conn.close()
 
