@@ -10,7 +10,7 @@ def generate_organogram_html(data: dict[str, Any], port: int = 33333) -> str:
     """Render the offline-first Workspace Organogram & Workflow Designer."""
     workspace = data.get("workspace") or {}
     workspace_name = html.escape(str(workspace.get("name") or "workspace"))
-    agents = data.get("agents") or data.get("workspace_agents") or []
+    agents = data.get("workspace_agents") or []
     edges = data.get("workflow_edges") or []
     archetypes = data.get("archetypes") or []
 
