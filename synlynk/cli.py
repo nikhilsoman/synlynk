@@ -4004,16 +4004,18 @@ def main(argv=None) -> None:
             )
             print(f"Autonomous Post-Release SOP result: ok={res.get('success')}")
         else:
-            cmd_release(
-                dry_run=getattr(args, "dry_run", False),
-                version=getattr(args, "version", None),
-                minor=getattr(args, "minor", False),
-                role=getattr(args, "role", "dev"),
-                check_docs=getattr(args, "check_docs", False),
-                pr_mode=getattr(args, "pr_mode", False),
-                waive=getattr(args, "waive", None),
-                auto_publish=getattr(args, "auto_publish", False),
-            )
+            rel_kwargs = {
+                "dry_run": getattr(args, "dry_run", False),
+                "version": getattr(args, "version", None),
+                "minor": getattr(args, "minor", False),
+                "role": getattr(args, "role", "dev"),
+                "check_docs": getattr(args, "check_docs", False),
+                "pr_mode": getattr(args, "pr_mode", False),
+                "waive": getattr(args, "waive", None),
+            }
+            if getattr(args, "auto_publish", False):
+                rel_kwargs["auto_publish"] = True
+            cmd_release(**rel_kwargs)
     elif args.command == "marketing":
         if getattr(args, "marketing_action", None) == "ceremony":
             cmd_marketing_ceremony(

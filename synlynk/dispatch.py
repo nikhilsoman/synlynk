@@ -3061,12 +3061,12 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
         except Exception:
             # Keep legacy workspaces dispatchable before agent-store adoption.
             pass
-    try:
-        from synlynk.bearings import inject_bearings_block
-        if context_text:
-            context_text = inject_bearings_block(context_text)
-    except Exception:
-        pass
+        try:
+            from synlynk.bearings import inject_bearings_block
+            if context_text:
+                context_text = inject_bearings_block(context_text)
+        except Exception:
+            pass
     if not full_context and context_text:
         tokens_est = len(context_text) // 4
         if tokens_est > 3000:
