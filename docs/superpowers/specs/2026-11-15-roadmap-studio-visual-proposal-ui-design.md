@@ -1,7 +1,9 @@
 # Roadmap Studio — Visual Front-End for the TPM-Sweep Proposal Protocol
 
 **Date:** 2026-11-15
-**Status:** Proposed — pending decide panel
+**Status:** Approved by decide panel (claude/agy/codex, 2026-11-15, grok unavailable —
+`2026-11-15-approve-roadmap-studio-design-pr-5286-do`) conditional on three clarifications, folded
+into this revision — pending Nikhil's sign-off
 
 ## Context
 
@@ -70,8 +72,14 @@ Studio visualizes what already exists and writes through the same columns.
   - **Approve** (button on a milestone column) → `stories.readiness='ready'` for all constituents,
     ticket `status='resolved'`.
   - **Hold** (button) → ticket `status='held'`.
-  - **Revise** (text box) → recorded instruction, same as `/revise <text>` today — no new
-    auto-replanning behavior; TPM still processes it on its own cadence exactly as now.
+  - **Revise** (text box) → calls `process_proposal_comments()`'s existing revise path, which today
+    returns the instruction in an in-memory `revision_instructions` list only — confirmed via
+    `grep -n revision_instructions synlynk/tpm_sweep.py` (lines 882, 913, 949): it is never written
+    to any table or column, so today's `/revise` instruction is not actually persisted anywhere for
+    later TPM reading. Roadmap Studio's Revise box matches this exact (non-persistent) behavior for
+    parity with the GitHub-comment path — no new auto-replanning behavior, and no new persistence
+    added in this spec either. If persisting revise instructions turns out to matter in practice,
+    that is a follow-up story against `tpm_sweep.py` itself, not a Roadmap Studio design change.
   - **Drop** (drag a card out of a milestone column into backlog, or a "drop" affordance on the
     card) → `stories.readiness='deferred'`.
   - **Prioritize** (drag-to-reorder within a milestone column) → see "New column" below.
@@ -87,6 +95,21 @@ Studio visualizes what already exists and writes through the same columns.
   `dispatch_tpm_advisory_proposal()` already writes at proposal-creation time. This makes the story
   stick to that specific proposal even if a later TPM sweep or `/revise` cycle would not otherwise
   have selected it. No new column; reusing what's already there.
+- **Pin vs. the 5-story cap:** `package_next_release_proposal()` only validates the 5-story cap at
+  proposal-creation time — nothing re-checks it when `constituent_story_ids` is mutated afterward.
+  Pin is therefore capable of pushing a ticket past 5 constituents. Decided behavior: pin is allowed
+  to exceed the cap (it's a deliberate manual override of a TPM-generated suggestion, which is the
+  entire point of the feature), but the UI surfaces a non-blocking warning badge on the column
+  ("6 of 5 suggested") rather than enforcing the cap silently or blocking the action. No change to
+  `package_next_release_proposal()` itself — the cap still applies exactly as before to what the TPM
+  sweep proposes on its own.
+- **`proposal_order` scoping invariant:** a reorder write only ever targets story IDs that are
+  members of the acting ticket's own `constituent_story_ids` — the reorder handler rejects (not
+  silently ignores) any `story_id` in `ordered_story_ids` not present in that ticket's own
+  constituent list. This guards against a story being reordered under a ticket it doesn't actually
+  belong to, even though nothing in today's packaging logic produces a story belonging to more than
+  one active ticket simultaneously (codex's note from the decide panel, kept as a one-line
+  invariant rather than new logic, since the precondition can't currently occur).
 
 **Out of scope (explicitly deferred, not silently dropped):**
 - Free-form creation of new milestones beyond the existing one-candidate-per-release-version /
@@ -149,6 +172,15 @@ Each handler calls the same underlying SQL `process_proposal_comments()` already
 matching comment command (extracted into small shared helper functions where
 `process_proposal_comments()` currently inlines the SQL, so both the comment-grammar path and the
 Vizor path call one implementation — avoiding two copies of the same write logic drifting apart).
+
+**Ticket-scoping difference from the comment path:** today, `process_proposal_comments()` scans
+and acts across *all* open proposals when parsing a GitHub issue's comments (the issue itself is
+the scope, and only one proposal issue is normally open at a time in practice, but the function
+doesn't enforce that). The extracted shared helpers take an explicit `ticket_id` and act only
+against that one ticket's rows — Roadmap Studio always passes the `ticket_id` of the column the
+user is interacting with, since multiple milestone columns are visible and addressable
+simultaneously in the UI, unlike the single-issue-comment path. The GitHub-comment path keeps its
+current all-open-proposals behavior unchanged; only the new Vizor-side callers are ticket-scoped.
 
 ### Front-end interaction
 
