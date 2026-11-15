@@ -2921,6 +2921,7 @@ def cmd_release(
     check_docs: bool = False,
     pr_mode: bool = False,
     waive: Optional[list] = None,
+    auto_publish: bool = False,
 ) -> None:
     """Cut a named release: bump version, prepend CHANGELOG.md, write blog stub, print checklist."""
     import datetime
@@ -3220,8 +3221,15 @@ merged: YYYY-MM-DD (or status: open)
     print("    - [x] GitHub README synchronized")
     print(f"    - [{'x' if ceremony_res.website_updated else ' '}] Synlynk.com website (website/) updated for release")
     print(f"    - [{'x' if ceremony_res.docs_updated else ' '}] Synlynk Docs bundles synchronized: Quick Start, Official Reference, Command Ref (HTML & PDF)")
-    print(f"[ ] git tag v{next_version} && git push --tags")
-    print(f"[ ] gh release create v{next_version}")
+    if auto_publish and not dry_run:
+        from synlynk.release_sop import create_and_push_git_tag, publish_github_release
+        tag_ok, tag_msg = create_and_push_git_tag(next_version, repo_root=root, dry_run=False, push=True)
+        print(f"[{'x' if tag_ok else ' '}] git tag v{next_version} && git push --tags: {tag_msg}")
+        gh_ok, gh_msg = publish_github_release(next_version, notes=changelog_entry, repo_root=root, dry_run=False)
+        print(f"[{'x' if gh_ok else ' '}] gh release create v{next_version}: {gh_msg}")
+    else:
+        print(f"[ ] git tag v{next_version} && git push --tags")
+        print(f"[ ] gh release create v{next_version}")
     if dry_run:
         print(f"  [ ] Roadmap row would be marked shipped and Milestone closed — {next_version}")
     else:

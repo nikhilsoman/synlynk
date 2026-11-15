@@ -55,3 +55,23 @@ def inject_bearings_block(text: str) -> str:
         rest = "".join(lines[1:])
         return f"{header}\n{block}\n\n{rest.lstrip()}"
     return f"{block}\n\n{text}"
+
+
+def cmd_bearings(inject_file: Optional[str] = None) -> None:
+    """CLI handler for synlynk session bearings / synlynk bearings."""
+    import os
+    import sys
+
+    if inject_file:
+        if not os.path.isfile(inject_file):
+            print(f"Error: target file not found: {inject_file}", file=sys.stderr)
+            sys.exit(1)
+        with open(inject_file, "r", encoding="utf-8") as f:
+            content = f.read()
+        updated = inject_bearings_block(content)
+        with open(inject_file, "w", encoding="utf-8") as f:
+            f.write(updated)
+        print(f"Injected canonical session bearings card into {inject_file}")
+    else:
+        print(generate_bearings_block())
+

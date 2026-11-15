@@ -240,6 +240,9 @@ def run_tpm_wake_cycle() -> dict:
     # Poll comments on any open release-proposal issue and act on verdicts
     comment_result = poll_and_process_proposal_comments()
 
+    # Check if any approved release milestone has all constituent stories done
+    post_release_result = check_and_trigger_post_release()
+
     if autonomy_level == AutonomyLevel.L1_ADVISORY:
         # In L1 Advisory: package release-scale proposal and file tracking issue for human gate
         proposal_url = dispatch_tpm_advisory_proposal()
@@ -259,7 +262,67 @@ def run_tpm_wake_cycle() -> dict:
         "routed": routed,
         "sweep": sweep_result,
         "proposal_comment_verdict": comment_result.get("verdict") if comment_result else None,
+        "post_release": post_release_result,
     }
+
+
+def check_and_trigger_post_release(conn=None, repo_root: str = ".") -> Optional[dict]:
+    """Check if all constituent stories for an approved proposal are done, and trigger post-release SOP."""
+    from synlynk.db import _get_db
+    import json
+
+    own_conn = conn is None
+    if own_conn:
+        conn = _get_db()
+    try:
+        has_table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='approval_tickets'"
+        ).fetchone()
+        if not has_table:
+            return None
+
+        # Check for approved or active release proposals with constituent_story_ids
+        row = conn.execute(
+            "SELECT id, story_id, constituent_story_ids, status FROM approval_tickets "
+            "WHERE action='release_proposal' AND status IN ('approved', 'in_progress') "
+            "ORDER BY rowid DESC LIMIT 1"
+        ).fetchone()
+        if not row:
+            return None
+
+        ticket_id, release_ver, constituent_json, ticket_status = row[0], row[1], row[2], row[3]
+        if not constituent_json:
+            return None
+
+        try:
+            story_ids = json.loads(constituent_json)
+        except Exception:
+            return None
+
+        if not story_ids:
+            return None
+
+        # Check if all constituent stories are in done/merged/archived status
+        placeholders = ",".join("?" for _ in story_ids)
+        pending_count_row = conn.execute(
+            f"SELECT COUNT(*) FROM stories WHERE story_id IN ({placeholders}) AND status NOT IN ('done', 'merged', 'shipped')",
+            tuple(story_ids),
+        ).fetchone()
+        pending = pending_count_row[0] if pending_count_row else 0
+
+        if pending == 0:
+            logger.info("All constituent stories done for %s; triggering autonomous post-release SOP", release_ver)
+            from synlynk.release_sop import execute_post_release_sop
+
+            res = execute_post_release_sop(version=release_ver, repo_root=repo_root, dry_run=False)
+            return {"release_version": release_ver, "sop_result": res}
+        return None
+    except Exception as exc:
+        logger.warning("check_and_trigger_post_release failed: %s", exc)
+        return None
+    finally:
+        if own_conn:
+            conn.close()
 
 
 def poll_and_process_proposal_comments(conn=None) -> Optional[dict]:

@@ -1019,6 +1019,11 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         help="What this session's work amounted to",
     )
     session_close_parser.add_argument("--summary", default=None, help="One-line closing summary")
+    session_bearings_parser = session_sub.add_parser("bearings", help="Display or inject canonical session bearings card")
+    session_bearings_parser.add_argument("--inject", metavar="FILE", help="Inject or update bearings card in target markdown file")
+
+    bearings_parser = subparsers.add_parser("bearings", help="Display or inject canonical constitutional session bearings card")
+    bearings_parser.add_argument("--inject", metavar="FILE", help="Inject or update bearings card in target markdown file")
 
     harness_parser = subparsers.add_parser("harness", help="Manage and run autopilot harnesses")
     harness_sub = harness_parser.add_subparsers(dest="harness_action")
@@ -2228,6 +2233,12 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     release_parser.add_argument(
         '--waive', action='append', default=[],
         help='Skip a waivable README check: check=reason (repeatable)')
+    release_parser.add_argument(
+        '--auto-publish', action='store_true',
+        help='Automatically create/push git tag and publish GitHub release')
+    release_parser.add_argument(
+        '--post-release', action='store_true',
+        help='Execute autonomous post-release SOP (tagging, GitHub release, collateral sync, milestone closeout)')
 
     viz_parser = subparsers.add_parser("viz", help="Open Vizor dashboard for this workspace")
     viz_parser.add_argument("--install", action="store_true",
@@ -3985,15 +3996,26 @@ def main(argv=None) -> None:
     elif args.command == "roles":
         cmd_roles(fix=getattr(args, "fix", False))
     elif args.command == "release":
-        cmd_release(
-            dry_run=getattr(args, "dry_run", False),
-            version=getattr(args, "version", None),
-            minor=getattr(args, "minor", False),
-            role=getattr(args, "role", "dev"),
-            check_docs=getattr(args, "check_docs", False),
-            pr_mode=getattr(args, "pr_mode", False),
-            waive=getattr(args, "waive", None),
-        )
+        if getattr(args, "post_release", False):
+            from synlynk.release_sop import execute_post_release_sop
+            res = execute_post_release_sop(
+                version=getattr(args, "version", None),
+                dry_run=getattr(args, "dry_run", False),
+            )
+            print(f"Autonomous Post-Release SOP result: ok={res.get('success')}")
+        else:
+            rel_kwargs = {
+                "dry_run": getattr(args, "dry_run", False),
+                "version": getattr(args, "version", None),
+                "minor": getattr(args, "minor", False),
+                "role": getattr(args, "role", "dev"),
+                "check_docs": getattr(args, "check_docs", False),
+                "pr_mode": getattr(args, "pr_mode", False),
+                "waive": getattr(args, "waive", None),
+            }
+            if getattr(args, "auto_publish", False):
+                rel_kwargs["auto_publish"] = True
+            cmd_release(**rel_kwargs)
     elif args.command == "marketing":
         if getattr(args, "marketing_action", None) == "ceremony":
             cmd_marketing_ceremony(
@@ -4122,8 +4144,14 @@ def main(argv=None) -> None:
             cmd_session_checkpoint()
         elif action == "close":
             cmd_session_close(disposition=args.disposition, summary=args.summary)
+        elif action == "bearings":
+            from synlynk.bearings import cmd_bearings
+            cmd_bearings(inject_file=getattr(args, "inject", None))
         else:
             help_parsers.get("session", parser).print_help()
+    elif args.command == "bearings":
+        from synlynk.bearings import cmd_bearings
+        cmd_bearings(inject_file=getattr(args, "inject", None))
     elif args.command == "autonomy":
         from synlynk.autonomy import (
             get_autonomy_mode, set_autonomy_mode,
