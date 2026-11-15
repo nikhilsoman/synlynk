@@ -33,3 +33,25 @@ def test_inject_bearings_block():
     # Re-injecting is idempotent (does not duplicate block)
     reinjected = inject_bearings_block(injected)
     assert reinjected.count("<!-- synlynk:bearings:start -->") == 1
+
+
+def test_cmd_bearings_prints_to_stdout(capsys):
+    from synlynk.bearings import cmd_bearings
+
+    cmd_bearings()
+    captured = capsys.readouterr().out
+    assert "## Session Bearings & Constitutional Invariants" in captured
+    assert "<!-- synlynk:bearings:start -->" in captured
+
+
+def test_cmd_bearings_inject_file(tmp_path):
+    from synlynk.bearings import cmd_bearings
+
+    target = tmp_path / "CLAUDE.md"
+    target.write_text("# Project Guidelines\n\nSome instructions.", encoding="utf-8")
+    cmd_bearings(inject_file=str(target))
+
+    content = target.read_text(encoding="utf-8")
+    assert "## Session Bearings & Constitutional Invariants" in content
+    assert "<!-- synlynk:bearings:start -->" in content
+
