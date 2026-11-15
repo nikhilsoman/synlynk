@@ -77,3 +77,46 @@ def test_charter_with_invalid_autonomy_level_raises_error():
     with pytest.raises(CharterValidationError) as exc_info:
         validate_charter(content)
     assert "invalid autonomy_level 'GOD_MODE'" in str(exc_info.value)
+
+
+def test_charter_with_chief_of_staff_and_sfia_passes():
+    content = """---
+schema_version: 1
+role: wingman
+primary_archetype: chief-of-staff
+description: Personal Chief of Staff
+durability: session-only
+tools: []
+credentials: []
+boundaries:
+  - Never execute un-fenced Tier-3 changes unilaterally.
+sfia_mapping: {"composite_skills": [{"skill": "BAPM", "level": 2}, {"skill": "PROG", "level": 3}]}
+---
+
+## Instructions
+Personal co-pilot tasks.
+
+## Authority & Escalation
+Escalate Tier 3.
+
+## Workflow Ownership
+Single operator assistance.
+"""
+    parsed = validate_charter(content)
+    assert parsed["primary_archetype"] == "chief-of-staff"
+    assert parsed["role"] == "wingman"
+    assert len(parsed["boundaries"]) == 1
+    assert "composite_skills" in parsed["sfia_mapping"]
+
+
+def test_charter_with_sfia_taxonomy_lookup():
+    from synlynk.charter_schema import get_sfia_skill, get_sfia_taxonomy
+    tax = get_sfia_taxonomy()
+    assert "skills" in tax
+    assert "PGMG" in tax["skills"]
+    assert "PROG" in tax["skills"]
+
+    pgmg = get_sfia_skill("PGMG")
+    assert pgmg is not None
+    assert pgmg["name"] == "Program Management"
+    assert 5 in pgmg["levels"]

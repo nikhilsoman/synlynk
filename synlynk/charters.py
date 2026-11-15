@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from synlynk.capability import capability_score
+from synlynk.charter_schema import get_sfia_skill, get_sfia_taxonomy
 
 
 @dataclass
@@ -27,6 +28,10 @@ class AgentCharter:
     credentials: List[str] = field(default_factory=list)
     verification_contracts: List[str] = field(default_factory=list)
     description: Optional[str] = None
+    primary_archetype: Optional[str] = None
+    sfia_mapping: Optional[dict] = None
+    boundaries: List[str] = field(default_factory=list)
+    evidence_contracts: List[str] = field(default_factory=list)
 
 
 DEFAULT_ROLE_CHARTERS: Dict[str, dict] = {

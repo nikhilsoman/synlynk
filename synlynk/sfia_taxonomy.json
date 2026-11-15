@@ -1,0 +1,54 @@
+{
+  "version": "SFIA-8",
+  "skills": {
+    "PGMG": {
+      "code": "PGMG",
+      "name": "Program Management",
+      "category": "Delivery and Operation",
+      "levels": [4, 5, 6],
+      "description": "Aligning, managing and implementing program work-graphs, milestones, and governance gates."
+    },
+    "PROD": {
+      "code": "PROD",
+      "name": "Product Management",
+      "category": "Strategy and Architecture",
+      "levels": [5, 6],
+      "description": "Managing product strategy, roadmap alignment, user intent capture, and governance sign-offs."
+    },
+    "ARCH": {
+      "code": "ARCH",
+      "name": "Solution Architecture",
+      "category": "Strategy and Architecture",
+      "levels": [5, 6],
+      "description": "Designing technical architectures, specifications, and decide panel consensus."
+    },
+    "PROG": {
+      "code": "PROG",
+      "name": "Software Development",
+      "category": "Development and Implementation",
+      "levels": [2, 3, 4],
+      "description": "Designing, building, testing, and debugging software components per architectural specs."
+    },
+    "TEST": {
+      "code": "TEST",
+      "name": "Testing",
+      "category": "Development and Implementation",
+      "levels": [2, 3, 4],
+      "description": "Independent testing, verification, test matrix execution, and formal PR reviews."
+    },
+    "ITOP": {
+      "code": "ITOP",
+      "name": "IT Infrastructure / Operations",
+      "category": "Delivery and Operation",
+      "levels": [2, 3, 4],
+      "description": "Managing repository substrates, worktree hygiene, sentinel alerting, and deployment operations."
+    },
+    "BAPM": {
+      "code": "BAPM",
+      "name": "Business Analysis",
+      "category": "Strategy and Architecture",
+      "levels": [2, 3],
+      "description": "Investigating business situations, capturing operator intent, and translating requirements."
+    }
+  }
+}
