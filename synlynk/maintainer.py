@@ -23,9 +23,28 @@ SEVERITY_RANKS = {
 }
 
 
-def is_issue_remediated(issue_text: str, commit_messages: List[str]) -> bool:
-    """Return True if a commit message remediates the same topic as the issue."""
+def is_issue_remediated(
+    issue_text: str,
+    commit_messages: List[str],
+    issue_number: Optional[int] = None,
+) -> bool:
+    """Return True if a commit message or closed decision remediates the same topic as the issue."""
     issue_lower = issue_text.lower()
+
+    if issue_number is not None:
+        num_patterns = [
+            f"#{issue_number}",
+            f"gh:#{issue_number}",
+            f"fixes #{issue_number}",
+            f"closes #{issue_number}",
+            f"resolves #{issue_number}",
+            f"gh-{issue_number}",
+        ]
+        for msg in commit_messages:
+            msg_lower = msg.lower()
+            if any(pat in msg_lower for pat in num_patterns):
+                return True
+
     for msg in commit_messages:
         msg_lower = msg.lower()
         for topic in _REMEDIATION_TOPICS:
@@ -33,6 +52,10 @@ def is_issue_remediated(issue_text: str, commit_messages: List[str]) -> bool:
                 return True
         if "circuit breaker" in issue_lower and "live-19" in msg_lower:
             return True
+        live_tags = re.findall(r"live-\d+", issue_lower)
+        for tag in live_tags:
+            if tag in msg_lower:
+                return True
     return False
 
 
@@ -232,4 +255,134 @@ def cmd_maintainer_sweep(repo_root: str = ".", refresh_graph: bool = False) -> i
         )
     except Exception as exc:
         print(f"  ⚠ could not record MESH_CONTRACT_DRIFT: {exc}")
+    return 0
+
+
+def cluster_open_issues(issues: list[dict]) -> dict[str, list[dict]]:
+    """Cluster open issues by domain / label proximity for focused burndown sprints."""
+    clusters: dict[str, list[dict]] = {
+        "backend": [],
+        "frontend": [],
+        "cli": [],
+        "docs": [],
+        "sentinel": [],
+        "testing": [],
+        "other": [],
+    }
+    for iss in issues:
+        title = (iss.get("title") or "").lower()
+        labels = [str(l).lower() for l in iss.get("labels", [])]
+        text = f"{title} {' '.join(labels)}"
+
+        if any(k in text for k in ("backend", "db", "sqlite", "migration", "state.db", "sql")):
+            clusters["backend"].append(iss)
+        elif any(k in text for k in ("css", "html", "vizor", "template", "frontend")):
+            clusters["frontend"].append(iss)
+        elif any(k in text for k in ("cli", "argument", "flag", "command", "parser")):
+            clusters["cli"].append(iss)
+        elif any(k in text for k in ("docs", "readme", "spec", "blog", "guide")):
+            clusters["docs"].append(iss)
+        elif any(k in text for k in ("sentinel", "stall", "alert", "health", "crash")):
+            clusters["sentinel"].append(iss)
+        elif any(k in text for k in ("test", "pytest", "mock", "fixture", "e2e")):
+            clusters["testing"].append(iss)
+        else:
+            clusters["other"].append(iss)
+
+    return {k: v for k, v in clusters.items() if v}
+
+
+def run_backlog_burndown_sweep(
+    repo_root: str = ".",
+    conn=None,
+    dry_run: bool = True,
+    limit: int = 50,
+) -> dict:
+    """Execute backlog burndown sweep: identify remediated issues and cluster remaining work."""
+    commit_messages = []
+    try:
+        res = subprocess.run(
+            ["git", "log", "-n", "300", "--pretty=format:%B%x1f"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if res.returncode == 0:
+            commit_messages = [m.strip() for m in res.stdout.split("\x1f") if m.strip()]
+    except Exception:
+        pass
+
+    from synlynk.backlog import fetch_open_github_issues
+
+    open_issues = fetch_open_github_issues(limit=limit)
+    remediated = []
+    remaining = []
+
+    for iss in open_issues:
+        num = iss.get("number")
+        title = iss.get("title", "")
+        body = iss.get("body", "")
+        text = f"{title} {body}"
+
+        if is_issue_remediated(text, commit_messages, issue_number=num):
+            remediated.append(iss)
+            if not dry_run and num:
+                try:
+                    subprocess.run(
+                        [
+                            "python3", "bin/synlynk.py", "gh", "--role", "qa", "--",
+                            "issue", "close", str(num),
+                            "--comment", "Closed via autonomous Maintainer backlog burndown sweep: remediating commit detected in git log.",
+                        ],
+                        cwd=repo_root,
+                        capture_output=True,
+                        timeout=15,
+                    )
+                except Exception:
+                    pass
+        else:
+            remaining.append(iss)
+
+    clusters = cluster_open_issues(remaining)
+
+    sprint_staged = None
+    if remaining:
+        largest_domain = max(clusters.keys(), key=lambda d: len(clusters[d])) if clusters else "general"
+        count = len(clusters.get(largest_domain, []))
+        if count >= 3:
+            sprint_staged = {
+                "domain": largest_domain,
+                "count": count,
+                "title": f"Backlog Burndown Sprint: {largest_domain} ({count} issues)",
+                "issue_numbers": [i.get("number") for i in clusters.get(largest_domain, []) if i.get("number")],
+            }
+
+    return {
+        "inspected": len(open_issues),
+        "remediated_count": len(remediated),
+        "remediated": [{"number": i.get("number"), "title": i.get("title")} for i in remediated],
+        "remaining_count": len(remaining),
+        "clusters": {k: len(v) for k, v in clusters.items()},
+        "sprint_staged": sprint_staged,
+        "dry_run": dry_run,
+    }
+
+
+def cmd_maintainer_burndown(repo_root: str = ".", dry_run: bool = False, limit: int = 50) -> int:
+    """CLI verb for maintainer backlog burndown sweep."""
+    res = run_backlog_burndown_sweep(repo_root=repo_root, dry_run=dry_run, limit=limit)
+    mode_str = " (DRY-RUN)" if res["dry_run"] else ""
+    print(f"\n  Maintainer Backlog Burndown Sweep{mode_str}:")
+    print(f"  • Inspected: {res['inspected']} open issues")
+    print(f"  • Remediated: {res['remediated_count']} issues")
+    for r in res["remediated"][:5]:
+        print(f"    - #{r.get('number')}: {r.get('title')}")
+    print(f"  • Remaining: {res['remaining_count']} issues")
+    print("  • Domain Clusters:")
+    for dom, count in res["clusters"].items():
+        print(f"    - {dom}: {count} issue(s)")
+    if res.get("sprint_staged"):
+        s = res["sprint_staged"]
+        print(f"\n  ✓ Staged Burndown Sprint: {s['title']}")
     return 0

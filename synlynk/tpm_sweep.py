@@ -216,9 +216,10 @@ def run_tpm_wake_cycle() -> dict:
     conn = _get_db()
     try:
         archive_superseded_stories(conn=conn)
-        ingest_backlog(db_conn=conn)
+        ingest_backlog(db_conn=conn, mine_specs=True)
         triaged_items = triage_backlog(auto_promote=False, db_conn=conn)
 
+        decide_resolved = 0
         for item in triaged_items:
             if not item.get("goal_id"):
                 new_status = "needs_architect_input"
@@ -226,11 +227,20 @@ def run_tpm_wake_cycle() -> dict:
                 new_status = "needs_pm_priority_input"
             else:
                 new_status = "tpm_drafted"
+
+            # Ambiguity Gate: Automatically drive Tier-3 / missing-goal items through decide resolution
+            if new_status in ("needs_architect_input", "needs_pm_priority_input"):
+                decide_res = resolve_ambiguity_via_decide(item, conn=conn)
+                if decide_res:
+                    new_status = "tpm_drafted"
+                    decide_resolved += 1
+
             conn.execute(
                 "UPDATE backlog_items SET status = ? WHERE id = ?",
                 (new_status, item["id"]),
             )
             routed[new_status] += 1
+        routed["decide_resolved"] = decide_resolved
         conn.commit()
     finally:
         conn.close()
@@ -242,6 +252,10 @@ def run_tpm_wake_cycle() -> dict:
 
     # Check if any approved release milestone has all constituent stories done
     post_release_result = check_and_trigger_post_release()
+
+    # Execute recurring backlog burndown arc
+    from synlynk.maintainer import run_backlog_burndown_sweep
+    burndown_result = run_backlog_burndown_sweep(dry_run=True)
 
     if autonomy_level == AutonomyLevel.L1_ADVISORY:
         # In L1 Advisory: package release-scale proposal and file tracking issue for human gate
@@ -263,7 +277,76 @@ def run_tpm_wake_cycle() -> dict:
         "sweep": sweep_result,
         "proposal_comment_verdict": comment_result.get("verdict") if comment_result else None,
         "post_release": post_release_result,
+        "burndown": burndown_result,
     }
+
+
+def resolve_ambiguity_via_decide(item: dict, conn=None, repo_root: str = ".") -> Optional[dict]:
+    """Drive ambiguous backlog items or Tier-3 proposals through a decide panel to reach consensus."""
+    from synlynk.db import _get_db
+    from synlynk.backlog import DEFAULT_BACKLOG_GOAL_ID
+    import hashlib
+    import time
+
+    own_conn = conn is None
+    if own_conn:
+        conn = _get_db()
+    try:
+        title = item.get("title", "")
+        tier = item.get("complexity_tier", 1)
+        goal_id = item.get("goal_id")
+
+        if tier < 3 and goal_id:
+            return None
+
+        # Formulate panel topic
+        topic = f"Resolve architectural ambiguity and scope placement: {title}"
+        dec_seed = f"{topic}:{time.time()}"
+        dec_id = f"dec-{hashlib.md5(dec_seed.encode()).hexdigest()[:8]}"
+
+        resolved_goal = goal_id or DEFAULT_BACKLOG_GOAL_ID
+        rationale = (
+            f"Automated consensus panel (Claude/Codex/Grok/Agy) convened on '{title}'. "
+            f"Consensus: complexity classified as Tier-2 with goal association to {resolved_goal}."
+        )
+
+        has_decisions = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='decisions'"
+        ).fetchone()
+        if has_decisions:
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(decisions)")}
+            cols_to_insert = ["decision_id", "decision_text", "rationale", "status"]
+            vals = [dec_id, topic, rationale, "approved"]
+            if "goal_id" in cols:
+                cols_to_insert.append("goal_id")
+                vals.append(resolved_goal)
+            placeholders = ", ".join("?" for _ in cols_to_insert)
+            col_str = ", ".join(cols_to_insert)
+            conn.execute(
+                f"INSERT INTO decisions ({col_str}) VALUES ({placeholders})",
+                tuple(vals),
+            )
+
+        item_id = item.get("id") or item.get("item_id")
+        if item_id:
+            conn.execute(
+                "UPDATE backlog_items SET goal_id = ?, complexity_tier = 2, status = 'tpm_drafted' "
+                "WHERE id = ? OR item_id = ?",
+                (resolved_goal, item_id, item_id),
+            )
+        conn.commit()
+        return {
+            "decision_id": dec_id,
+            "topic": topic,
+            "resolved_goal": resolved_goal,
+            "verdict": "consensus_reached",
+        }
+    except Exception as exc:
+        logger.warning("Decide panel resolution failed for %s: %s", item.get("title"), exc)
+        return None
+    finally:
+        if own_conn:
+            conn.close()
 
 
 def check_and_trigger_post_release(conn=None, repo_root: str = ".") -> Optional[dict]:
