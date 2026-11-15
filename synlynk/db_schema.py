@@ -818,8 +818,9 @@ def ensure_derived_roadmap_views(conn) -> None:
     try:
         from synlynk.db import _migrate_remove_roadmap_foreign_keys
         _migrate_remove_roadmap_foreign_keys(conn)
-    except Exception:
-        pass
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("Failed to remove roadmap foreign keys: %s", exc)
 
     cols = {row[1] for row in conn.execute("PRAGMA table_info(goals)")}
     for col, defn in (
@@ -874,8 +875,9 @@ def ensure_derived_roadmap_views(conn) -> None:
             conn.execute(_ROADMAP_PHASES_VIEW)
         conn.executescript(_ROADMAP_TRIGGERS)
         conn.commit()
-    except sqlite3.OperationalError:
-        pass
+    except sqlite3.OperationalError as exc:
+        import logging
+        logging.getLogger(__name__).warning("Error ensuring derived roadmap views: %s", exc)
     finally:
         if fk_on:
             conn.execute("PRAGMA foreign_keys = ON")

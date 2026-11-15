@@ -2484,8 +2484,85 @@ def _add_column_if_missing(
         conn.commit()
 
 
+def _rebuild_table_strip_roadmap_fks(conn: sqlite3.Connection, table_name: str) -> bool:
+    """Safely rebuild a table using SQLite's 12-step procedure to remove FKs to roadmap_phases or roadmap_arcs."""
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table_name,),
+    ).fetchone()
+    if not row or not row[0]:
+        return False
+
+    orig_sql = row[0]
+    if "roadmap_phases" not in orig_sql and "roadmap_arcs" not in orig_sql:
+        return False
+
+    # Check if table has explicit foreign key references to roadmap_phases or roadmap_arcs
+    fk_list = conn.execute(f"PRAGMA foreign_key_list({table_name})").fetchall()
+    has_fk = any(fk[2] in ("roadmap_phases", "roadmap_arcs") for fk in fk_list)
+    if not has_fk and "REFERENCES roadmap_phases" not in orig_sql and "REFERENCES roadmap_arcs" not in orig_sql:
+        return False
+
+    index_sqls = [
+        r[0]
+        for r in conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL",
+            (table_name,),
+        )
+    ]
+
+    tmp_table = f"_{table_name}_rebuild_tmp"
+    conn.execute(f'DROP TABLE IF EXISTS "{tmp_table}"')
+
+    # Replace table name in CREATE TABLE statement
+    new_sql = re.sub(
+        rf'\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["`\']?{re.escape(table_name)}["`\']?',
+        f'CREATE TABLE "{tmp_table}"',
+        orig_sql,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+
+    # Strip column-level REFERENCES to roadmap_phases or roadmap_arcs
+    new_sql = re.sub(
+        r'\bREFERENCES\s+(?:roadmap_phases|roadmap_arcs)(?:\s*\([^)]*\))?(?:\s+ON\s+(?:DELETE|UPDATE)\s+[A-Za-z]+)*(?:\s+(?:NOT\s+)?DEFERRABLE(?:\s+INITIALLY\s+[A-Za-z]+)?)?',
+        '',
+        new_sql,
+        flags=re.IGNORECASE,
+    )
+
+    # Strip table-level FOREIGN KEY constraints targeting roadmap_phases or roadmap_arcs
+    new_sql = re.sub(
+        r'(?:CONSTRAINT\s+\w+\s+)?FOREIGN\s+KEY\s*\([^)]*\)\s+REFERENCES\s+(?:roadmap_phases|roadmap_arcs)[^,)]*',
+        '',
+        new_sql,
+        flags=re.IGNORECASE,
+    )
+
+    # Clean up double commas or commas before closing parenthesis
+    new_sql = re.sub(r',\s*,', ',', new_sql)
+    new_sql = re.sub(r',\s*\)', ')', new_sql)
+
+    conn.execute(new_sql)
+
+    cols = [r[1] for r in conn.execute(f"PRAGMA table_info({table_name})")]
+    quoted_cols = ", ".join(f'"{c}"' for c in cols)
+    conn.execute(f'INSERT INTO "{tmp_table}" ({quoted_cols}) SELECT {quoted_cols} FROM "{table_name}"')
+    conn.execute(f'DROP TABLE "{table_name}"')
+    conn.execute(f'ALTER TABLE "{tmp_table}" RENAME TO "{table_name}"')
+
+    for idx_sql in index_sqls:
+        conn.execute(idx_sql)
+
+    return True
+
+
 def _migrate_remove_roadmap_foreign_keys(conn: sqlite3.Connection) -> None:
-    """Safely drop legacy FK references to roadmap_arcs and roadmap_phases without losing data."""
+    """Safely drop legacy FK references to roadmap_arcs and roadmap_phases without losing data.
+
+    Uses SQLite's 12-step table-rebuild procedure to avoid ALTER TABLE DROP COLUMN
+    trigger validation errors (gh:#5274 / LIVE-32).
+    """
     conn.commit()
     fk_res = conn.execute("PRAGMA foreign_keys").fetchone()
     fk_on = bool(fk_res and fk_res[0])
@@ -2493,27 +2570,25 @@ def _migrate_remove_roadmap_foreign_keys(conn: sqlite3.Connection) -> None:
         conn.execute("PRAGMA foreign_keys = OFF")
 
     try:
-        conn.execute("DROP TRIGGER IF EXISTS trg_roadmap_phases_update")
-        conn.execute("DROP TRIGGER IF EXISTS trg_roadmap_phases_insert")
-        conn.execute("DROP TRIGGER IF EXISTS trg_roadmap_phases_delete")
+        view_triggers = [
+            "trg_roadmap_phases_update",
+            "trg_roadmap_phases_insert",
+            "trg_roadmap_phases_delete",
+            "trg_roadmap_arcs_insert",
+            "trg_roadmap_arcs_update",
+            "trg_roadmap_arcs_delete",
+        ]
+        for trg in view_triggers:
+            conn.execute(f"DROP TRIGGER IF EXISTS {trg}")
 
-        sql_goals = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'goals' AND type = 'table'").fetchone()
-        if sql_goals and sql_goals[0] and "REFERENCES roadmap_phases" in sql_goals[0]:
-            conn.execute("CREATE TABLE IF NOT EXISTS _goals_bak AS SELECT id, phase_id FROM goals")
-            conn.execute("ALTER TABLE goals DROP COLUMN phase_id")
-            conn.execute("ALTER TABLE goals ADD COLUMN phase_id INTEGER")
-            conn.execute("UPDATE goals SET phase_id = (SELECT phase_id FROM _goals_bak WHERE _goals_bak.id = goals.id)")
-            conn.execute("DROP TABLE IF EXISTS _goals_bak")
+        _rebuild_table_strip_roadmap_fks(conn, "goals")
+        _rebuild_table_strip_roadmap_fks(conn, "cost_entries")
 
-        sql_costs = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'cost_entries' AND type = 'table'").fetchone()
-        if sql_costs and sql_costs[0] and ("REFERENCES roadmap_phases" in sql_costs[0] or "REFERENCES roadmap_arcs" in sql_costs[0]):
-            conn.execute("CREATE TABLE IF NOT EXISTS _costs_bak AS SELECT id, epic_id, phase_id FROM cost_entries")
-            conn.execute("ALTER TABLE cost_entries DROP COLUMN epic_id")
-            conn.execute("ALTER TABLE cost_entries DROP COLUMN phase_id")
-            conn.execute("ALTER TABLE cost_entries ADD COLUMN epic_id INTEGER")
-            conn.execute("ALTER TABLE cost_entries ADD COLUMN phase_id INTEGER")
-            conn.execute("UPDATE cost_entries SET epic_id = (SELECT epic_id FROM _costs_bak WHERE _costs_bak.id = cost_entries.id), phase_id = (SELECT phase_id FROM _costs_bak WHERE _costs_bak.id = cost_entries.id)")
-            conn.execute("DROP TABLE IF EXISTS _costs_bak")
+        row_phases = conn.execute("SELECT type FROM sqlite_master WHERE name = 'roadmap_phases'").fetchone()
+        row_arcs = conn.execute("SELECT type FROM sqlite_master WHERE name = 'roadmap_arcs'").fetchone()
+        if (row_phases and row_phases[0] == "view") and (row_arcs and row_arcs[0] == "view"):
+            from synlynk.db_schema import _ROADMAP_TRIGGERS
+            conn.executescript(_ROADMAP_TRIGGERS)
 
         conn.commit()
     finally:
