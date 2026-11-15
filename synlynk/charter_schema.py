@@ -8,12 +8,16 @@ See docs/superpowers/specs/2026-08-27-charter-content-structure-design.md.
 """
 from __future__ import annotations
 
+import json
+import os
+from typing import Optional
+
 KNOWN_ROLES = (
     "dev", "qa", "pm", "architect", "tpm", "designer", "marketing", "synlynk-bot", "maintainer",
-    "secops", "infra-devops",
+    "secops", "infra-devops", "wingman",
 )
 VALID_ARCHETYPES = (
-    "orchestrator", "strategist", "director", "creator", "inspector", "custodian",
+    "orchestrator", "strategist", "director", "creator", "inspector", "custodian", "chief-of-staff",
 )
 VALID_AUTONOMY_LEVELS = ("L1_ADVISORY", "L2_GATED", "L3_AUTONOMOUS")
 VALID_DURABILITY = ("durable", "session-only", "dispatch-only")
@@ -21,6 +25,27 @@ REQUIRED_SECTIONS = ("Instructions", "Authority & Escalation", "Workflow Ownersh
 REQUIRED_FRONTMATTER_KEYS = (
     "schema_version", "role", "description", "durability", "tools", "credentials",
 )
+
+_SFIA_CACHE: Optional[dict] = None
+
+
+def get_sfia_taxonomy() -> dict:
+    """Load and return the bundled SFIA skill taxonomy."""
+    global _SFIA_CACHE
+    if _SFIA_CACHE is None:
+        path = os.path.join(os.path.dirname(__file__), "sfia_taxonomy.json")
+        if os.path.isfile(path):
+            with open(path, "r", encoding="utf-8") as f:
+                _SFIA_CACHE = json.load(f)
+        else:
+            _SFIA_CACHE = {"skills": {}}
+    return _SFIA_CACHE
+
+
+def get_sfia_skill(code: str) -> Optional[dict]:
+    """Retrieve metadata for a specific SFIA skill code."""
+    tax = get_sfia_taxonomy()
+    return tax.get("skills", {}).get(code.upper())
 
 
 class CharterValidationError(Exception):
@@ -79,7 +104,8 @@ def parse_frontmatter(frontmatter_text: str) -> dict:
             if not non_blank:
                 data[key] = [] if key in (
                     "tools", "credentials", "skills", "sops", "autonomous_authorities",
-                    "escalation_triggers", "wake_cycle_sop", "verification_contracts"
+                    "escalation_triggers", "wake_cycle_sop", "verification_contracts",
+                    "boundaries", "evidence_contracts"
                 ) else ""
             elif all(bl.strip().startswith("- ") for bl in non_blank):
                 data[key] = [bl.strip()[2:].strip() for bl in non_blank]
@@ -100,6 +126,12 @@ def parse_frontmatter(frontmatter_text: str) -> dict:
             i += 1
         elif rest == "{}":
             data[key] = {}
+            i += 1
+        elif rest.startswith("{") and rest.endswith("}"):
+            try:
+                data[key] = json.loads(rest)
+            except Exception:
+                data[key] = {}
             i += 1
         elif rest.startswith("[") and rest.endswith("]"):
             inner = rest[1:-1].strip()
@@ -168,10 +200,47 @@ def validate_charter(content: str, known_roles=KNOWN_ROLES) -> dict:
 
     for list_key in (
         "tools", "credentials", "autonomous_authorities", "escalation_triggers",
-        "skills", "sops", "wake_cycle_sop", "verification_contracts"
+        "skills", "sops", "wake_cycle_sop", "verification_contracts",
+        "boundaries", "evidence_contracts"
     ):
         if list_key in data and not isinstance(data[list_key], list):
             errors.append(f"{list_key!r} must be a list (use '[]' for empty)")
+
+    if "boundaries" in data and isinstance(data["boundaries"], list):
+        for b in data["boundaries"]:
+            if not isinstance(b, str) or not b.strip():
+                errors.append("boundaries items must be non-empty strings")
+
+    if "sfia_mapping" in data:
+        mapping = data["sfia_mapping"]
+        if isinstance(mapping, str):
+            parsed_map = {}
+            for line in mapping.splitlines():
+                stripped = line.strip()
+                if ":" in stripped:
+                    k, _, v = stripped.partition(":")
+                    parsed_map[k.strip()] = v.strip().strip('"\'')
+            if parsed_map:
+                data["sfia_mapping"] = parsed_map
+                mapping = parsed_map
+
+        if not isinstance(mapping, dict):
+            errors.append("sfia_mapping must be a mapping/dict")
+        else:
+            if data.get("primary_archetype") == "chief-of-staff":
+                if "composite_skills" in mapping and not isinstance(mapping["composite_skills"], list):
+                    errors.append("chief-of-staff sfia_mapping.composite_skills must be a list")
+            elif "sfia_code" in mapping:
+                code = mapping.get("sfia_code")
+                if not isinstance(code, str) or not code.strip():
+                    errors.append("sfia_mapping.sfia_code must be a non-empty string")
+                if "sfia_level" in mapping:
+                    try:
+                        lvl = int(mapping["sfia_level"])
+                        if not (1 <= lvl <= 7):
+                            errors.append(f"sfia_mapping.sfia_level must be between 1 and 7, got {lvl}")
+                    except (ValueError, TypeError):
+                        errors.append("sfia_mapping.sfia_level must be an integer between 1 and 7")
 
     missing_sections = []
     for section in REQUIRED_SECTIONS:
