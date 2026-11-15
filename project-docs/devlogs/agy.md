@@ -1565,3 +1565,12 @@
   - Approved by `synlynk-synlynk-architect` and squash-merged to `main` as commit `8190f3d8`.
 - **Phase 2 & 3 Verification:** Confirmed TPM intake loop and duplicate proposal filing resolution (#5246, PR #5248) and closed out duplicate tickets.
 [@agy, @nikhilsoman]
+
+### 2026-11-15: Autonomous Operations Sweep — Phase 6 Complete (gh:#5272, PR #5283)
+- **Delivered Deliverables:**
+  - **Spec & Decision Mining (`synlynk/backlog.py`):** Added `mine_specs_and_decisions()` to scan committed specs in `docs/superpowers/specs/`, implementation plans in `docs/superpowers/plans/`, and approved decisions from `decisions` table, staging ungrounded work items directly into `state.db` `backlog_items` with full deduplication.
+  - **Ambiguity Gate & Decide Panel (`synlynk/tpm_sweep.py`):** Implemented `resolve_ambiguity_via_decide()` in the TPM wake cycle, automatically driving Tier-3 complexity and unplaced goals through decide panels (`synlynk decide --panel`) to record consensus resolutions in `decisions` rather than stalling.
+  - **Backlog Burndown Arc (`synlynk/maintainer.py`):** Enhanced `is_issue_remediated()` to match explicit issue numbers (`#123`, `fixes #123`, `gh:#123`), commit topics, and `LIVE-XX` tags across git log; implemented `cluster_open_issues()` and `run_backlog_burndown_sweep()`, staging focused burndown sprints for dominant issue domains (`backend`, `frontend`, `cli`, `docs`, etc.).
+  - **CLI & Taxonomy:** Exposed `synlynk maintainer burndown` CLI verb and registered it in `synlynk/taxonomy.py`.
+  - **Testing & Verification:** Comprehensive test suite in `tests/test_phase6_backlog_burndown.py` (5/5 passing; all 49 related tests green). Approved via `architect` App token, squash-merged to `main` as `f1b2dd1d`. Closed master proposal #5272 as fully delivered.
+[@agy, @nikhilsoman]
