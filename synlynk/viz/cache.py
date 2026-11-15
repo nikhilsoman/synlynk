@@ -13,6 +13,7 @@ from synlynk.viz.gantt import generate_gantt_html
 from synlynk.viz.home import generate_index_html
 from synlynk.viz.canvases import generate_infra_html, generate_logical_html, generate_product_html, generate_world_html
 from synlynk.viz.observatory import generate_observatory_html
+from synlynk.viz.roadmap_studio import generate_roadmap_studio_html
 from synlynk.viz.overview import generate_overview_html
 from synlynk.viz.roles import generate_roles_html
 from synlynk.viz.organogram import generate_organogram_html
@@ -30,6 +31,7 @@ def _write_cache(data: dict, port: int) -> None:
         "overview.html": generate_overview_html(data, port),
         "activity.html": generate_activity_stream_html(data, port),
         "board.html": generate_board_html(port),
+        "roadmap_studio.html": generate_roadmap_studio_html(port),
         "gantt.html": generate_gantt_html(data, port),
         "tube.html": generate_architect_map_html(data, port),
         "product.html": generate_product_html(data, port),
