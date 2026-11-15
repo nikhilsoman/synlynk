@@ -4293,11 +4293,30 @@ def _preflight_dispatch(
         pr=pr,
         task=_task_hint or "",
     )
+    from synlynk.policy_gates import gate_mode
+
+    governs_mode = gate_mode("governs_authority", "require_linked_goal_mode")
     if _task_hint and not linkage_resolvable:
+        if governs_mode == "enforce":
+            _reason = (
+                "Dispatch rejected: task is not linked to a GOVERNS story, issue, or PR. "
+                "Link with --story <id>, --issue <num>, or --pr <num>."
+            )
+            write_alert = _pkg("_write_sentinel_alert", _write_sentinel_alert)
+            write_alert(
+                "ERROR",
+                "GOVERNS_LINKAGE_MISSING",
+                _reason,
+                os.path.join(".synlynk", "sentinel.md"),
+            )
+            return {
+                "passed": False,
+                "sentinel": "GOVERNS_LINKAGE_MISSING",
+                "reason": _reason,
+            }
         _emit_missing_governs_linkage_warning()
     elif story_id is not None or _task_hint or harness_name not in HARNESS_CAPABILITY_BASELINES:
         from synlynk.governs_gate import dispatch_governs_linkage
-        from synlynk.policy_gates import gate_mode
 
         governs_gate = dispatch_governs_linkage(db_conn, story_id)
         if not governs_gate["passed"]:
@@ -4305,7 +4324,7 @@ def _preflight_dispatch(
             # A missing story or goal still fails closed.
             if (
                 governs_gate.get("sentinel") == "GOVERNS_PHASE_MISSING"
-                and gate_mode("governs_authority", "require_linked_goal_mode") == "observe"
+                and governs_mode == "observe"
             ):
                 print(
                     "  ⚠ [OBSERVE MODE — not blocking] "

@@ -59,6 +59,41 @@ def archive_superseded_stories(conn=None) -> list[str]:
             conn.close()
 
 
+def find_unstaffed_loop_goals(conn=None) -> list[dict]:
+    """Find active kind='loop' goals with no active (non-done, non-cancelled) operating story."""
+    from synlynk.db import _get_db
+
+    own_conn = conn is None
+    if own_conn:
+        conn = _get_db()
+    try:
+        has_goals = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='goals'"
+        ).fetchone()
+        has_stories = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='stories'"
+        ).fetchone()
+        if not has_goals or not has_stories:
+            return []
+
+        goals = conn.execute(
+            "SELECT goal_id, outcome FROM goals WHERE kind='loop' AND status='active'"
+        ).fetchall()
+        unstaffed = []
+        for gid, outcome in goals:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM stories WHERE goal_id=? AND status NOT IN ('done', 'cancelled')",
+                (gid,),
+            ).fetchone()
+            count = row[0] if row else 0
+            if count == 0:
+                unstaffed.append({"goal_id": gid, "outcome": outcome})
+        return unstaffed
+    finally:
+        if own_conn:
+            conn.close()
+
+
 def evaluate_asimov_invariants(story: dict, repo_path: str = ".") -> tuple[bool, str]:
     """Evaluate Asimov's Laws & Synlynk Invariants for a proposed task dispatch.
 
