@@ -242,6 +242,34 @@ def update_registered_product(slug: str, **updates: object) -> dict:
         return entry
 
 
+def prune_dead_products(*, dry_run: bool = False) -> list[str]:
+    """Remove registry entries whose recorded repository no longer exists."""
+    registry = registry_path()
+    with registry_lock(registry):
+        payload = _read_unlocked(registry)
+        dead_slugs = sorted(
+            slug
+            for slug, entry in payload["products"].items()
+            if isinstance(entry, dict)
+            and entry.get("repo_path")
+            and not os.path.exists(str(entry["repo_path"]))
+        )
+        if not dry_run and dead_slugs:
+            for slug in dead_slugs:
+                del payload["products"][slug]
+            _write_unlocked(registry, payload)
+    return dead_slugs
+
+
+def cmd_registry_prune(*, dry_run: bool = False) -> int:
+    """Prune dead repository registrations and print a confirmation count."""
+    dead_slugs = prune_dead_products(dry_run=dry_run)
+    action = "Would prune" if dry_run else "Pruned"
+    noun = "entry" if len(dead_slugs) == 1 else "entries"
+    print(f"{action} {len(dead_slugs)} dead registry {noun}.")
+    return 0
+
+
 def identity_metadata(conn, *, product_id: str, mode: str, path: Path) -> None:
     """Bootstrap/read identity metadata on an already-open writable ledger."""
     conn.execute(

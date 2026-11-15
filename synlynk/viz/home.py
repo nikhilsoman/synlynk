@@ -1,6 +1,7 @@
 """Vizor index / home canvas."""
 import html
 import json
+import os
 from synlynk.viz.chrome import _live_js
 def generate_index_html(data: dict, port: int) -> str:
     """Generate the master Vizor shell with two-tier accordion and location breadcrumbs."""
@@ -26,7 +27,14 @@ def generate_index_html(data: dict, port: int) -> str:
         from synlynk.state_registry import _read_unlocked, registry_path
         rpath = registry_path()
         reg_products = _read_unlocked(rpath).get("products", {}) if rpath.exists() else {}
-        other_slugs = [s for s in sorted(reg_products.keys()) if s != workspace_name]
+        other_slugs = [
+            slug
+            for slug, entry in sorted(reg_products.items())
+            if slug != workspace_name
+            and isinstance(entry, dict)
+            and entry.get("state") == "active"
+            and os.path.exists(str(entry.get("repo_path") or entry.get("canonical_path") or ""))
+        ]
     except Exception:
         other_slugs = []
 
