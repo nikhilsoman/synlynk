@@ -2616,7 +2616,8 @@ def main(argv=None) -> None:
         if not tok.startswith("-"):
             _cmd_name = tok
             break
-    if _cmd_name != "init":
+    _repo_initialized = os.path.exists(".synlynk/config.json") or os.path.exists(".synlynk/workspace.json")
+    if _repo_initialized or _cmd_name != "init":
         _reconcile_jobs()
         try:
             from synlynk.capability_watch import spawn_staleness_check_thread
