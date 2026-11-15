@@ -3455,7 +3455,7 @@ def init(force: bool = False, agents: list = None,
 
     # ── Step 1: Detect existing state ──────────────────────────────────────
     _print_step(1, "Scanning repository")
-    synlynk_exists = os.path.exists(".synlynk")
+    synlynk_exists = os.path.exists(".synlynk/config.json") or os.path.exists(".synlynk/workspace.json")
     if synlynk_exists and not force:
         print(f"  {_YELLOW}⚠ .synlynk/ already exists.{_RESET} "
               "Use --force to reinitialise.\n  Updating agent files only.")

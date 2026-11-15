@@ -701,7 +701,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 
     _claude_md = (
         _tool_header(
-            "synlynk Claude Instructions", "claude-sonnet-4-6",
+            "synlynk Claude Instructions", "claude-sonnet-5",
             "Co-Authored-By: Claude Sonnet <noreply@anthropic.com>",
             "claude",
         )

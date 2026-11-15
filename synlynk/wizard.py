@@ -223,7 +223,7 @@ def cmd_launch_ftue(dry_run: bool = False, list_mode: bool = False) -> None:
                 force_agent=True,
                 context_mode=chosen.get("context_mode", "full"),
             )
-            job_id = job.get("job_id", "unknown") if isinstance(job, dict) else "dispatched"
+            job_id = (job.get("id") or job.get("job_id") or "unknown") if isinstance(job, dict) else "dispatched"
             print(f"\n  {_GREEN}▶{_RESET} [{job_id}] {chosen['agent']} dispatched\n"
                   f"  {_DIM}Log: synlynk logs --job {job_id}{_RESET}\n")
         except Exception as exc:
