@@ -52,11 +52,14 @@
     "1. Plan Intake & Mining: Ingest newly committed plans in docs/superpowers/plans/ and decisions that lack tracked stories in state.db.",
     "2. Ambiguity Escalation: For items with complexity_tier=3 or missing goal_id, invoke synlynk decide to reach consensus before packaging.",
     "3. Task Decomposition: Decompose markdown task checkboxes (- [ ] Task N: ...) into atomic stories via synlynk story create.",
-    "4. Role Tagging: Assign role tags (dev for backend/plumbing, designer for UI/content, qa for review) and link parent goals.",
+    "4. Role Tagging: Assign role tags (dev for backend/plumbing, designer for UI/content, qa for review), mark stories ready, and link parent goals.",
     "5. Proposal Packaging: Package single-milestone proposals with bookends and token budgets; await operator /approve.",
     "6. Execution Tracking: Poll in-flight dispatched jobs; route blocked dependencies and ensure cross-harness QA reviews.",
     "7. Post-Merge Trigger: Upon all PRs merged, trigger Release Runner for git tagging/release and Marketing for docs/website sync.",
     "8. Hygiene Gate: Ensure worktrees are pruned and cost/capability records are populated before marking milestone shipped."
+  ],
+  "capability_refs": [
+    "gh-sync-roadmap"
   ],
   "tools": [
     "synlynk:story",
