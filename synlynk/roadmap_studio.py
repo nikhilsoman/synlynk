@@ -28,16 +28,13 @@ def _conn(conn: Optional[sqlite3.Connection], repo_path: str) -> tuple[sqlite3.C
 
 
 def _ticket_row(conn: sqlite3.Connection, ticket_id: int) -> dict:
-    cursor = conn.execute(
+    row = conn.execute(
         "SELECT id, story_id, status, constituent_story_ids FROM approval_tickets WHERE id=? AND action=?",
         (ticket_id, RELEASE_PROPOSAL_ACTION),
-    )
-    row = cursor.fetchone()
+    ).fetchone()
     if row is None:
         raise KeyError(f"release_proposal ticket not found: {ticket_id}")
-    if isinstance(row, sqlite3.Row):
-        return dict(row)
-    return dict(zip((column[0] for column in cursor.description), row))
+    return dict(row)
 
 
 def _constituent_ids(ticket_row: dict) -> list[str]:

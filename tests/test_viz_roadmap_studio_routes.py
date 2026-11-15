@@ -4,6 +4,7 @@ raise the same exception types _handle_board_status_request's pattern expects
 added in synlynk/viz/server.py behave consistently with the Board route handlers.
 """
 import json
+import sqlite3
 
 import pytest
 import synlynk as sl
@@ -36,6 +37,7 @@ def _seed(conn):
 
 def test_approve_ticket_raises_keyerror_maps_to_404_in_handler(tmp_path):
     conn = sl._get_db(str(tmp_path / "state.db"))
+    conn.row_factory = sqlite3.Row
     try:
         _seed(conn)
         with pytest.raises(KeyError):
@@ -46,6 +48,7 @@ def test_approve_ticket_raises_keyerror_maps_to_404_in_handler(tmp_path):
 
 def test_reorder_stories_raises_valueerror_maps_to_400_in_handler(tmp_path):
     conn = sl._get_db(str(tmp_path / "state.db"))
+    conn.row_factory = sqlite3.Row
     try:
         _seed(conn)
         with pytest.raises(ValueError):
@@ -56,6 +59,7 @@ def test_reorder_stories_raises_valueerror_maps_to_400_in_handler(tmp_path):
 
 def test_pin_story_returns_ok_dict_shape_handler_passes_through(tmp_path):
     conn = sl._get_db(str(tmp_path / "state.db"))
+    conn.row_factory = sqlite3.Row
     try:
         _seed(conn)
         result = pin_story(1, "s1", conn=conn)
