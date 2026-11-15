@@ -1543,3 +1543,25 @@
   - Added CLI verbs (`synlynk ibpd status`, `synlynk ibpd tiers`, `synlynk ibpd quote`) with full `--json` support and test suite `tests/test_ibpd.py`.
   - Approved by `synlynk-synlynk-qa` and merged to `main` as `1f00ceff`.
 [@agy, @nikhilsoman]
+
+### 2026-11-15: Autonomous Operations & Release Lifecycle Sweep — Phases 0, 1, 4, 5 (#5272)
+- **Phase 0 (Housekeeping & Bookkeeping — PR #5278):**
+  - Pruned 16 stale merged worktrees and deleted local tracking branches via `synlynk worktree clean`.
+  - Migrated `cost_entries` legacy foreign keys in `state.db` without trigger collisions.
+  - Reconciled and logged unrecorded token costs for Tracks 2–4, Devlog sync, Release ceremony, and SFIA spec in `costs.md`.
+  - Backfilled and calibrated 4,020 ratings across SFIA disciplines (`synlynk capability backfill`).
+  - Squash-merged to `main` as commit `c9276dbb`.
+- **Phase 1 (SFIA Charters, Archetypes & Wingman Role — PR #5279):**
+  - Authored design spec `docs/superpowers/specs/2026-11-15-sfia-charter-archetypes-and-wingman-design.md` (PR #5275).
+  - Extended `synlynk/charter_schema.py` to support `chief-of-staff` archetype, `sfia_mapping`, and strict `boundaries`.
+  - Bundled standardized SFIA skill taxonomy in `synlynk/sfia_taxonomy.json` (`PGMG`, `PROD`, `ARCH`, `PROG`, `TEST`, `ITOP`, `BAPM`).
+  - Formalized `.synlynk/charters/tpm.json` under `orchestrator` archetype (SFIA PGMG Level 5, 7-stage state machine) and `.synlynk/charters/wingman.json` under `chief-of-staff` archetype (Personal Edition default composite L2/3).
+  - Approved by `synlynk-synlynk-qa` and squash-merged to `main` as commit `4658ee39`.
+- **Phase 4 & Phase 5 (Bearings Card CLI & Autonomous Post-Release SOP — PR #5280):**
+  - Exposed `synlynk session bearings` and `synlynk bearings` CLI verbs (with `--inject <file>` support).
+  - Wired single-sourced constitutional session bearings card (`synlynk/bearings.py`) into worker prompt context during role-attributed dispatches.
+  - Implemented `synlynk.release_sop` with end-to-end closed-loop post-release operations: automated git tagging, GitHub release creation via App token, collateral sync, and database milestone closeout.
+  - Wired `check_and_trigger_post_release()` into `synlynk/tpm_sweep.py` wake cycle.
+  - Approved by `synlynk-synlynk-architect` and squash-merged to `main` as commit `8190f3d8`.
+- **Phase 2 & 3 Verification:** Confirmed TPM intake loop and duplicate proposal filing resolution (#5246, PR #5248) and closed out duplicate tickets.
+[@agy, @nikhilsoman]
