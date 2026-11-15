@@ -865,6 +865,70 @@ def post_proposal_interim_rollup(
             conn.close()
 
 
+def _apply_approve(
+    conn, constituent_story_ids: list[str], dropped_stories: list[str], ticket_id: "int | None" = None
+) -> int:
+    """Promote every non-dropped constituent to readiness='ready' and resolve the ticket.
+
+    ticket_id=None preserves the comment-grammar path's historical behavior of
+    resolving every currently-open release_proposal ticket (only one is normally
+    open at a time on that path). An explicit ticket_id scopes the UPDATE to that
+    one ticket only — used by the Vizor Roadmap Studio write path.
+    """
+    promoted = 0
+    for sid in constituent_story_ids:
+        if sid not in dropped_stories:
+            conn.execute("UPDATE stories SET readiness='ready' WHERE story_id=?", (sid,))
+            promoted += 1
+    try:
+        if ticket_id is not None:
+            conn.execute(
+                "UPDATE approval_tickets SET status='resolved', resolved_at=CURRENT_TIMESTAMP "
+                "WHERE action='release_proposal' AND status='open' AND id=?",
+                (ticket_id,),
+            )
+        else:
+            conn.execute(
+                "UPDATE approval_tickets SET status='resolved', resolved_at=CURRENT_TIMESTAMP "
+                "WHERE action='release_proposal' AND status='open'"
+            )
+    except Exception:
+        pass
+    conn.commit()
+    return promoted
+
+
+def _apply_hold(conn, ticket_id: "int | None" = None) -> None:
+    """Hold the open release_proposal ticket(s). See _apply_approve for ticket_id semantics."""
+    try:
+        if ticket_id is not None:
+            conn.execute(
+                "UPDATE approval_tickets SET status='held' "
+                "WHERE action='release_proposal' AND status='open' AND id=?",
+                (ticket_id,),
+            )
+        else:
+            conn.execute(
+                "UPDATE approval_tickets SET status='held' "
+                "WHERE action='release_proposal' AND status='open'"
+            )
+        conn.commit()
+    except Exception:
+        pass
+
+
+def _apply_drop(conn, story_id: str) -> None:
+    """Defer one story's readiness. Story-scoped already; no ticket_id needed."""
+    conn.execute("UPDATE stories SET readiness='deferred' WHERE story_id=?", (story_id,))
+    conn.commit()
+
+
+def _apply_prioritize(conn, story_id: str) -> None:
+    """Flip one story's binary priority flag. Story-scoped already; no ticket_id needed."""
+    conn.execute("UPDATE stories SET priority=1 WHERE story_id=?", (story_id,))
+    conn.commit()
+
+
 def process_proposal_comments(
     comments: list, constituent_story_ids: list[str], conn=None
 ) -> dict:
@@ -891,20 +955,7 @@ def process_proposal_comments(
 
                 if low_sline.startswith("/approve") or low_sline == "lgtm" or "lgtm" in low_sline:
                     verdict = "approved"
-                    for sid in constituent_story_ids:
-                        if sid not in dropped_stories:
-                            conn.execute(
-                                "UPDATE stories SET readiness='ready' WHERE story_id=?", (sid,)
-                            )
-                            promoted += 1
-                    try:
-                        conn.execute(
-                            "UPDATE approval_tickets SET status='resolved', resolved_at=CURRENT_TIMESTAMP "
-                            "WHERE action='release_proposal' AND status='open'"
-                        )
-                    except Exception:
-                        pass
-                    conn.commit()
+                    promoted += _apply_approve(conn, constituent_story_ids, dropped_stories)
 
                 elif low_sline.startswith("/revise"):
                     verdict = "revisions_requested"
@@ -916,30 +967,17 @@ def process_proposal_comments(
                     target_id = sline[5:].strip()
                     if target_id:
                         dropped_stories.append(target_id)
-                        conn.execute(
-                            "UPDATE stories SET readiness='deferred' WHERE story_id=?", (target_id,)
-                        )
-                        conn.commit()
+                        _apply_drop(conn, target_id)
 
                 elif low_sline.startswith("/prioritize"):
                     target_id = sline[11:].strip()
                     if target_id:
                         prioritized_stories.append(target_id)
-                        conn.execute(
-                            "UPDATE stories SET priority=1 WHERE story_id=?", (target_id,)
-                        )
-                        conn.commit()
+                        _apply_prioritize(conn, target_id)
 
                 elif low_sline.startswith("/hold"):
                     verdict = "held"
-                    try:
-                        conn.execute(
-                            "UPDATE approval_tickets SET status='held' "
-                            "WHERE action='release_proposal' AND status='open'"
-                        )
-                        conn.commit()
-                    except Exception:
-                        pass
+                    _apply_hold(conn)
 
         return {
             "verdict": verdict,

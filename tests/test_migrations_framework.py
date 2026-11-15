@@ -374,3 +374,53 @@ def test_m0032_is_idempotent(tmp_path):
     assert "constituent_story_ids" in cols
     conn.close()
 
+
+def test_migration_0033_adds_stories_proposal_order(tmp_path, monkeypatch):
+    import sqlite3
+    from synlynk.migrations import runner
+    from synlynk.migrations.m0033_stories_proposal_order import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        """CREATE TABLE stories (
+            story_id TEXT PRIMARY KEY,
+            title TEXT,
+            readiness TEXT
+        )"""
+    )
+    conn.execute("PRAGMA user_version = 32")
+    conn.commit()
+
+    monkeypatch.setattr(runner, "MIGRATIONS", [MIGRATION])
+    runner.run_pending_migrations(conn)
+
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
+    assert "proposal_order" in cols
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 33
+
+    # Re-running against an already-migrated db is a no-op, not a crash.
+    runner.run_pending_migrations(conn)
+    cols_after = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
+    assert cols_after == cols
+    conn.close()
+
+
+def test_m0033_is_idempotent(tmp_path):
+    import sqlite3
+    from synlynk.migrations.m0033_stories_proposal_order import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        """CREATE TABLE stories (
+            story_id TEXT PRIMARY KEY,
+            title TEXT,
+            readiness TEXT
+        )"""
+    )
+    MIGRATION.up(conn)
+    MIGRATION.up(conn)
+    conn.commit()
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
+    assert "proposal_order" in cols
+    conn.close()
+
