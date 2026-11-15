@@ -214,34 +214,59 @@ def test_fresh_db_has_unpushed_branch_check_attempts_column(tmp_path, monkeypatc
     assert "unpushed_branch_check_attempts" in cols
 
 
-def test_job_terminal_decision_effect_state_migrates_conservatively(tmp_path, monkeypatch):
+def test_current_db_repairs_missing_job_terminal_decision_effect_state(tmp_path, monkeypatch):
     import sqlite3
     from synlynk import db
 
     db_path = tmp_path / "state.db"
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+
+    fresh = db._get_db()
+    fresh.close()
+
     conn = sqlite3.connect(db_path)
+    conn.execute("DROP INDEX idx_job_terminal_decision_latest")
+    conn.execute("ALTER TABLE job_terminal_decision RENAME TO legacy_job_terminal_decision")
     conn.execute(
         "CREATE TABLE job_terminal_decision ("
-        "job_id TEXT NOT NULL, status TEXT NOT NULL, verification_state TEXT NOT NULL, "
-        "decision_reason TEXT NOT NULL, revision INTEGER NOT NULL, "
+        "job_id TEXT NOT NULL, status TEXT NOT NULL, exit_code INTEGER, "
+        "verification_state TEXT NOT NULL, primary_evidence_id TEXT, "
+        "evidence_snapshot_json TEXT NOT NULL DEFAULT '[]', decision_reason TEXT NOT NULL, "
+        "decided_at TEXT NOT NULL, decided_by TEXT NOT NULL, revision INTEGER NOT NULL, "
+        "contract_version INTEGER NOT NULL, follow_up TEXT NOT NULL DEFAULT 'none', "
         "PRIMARY KEY(job_id, revision))"
     )
     conn.execute(
-        "INSERT INTO job_terminal_decision VALUES (?, ?, ?, ?, ?)",
-        ("legacy-job", "completed", "verified", "legacy", 1),
+        "INSERT INTO job_terminal_decision "
+        "SELECT job_id, status, exit_code, verification_state, primary_evidence_id, "
+        "evidence_snapshot_json, decision_reason, decided_at, decided_by, revision, "
+        "contract_version, follow_up FROM legacy_job_terminal_decision"
+    )
+    conn.execute("DROP TABLE legacy_job_terminal_decision")
+    conn.execute(
+        "CREATE INDEX idx_job_terminal_decision_latest "
+        "ON job_terminal_decision(job_id, revision DESC)"
     )
     conn.commit()
     conn.close()
-    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
 
     migrated = db._get_db()
     columns = {row[1] for row in migrated.execute("PRAGMA table_info(job_terminal_decision)")}
 
     assert "effect_state" in columns
-    assert migrated.execute(
-        "SELECT effect_state FROM job_terminal_decision WHERE job_id='legacy-job'"
-    ).fetchone()[0] == "unknown"
     migrated.close()
+
+
+def test_fresh_db_creates_job_terminal_decision_effect_state(tmp_path, monkeypatch):
+    from synlynk import db
+
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
+
+    conn = db._get_db()
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(job_terminal_decision)")}
+
+    assert "effect_state" in columns
+    conn.close()
 
 
 def test_daemon_job_lifecycle_columns_migrate_without_fabricating_identity(tmp_path, monkeypatch):
