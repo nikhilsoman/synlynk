@@ -2493,6 +2493,10 @@ def _migrate_remove_roadmap_foreign_keys(conn: sqlite3.Connection) -> None:
         conn.execute("PRAGMA foreign_keys = OFF")
 
     try:
+        conn.execute("DROP TRIGGER IF EXISTS trg_roadmap_phases_update")
+        conn.execute("DROP TRIGGER IF EXISTS trg_roadmap_phases_insert")
+        conn.execute("DROP TRIGGER IF EXISTS trg_roadmap_phases_delete")
+
         sql_goals = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'goals' AND type = 'table'").fetchone()
         if sql_goals and sql_goals[0] and "REFERENCES roadmap_phases" in sql_goals[0]:
             conn.execute("CREATE TABLE IF NOT EXISTS _goals_bak AS SELECT id, phase_id FROM goals")
