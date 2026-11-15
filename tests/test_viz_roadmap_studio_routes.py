@@ -4,11 +4,15 @@ raise the same exception types _handle_board_status_request's pattern expects
 added in synlynk/viz/server.py behave consistently with the Board route handlers.
 """
 import json
+import http.server
 import sqlite3
+import threading
+from urllib.request import urlopen
 
 import pytest
 import synlynk as sl
 from synlynk.roadmap_studio import approve_ticket, pin_story, reorder_stories
+from synlynk.vizor_daemon import build_workspace_routing_handler
 
 
 def _seed(conn):
@@ -33,6 +37,95 @@ def _seed(conn):
         (json.dumps(["s1"]),),
     )
     conn.commit()
+
+
+def _serve(handler_cls):
+    server = http.server.HTTPServer(("127.0.0.1", 0), handler_cls)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server
+
+
+def _register_workspace(tmp_path, monkeypatch, *, slug="roadmap-test"):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    config_dir = repo_path / ".synlynk"
+    config_dir.mkdir()
+    (config_dir / "config.json").write_text(json.dumps({"identity_slug": slug}))
+    db_path = tmp_path / "state.db"
+    registry_path = tmp_path / "product-registry.json"
+    registry_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "products": {
+                    slug: {
+                        "slug": slug,
+                        "repo_path": str(repo_path),
+                        "canonical_path": str(db_path),
+                    }
+                },
+            }
+        )
+    )
+    monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(registry_path))
+    monkeypatch.setattr(
+        "synlynk.vizor_daemon._registered_workspaces",
+        lambda: {slug: {"repo_path": str(repo_path)}},
+    )
+    return slug, db_path
+
+
+def test_scoped_get_returns_roadmap_studio_json_for_registered_workspace(tmp_path, monkeypatch):
+    slug, db_path = _register_workspace(tmp_path, monkeypatch)
+    conn = sqlite3.connect(db_path)
+    try:
+        _seed(conn)
+    finally:
+        conn.close()
+
+    server = _serve(build_workspace_routing_handler())
+    try:
+        with urlopen(
+            f"http://127.0.0.1:{server.server_port}/w/{slug}/api/roadmap_studio"
+        ) as response:
+            assert response.status == 200
+            payload = json.loads(response.read().decode("utf-8"))
+        assert payload["tickets"][0]["release_version"] == "v1"
+        assert payload["tickets"][0]["stories"][0]["story_id"] == "s1"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_scoped_get_returns_empty_fallback_for_pre_migration_database(tmp_path, monkeypatch):
+    slug, db_path = _register_workspace(tmp_path, monkeypatch)
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "CREATE TABLE approval_tickets ("
+            "id INTEGER PRIMARY KEY, story_id TEXT, action TEXT, issue_url TEXT, status TEXT)"
+        )
+        conn.execute(
+            "CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, readiness TEXT, status TEXT)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    server = _serve(build_workspace_routing_handler())
+    try:
+        with urlopen(
+            f"http://127.0.0.1:{server.server_port}/w/{slug}/api/roadmap_studio"
+        ) as response:
+            assert response.status == 200
+            assert json.loads(response.read().decode("utf-8")) == {
+                "tickets": [],
+                "backlog": [],
+            }
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 def test_approve_ticket_raises_keyerror_maps_to_404_in_handler(tmp_path):
