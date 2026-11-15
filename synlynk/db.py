@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import shutil
@@ -1402,8 +1403,11 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                     "ALTER TABLE job_terminal_decision "
                     "ADD COLUMN effect_state TEXT NOT NULL DEFAULT 'unknown'"
                 )
-            except sqlite3.OperationalError:
-                pass
+            except sqlite3.OperationalError as exc:
+                logging.getLogger("synlynk").warning(
+                    "Failed to add job_terminal_decision.effect_state: %s", exc
+                )
+                raise
         if "type_id" not in daemon_job_cols:
             try:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN type_id TEXT")
@@ -2377,6 +2381,15 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
     # Harness Context Compaction Protocol: tags a cost_entries row with the
     # compaction event (e.g. "checkpoint", "pack") that produced it, if any.
     _add_column_if_missing(conn, table="cost_entries", column="compaction_event_type", definition="TEXT")
+
+    # This repair must remain outside the legacy schema-version gate: live
+    # databases can be marked current despite missing this additive column.
+    _add_column_if_missing(
+        conn,
+        table="job_terminal_decision",
+        column="effect_state",
+        definition="TEXT NOT NULL DEFAULT 'unknown'",
+    )
 
     # Keep this repair outside the schema-version gate.  A database can have
     # already reached the current version while a prior migration stopped
