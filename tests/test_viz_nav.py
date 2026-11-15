@@ -1,3 +1,5 @@
+import json
+
 from synlynk.viz.nav import VIEW_CATALOG, workspace_view_href, switcher_html, iframe_nav_script
 
 
@@ -86,3 +88,31 @@ def test_chrome_honors_view_query_and_postmessage():
     assert "URLSearchParams" in html
     assert "vizor-navigate" in html
     assert "window.setView = setView" in html
+
+
+def test_home_workspace_nav_only_shows_active_products_with_live_paths(tmp_path, monkeypatch):
+    registry = tmp_path / "registry.json"
+    live_repo = tmp_path / "live-repo"
+    live_repo.mkdir()
+    live_db = tmp_path / "live.db"
+    live_db.touch()
+    registry.write_text(json.dumps({
+        "version": 1,
+        "products": {
+            "synlynk": {"state": "active", "repo_path": str(live_repo)},
+            "live": {"state": "active", "repo_path": str(live_repo)},
+            "inactive": {"state": "archived", "repo_path": str(live_repo)},
+            "dead-repo": {"state": "active", "repo_path": str(tmp_path / "gone")},
+            "canonical-only": {"state": "active", "canonical_path": str(live_db)},
+            "dead-canonical": {"state": "active", "canonical_path": str(tmp_path / "gone.db")},
+        },
+    }))
+    monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(registry))
+
+    html = generate_index_html(_mini(), 33333)
+
+    assert "/w/live/index.html" in html
+    assert "/w/canonical-only/index.html" in html
+    assert "/w/inactive/index.html" not in html
+    assert "/w/dead-repo/index.html" not in html
+    assert "/w/dead-canonical/index.html" not in html

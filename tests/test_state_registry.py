@@ -9,6 +9,8 @@ from synlynk.state_registry import (
     canonical_path,
     ensure_registered_product,
     identity_metadata,
+    cmd_registry_prune,
+    prune_dead_products,
     product_identity,
 )
 
@@ -113,6 +115,30 @@ def test_ensure_registered_product_backfills_repo_path_on_existing_entry(tmp_pat
 
     payload = json.loads(registry.read_text())
     assert payload["products"]["acme"]["repo_path"] == str(repo_path.resolve())
+
+
+def test_prune_dead_products_reports_without_writing_then_removes(tmp_path, monkeypatch, capsys):
+    registry = tmp_path / "registry.json"
+    live_repo = tmp_path / "live"
+    live_repo.mkdir()
+    registry.write_text(json.dumps({
+        "version": 1,
+        "products": {
+            "live": {"repo_path": str(live_repo)},
+            "dead": {"repo_path": str(tmp_path / "missing")},
+            "legacy": {"canonical_path": str(tmp_path / "legacy.db")},
+        },
+    }))
+    monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(registry))
+
+    assert prune_dead_products(dry_run=True) == ["dead"]
+    assert set(json.loads(registry.read_text())["products"]) == {"live", "dead", "legacy"}
+
+    assert prune_dead_products() == ["dead"]
+    assert set(json.loads(registry.read_text())["products"]) == {"live", "legacy"}
+
+    assert cmd_registry_prune(dry_run=True) == 0
+    assert capsys.readouterr().out == "Would prune 0 dead registry entries.\n"
 
 
 def test_typed_open_requires_explicit_noncanonical_modes(tmp_path):

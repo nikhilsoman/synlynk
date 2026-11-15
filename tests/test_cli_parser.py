@@ -97,6 +97,13 @@ def test_start_command_parses():
     assert args.command == "start"
 
 
+def test_registry_prune_parser_accepts_dry_run():
+    parser = cli_mod.build_parser()
+    args = parser.parse_args(["registry", "prune", "--dry-run"])
+
+    assert (args.command, args.registry_action, args.dry_run) == ("registry", "prune", True)
+
+
 def test_type_seed_and_identity_pack_parse():
     parser = cli_mod.build_parser()
     args = parser.parse_args(["type", "seed", "--pack", "studio"])

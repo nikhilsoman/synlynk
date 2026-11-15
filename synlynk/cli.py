@@ -1242,6 +1242,11 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     state_register.add_argument("--product-id", default=None, dest="product_id")
     state_restore.add_argument("--apply", action="store_true")
 
+    registry_parser = subparsers.add_parser("registry", help="Manage the product registry")
+    registry_sub = registry_parser.add_subparsers(dest="registry_action")
+    registry_prune = registry_sub.add_parser("prune", help="Remove entries with missing repository paths")
+    registry_prune.add_argument("--dry-run", action="store_true", help="Report dead entries without removing them")
+
     ops_parser = subparsers.add_parser(
         "ops",
         help="Cross-repo platform operations report (jobs, costs, LIVE, hygiene)",
@@ -2900,6 +2905,12 @@ def main(argv=None) -> None:
             ), sort_keys=True))
         else:
             help_parsers.get("state", parser).print_help()
+    elif args.command == "registry":
+        if args.registry_action == "prune":
+            from synlynk.state_registry import cmd_registry_prune
+
+            sys.exit(cmd_registry_prune(dry_run=args.dry_run))
+        help_parsers.get("registry", parser).print_help()
     elif args.command == "home":
         cmd_home(args)
     elif args.command == "selftest":
