@@ -3,6 +3,7 @@ import html
 import json
 import os
 import re
+import sqlite3
 import sys
 import threading
 import time
@@ -75,6 +76,28 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(json.dumps(payload).encode("utf-8"))
+
+    def _resolve_workspace_repo_path(self, path: str) -> str:
+        """Resolve a scoped API path to its registered workspace repository."""
+        slug = None
+        if path.startswith("/w/"):
+            slug = path.split("/", 3)[2]
+        elif path.endswith("/api/board") or path.endswith("/api/roadmap_studio"):
+            # The daemon's static workspace router rewrites /w/<slug>/... to
+            # /<slug>/... before delegating to this handler.
+            prefix = path.rsplit("/api/", 1)[0].strip("/")
+            if prefix and "/" not in prefix:
+                slug = prefix
+        if slug:
+            try:
+                from synlynk.vizor_daemon import _registered_workspaces
+
+                entry = _registered_workspaces().get(slug) or {}
+                if entry.get("repo_path"):
+                    return entry["repo_path"]
+            except Exception:
+                pass
+        return "."
 
     def do_GET(self):
         from urllib.parse import urlparse, parse_qs
@@ -243,25 +266,26 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json_ok(matrix)
             return
 
-        if path == "/api/board":
+        if path == "/api/board" or path.endswith("/api/board"):
             from synlynk.board import board_data
             filters = parse_qs(parsed.query)
             try:
                 payload = board_data(
+                    repo_path=self._resolve_workspace_repo_path(path),
                     repo_id=(filters.get("repo_id") or [None])[0],
                     type_id=(filters.get("type_id") or [None])[0],
                     goal_id=(filters.get("goal_id") or [None])[0],
                 )
-            except FileNotFoundError:
+            except (FileNotFoundError, sqlite3.OperationalError):
                 payload = {"identity_slug": "", "cards": [], "filters": {"repos": [], "types": [], "goals": []}}
             self._send_json_ok(payload)
             return
 
-        if path == "/api/roadmap_studio":
+        if path == "/api/roadmap_studio" or path.endswith("/api/roadmap_studio"):
             from synlynk.roadmap_studio import studio_data
             try:
-                payload = studio_data()
-            except FileNotFoundError:
+                payload = studio_data(repo_path=self._resolve_workspace_repo_path(path))
+            except (FileNotFoundError, sqlite3.OperationalError):
                 payload = {"tickets": [], "backlog": []}
             self._send_json_ok(payload)
             return
