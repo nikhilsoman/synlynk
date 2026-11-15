@@ -193,8 +193,8 @@
     },
     "governs_authority": {
       "require_linked_goal": true,
-      "require_linked_goal_mode": "observe",
-      "note": "100% GOVERNS adherence required per Nikhil's 2026-10-04 hardening \u2014 every dispatched job must link a GOVERNS goal/story. Hard-fail enforcement shipped via PR #2029 (gh:#1990, closed 2026-10-05). require_linked_goal_mode set to observe 2026-10-07 pending a 100-pass clean streak \u2014 see docs/superpowers/specs/2026-10-07-policy-enforcement-maturity-design.md."
+      "require_linked_goal_mode": "enforce",
+      "note": "100% GOVERNS adherence required per Nikhil's 2026-10-04 hardening \u2014 every dispatched job must link a GOVERNS goal/story. Hard-fail enforcement shipped via gh:#1990 and gh:#5119."
     },
     "constitution_authority": {
       "require_citation": true,

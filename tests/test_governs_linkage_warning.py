@@ -24,6 +24,8 @@ def _quiet_unrelated_preflight(monkeypatch):
 
 def test_dispatch_warns_and_proceeds_without_governs_linkage(project_dir, monkeypatch, capsys):
     _quiet_unrelated_preflight(monkeypatch)
+    import synlynk.policy_gates as pg
+    monkeypatch.setattr(pg, "gate_mode", lambda gate, key, repo_root=".": "observe")
 
     job = sl.dispatch_agent(
         "codex",
@@ -40,6 +42,21 @@ def test_dispatch_warns_and_proceeds_without_governs_linkage(project_dir, monkey
     assert job["id"].startswith("job-")
     assert job["pid"] == 4242
     assert job["status"] == "running"
+
+
+def test_dispatch_hard_fails_without_governs_linkage_in_enforce_mode(project_dir, monkeypatch):
+    import pytest
+    _quiet_unrelated_preflight(monkeypatch)
+
+    with pytest.raises(RuntimeError, match="Dispatch rejected: task is not linked to a GOVERNS story"):
+        sl.dispatch_agent(
+            "codex",
+            "add a unit test for the helper",
+            force_agent=True,
+            context_mode="none",
+        )
+    sentinel = (project_dir / ".synlynk" / "sentinel.md").read_text()
+    assert "GOVERNS_LINKAGE_MISSING" in sentinel
 
 
 def test_dispatch_with_linked_governs_story_is_unchanged(project_dir, monkeypatch, capsys):

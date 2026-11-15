@@ -544,6 +544,34 @@ def _hc_roadmap_decision_drift() -> HealthCheck:
     )
 
 
+def _hc_loop_goals_operating_stories() -> HealthCheck:
+    """Verify all active kind='loop' goals have a live operating story."""
+    try:
+        conn = _pkg("_get_db")()
+        from synlynk.tpm_sweep import find_unstaffed_loop_goals
+
+        unstaffed = find_unstaffed_loop_goals(conn)
+        if not unstaffed:
+            return HealthCheck(
+                "loop_goals_operating_stories",
+                "ok",
+                "all active loop goals have operating stories",
+            )
+        gids = ", ".join(u["goal_id"] for u in unstaffed)
+        return HealthCheck(
+            "loop_goals_operating_stories",
+            "fail",
+            f"active loop goals lack operating story: {gids}",
+            fix="Create an active story linked to the loop goal: synlynk story create --goal-id <goal-id>",
+        )
+    except Exception as exc:
+        return HealthCheck(
+            "loop_goals_operating_stories",
+            "warn",
+            f"loop goal check unavailable: {exc}",
+        )
+
+
 def _hc_editions_config(config: dict = None) -> HealthCheck:
     """Validate that .synlynk/config.json edition and hosted keys are recognized."""
     try:
@@ -1635,6 +1663,7 @@ HEALTH_CHECKS = [
     _hc_todo_drift,
     _hc_roadmap_merge_parity,
     _hc_roadmap_decision_drift,
+    _hc_loop_goals_operating_stories,
     _hc_editions_config,
     _hc_identity_key,
     _hc_identity_roles,
