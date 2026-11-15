@@ -3701,22 +3701,6 @@ def _generate_todo_md() -> None:
             return
 
     conn = _get_db()
-    # Ensure goal_contributions table exists if minimal schema
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS goal_contributions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            goal_id TEXT NOT NULL,
-            story_id TEXT NOT NULL,
-            link_status TEXT NOT NULL DEFAULT 'linked',
-            skip_reason TEXT,
-            resolution_reason TEXT,
-            resolved_at TIMESTAMP,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(goal_id, story_id)
-        )
-        """
-    )
     rows = conn.execute(
         """
         SELECT s.story_id, s.title, s.engg_domain, s.status, s.created_at,
