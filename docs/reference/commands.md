@@ -8,6 +8,8 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 
 ## Orientation gateway (always available)
 
+- `session bearings` — sustain
+- `bearings` — sustain
 - `governs` — visualize
 - `preflight` — open
 - `status` — visualize
