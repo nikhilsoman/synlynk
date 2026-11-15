@@ -8,7 +8,7 @@ from synlynk.viz.organogram import generate_organogram_html
 def test_generate_organogram_html_renders_offline_first_svg():
     mock_data = {
         "workspace": {"name": "test-workspace", "slug": "synlynk"},
-        "agents": [
+        "workspace_agents": [
             {
                 "agent_id": "tpm",
                 "role": "tpm",
@@ -54,3 +54,29 @@ def test_generate_organogram_html_renders_offline_first_svg():
     assert "https://" not in html_out.lower() or "href" not in html_out.lower()
     assert "cdn." not in html_out.lower()
     assert "unpkg.com" not in html_out.lower()
+
+
+def test_generate_organogram_html_uses_workspace_agents_over_cost_buckets():
+    data = {
+        "agents": {
+            "dev": {
+                "tasks_done": 3,
+                "tasks_active": 1,
+                "total_usd": 1.25,
+                "success_rate": 1.0,
+                "alert_count": 0,
+            }
+        },
+        "workspace_agents": [
+            {
+                "agent_id": "vizor-dev",
+                "role": "developer",
+                "primary_archetype": "creator",
+            }
+        ],
+    }
+
+    html_out = generate_organogram_html(data)
+
+    assert 'data-agent-id="vizor-dev"' in html_out
+    assert "@developer" in html_out
