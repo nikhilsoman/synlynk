@@ -323,6 +323,90 @@ def test_dispatch_tpm_advisory_proposal_uses_tpm_role(monkeypatch, tmp_path):
         conn.close()
 
 
+def test_dispatch_tpm_advisory_proposal_persists_theme(monkeypatch, tmp_path):
+    import sqlite3
+    import synlynk.tpm_sweep as tpm_mod
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        "CREATE TABLE approval_tickets (id INTEGER PRIMARY KEY, story_id TEXT, "
+        "action TEXT, issue_url TEXT, status TEXT, constituent_story_ids TEXT, theme TEXT)"
+    )
+    conn.commit()
+
+    monkeypatch.setattr(
+        tpm_mod,
+        "package_next_release_proposal",
+        lambda conn=None, repo_root=".": {
+            "release_version": "v9.9.9",
+            "theme": "Test Theme",
+            "bookend_mtd": "", "bookend_wtd": "", "bookend_today": "", "bookend_horizon": "",
+            "stories": [], "role_breakdown": {},
+        },
+    )
+
+    class _FakeResult:
+        returncode = 0
+        stdout = "https://github.com/test/9999\n"
+        stderr = ""
+
+    monkeypatch.setattr(
+        "synlynk.gh_role.run_gh_as_role", lambda *a, **kw: _FakeResult()
+    )
+
+    url = tpm_mod.dispatch_tpm_advisory_proposal(conn=conn, max_active_proposals=5, assignee="nikhilsoman")
+
+    assert url == "https://github.com/test/9999"
+    theme = conn.execute(
+        "SELECT theme FROM approval_tickets WHERE story_id='v9.9.9'"
+    ).fetchone()[0]
+    assert theme == "Test Theme"
+    conn.close()
+
+
+def test_dispatch_tpm_advisory_proposal_skips_theme_when_column_absent(monkeypatch, tmp_path):
+    """The existing constituent_story_ids-absent fixtures in this file prove the insert must
+    still succeed against a minimal approval_tickets table with neither optional column."""
+    import sqlite3
+    import synlynk.tpm_sweep as tpm_mod
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        "CREATE TABLE approval_tickets (id INTEGER PRIMARY KEY, story_id TEXT, "
+        "action TEXT, issue_url TEXT, status TEXT)"
+    )
+    conn.commit()
+
+    monkeypatch.setattr(
+        tpm_mod,
+        "package_next_release_proposal",
+        lambda conn=None, repo_root=".": {
+            "release_version": "v9.9.8",
+            "theme": "Test Theme",
+            "bookend_mtd": "", "bookend_wtd": "", "bookend_today": "", "bookend_horizon": "",
+            "stories": [], "role_breakdown": {},
+        },
+    )
+
+    class _FakeResult:
+        returncode = 0
+        stdout = "https://github.com/test/9998\n"
+        stderr = ""
+
+    monkeypatch.setattr(
+        "synlynk.gh_role.run_gh_as_role", lambda *a, **kw: _FakeResult()
+    )
+
+    url = tpm_mod.dispatch_tpm_advisory_proposal(conn=conn, max_active_proposals=5, assignee="nikhilsoman")
+
+    assert url == "https://github.com/test/9998"
+    row = conn.execute(
+        "SELECT story_id, status FROM approval_tickets WHERE story_id='v9.9.8'"
+    ).fetchone()
+    assert row == ("v9.9.8", "open")
+    conn.close()
+
+
 
 
 # --------------------------------------------------------------------------- #
