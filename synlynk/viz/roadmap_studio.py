@@ -14,9 +14,9 @@ def generate_roadmap_studio_html(port: int) -> str:
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>synlynk Vizor — Roadmap Studio</title>
 <style>
-:root{--bg:#f6f8fa;--panel:#fff;--panel-2:#f1f5f9;--ink:#1f2328;--muted:#667085;--line:#d8dee4;--accent:#0d9e87;--accent-bg:#e6f7f4;--warn:#dc2626;--shadow:0 2px 8px rgba(31,35,40,0.06)}
+:root{--bg:#f6f8fa;--panel:#fff;--panel-2:#f1f5f9;--ink:#1f2328;--muted:#667085;--line:#d8dee4;--accent:#0d9e87;--accent-bg:#e6f7f4;--warn:#dc2626;--shadow:0 2px 8px rgba(31,35,40,0.06);--provisional:#d97706;--hold-bg:#fef3c7;--hold-border:#d97706;--hold-ink:#92400e;--drop-bg:#fee2e2;--drop-border:#dc2626;--drop-ink:#991b1b}
 @media (prefers-color-scheme: dark){
-  :root{--bg:#0d1117;--panel:#161b22;--panel-2:#21262d;--ink:#f0f6fc;--muted:#8b949e;--line:#30363d;--accent:#3de0c0;--accent-bg:#0d2137;--warn:#f87171;--shadow:0 2px 12px rgba(0,0,0,0.4)}
+  :root{--bg:#0d1117;--panel:#161b22;--panel-2:#21262d;--ink:#f0f6fc;--muted:#8b949e;--line:#30363d;--accent:#3de0c0;--accent-bg:#0d2137;--warn:#f87171;--shadow:0 2px 12px rgba(0,0,0,0.4);--provisional:#fbbf24;--hold-bg:#3a2e0f;--hold-border:#d97706;--hold-ink:#fbbf24;--drop-bg:#3a1414;--drop-border:#dc2626;--drop-ink:#f87171}
 }
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 main{max-width:1600px;margin:0 auto;padding:28px 24px 70px}
@@ -32,6 +32,16 @@ h1{font-size:30px;margin:6px 0 4px;font-weight:700}
 .column-actions{display:flex;gap:6px;margin-bottom:10px}
 .btn{border:1px solid var(--line);background:var(--panel);border-radius:4px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:inherit;font-weight:600}
 .btn:hover{border-color:var(--accent)}
+.btn-approve{border:none;background:var(--accent);color:#fff;font-weight:700}
+.btn-approve:hover{opacity:.85}
+.btn-hold{border:1px solid var(--hold-border);background:var(--hold-bg);color:var(--hold-ink)}
+.btn-drop{border:1px solid var(--drop-border);background:var(--drop-bg);color:var(--drop-ink);font-size:10px;padding:2px 6px}
+.btn-pin{border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent);font-size:10px;padding:2px 6px}
+.pin-select{font-size:10px;padding:2px;border-radius:4px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.provisional-banner{background:var(--accent-bg);border:1px solid var(--accent);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--ink);margin-bottom:16px}
+.column.provisional{border-left:3px solid var(--provisional)}
+.column-theme{color:var(--muted);font-size:11px;font-weight:400;margin:2px 0 0}
+.card-actions{margin-top:6px}
 .revise-box{width:100%;font-size:11px;margin-top:6px;padding:4px;border-radius:4px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;box-shadow:var(--shadow);cursor:grab}
 .card h3{font-size:12px;margin:0 0 4px}
@@ -44,6 +54,7 @@ h1{font-size:30px;margin:6px 0 4px;font-weight:700}
 <div class="eyebrow">Vizor / Roadmap Studio</div>
 <h1>Roadmap Studio</h1>
 <p class="subtitle">Drag, approve, hold, revise, drop, and pin stories against open release proposals. Writes go straight to the product <code>state.db</code> via the same paths as the GitHub-comment grammar.</p>
+<div class="provisional-banner">Nothing below is final. A release only ships once you Approve it.</div>
 <div id="board" class="board"></div>
 <div class="backlog" id="backlog-pane">
   <h2>Backlog</h2>
@@ -53,31 +64,49 @@ h1{font-size:30px;margin:6px 0 4px;font-weight:700}
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let studioData={tickets:[],backlog:[]};
 
-function cardHtml(story,ticketId){
+function cardHtml(story,ticketId,openTickets){
+  let action='';
+  if(ticketId!=null){
+    action=`<button class="btn btn-drop" onclick="dropStory('${esc(story.story_id)}')">Drop</button>`;
+  }else if((openTickets||[]).length){
+    const pinId=`pin-${esc(story.story_id)}`;
+    const options=openTickets.map(t=>`<option value="${t.id}">${esc(t.release_version)}</option>`).join('');
+    action=`<select class="pin-select" id="${pinId}">${options}</select> <button class="btn btn-pin" onclick="pinStory(Number(document.getElementById('${pinId}').value),'${esc(story.story_id)}')">Pin</button>`;
+  }
   return `<article class="card" draggable="true" data-story-id="${esc(story.story_id)}" data-ticket-id="${ticketId??''}">
     <h3>${esc(story.title||story.story_id)}</h3>
     <div class="meta">${esc(story.story_id)} &middot; ${esc(story.role||'')}</div>
+    <div class="card-actions">${action}</div>
   </article>`;
 }
 
 function draw(){
+  const openTickets=(studioData.tickets||[]).filter(t=>t.status==='open'||t.status==='held');
   document.getElementById('board').innerHTML=studioData.tickets.map(t=>{
     const overCap=(t.stories||[]).length>5;
-    return `<section class="column" data-ticket-id="${t.id}">
+    const statusLabel=t.status==='held'?'ON HOLD — still a proposal':'PROPOSAL — awaiting /approve';
+    const themeLine=t.theme?`<div class="column-theme">${esc(t.theme)}</div>`:'';
+    return `<section class="column provisional" data-ticket-id="${t.id}">
       <div class="column-header">
-        <h2>${esc(t.release_version)} &middot; ${esc(t.status)}</h2>
+        <div>
+          <h2>${esc(t.release_version)} &middot; ${statusLabel}</h2>
+          ${themeLine}
+        </div>
         ${overCap?`<span class="cap-warn">${t.stories.length} of 5 suggested</span>`:''}
       </div>
       <div class="column-actions">
-        <button class="btn" onclick="approveTicket(${t.id})">Approve</button>
-        <button class="btn" onclick="holdTicket(${t.id})">Hold</button>
+        <button class="btn btn-approve" onclick="approveTicket(${t.id})">Approve</button>
+        <button class="btn btn-hold" onclick="holdTicket(${t.id})">Hold</button>
       </div>
-      <input class="revise-box" placeholder="Revise instructions..." onkeydown="if(event.key==='Enter')reviseTicket(${t.id},this.value)">
-      <div class="cards" data-ticket-id="${t.id}">${(t.stories||[]).map(s=>cardHtml(s,t.id)).join('')||'<div class="empty">No stories</div>'}</div>
+      <div class="column-actions">
+        <input class="revise-box" placeholder="Revise instructions..." id="revise-${t.id}" onkeydown="if(event.key==='Enter')reviseTicket(${t.id},this.value)">
+        <button class="btn" onclick="reviseTicket(${t.id},document.getElementById('revise-${t.id}').value)">Submit</button>
+      </div>
+      <div class="cards" data-ticket-id="${t.id}">${(t.stories||[]).map(s=>cardHtml(s,t.id,openTickets)).join('')||'<div class="empty">No stories</div>'}</div>
     </section>`;
   }).join('')||'<div class="empty">No open proposals</div>';
 
-  document.getElementById('backlog-list').innerHTML=(studioData.backlog||[]).map(s=>cardHtml(s,null)).join('')||'<div class="empty">Backlog empty</div>';
+  document.getElementById('backlog-list').innerHTML=(studioData.backlog||[]).map(s=>cardHtml(s,null,openTickets)).join('')||'<div class="empty">Backlog empty</div>';
 
   wireDragAndDrop();
 }
