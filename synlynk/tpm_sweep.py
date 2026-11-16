@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from synlynk.approval_gate import raise_approval_ticket
 from synlynk.autonomy import AutonomyLevel, get_agent_autonomy_level
@@ -817,18 +817,20 @@ def dispatch_tpm_advisory_proposal(
         constituent_ids_json = json.dumps(constituent_ids)
         try:
             cols = {row[1] for row in conn.execute("PRAGMA table_info(approval_tickets)")}
+            extra_cols: list[str] = []
+            extra_vals: list[Any] = []
             if "constituent_story_ids" in cols:
-                conn.execute(
-                    "INSERT INTO approval_tickets (story_id, action, issue_url, status, constituent_story_ids) "
-                    "VALUES (?, 'release_proposal', ?, 'open', ?)",
-                    (rel_ver, issue_url, constituent_ids_json),
-                )
-            else:
-                conn.execute(
-                    "INSERT INTO approval_tickets (story_id, action, issue_url, status) "
-                    "VALUES (?, 'release_proposal', ?, 'open')",
-                    (rel_ver, issue_url),
-                )
+                extra_cols.append("constituent_story_ids")
+                extra_vals.append(constituent_ids_json)
+            if "theme" in cols:
+                extra_cols.append("theme")
+                extra_vals.append(proposal["theme"])
+            col_list = "story_id, action, issue_url, status" + "".join(f", {c}" for c in extra_cols)
+            placeholders = "?, 'release_proposal', ?, 'open'" + ", ?" * len(extra_cols)
+            conn.execute(
+                f"INSERT INTO approval_tickets ({col_list}) VALUES ({placeholders})",
+                (rel_ver, issue_url, *extra_vals),
+            )
             conn.commit()
         except Exception as exc:
             logger.error(
