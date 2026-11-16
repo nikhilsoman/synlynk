@@ -18,6 +18,18 @@ from typing import Any, Dict, List, Tuple
 _VIEWS = ("product", "logical", "infra", "world")
 
 
+def _is_unsafe_walk_root(repo_path: str) -> bool:
+    """True when ``repo_path`` is the filesystem root (or resolves to it).
+
+    A misconfigured workspace registration (``repo_path: "/"``) must never
+    reach ``os.walk`` here: walking the whole disk can run for hours and,
+    since views are rendered sequentially, blocks every other workspace's
+    refresh behind it.
+    """
+    abs_path = os.path.abspath(repo_path or "")
+    return os.path.dirname(abs_path) == abs_path
+
+
 def derive_canonical_community_metadata(raw_nodes: List[Dict[str, Any]]) -> Dict[Any, Dict[str, Any]]:
     """Derive rich canonical metadata, descriptions, primary paths, and member symbols per community."""
     from collections import defaultdict, Counter
@@ -542,7 +554,7 @@ def extract_logical_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[Lis
         "worktrees", ".worktrees", ".claude", ".pytest_cache", ".ruff_cache",
         "dist", "build", "test_archive", "test_context_output",
     }
-    for root, dirs, files in os.walk(repo_path):
+    for root, dirs, files in ([] if _is_unsafe_walk_root(repo_path) else os.walk(repo_path)):
         dirs[:] = sorted(d for d in dirs if d not in skip and not d.startswith("."))
         py_files = sorted(f for f in files if f.endswith(".py") and not f.startswith("."))
         if not py_files:
@@ -683,7 +695,7 @@ def _discover_infra_components(repo_path: str, repo: str) -> Tuple[List[Tuple[st
         pass
 
     # 3. Prisma Schema & Databases
-    for root, dirs, files in os.walk(repo_path):
+    for root, dirs, files in ([] if _is_unsafe_walk_root(repo_path) else os.walk(repo_path)):
         dirs[:] = [d for d in dirs if d not in (".git", "node_modules", ".venv", "venv", "dist", "build", "worktrees", ".worktrees", ".pnpm-store", ".turbo")]
         for f in files:
             if f.endswith(".prisma"):
@@ -826,7 +838,7 @@ def extract_world_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[List[
     skip_dirs = {".git", ".synlynk", "__pycache__", "node_modules", ".venv", "venv", "dist", "build", ".pytest_cache", ".ruff_cache", "project-docs", "docs", "worktrees", ".worktrees", ".pnpm-store", ".turbo"}
     scanned_count = 0
     max_scan_files = 150
-    for root, dirs, files in os.walk(repo_path):
+    for root, dirs, files in ([] if _is_unsafe_walk_root(repo_path) else os.walk(repo_path)):
         dirs[:] = [d for d in dirs if d not in skip_dirs and not d.startswith(".")]
         for f in files:
             if f.endswith((".py", ".js", ".ts", ".json", ".env.example", ".env", ".yml", ".yaml")):
