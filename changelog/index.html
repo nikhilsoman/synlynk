@@ -45,6 +45,24 @@
 Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
 <hr>
 <h2><a href="https://github.com/nikhilsoman/synlynk/compare/v0.3.0...HEAD">Unreleased</a></h2>
+<div class="changelog-version-header"><span class="changelog-version">vv0.37.0</span><span class="changelog-date">2026-11-16</span></div>
+<h3 class="tag-added">Added</h3>
+- **Universal GOVERNS Enforcement & Preflight Gate (#5119, #1990, PR #5316):**
+  - Fail-closed preflight enforcement gate in `synlynk/dispatch.py` rejecting unlinked dispatches with sentinel `GOVERNS_LINKAGE_MISSING` unless anchored via `--story`, `--issue`, or `--pr`.
+  - Promoted `governs_authority.require_linked_goal_mode` from `"observe"` to `"enforce"` in `.synlynk/policy.json`.
+  - Added continuous loop goal health check (`_hc_loop_goals_operating_stories`) in `synlynk/doctor.py` and `find_unstaffed_loop_goals` in `synlynk/tpm_sweep.py`, ensuring all active `kind="loop"` goals possess an active operating story.
+  - Fail-closed `synlynk pr check` gate verified blocking PR merge on unlinked jobs.
+<h3 class="tag-fixed">Fixed</h3>
+- **FTUE & Provider Discovery Hardening (#5297, #5298, #5299, PR #5303):**
+  - Fixed pre-dispatch database reconciliation lock side effects on clean repositories during `synlynk init --dry-run`.
+  - Added full environment variable passthrough allowlist in `_constants.py` for the Claude harness (`ANTHROPIC_BASE_URL`, `CLAUDE_CONFIG_DIR`), unblocking local gateways and custom model proxies.
+  - Resolved `[unknown]` job ID rendering in launch wizard output.
+- **Workspace Registry & Navigation Defense (#5305, PR #5306):**
+  - Added `synlynk registry prune` with confirmed counts and `--dry-run` to clean dead workspace references.
+  - Filtered Vizor workspace navigation to active products with verified on-disk repositories.
+- **Vizor UI Resilience & Organogram (#5308, #5309, PRs #5309, #5310):**
+  - Dynamic organogram rendering across all active workspace agents in `synlynk/viz/organogram.py`.
+  - Graceful handling of null efficiency capacity budgets in `synlynk/viz/efficiency.py`.
 <div class="changelog-version-header"><span class="changelog-version">vv0.36.0</span><span class="changelog-date">2026-11-14</span></div>
 <h3 class="tag-added">Added</h3>
 - **Intent-Based Product Development (IBPD) Engine (Track 4 / Spec #12) (#5247):**
