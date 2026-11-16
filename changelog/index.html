@@ -45,6 +45,13 @@
 Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
 <hr>
 <h2><a href="https://github.com/nikhilsoman/synlynk/compare/v0.3.0...HEAD">Unreleased</a></h2>
+<div class="changelog-version-header"><span class="changelog-version">vv0.38.0</span><span class="changelog-date">2026-11-17</span></div>
+<h3 class="tag-added">Added</h3>
+- **FinOps Dual-Ledger Telemetry & Autonomous Daemon Resilience (#5328, #5331, #5333):**
+  - Decoupled autonomous heal (`cmd_heal`) and TPM wake (`run_tpm_wake_cycle`) loops in `synlynk/daemon.py` ensuring continuous loop execution.
+  - Guarded role authority checks in `synlynk/tpm_sweep.py` preventing unhandled dispatch exceptions on non-dev roles.
+  - Added `status='resolved'` proposal handling in `check_and_trigger_post_release()` for automated release ceremony execution.
+  - Shipped dual-ledger token calibration, dynamic burn-rate multipliers, and turn-usage JSON migration.
 <div class="changelog-version-header"><span class="changelog-version">vv0.37.0</span><span class="changelog-date">2026-11-16</span></div>
 <h3 class="tag-added">Added</h3>
 - **Universal GOVERNS Enforcement & Preflight Gate (#5119, #1990, PR #5316):**
