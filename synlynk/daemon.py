@@ -1373,14 +1373,34 @@ class SynlynkDaemon(WatchDaemon):
 
     def _autonomous_tick(self) -> None:
         """Run one bounded heal/TPM pass and leave an SRE heartbeat."""
+        errors = []
         try:
             from synlynk.heal import cmd_heal
-            from synlynk.tpm_sweep import run_tpm_wake_cycle
             cmd_heal(batch_size=1, auto_merge=False)
-            run_tpm_wake_cycle()
-            log_telemetry_event({"event": "sre_heartbeat", "status": "ok", "component": "autonomous_loop"})
         except Exception as exc:
-            log_telemetry_event({"event": "sre_heartbeat", "status": "degraded", "component": "autonomous_loop", "error": str(exc)})
+            errors.append(f"cmd_heal: {exc}")
+            _traceback.print_exc()
+
+        try:
+            from synlynk.tpm_sweep import run_tpm_wake_cycle
+            run_tpm_wake_cycle()
+        except Exception as exc:
+            errors.append(f"tpm_wake: {exc}")
+            _traceback.print_exc()
+
+        if errors:
+            log_telemetry_event({
+                "event": "sre_heartbeat",
+                "status": "degraded",
+                "component": "autonomous_loop",
+                "error": "; ".join(errors),
+            })
+        else:
+            log_telemetry_event({
+                "event": "sre_heartbeat",
+                "status": "ok",
+                "component": "autonomous_loop",
+            })
 
     def _run_capability_watch_tick(self, config: dict) -> None:
         """Run due capability checks from the daemon cadence.

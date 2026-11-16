@@ -1,5 +1,72 @@
 # Agy Devlog
 
+## 2026-11-16 — Milestone Packaging Realignment: v0.38.0 FinOps & Editions Governance (#5328)
+
+### Shipped & Verified Across Fleet
+- **Backlog Purge & Proposal Cancellation:**
+  - Cancelled and closed GitHub Issue #5326 (`approval_tickets` Ticket #14) per operator direction.
+  - Formally archived the 5 non-essential residual October tasks in `state.db` (`story-f5819acc`, `story-7322619b`, `story-395153be`, `story-5551aa7e`, `story-ec6e4acf`), preventing historical tech-debt dredging.
+- **Forward Strategic Packaging (Milestone v0.38.0):**
+  - Packaged the real forward-looking milestone: **v0.38.0: FinOps Dual-Ledger Telemetry & Editions Governance (Theme 3 & Track 1)**.
+  - Constituent tasks:
+    1. `story-3271d873`: Wire dynamic burn-rate multiplier into dispatch preflight gate [dev/codex].
+    2. `story-1a8afcc1`: Populate `cost_entries` estimate columns + drift alert in `synlynk/cost.py` [dev/codex].
+    3. `story-ded28a2b`: Dual-ledger token calibration & `cost_entries` migration in `synlynk/db.py` [dev/codex].
+    4. `story-ae1b3cda` (#3916): Cost-entries turn-usage-JSON migration and token true-up ledger [dev/codex].
+    5. `story-8684a183`: Track 1: Editions Registry (#9) - Core/Opt-in/Hosted boundary and gating in `synlynk/editions.py` [pm/claude].
+  - Filed live GitHub tracking issue **[#5328](https://github.com/nikhilsoman/synlynk/issues/5328)** and recorded in `approval_tickets` Ticket #15.
+[@agy, @nikhilsoman]
+
+## 2026-11-16 — TPM Proposal Pipeline Dynamic Reconciliation & Perf Refresh (PR #5325)
+
+### Shipped & Verified Across Fleet
+- **Dynamic Theme Resolution (`synlynk/tpm_sweep.py`):**
+  - Replaced the frozen `roadmap_metadata` lookup table with dynamic queries against Approach C `roadmap_arcs` view and `goals` table.
+  - Proposals now inherit real themes and priorities from active roadmap arcs.
+- **Priority-Based Story Selection & Zombie Exclusion:**
+  - Candidate selection query now joins `stories` with `goals` and excludes stories whose parent goals are marked `done` or `archived`.
+  - Replaced ancient `rowid ASC` ordering with `COALESCE(g.roadmap_priority, 'P9') ASC, COALESCE(s.priority, 0) DESC, s.rowid DESC`, preventing legacy backlog dredging.
+- **Stale Proposal Auto-Reconciliation:**
+  - Added `_is_version_stale()` logic to `dispatch_tpm_advisory_proposal()` that auto-supersedes older open proposals across version bumps.
+- **Housekeeping & Zombie Story Closeouts:**
+  - Closed zombie issues #4361 (`story-issue-1654`) and #4362 (`story-issue-1655`) under completed `goal-d3333441`.
+  - Re-anchored #2901 (`story-3aeb1c7a`) to Theme 6 (Cloud Swarms / `goal-d5323df6`).
+  - Closed stale proposal Issue #5285 (v0.36.1) as superseded in `approval_tickets` Ticket #13.
+  - Dispatched fresh, dynamic proposal Issue [#5326](https://github.com/nikhilsoman/synlynk/issues/5326) for milestone **v0.37.1** (`approval_tickets` Ticket #14).
+- **Perf Spec Currency & Benchmarks:**
+  - Updated `docs/testing/pytest-xdist-evaluation-1496.md` with 5,764-test re-evaluation findings.
+  - Added CLI startup benchmark `tests/test_cli_startup_perf.py` verified under 0.20s.
+- **Verification:**
+  - 27 unit tests passed in `tests/test_tpm_l1_advisory.py`.
+  - Full CI matrix passed on PR #5325; non-author QA verification executed via `synlynk-synlynk-qa` and merged to `main` (`0c00c2b3`).
+[@agy, @nikhilsoman]
+
+## 2026-11-16 — Milestone Release v0.37.0: Autonomous Operations & Universal Governance
+
+### Shipped & Verified Across Fleet
+- **Universal GOVERNS Enforcement & Preflight Gate (#5119, #1990, PR #5316):**
+  - Fail-closed preflight enforcement gate in `synlynk/dispatch.py` rejecting unlinked dispatches with sentinel `GOVERNS_LINKAGE_MISSING` unless anchored via `--story`, `--issue`, or `--pr`.
+  - Promoted `governs_authority.require_linked_goal_mode` from `"observe"` to `"enforce"` in `.synlynk/policy.json`.
+  - Added continuous loop goal health check (`_hc_loop_goals_operating_stories`) in `synlynk/doctor.py` and `find_unstaffed_loop_goals` in `synlynk/tpm_sweep.py`, ensuring all active `kind="loop"` goals possess an active operating story.
+  - Unit suites passing: `tests/test_universal_governs_enforcement.py`, `tests/test_governs_linkage_warning.py`, `tests/test_dispatch.py` (210/210 passed).
+  - Closed Issue #5119 & #1990; marked `story-ae619721` done.
+- **FTUE & Provider Discovery Hardening (#5297, #5298, #5299, PR #5303):**
+  - Zero-mutation `synlynk init --dry-run` database isolation preventing pre-dispatch DB lock side effects on clean repos.
+  - Claude harness proxy/gateway environment variable passthrough allowlist in `_constants.py` (`ANTHROPIC_BASE_URL`, `CLAUDE_CONFIG_DIR`).
+  - Resolved `[unknown]` job ID rendering in launch wizard output.
+- **Workspace Registry & Navigation Defense (#5305, PR #5306):**
+  - Added `synlynk registry prune` with confirmed counts and `--dry-run` to clean dead workspace references.
+  - Filtered Vizor workspace navigation to active products with verified on-disk repositories.
+- **Vizor UI Resilience & Organogram (#5308, #5309, PRs #5309, #5310):**
+  - Dynamic organogram rendering across all active workspace agents in `synlynk/viz/organogram.py`.
+  - Graceful handling of null efficiency capacity budgets in `synlynk/viz/efficiency.py`.
+- **Release Ceremony & Autonomous Post-Release SOP (PR #5318):**
+  - Synchronized `VERSION` (0.37.0), `CHANGELOG.md`, `README.md` (5,764 collected tests badge + hero update), canonical docs HTML, mirrored PDFs/EPUBs, and `website/src/_data/release.json`.
+  - Verified `doctor --version` synchronized with zero drift.
+  - Merged via PR #5318 with non-author QA verification (`synlynk-synlynk-qa`).
+  - Executed autonomous post-release SOP (`synlynk release --post-release --version 0.37.0 --role pm`): Git tag `v0.37.0` pushed, GitHub release published, database closeout completed.
+[@agy, @nikhilsoman]
+
 ## 2026-11-10 — Track 2 Horizon 3 (v0.31.0): Autonomous Fleet Governance, Universal Archetypes & Visual Organogram
 
 ### Shipped & Verified Across Fleet
