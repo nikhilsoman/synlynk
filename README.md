@@ -14,6 +14,8 @@
 
 Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. The Python CLI injects scoped project context into every dispatch, uses empirical harness allocation only after a harness has at least five completed, merged jobs for the relevant task type, and follows the documented interim policy until then. See the [empirical capability policy](docs/blog/244-chore-empirical-capability-policy.md) and [routing policy](.synlynk/policy.json). Synlynk also tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
+**v0.38.0:** FinOps Dual-Ledger Telemetry & Autonomous Daemon Resilience — Decoupled autonomous heal and TPM wake loops, guarded role authority checks, full post-release SOP automation, and dual-ledger token calibration (#5328, #5331, #5333).
+
 **v0.37.0:** Autonomous Operations & Universal Governance — Fail-closed preflight GOVERNS enforcement gate (#5119, #1990), continuous loop goal health verification, zero-mutation FTUE & Claude gateway passthrough (#5297–#5299), and workspace registry pruning (#5305).
 
 **v0.36.0:** Intent-Based Product Development (IBPD) Engine (Track 4) — Master Roadmap Phase 3 self-serve delivery ladder (Tiers 1–3), hosted edition capabilities, and engagement quote evaluation (#5247).
@@ -135,7 +137,6 @@ The AI tool is instructed (via `CLAUDE.md` / `GEMINI.md`) to read `.synlynk/cont
 Commands are grouped by where you'll reach for them in a typical project lifecycle.
 
 <!-- commands:start -->
-<!-- commands:start -->
 
 **Start here:**
 
@@ -156,5 +157,4 @@ Commands are grouped by where you'll reach for them in a typical project lifecyc
 
 Full command reference: [docs/reference/commands.md](docs/reference/commands.md)
 
-<!-- commands:end -->
 <!-- commands:end -->
