@@ -27,13 +27,13 @@ def _seed(conn):
         """CREATE TABLE IF NOT EXISTS approval_tickets (
             id INTEGER PRIMARY KEY AUTOINCREMENT, story_id TEXT, action TEXT,
             issue_url TEXT, status TEXT, opened_at TIMESTAMP, resolved_at TIMESTAMP,
-            constituent_story_ids TEXT
+            constituent_story_ids TEXT, theme TEXT
         )"""
     )
     conn.execute("INSERT INTO stories (story_id, title, readiness, status) VALUES ('s1','T1','ready','open')")
     conn.execute(
-        "INSERT INTO approval_tickets (id, story_id, action, issue_url, status, constituent_story_ids) "
-        "VALUES (1, 'v1', 'release_proposal', 'https://x/1', 'open', ?)",
+        "INSERT INTO approval_tickets (id, story_id, action, issue_url, status, constituent_story_ids, theme) "
+        "VALUES (1, 'v1', 'release_proposal', 'https://x/1', 'open', ?, 'Test Theme')",
         (json.dumps(["s1"]),),
     )
     conn.commit()
@@ -92,6 +92,7 @@ def test_scoped_get_returns_roadmap_studio_json_for_registered_workspace(tmp_pat
             assert response.status == 200
             payload = json.loads(response.read().decode("utf-8"))
         assert payload["tickets"][0]["release_version"] == "v1"
+        assert payload["tickets"][0]["theme"] == "Test Theme"
         assert payload["tickets"][0]["stories"][0]["story_id"] == "s1"
     finally:
         server.shutdown()

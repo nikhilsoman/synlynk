@@ -32,7 +32,8 @@ def _seed(conn):
             status TEXT,
             opened_at TIMESTAMP,
             resolved_at TIMESTAMP,
-            constituent_story_ids TEXT
+            constituent_story_ids TEXT,
+            theme TEXT
         )"""
     )
     conn.execute(
@@ -43,8 +44,8 @@ def _seed(conn):
         "('s4','Task 4','dev','draft','done',5)"
     )
     conn.execute(
-        "INSERT INTO approval_tickets (id, story_id, action, issue_url, status, constituent_story_ids) VALUES "
-        "(1, 'v0.33.0', 'release_proposal', 'https://github.com/test/1', 'open', ?)",
+        "INSERT INTO approval_tickets (id, story_id, action, issue_url, status, constituent_story_ids, theme) VALUES "
+        "(1, 'v0.33.0', 'release_proposal', 'https://github.com/test/1', 'open', ?, 'Test Theme')",
         (json.dumps(["s1", "s2"]),),
     )
     conn.commit()
@@ -63,11 +64,28 @@ def test_studio_data_returns_open_tickets_and_backlog(tmp_path):
         ticket = data["tickets"][0]
         assert ticket["id"] == 1
         assert ticket["release_version"] == "v0.33.0"
+        assert ticket["theme"] == "Test Theme"
         story_ids = {s["story_id"] for s in ticket["stories"]}
         assert story_ids == {"s1", "s2"}
         # s3 is advisory and unclaimed -> backlog. s4 is draft but status='done' -> excluded.
         backlog_ids = {s["story_id"] for s in data["backlog"]}
         assert backlog_ids == {"s3"}
+    finally:
+        conn.close()
+
+
+def test_studio_data_returns_none_for_unset_ticket_theme(tmp_path):
+    db_file = tmp_path / "state.db"
+    conn = sl._get_db(str(db_file))
+    conn.row_factory = sqlite3.Row
+    try:
+        _seed(conn)
+        conn.execute("UPDATE approval_tickets SET theme=NULL WHERE id=1")
+        conn.commit()
+
+        from synlynk.roadmap_studio import studio_data
+
+        assert studio_data(conn=conn)["tickets"][0]["theme"] is None
     finally:
         conn.close()
 
