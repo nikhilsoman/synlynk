@@ -625,6 +625,99 @@ def format_release_proposal_markdown(proposal: dict) -> str:
     return "\n".join(lines)
 
 
+def _is_version_stale(open_ver: str, current_ver: str) -> bool:
+    """Return True if open_ver is strictly older than current_ver."""
+    if not open_ver or not current_ver:
+        return False
+    v1 = open_ver.lstrip("v").strip()
+    v2 = current_ver.lstrip("v").strip()
+    if v1 == v2:
+        return False
+    try:
+        from packaging.version import parse as parse_version
+
+        return parse_version(v1) < parse_version(v2)
+    except Exception:
+        p1 = [int(x) for x in v1.split(".") if x.isdigit()]
+        p2 = [int(x) for x in v2.split(".") if x.isdigit()]
+        return p1 < p2
+
+
+def _resolve_roadmap_metadata(rel_ver: str, conn, repo_root: str = ".") -> dict:
+    """Dynamically resolve proposal theme and bookends from Approach C roadmap views and goals."""
+    clean_ver = rel_ver.lstrip("v")
+    theme = None
+
+    if conn is not None:
+        try:
+            # Check Approach C roadmap_arcs view first
+            has_arcs = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name='roadmap_arcs'"
+            ).fetchone()
+            if has_arcs:
+                arc_row = conn.execute(
+                    "SELECT title FROM roadmap_arcs WHERE (version=? OR version=?) AND title IS NOT NULL LIMIT 1",
+                    (rel_ver, clean_ver),
+                ).fetchone()
+                if arc_row and arc_row[0]:
+                    theme = arc_row[0]
+                else:
+                    # Look up active uncompleted arc
+                    next_arc = conn.execute(
+                        "SELECT version, title FROM roadmap_arcs WHERE status NOT IN ('shipped', 'done') ORDER BY id ASC LIMIT 1"
+                    ).fetchone()
+                    if next_arc and next_arc[1]:
+                        theme = f"{next_arc[1]}"
+
+            # Next check goals table directly
+            if not theme:
+                has_goals = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name='goals'"
+                ).fetchone()
+                if has_goals:
+                    grow = conn.execute(
+                        "SELECT outcome, phase_title FROM goals WHERE (arc_version=? OR arc_version=?) LIMIT 1",
+                        (rel_ver, clean_ver),
+                    ).fetchone()
+                    if grow:
+                        theme = grow[1] or grow[0]
+        except Exception as exc:
+            logger.debug("Dynamic roadmap metadata resolution skipped: %s", exc)
+
+    # Static historical fallback for legacy milestone ranges
+    historical_metadata = {
+        "v0.32.3": {
+            "theme": "Zero-Drift Governance & Constitutional Spec Linter (Theme 1)",
+            "bookend_today": "Cut v0.32.2 release and activated TPM Autonomous Operations & Human-in-the-Loop Gate.",
+            "bookend_horizon": "Day 5 (v0.32.4): FinOps Dual-Ledger Telemetry & Dynamic Burn-Rate Governor; Day 6 (v0.32.5): Cloud Wedge Shell.",
+        },
+        "v0.32.4": {
+            "theme": "FinOps Dual-Ledger Telemetry & Dynamic Burn-Rate Governor (Theme 3)",
+            "bookend_today": "Shipped v0.32.3 Constitutional Spec Linter & Dual-Lock Document Guard.",
+            "bookend_horizon": "Day 6 (v0.32.5): Cloud Wedge Shell; Day 7 (v0.33.0): Sovereign Silicon Deep Integration.",
+        },
+        "v0.32.5": {
+            "theme": "The Cloud Wedge Shell & Personal Relay Hub (Theme 6)",
+            "bookend_today": "Shipped v0.32.4 FinOps Dual-Ledger Telemetry.",
+            "bookend_horizon": "Day 7 (v0.33.0): Sovereign Silicon Deep Integration; Week 2 (v0.34.0): Ambient Co-Pilot Suite.",
+        },
+        "v0.33.0": {
+            "theme": "Sovereign Silicon Deep Local Model Parity (Theme 2)",
+            "bookend_today": "Shipped v0.32.5 Cloud Wedge Shell.",
+            "bookend_horizon": "Week 2 (v0.34.0): Ambient Co-Pilot & Fenced Companion v2.1 Suite.",
+        },
+    }
+    meta = historical_metadata.get(rel_ver, {})
+    resolved_theme = theme or meta.get("theme") or f"Milestone {rel_ver}"
+    bookend_today = meta.get("bookend_today", "Active cadence execution.")
+    bookend_horizon = meta.get("bookend_horizon", "Scheduled roadmap progression.")
+    return {
+        "theme": resolved_theme,
+        "bookend_today": bookend_today,
+        "bookend_horizon": bookend_horizon,
+    }
+
+
 def package_next_release_proposal(conn=None, repo_root: str = ".") -> Optional[dict]:
     """Package unblocked backlog stories into a single-release proposal."""
     from synlynk.db import _get_db
@@ -640,12 +733,30 @@ def package_next_release_proposal(conn=None, repo_root: str = ".") -> Optional[d
         if not has_table:
             return None
 
-        # Fetch stories in advisory or unblocked ready/draft status
-        rows = conn.execute(
-            "SELECT story_id, title, role, estimated_tokens, gh_issue FROM stories "
-            "WHERE (readiness='advisory' OR (readiness IN ('ready', 'draft') AND status NOT IN ('done', 'archived'))) "
-            "ORDER BY CASE readiness WHEN 'advisory' THEN 1 WHEN 'ready' THEN 2 ELSE 3 END, rowid ASC LIMIT 5"
-        ).fetchall()
+        # Check if goals table exists for priority and lifecycle join
+        has_goals = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name='goals'"
+        ).fetchone()
+
+        if has_goals:
+            query = (
+                "SELECT s.story_id, s.title, s.role, s.estimated_tokens, s.gh_issue "
+                "FROM stories s "
+                "LEFT JOIN goals g ON s.goal_id = g.goal_id OR s.goal_id = g.id "
+                "WHERE (s.readiness='advisory' OR (s.readiness IN ('ready', 'draft') AND s.status NOT IN ('done', 'archived'))) "
+                "  AND (g.status IS NULL OR g.status NOT IN ('done', 'archived')) "
+                "ORDER BY CASE s.readiness WHEN 'advisory' THEN 1 WHEN 'ready' THEN 2 ELSE 3 END, "
+                "  COALESCE(g.roadmap_priority, 'P9') ASC, "
+                "  COALESCE(s.priority, 0) DESC, "
+                "  s.rowid DESC LIMIT 5"
+            )
+        else:
+            query = (
+                "SELECT story_id, title, role, estimated_tokens, gh_issue FROM stories "
+                "WHERE (readiness='advisory' OR (readiness IN ('ready', 'draft') AND status NOT IN ('done', 'archived'))) "
+                "ORDER BY CASE readiness WHEN 'advisory' THEN 1 WHEN 'ready' THEN 2 ELSE 3 END, rowid ASC LIMIT 5"
+            )
+        rows = conn.execute(query).fetchall()
         if not rows:
             return None
 
@@ -680,33 +791,7 @@ def package_next_release_proposal(conn=None, repo_root: str = ".") -> Optional[d
                 version_str = "0.32.2"
 
         rel_ver = f"v{version_str}"
-        roadmap_metadata = {
-            "v0.32.3": {
-                "theme": "Zero-Drift Governance & Constitutional Spec Linter (Theme 1)",
-                "bookend_today": "Cut v0.32.2 release and activated TPM Autonomous Operations & Human-in-the-Loop Gate.",
-                "bookend_horizon": "Day 5 (v0.32.4): FinOps Dual-Ledger Telemetry & Dynamic Burn-Rate Governor; Day 6 (v0.32.5): Cloud Wedge Shell.",
-            },
-            "v0.32.4": {
-                "theme": "FinOps Dual-Ledger Telemetry & Dynamic Burn-Rate Governor (Theme 3)",
-                "bookend_today": "Shipped v0.32.3 Constitutional Spec Linter & Dual-Lock Document Guard.",
-                "bookend_horizon": "Day 6 (v0.32.5): Cloud Wedge Shell; Day 7 (v0.33.0): Sovereign Silicon Deep Integration.",
-            },
-            "v0.32.5": {
-                "theme": "The Cloud Wedge Shell & Personal Relay Hub (Theme 6)",
-                "bookend_today": "Shipped v0.32.4 FinOps Dual-Ledger Telemetry.",
-                "bookend_horizon": "Day 7 (v0.33.0): Sovereign Silicon Deep Integration; Week 2 (v0.34.0): Ambient Co-Pilot Suite.",
-            },
-            "v0.33.0": {
-                "theme": "Sovereign Silicon Deep Local Model Parity (Theme 2)",
-                "bookend_today": "Shipped v0.32.5 Cloud Wedge Shell.",
-                "bookend_horizon": "Week 2 (v0.34.0): Ambient Co-Pilot & Fenced Companion v2.1 Suite.",
-            },
-        }
-        meta = roadmap_metadata.get(rel_ver, {
-            "theme": f"Milestone {rel_ver}",
-            "bookend_today": "Active cadence execution.",
-            "bookend_horizon": "Scheduled roadmap progression.",
-        })
+        meta = _resolve_roadmap_metadata(rel_ver, conn, repo_root=repo_root)
 
         return {
             "release_version": rel_ver,
@@ -743,6 +828,25 @@ def dispatch_tpm_advisory_proposal(
     if own_conn:
         conn = _get_db()
     try:
+        proposal = package_next_release_proposal(conn=conn, repo_root=repo_root)
+        if not proposal:
+            return None
+
+        rel_ver = proposal["release_version"]
+
+        # Auto-reconcile / supersede stale open proposals from older versions
+        try:
+            stale_rows = conn.execute(
+                "SELECT id, story_id, issue_url FROM approval_tickets WHERE action='release_proposal' AND status='open'"
+            ).fetchall()
+            for s_id, s_ver, s_url in stale_rows:
+                if s_ver and _is_version_stale(s_ver, rel_ver):
+                    conn.execute("UPDATE approval_tickets SET status='superseded' WHERE id=?", (s_id,))
+                    logger.info("Marked stale proposal %s (id=%s) as superseded by %s", s_ver, s_id, rel_ver)
+            conn.commit()
+        except Exception as exc:
+            logger.warning("Stale proposal auto-reconciliation failed: %s", exc)
+
         # Check active unapproved proposals (global cap)
         try:
             count_row = conn.execute(
@@ -756,12 +860,6 @@ def dispatch_tpm_advisory_proposal(
 
         if active_count >= max_active_proposals:
             return None
-
-        proposal = package_next_release_proposal(conn=conn, repo_root=repo_root)
-        if not proposal:
-            return None
-
-        rel_ver = proposal["release_version"]
 
         # Per-version dedup: skip if an open or held proposal already exists for this version
         try:

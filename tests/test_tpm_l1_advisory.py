@@ -948,3 +948,130 @@ def test_approve_hold_helpers_are_ticket_scoped_when_given_a_ticket_id(tmp_path)
         conn.close()
 
 
+def test_is_version_stale():
+    from synlynk.tpm_sweep import _is_version_stale
+
+    assert _is_version_stale("v0.36.1", "v0.37.1") is True
+    assert _is_version_stale("0.36.1", "0.37.0") is True
+    assert _is_version_stale("v0.37.0", "v0.37.0") is False
+    assert _is_version_stale("v0.37.1", "v0.37.0") is False
+    assert _is_version_stale("", "v0.37.0") is False
+    assert _is_version_stale("v0.37.0", "") is False
+
+
+def test_package_next_release_proposal_excludes_stories_under_done_goals(tmp_path):
+    import sqlite3
+    from synlynk.tpm_sweep import package_next_release_proposal
+
+    conn = sqlite3.connect(tmp_path / "test.db")
+    try:
+        conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, role TEXT, estimated_tokens INTEGER, gh_issue TEXT, readiness TEXT, status TEXT, goal_id TEXT, priority INTEGER)")
+        conn.execute("CREATE TABLE goals (id INTEGER PRIMARY KEY, goal_id TEXT, status TEXT, roadmap_priority TEXT)")
+        
+        # Goal 1 is done
+        conn.execute("INSERT INTO goals (id, goal_id, status) VALUES (1, 'g-done', 'done')")
+        # Goal 2 is active
+        conn.execute("INSERT INTO goals (id, goal_id, status, roadmap_priority) VALUES (2, 'g-active', 'active', 'P1')")
+
+        # Story under done goal
+        conn.execute("INSERT INTO stories (story_id, title, readiness, status, goal_id) VALUES ('s-zombie', 'Zombie Story', 'ready', 'open', 'g-done')")
+        # Story under active goal
+        conn.execute("INSERT INTO stories (story_id, title, readiness, status, goal_id) VALUES ('s-active', 'Active Story', 'ready', 'open', 'g-active')")
+        conn.commit()
+
+        proposal = package_next_release_proposal(conn=conn, repo_root=str(tmp_path))
+        assert proposal is not None
+        story_ids = [s["story_id"] for s in proposal["stories"]]
+        assert "s-active" in story_ids
+        assert "s-zombie" not in story_ids
+    finally:
+        conn.close()
+
+
+def test_package_next_release_proposal_orders_by_roadmap_priority(tmp_path):
+    import sqlite3
+    from synlynk.tpm_sweep import package_next_release_proposal
+
+    conn = sqlite3.connect(tmp_path / "test.db")
+    try:
+        conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, role TEXT, estimated_tokens INTEGER, gh_issue TEXT, readiness TEXT, status TEXT, goal_id TEXT, priority INTEGER)")
+        conn.execute("CREATE TABLE goals (id INTEGER PRIMARY KEY, goal_id TEXT, status TEXT, roadmap_priority TEXT)")
+        
+        conn.execute("INSERT INTO goals (id, goal_id, status, roadmap_priority) VALUES (1, 'g-low', 'active', 'P3')")
+        conn.execute("INSERT INTO goals (id, goal_id, status, roadmap_priority) VALUES (2, 'g-high', 'active', 'P1')")
+
+        # Older story with lower roadmap priority
+        conn.execute("INSERT INTO stories (story_id, title, readiness, status, goal_id, priority) VALUES ('s-old-p3', 'Low Pri', 'ready', 'open', 'g-low', 0)")
+        # Newer story with higher roadmap priority
+        conn.execute("INSERT INTO stories (story_id, title, readiness, status, goal_id, priority) VALUES ('s-new-p1', 'High Pri', 'ready', 'open', 'g-high', 0)")
+        conn.commit()
+
+        proposal = package_next_release_proposal(conn=conn, repo_root=str(tmp_path))
+        assert proposal is not None
+        assert proposal["stories"][0]["story_id"] == "s-new-p1"
+    finally:
+        conn.close()
+
+
+def test_resolve_roadmap_metadata_dynamic_from_arcs_and_goals(tmp_path):
+    import sqlite3
+    from synlynk.tpm_sweep import _resolve_roadmap_metadata
+
+    conn = sqlite3.connect(tmp_path / "test.db")
+    try:
+        conn.execute("CREATE TABLE roadmap_arcs (id INTEGER PRIMARY KEY, version TEXT, title TEXT, status TEXT)")
+        conn.execute("INSERT INTO roadmap_arcs (version, title, status) VALUES ('v0.37.1', 'Dynamic Milestone Title', 'in_progress')")
+        conn.commit()
+
+        meta = _resolve_roadmap_metadata("v0.37.1", conn=conn)
+        assert meta["theme"] == "Dynamic Milestone Title"
+    finally:
+        conn.close()
+
+
+def test_dispatch_tpm_advisory_proposal_supersedes_stale_proposals(monkeypatch, tmp_path):
+    import sqlite3
+    import synlynk.tpm_sweep as tpm_mod
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    try:
+        conn.execute(
+            "CREATE TABLE approval_tickets (id INTEGER PRIMARY KEY, story_id TEXT, "
+            "action TEXT, issue_url TEXT, status TEXT, constituent_story_ids TEXT, theme TEXT)"
+        )
+        # Old proposal for v0.36.1 is open
+        conn.execute(
+            "INSERT INTO approval_tickets (id, story_id, action, issue_url, status) "
+            "VALUES (13, 'v0.36.1', 'release_proposal', 'https://github.com/test/5285', 'open')"
+        )
+        conn.commit()
+
+        monkeypatch.setattr(
+            tpm_mod,
+            "package_next_release_proposal",
+            lambda conn=None, repo_root=".": {
+                "release_version": "v0.37.1",
+                "theme": "Autonomous Operations",
+                "bookend_mtd": "", "bookend_wtd": "", "bookend_today": "", "bookend_horizon": "",
+                "stories": [], "role_breakdown": {},
+            },
+        )
+
+        class _FakeResult:
+            returncode = 0
+            stdout = "https://github.com/test/5325\n"
+            stderr = ""
+
+        monkeypatch.setattr("synlynk.gh_role.run_gh_as_role", lambda *a, **kw: _FakeResult())
+
+        url = tpm_mod.dispatch_tpm_advisory_proposal(conn=conn, max_active_proposals=5, assignee="nikhilsoman")
+        assert url == "https://github.com/test/5325"
+
+        # Verify old proposal was superseded
+        old_status = conn.execute("SELECT status FROM approval_tickets WHERE id=13").fetchone()[0]
+        assert old_status == "superseded"
+    finally:
+        conn.close()
+
+
+

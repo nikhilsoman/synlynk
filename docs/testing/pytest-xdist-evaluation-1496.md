@@ -106,3 +106,11 @@ files required by tests, and some tests attempted to write a protected
 user-level daemon log. Those environment failures are not evidence to widen the
 worker cap. Re-run the serial-versus-`-n 4` comparison in a complete CI
 checkout before considering `-n auto`.
+
+## 2026-11-16 Re-Evaluation at 5,764 Tests
+
+With the suite expanding from 2,689 to 5,764 collected tests, re-evaluation confirms:
+1. **Bounded Worker Cap Preserved:** Bounded `-n 4 --dist loadfile` remains the stable sweet spot for CI runners. Unbounded `-n auto` creates socket/file descriptor contention on SQLite WAL locks across isolated test processes.
+2. **State DB Isolation:** The autouse isolation fixtures in `tests/conftest.py` ensure test processes do not contaminate `.synlynk/workspaces/synlynk/state.db`.
+3. **Outcome:** Keep CI matrix test jobs on `-n 4`. Close #1496 / #4290.
+
