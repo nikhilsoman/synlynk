@@ -53,7 +53,7 @@ def studio_data(repo_path: str = ".", *, conn: Optional[sqlite3.Connection] = No
     active_conn, owns = _conn(conn, repo_path)
     try:
         ticket_rows = active_conn.execute(
-            "SELECT id, story_id AS release_version, issue_url, status, constituent_story_ids "
+            "SELECT id, story_id AS release_version, issue_url, status, constituent_story_ids, theme "
             "FROM approval_tickets WHERE action=? AND status IN ('open','held')",
             (RELEASE_PROPOSAL_ACTION,),
         ).fetchall()
@@ -80,6 +80,7 @@ def studio_data(repo_path: str = ".", *, conn: Optional[sqlite3.Connection] = No
                     "release_version": row_dict["release_version"],
                     "issue_url": row_dict["issue_url"],
                     "status": row_dict["status"],
+                    "theme": row_dict.get("theme"),
                     "stories": stories,
                 }
             )
