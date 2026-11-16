@@ -424,3 +424,87 @@ def test_m0033_is_idempotent(tmp_path):
     assert "proposal_order" in cols
     conn.close()
 
+
+def test_migration_0034_adds_approval_tickets_theme(tmp_path, monkeypatch):
+    import sqlite3
+    from synlynk.migrations import runner
+    from synlynk.migrations.m0034_approval_tickets_theme import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        """CREATE TABLE approval_tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            story_id TEXT,
+            action TEXT,
+            issue_url TEXT,
+            status TEXT
+        )"""
+    )
+    conn.execute("PRAGMA user_version = 33")
+    conn.commit()
+
+    monkeypatch.setattr(runner, "MIGRATIONS", [MIGRATION])
+    runner.run_pending_migrations(conn)
+
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(approval_tickets)")}
+    assert "theme" in cols
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 34
+
+    runner.run_pending_migrations(conn)
+    cols_after = {row[1] for row in conn.execute("PRAGMA table_info(approval_tickets)")}
+    assert cols_after == cols
+    conn.close()
+
+
+def test_m0034_is_idempotent(tmp_path):
+    import sqlite3
+    from synlynk.migrations.m0034_approval_tickets_theme import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        """CREATE TABLE approval_tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            story_id TEXT,
+            action TEXT,
+            issue_url TEXT,
+            status TEXT
+        )"""
+    )
+    MIGRATION.up(conn)
+    MIGRATION.up(conn)
+    conn.commit()
+
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(approval_tickets)")}
+    assert "theme" in cols
+    conn.close()
+
+
+def test_m0034_backfills_known_v0_36_1_theme(tmp_path):
+    import sqlite3
+    from synlynk.migrations.m0034_approval_tickets_theme import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        """CREATE TABLE approval_tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            story_id TEXT,
+            action TEXT,
+            issue_url TEXT,
+            status TEXT
+        )"""
+    )
+    conn.execute(
+        "INSERT INTO approval_tickets (story_id, action, issue_url, status) "
+        "VALUES ('v0.36.1', 'release_proposal', 'https://github.com/test/5285', 'open')"
+    )
+    conn.commit()
+
+    MIGRATION.up(conn)
+    conn.commit()
+
+    theme = conn.execute(
+        "SELECT theme FROM approval_tickets WHERE story_id='v0.36.1'"
+    ).fetchone()[0]
+    assert theme == "Milestone v0.36.1"
+    conn.close()
+
