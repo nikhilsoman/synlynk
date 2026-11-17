@@ -129,6 +129,38 @@ def evaluate_asimov_invariants(story: dict, repo_path: str = ".") -> tuple[bool,
     return True, "All Asimov & Synlynk invariants satisfied."
 
 
+def _find_proposal_approval_for_story(story_id: str) -> Optional[dict]:
+    """Return resolved/consumed release_proposal ticket dict if story_id is one of its constituents."""
+    from synlynk.db import _get_db
+    import json
+
+    conn = _get_db()
+    try:
+        rows = conn.execute(
+            "SELECT id, story_id, action, issue_url, status, constituent_story_ids "
+            "FROM approval_tickets WHERE action='release_proposal' AND status IN ('resolved', 'consumed') "
+            "ORDER BY id DESC"
+        ).fetchall()
+        for row in rows:
+            raw = row[5]
+            if raw:
+                try:
+                    ids = json.loads(raw)
+                    if isinstance(ids, list) and story_id in ids:
+                        return {
+                            "id": row[0],
+                            "story_id": row[1],
+                            "action": row[2],
+                            "issue_url": row[3],
+                            "status": row[4],
+                        }
+                except Exception:
+                    pass
+        return None
+    finally:
+        conn.close()
+
+
 def _ready_stories() -> list:
     from synlynk.db import _get_db
 
@@ -196,8 +228,12 @@ def run_sweep_pass(assignee: str = "nikhilsoman") -> Dict[str, int]:
         if authority.requires_approval:
             action = "task_dispatch:implement"
             resolved_ticket = _find_ticket(story["story_id"], action, "resolved")
+            if not resolved_ticket:
+                resolved_ticket = _find_proposal_approval_for_story(story["story_id"])
+
             if resolved_ticket:
-                _mark_ticket_consumed(resolved_ticket["id"])
+                if resolved_ticket.get("action") == "task_dispatch:implement":
+                    _mark_ticket_consumed(resolved_ticket["id"])
                 # Fall through to dispatch below, same as an allowed authority.
             else:
                 if not _find_ticket(story["story_id"], action, "open"):
@@ -297,14 +333,27 @@ def run_tpm_wake_cycle() -> dict:
     burndown_result = run_backlog_burndown_sweep(dry_run=True)
 
     if autonomy_level == AutonomyLevel.L1_ADVISORY:
-        # In L1 Advisory: package release-scale proposal and file tracking issue for human gate
-        proposal_url = dispatch_tpm_advisory_proposal()
-        sweep_result = {
-            "status": "advisory_only",
-            "dispatched": 0,
-            "proposals": len(triaged_items),
-            "proposal_url": proposal_url,
-        }
+        # In L1 Advisory: check if an operator approval just occurred or approved stories are ready to sweep
+        has_approved_ready = False
+        if comment_result and comment_result.get("verdict") == "approved":
+            has_approved_ready = True
+        else:
+            for s in _ready_stories():
+                if _find_proposal_approval_for_story(s["story_id"]):
+                    has_approved_ready = True
+                    break
+
+        if has_approved_ready:
+            sweep_result = run_sweep_pass()
+        else:
+            # Package release-scale proposal and file tracking issue for human gate
+            proposal_url = dispatch_tpm_advisory_proposal()
+            sweep_result = {
+                "status": "advisory_only",
+                "dispatched": 0,
+                "proposals": len(triaged_items),
+                "proposal_url": proposal_url,
+            }
     else:
         # In L2 Gated / L3 Autonomous: run sweep pass
         sweep_result = run_sweep_pass()

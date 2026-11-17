@@ -140,6 +140,34 @@ def test_run_sweep_pass_dispatches_and_consumes_resolved_ticket(isolated_db, pro
     assert _find_ticket(story_id, "task_dispatch:implement", "consumed") is not None
 
 
+def test_run_sweep_pass_dispatches_story_approved_via_release_proposal(isolated_db, project_dir):
+    import json
+    story_id = cmd_story_create(title="story from release proposal")
+    cmd_story_ready(story_id)
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO approval_tickets (story_id, action, issue_url, status, constituent_story_ids) "
+        "VALUES ('v0.38.1', 'release_proposal', 'https://github.com/example/issues/100', 'resolved', ?)",
+        (json.dumps([story_id]),)
+    )
+    conn.commit()
+    conn.close()
+
+    with patch("synlynk.tpm_sweep.check_authority") as mock_auth, \
+            patch("synlynk.tpm_sweep.raise_approval_ticket") as mock_ticket, \
+            patch("synlynk.tpm_sweep.dispatch_agent") as mock_dispatch:
+        mock_auth.return_value = MagicMock(
+            allowed=True, requires_approval=True, reason="named_release"
+        )
+        mock_dispatch.return_value = {"id": "job-prop-1", "agent": "codex"}
+        summary = run_sweep_pass()
+
+    assert summary["advanced"] == 1
+    assert summary["parked"] == 0
+    mock_ticket.assert_not_called()
+
+
+
 def _story_with_job(project_dir, job_status):
     story_id = cmd_story_create(title=f"Story with {job_status} job")
     cmd_story_ready(story_id)
