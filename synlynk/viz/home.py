@@ -2,6 +2,7 @@
 import html
 import json
 import os
+from synlynk.viz.banner import _compute_underused_feature_banner
 from synlynk.viz.chrome import _live_js
 def generate_index_html(data: dict, port: int) -> str:
     """Generate the master Vizor shell with two-tier accordion and location breadcrumbs."""
@@ -393,6 +394,19 @@ def generate_index_html(data: dict, port: int) -> str:
     meta_json = json.dumps({"port": port, "updated_at": updated_at})
     avatar_label = (workspace_name[:1] or "S").upper()
 
+    banner_message = _compute_underused_feature_banner(data)
+    banner_html = ""
+    if banner_message:
+        banner_html = f'''
+    <div id="vizor-first-visit-banner" style="animation: slideIn 0.3s ease-out; background: var(--accent-banner, #f59e0b); color: #1a1a1a; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center;">
+        <span>{banner_message}</span>
+        <button onclick="document.getElementById('vizor-first-visit-banner').remove()" style="background: none; border: none; font-weight: bold; cursor: pointer;">Close</button>
+    </div>
+    <style>
+      @keyframes slideIn {{ from {{ transform: translateY(-100%); }} to {{ transform: translateY(0); }} }}
+    </style>
+'''
+
     return f"""<!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
@@ -402,6 +416,7 @@ def generate_index_html(data: dict, port: int) -> str:
 <style>{style_content}</style>
 </head>
 <body>
+{banner_html}
 <div class="shell">
   <aside class="sidenav">
     <div class="nav-header">
