@@ -7,7 +7,8 @@ import json
 import http.server
 import sqlite3
 import threading
-from urllib.request import urlopen
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 import pytest
 import synlynk as sl
@@ -44,6 +45,21 @@ def _serve(handler_cls):
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server
+
+
+def _post(server, path, payload):
+    request = Request(
+        f"http://127.0.0.1:{server.server_port}{path}",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlopen(request) as response:
+            return response.status
+    except HTTPError as exc:
+        exc.read()
+        return exc.code
 
 
 def _register_workspace(tmp_path, monkeypatch, *, slug="roadmap-test"):
@@ -160,3 +176,67 @@ def test_pin_story_returns_ok_dict_shape_handler_passes_through(tmp_path):
         assert result == {"ok": True, "ticket_id": 1, "story_id": "s1", "over_cap": False}
     finally:
         conn.close()
+
+
+@pytest.mark.parametrize(
+    ("action", "payload"),
+    [
+        ("approve", {"ticket_id": "bad"}),
+        ("hold", {"ticket_id": "bad"}),
+        ("revise", {"ticket_id": "bad", "instructions": "x"}),
+        ("drop", {"story_id": None}),
+        ("reorder", {"ticket_id": 1, "ordered_story_ids": ["not-a-member"]}),
+        ("pin", {"ticket_id": 1, "story_id": None}),
+    ],
+)
+def test_write_routes_return_400_and_leave_workspace_unchanged(
+    tmp_path, monkeypatch, action, payload
+):
+    slug, db_path = _register_workspace(tmp_path, monkeypatch)
+    conn = sqlite3.connect(db_path)
+    _seed(conn)
+    conn.close()
+    conn = sqlite3.connect(db_path)
+    before = list(conn.iterdump())
+    conn.close()
+    monkeypatch.setattr(
+        "synlynk.local_http_auth.authorize_local_request", lambda headers: (True, 200, "")
+    )
+    server = _serve(build_workspace_routing_handler())
+    try:
+        assert _post(server, f"/w/{slug}/api/roadmap_studio/{action}", payload) == 400
+    finally:
+        server.shutdown()
+        server.server_close()
+    conn = sqlite3.connect(db_path)
+    try:
+        assert list(conn.iterdump()) == before
+    finally:
+        conn.close()
+
+
+@pytest.mark.parametrize(
+    ("action", "payload"),
+    [
+        ("approve", {"ticket_id": 999}),
+        ("hold", {"ticket_id": 999}),
+        ("revise", {"ticket_id": 999, "instructions": "x"}),
+        ("drop", {"story_id": "missing"}),
+        ("reorder", {"ticket_id": 999, "ordered_story_ids": ["s1"]}),
+        ("pin", {"ticket_id": 999, "story_id": "s1"}),
+    ],
+)
+def test_write_routes_return_404_for_missing_ticket_or_story(tmp_path, monkeypatch, action, payload):
+    slug, db_path = _register_workspace(tmp_path, monkeypatch)
+    conn = sqlite3.connect(db_path)
+    _seed(conn)
+    conn.close()
+    monkeypatch.setattr(
+        "synlynk.local_http_auth.authorize_local_request", lambda headers: (True, 200, "")
+    )
+    server = _serve(build_workspace_routing_handler())
+    try:
+        assert _post(server, f"/w/{slug}/api/roadmap_studio/{action}", payload) == 404
+    finally:
+        server.shutdown()
+        server.server_close()

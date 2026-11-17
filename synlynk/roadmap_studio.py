@@ -28,6 +28,8 @@ def _conn(conn: Optional[sqlite3.Connection], repo_path: str) -> tuple[sqlite3.C
 
 
 def _ticket_row(conn: sqlite3.Connection, ticket_id: int) -> dict:
+    if not isinstance(ticket_id, int) or isinstance(ticket_id, bool):
+        raise ValueError("ticket_id must be an integer")
     row = conn.execute(
         "SELECT id, story_id, status, constituent_story_ids FROM approval_tickets WHERE id=? AND action=?",
         (ticket_id, RELEASE_PROPOSAL_ACTION),
@@ -140,6 +142,10 @@ def revise_ticket(
 def drop_story(story_id: str, repo_path: str = ".", *, conn: Optional[sqlite3.Connection] = None) -> dict:
     active_conn, owns = _conn(conn, repo_path)
     try:
+        if not story_id or not isinstance(story_id, str):
+            raise ValueError("story_id is required")
+        if active_conn.execute("SELECT 1 FROM stories WHERE story_id=?", (story_id,)).fetchone() is None:
+            raise KeyError(f"story not found: {story_id}")
         _apply_drop(active_conn, story_id)
         return {"ok": True, "story_id": story_id}
     finally:
@@ -182,7 +188,11 @@ def pin_story(
     """
     active_conn, owns = _conn(conn, repo_path)
     try:
+        if not story_id or not isinstance(story_id, str):
+            raise ValueError("story_id is required")
         ticket_row = _ticket_row(active_conn, ticket_id)
+        if active_conn.execute("SELECT 1 FROM stories WHERE story_id=?", (story_id,)).fetchone() is None:
+            raise KeyError(f"story not found: {story_id}")
         members = _constituent_ids(ticket_row)
         if story_id not in members:
             members.append(story_id)
