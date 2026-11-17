@@ -2256,6 +2256,10 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         help='Execute autonomous post-release SOP (tagging, GitHub release, collateral sync, milestone closeout)')
 
     viz_parser = subparsers.add_parser("viz", help="Open Vizor dashboard for this workspace")
+    viz_parser.add_argument("--serve", action="store_true",
+                            help="Start the Vizor server directly in the foreground")
+    viz_parser.add_argument("--port", type=int, default=None,
+                            help="Port to bind Vizor server to (default: configured port or 27472)")
     viz_parser.add_argument("--install", action="store_true",
                             help="Install the Vizor daemon as an OS-supervised background service")
     viz_parser.add_argument("--ensure", action="store_true",

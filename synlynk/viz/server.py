@@ -1002,7 +1002,7 @@ def _serve_until_stopped(server: http.server.HTTPServer) -> None:
     try:
         while True:
             time.sleep(3600)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, EOFError):
         pass
     finally:
         server.shutdown()
@@ -1022,13 +1022,24 @@ def _ftue_prompts(config: dict) -> dict:
     if vizor.get("ftue_done"):
         return config
     print("\n✦ synlynk viz — first setup\n")
-    if sys.stdin.isatty():
-        has_ux = input("  Does this project have user-facing UX? (y/n) ").strip().lower() == "y"
-        vizor["second_view"] = "journeys" if has_ux else "tube"
-        notify = input("  Enable browser notifications? (y/n) ").strip().lower() == "y"
-        vizor["notify_on_refresh"] = notify
-        interval_raw = input("  Auto-refresh interval? (15 / 30 / off) [off] ").strip() or "off"
-        vizor["refresh_interval_minutes"] = 0 if interval_raw == "off" else int(interval_raw)
+    is_interactive = False
+    try:
+        is_interactive = sys.stdin.isatty()
+    except Exception:
+        is_interactive = False
+
+    if is_interactive:
+        try:
+            has_ux = input("  Does this project have user-facing UX? (y/n) ").strip().lower() == "y"
+            vizor["second_view"] = "journeys" if has_ux else "tube"
+            notify = input("  Enable browser notifications? (y/n) ").strip().lower() == "y"
+            vizor["notify_on_refresh"] = notify
+            interval_raw = input("  Auto-refresh interval? (15 / 30 / off) [off] ").strip() or "off"
+            vizor["refresh_interval_minutes"] = 0 if interval_raw == "off" else int(interval_raw)
+        except (EOFError, KeyboardInterrupt):
+            vizor["second_view"] = "tube"
+            vizor["notify_on_refresh"] = False
+            vizor["refresh_interval_minutes"] = 0
     else:
         vizor["second_view"] = "tube"
         vizor["notify_on_refresh"] = False
@@ -1145,6 +1156,22 @@ def cmd_viz(args) -> None:
         from synlynk.product_store import identity_slug_from_config
         from synlynk.wave6 import hosted_vizor_placeholder
         print(json.dumps(hosted_vizor_placeholder(identity_slug_from_config(".")), indent=2))
+        return
+
+    if getattr(args, "serve", False):
+        port = getattr(args, "port", None) or vizor_daemon._read_port() or _pkg().DEFAULT_PORT
+        slug = _pkg()._current_workspace_slug()
+        try:
+            server = _pkg()._start_server(port)
+        except OSError as exc:
+            print(f"  ✗ Failed to bind Vizor server on port {port}: {exc}")
+            return
+        url = f"http://localhost:{port}/w/{slug}/overview.html"
+        print(f"  ✓ Vizor serving at {url} (Ctrl+C to stop)")
+        try:
+            _pkg()._serve_until_stopped(server)
+        except (KeyboardInterrupt, EOFError):
+            pass
         return
 
     if getattr(args, "ensure", False):
