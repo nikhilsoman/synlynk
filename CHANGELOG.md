@@ -9,6 +9,20 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.38.1] - 2026-11-17
+### Added
+- **Roadmap Studio Drag/Drop & Dynamic Bookends (#5338, PRs #5344, #5346, #5347, #5348):**
+  - Interactive Vizor drag-and-drop proposal controls over TPM-sweep release proposals (`story-058d77e0`).
+  - Dynamic `bookend_mtd`, `bookend_today`, and `bookend_horizon` in `synlynk/tpm_sweep.py` derived from git tags, merged PRs, and upcoming proposals, eliminating static fallbacks (`story-7d4e5129`, PR #5346).
+  - Thematic candidate story clustering in TPM proposal sweep pass (`story-7d4e5129`, PR #5346).
+  - Route validation test suite covering 6 Roadmap Studio write routes (`/approve`, `/hold`, `/revise`, `/drop`, `/reorder`, `/pin`) with atomic rollback verification (`story-8f3a9102`, PR #5344).
+  - UX 1.0 Phase 3b: Vizor first-visit underused feature alert banner and dismiss controls (`story-d4b40958`, PR #5348).
+
+### Fixed
+- **CLI & Concurrency Hardening (#3978, PR #5347):**
+  - Handled `EOFError` and `KeyboardInterrupt` gracefully on non-interactive `synlynk viz --serve` invocations (`story-c822fd03`, PR #5347).
+  - Hardened SQLite migrations (`m0032`, `m0033`, `m0034`) against concurrent worker initialization race conditions (`OperationalError: duplicate column name`).
+
 ## [v0.38.0] - 2026-11-17
 ### Added
 - **FinOps Dual-Ledger Telemetry & Autonomous Daemon Resilience (#5328, #5331, #5333):**
