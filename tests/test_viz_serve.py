@@ -210,3 +210,35 @@ def test_handle_kill_routes_through_uxcore():
         result = handler._handle_kill({"job_id": "job-1"})
     mock_kill.assert_called_once_with(job_id="job-1")
     assert result["ok"] is True
+
+
+def test_ftue_prompts_handles_eoferror(tmp_path, monkeypatch):
+    from synlynk.viz.server import _ftue_prompts
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", MagicMock(side_effect=EOFError("unexpected EOF")))
+
+    config = {}
+    result = _ftue_prompts(config)
+
+    assert result["vizor"]["ftue_done"] is True
+    assert result["vizor"]["second_view"] == "tube"
+    assert result["vizor"]["notify_on_refresh"] is False
+    assert result["vizor"]["refresh_interval_minutes"] == 0
+
+
+def test_cmd_viz_handles_serve_with_eoferror(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from synlynk.viz.server import cmd_viz
+    import synlynk.viz
+
+    monkeypatch.chdir(tmp_path)
+    args = SimpleNamespace(serve=True, port=8721, hosted=False, ensure=False, install=False, uninstall=False, daemon_status=False)
+
+    mock_server = MagicMock()
+    with patch.object(synlynk.viz, "_start_server", return_value=mock_server) as mock_start, \
+            patch.object(synlynk.viz, "_serve_until_stopped", side_effect=EOFError("EOF")), \
+            patch.object(synlynk.viz, "_current_workspace_slug", return_value="test-ws"):
+        cmd_viz(args)
+
+    mock_start.assert_called_once_with(8721)
