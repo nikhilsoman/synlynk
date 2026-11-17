@@ -696,14 +696,160 @@ def _is_version_stale(open_ver: str, current_ver: str) -> bool:
         return p1 < p2
 
 
+def _derive_dynamic_bookends(rel_ver: str, conn, repo_root: str = ".") -> dict:
+    """Dynamically derive bookends from git tags, merged PRs, and upcoming roadmap milestones."""
+    import subprocess
+    import re
+
+    # 1. MTD: derive from recent git tags
+    recent_tags = []
+    try:
+        res = subprocess.run(
+            ["git", "tag", "--sort=-creatordate"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            for line in res.stdout.splitlines():
+                t = line.strip()
+                if re.match(r"^v?\d+\.\d+\.\d+$", t):
+                    tag_norm = t if t.startswith("v") else f"v{t}"
+                    if tag_norm not in recent_tags:
+                        recent_tags.append(tag_norm)
+                if len(recent_tags) >= 5:
+                    break
+    except Exception:
+        pass
+
+    if recent_tags:
+        tag_labels = []
+        for tag in recent_tags:
+            tag_clean = tag.lstrip("v")
+            title = None
+            if conn is not None:
+                try:
+                    row = conn.execute(
+                        "SELECT theme FROM approval_tickets WHERE action='release_proposal' AND (story_id=? OR story_id=?) LIMIT 1",
+                        (tag, tag_clean),
+                    ).fetchone()
+                    if row and row[0]:
+                        title = row[0]
+                    else:
+                        arc_row = conn.execute(
+                            "SELECT title FROM roadmap_arcs WHERE (version=? OR version=?) LIMIT 1",
+                            (tag, tag_clean),
+                        ).fetchone()
+                        if arc_row and arc_row[0]:
+                            title = arc_row[0]
+                except Exception:
+                    pass
+            if title:
+                short_title = title.split(":")[0].strip() if ":" in title else title[:30].strip()
+                tag_labels.append(f"{tag} ({short_title})")
+            else:
+                tag_labels.append(tag)
+        bookend_mtd = f"Shipped {', '.join(tag_labels)}."
+    else:
+        bookend_mtd = "Iterative release progression across active roadmap arcs."
+
+    # 2. Today: derive from recently merged PRs or git commits
+    merged_items = []
+    try:
+        res = subprocess.run(
+            ["git", "log", "--merges", "-n", "5", "--oneline"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            for line in res.stdout.strip().splitlines()[:3]:
+                m = re.search(r"pull request #(\d+)", line, re.I)
+                if m:
+                    pr_num = m.group(1)
+                    merged_items.append(f"PR #{pr_num}")
+                else:
+                    parts = line.split(" ", 1)
+                    if len(parts) > 1:
+                        merged_items.append(parts[1][:40])
+    except Exception:
+        pass
+
+    if merged_items:
+        bookend_today = f"Merged {', '.join(merged_items)}."
+    else:
+        bookend_today = "Active cadence execution and test suite hardening."
+
+    # 3. Horizon: derive from upcoming milestone proposals in approval_tickets or roadmap_arcs
+    horizon_items = []
+    if conn is not None:
+        try:
+            rows = conn.execute(
+                "SELECT story_id, theme FROM approval_tickets "
+                "WHERE action='release_proposal' AND status IN ('held', 'open') AND story_id != ? "
+                "ORDER BY id ASC LIMIT 2",
+                (rel_ver,),
+            ).fetchall()
+            for r in rows:
+                sid, theme = r[0], r[1]
+                theme_label = f": {theme[:40]}..." if theme and len(theme) > 40 else (f": {theme}" if theme else "")
+                horizon_items.append(f"{sid}{theme_label}")
+        except Exception:
+            pass
+
+    if horizon_items:
+        bookend_horizon = "; ".join(horizon_items) + "."
+    else:
+        bookend_horizon = "Next scheduled milestone in roadmap."
+
+    bookend_wtd = "Ratified authoritative platform roadmap cadence and thematic execution priorities."
+
+    return {
+        "bookend_mtd": bookend_mtd,
+        "bookend_wtd": bookend_wtd,
+        "bookend_today": bookend_today,
+        "bookend_horizon": bookend_horizon,
+    }
+
+
+def _cluster_candidate_stories(stories_list: list[dict], target_count: int = 5) -> list[dict]:
+    """Cluster candidate stories by thematic goal and subsystem proximity."""
+    if len(stories_list) <= target_count:
+        return stories_list
+
+    by_goal: dict[str, list[dict]] = {}
+    no_goal: list[dict] = []
+    for s in stories_list:
+        gid = s.get("goal_id")
+        if gid:
+            by_goal.setdefault(gid, []).append(s)
+        else:
+            no_goal.append(s)
+
+    sorted_goals = sorted(by_goal.keys(), key=lambda g: len(by_goal[g]), reverse=True)
+
+    clustered: list[dict] = []
+    for gid in sorted_goals:
+        for s in by_goal[gid]:
+            if len(clustered) < target_count:
+                clustered.append(s)
+
+    for s in no_goal:
+        if len(clustered) < target_count:
+            clustered.append(s)
+
+    return clustered
+
+
 def _resolve_roadmap_metadata(rel_ver: str, conn, repo_root: str = ".") -> dict:
-    """Dynamically resolve proposal theme and bookends from Approach C roadmap views and goals."""
+    """Dynamically resolve proposal theme and bookends from Approach C roadmap views, goals, and git state."""
     clean_ver = rel_ver.lstrip("v")
     theme = None
 
     if conn is not None:
         try:
-            # Check Approach C roadmap_arcs view first
             has_arcs = conn.execute(
                 "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name='roadmap_arcs'"
             ).fetchone()
@@ -715,14 +861,12 @@ def _resolve_roadmap_metadata(rel_ver: str, conn, repo_root: str = ".") -> dict:
                 if arc_row and arc_row[0]:
                     theme = arc_row[0]
                 else:
-                    # Look up active uncompleted arc
                     next_arc = conn.execute(
                         "SELECT version, title FROM roadmap_arcs WHERE status NOT IN ('shipped', 'done') ORDER BY id ASC LIMIT 1"
                     ).fetchone()
                     if next_arc and next_arc[1]:
                         theme = f"{next_arc[1]}"
 
-            # Next check goals table directly
             if not theme:
                 has_goals = conn.execute(
                     "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name='goals'"
@@ -737,37 +881,15 @@ def _resolve_roadmap_metadata(rel_ver: str, conn, repo_root: str = ".") -> dict:
         except Exception as exc:
             logger.debug("Dynamic roadmap metadata resolution skipped: %s", exc)
 
-    # Static historical fallback for legacy milestone ranges
-    historical_metadata = {
-        "v0.32.3": {
-            "theme": "Zero-Drift Governance & Constitutional Spec Linter (Theme 1)",
-            "bookend_today": "Cut v0.32.2 release and activated TPM Autonomous Operations & Human-in-the-Loop Gate.",
-            "bookend_horizon": "Day 5 (v0.32.4): FinOps Dual-Ledger Telemetry & Dynamic Burn-Rate Governor; Day 6 (v0.32.5): Cloud Wedge Shell.",
-        },
-        "v0.32.4": {
-            "theme": "FinOps Dual-Ledger Telemetry & Dynamic Burn-Rate Governor (Theme 3)",
-            "bookend_today": "Shipped v0.32.3 Constitutional Spec Linter & Dual-Lock Document Guard.",
-            "bookend_horizon": "Day 6 (v0.32.5): Cloud Wedge Shell; Day 7 (v0.33.0): Sovereign Silicon Deep Integration.",
-        },
-        "v0.32.5": {
-            "theme": "The Cloud Wedge Shell & Personal Relay Hub (Theme 6)",
-            "bookend_today": "Shipped v0.32.4 FinOps Dual-Ledger Telemetry.",
-            "bookend_horizon": "Day 7 (v0.33.0): Sovereign Silicon Deep Integration; Week 2 (v0.34.0): Ambient Co-Pilot Suite.",
-        },
-        "v0.33.0": {
-            "theme": "Sovereign Silicon Deep Local Model Parity (Theme 2)",
-            "bookend_today": "Shipped v0.32.5 Cloud Wedge Shell.",
-            "bookend_horizon": "Week 2 (v0.34.0): Ambient Co-Pilot & Fenced Companion v2.1 Suite.",
-        },
-    }
-    meta = historical_metadata.get(rel_ver, {})
-    resolved_theme = theme or meta.get("theme") or f"Milestone {rel_ver}"
-    bookend_today = meta.get("bookend_today", "Active cadence execution.")
-    bookend_horizon = meta.get("bookend_horizon", "Scheduled roadmap progression.")
+    resolved_theme = theme or f"Milestone {rel_ver}"
+    bookends = _derive_dynamic_bookends(rel_ver, conn, repo_root=repo_root)
+
     return {
         "theme": resolved_theme,
-        "bookend_today": bookend_today,
-        "bookend_horizon": bookend_horizon,
+        "bookend_mtd": bookends["bookend_mtd"],
+        "bookend_wtd": bookends["bookend_wtd"],
+        "bookend_today": bookends["bookend_today"],
+        "bookend_horizon": bookends["bookend_horizon"],
     }
 
 
@@ -779,21 +901,19 @@ def package_next_release_proposal(conn=None, repo_root: str = ".") -> Optional[d
     if own_conn:
         conn = _get_db()
     try:
-        # Check if stories table exists
         has_table = conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='stories'"
         ).fetchone()
         if not has_table:
             return None
 
-        # Check if goals table exists for priority and lifecycle join
         has_goals = conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name='goals'"
         ).fetchone()
 
         if has_goals:
             query = (
-                "SELECT s.story_id, s.title, s.role, s.estimated_tokens, s.gh_issue "
+                "SELECT s.story_id, s.title, s.role, s.estimated_tokens, s.gh_issue, s.goal_id "
                 "FROM stories s "
                 "LEFT JOIN goals g ON s.goal_id = g.goal_id OR s.goal_id = g.id "
                 "WHERE (s.readiness='advisory' OR (s.readiness IN ('ready', 'draft') AND s.status NOT IN ('done', 'archived'))) "
@@ -801,37 +921,42 @@ def package_next_release_proposal(conn=None, repo_root: str = ".") -> Optional[d
                 "ORDER BY CASE s.readiness WHEN 'advisory' THEN 1 WHEN 'ready' THEN 2 ELSE 3 END, "
                 "  COALESCE(g.roadmap_priority, 'P9') ASC, "
                 "  COALESCE(s.priority, 0) DESC, "
-                "  s.rowid DESC LIMIT 5"
+                "  s.rowid DESC LIMIT 15"
             )
         else:
             query = (
-                "SELECT story_id, title, role, estimated_tokens, gh_issue FROM stories "
+                "SELECT story_id, title, role, estimated_tokens, gh_issue, goal_id FROM stories "
                 "WHERE (readiness='advisory' OR (readiness IN ('ready', 'draft') AND status NOT IN ('done', 'archived'))) "
-                "ORDER BY CASE readiness WHEN 'advisory' THEN 1 WHEN 'ready' THEN 2 ELSE 3 END, rowid ASC LIMIT 5"
+                "ORDER BY CASE readiness WHEN 'advisory' THEN 1 WHEN 'ready' THEN 2 ELSE 3 END, rowid ASC LIMIT 15"
             )
         rows = conn.execute(query).fetchall()
         if not rows:
             return None
 
-        stories = []
-        role_breakdown: dict[str, list[str]] = {}
+        candidate_stories = []
         for r in rows:
-            sid, title, role, tokens, gh_issue = r[0], r[1], r[2] or "dev", r[3] or 25000, r[4]
+            sid, title, role, tokens, gh_issue, gid = r[0], r[1], r[2] or "dev", r[3] or 25000, r[4], r[5]
             inum = int(gh_issue) if gh_issue and str(gh_issue).isdigit() else None
-            stories.append({
+            candidate_stories.append({
                 "story_id": sid,
                 "issue_number": inum,
                 "title": title,
                 "role": role,
+                "goal_id": gid,
                 "harness": _resolve_harness(role, repo_root),
                 "estimated_tokens": tokens,
                 "estimated_cost_usd": round(tokens * 0.000002, 2),
                 "status": "Ready",
             })
-            role_breakdown.setdefault(role, []).append(title)
 
-        # Dynamically determine version from VERSION file
-        version_str = "0.32.2"
+        # Apply thematic clustering to select the top 5 proximal stories
+        clustered_stories = _cluster_candidate_stories(candidate_stories, target_count=5)
+        role_breakdown: dict[str, list[str]] = {}
+        for s in clustered_stories:
+            role_breakdown.setdefault(s["role"], []).append(s["title"])
+
+        # Dynamically determine version from VERSION file or latest git tag
+        version_str = None
         vfile = os.path.join(repo_root, "VERSION")
         if os.path.isfile(vfile):
             try:
@@ -841,7 +966,28 @@ def package_next_release_proposal(conn=None, repo_root: str = ".") -> Optional[d
                 if len(parts) == 3 and parts[2].isdigit():
                     version_str = f"{parts[0]}.{parts[1]}.{int(parts[2]) + 1}"
             except Exception:
-                version_str = "0.32.2"
+                pass
+
+        if not version_str:
+            try:
+                import subprocess
+                res = subprocess.run(
+                    ["git", "describe", "--tags", "--abbrev=0"],
+                    cwd=repo_root,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if res.returncode == 0 and res.stdout.strip():
+                    latest = res.stdout.strip().lstrip("v")
+                    p = latest.split(".")
+                    if len(p) == 3 and p[2].isdigit():
+                        version_str = f"{p[0]}.{p[1]}.{int(p[2]) + 1}"
+            except Exception:
+                pass
+
+        if not version_str:
+            version_str = "0.38.1"
 
         rel_ver = f"v{version_str}"
         meta = _resolve_roadmap_metadata(rel_ver, conn, repo_root=repo_root)
@@ -849,10 +995,10 @@ def package_next_release_proposal(conn=None, repo_root: str = ".") -> Optional[d
         return {
             "release_version": rel_ver,
             "theme": meta["theme"],
-            "bookend_mtd": "Shipped v0.30.0 (Agent Studio), v0.31.0 (VS Code Extension), v0.32.0 (Sub-3k Packager & AST Currency), v0.32.1 (DocGraph Sidecar), and v0.32.2 (TPM Autonomous Cadence).",
-            "bookend_wtd": "Ratified authoritative platform roadmap cadence (Decide Panel dec-9b41a7c3) and re-prioritized thematic order (Decide Panel dec-4e81b29a: 4 -> 1 -> 3 -> 6 -> 2 -> 5 -> 7).",
+            "bookend_mtd": meta["bookend_mtd"],
+            "bookend_wtd": meta["bookend_wtd"],
             "bookend_today": meta["bookend_today"],
-            "stories": stories,
+            "stories": clustered_stories,
             "role_breakdown": role_breakdown,
             "bookend_horizon": meta["bookend_horizon"],
         }

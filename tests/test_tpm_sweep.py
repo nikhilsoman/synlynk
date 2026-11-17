@@ -167,6 +167,53 @@ def test_run_sweep_pass_dispatches_story_approved_via_release_proposal(isolated_
     mock_ticket.assert_not_called()
 
 
+def test_derive_dynamic_bookends_without_hardcoded_v0322(isolated_db, project_dir):
+    from synlynk.tpm_sweep import _derive_dynamic_bookends
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO approval_tickets (story_id, action, issue_url, status, theme) "
+        "VALUES ('v0.39.0', 'release_proposal', 'https://example/39', 'held', 'Theme 6 Cloud Wedge')"
+    )
+    conn.commit()
+
+    with patch("subprocess.run") as mock_run:
+        def fake_run(cmd, *args, **kwargs):
+            m = MagicMock()
+            m.returncode = 0
+            if "tag" in cmd:
+                m.stdout = "v0.38.0\nv0.37.0\nv0.36.0\n"
+            elif "log" in cmd:
+                m.stdout = "abc1234 Merge pull request #5344 from dispatch/codex\n"
+            return m
+        mock_run.side_effect = fake_run
+
+        bookends = _derive_dynamic_bookends("v0.38.1", conn, repo_root=str(project_dir))
+
+    conn.close()
+    assert "v0.38.0" in bookends["bookend_mtd"]
+    assert "0.32.2" not in bookends["bookend_mtd"]
+    assert "5344" in bookends["bookend_today"]
+    assert "v0.39.0" in bookends["bookend_horizon"]
+
+
+def test_cluster_candidate_stories_by_thematic_goal():
+    from synlynk.tpm_sweep import _cluster_candidate_stories
+    stories = [
+        {"story_id": "s1", "goal_id": "goal-A", "title": "A1"},
+        {"story_id": "s2", "goal_id": "goal-B", "title": "B1"},
+        {"story_id": "s3", "goal_id": "goal-A", "title": "A2"},
+        {"story_id": "s4", "goal_id": "goal-A", "title": "A3"},
+        {"story_id": "s5", "goal_id": "goal-C", "title": "C1"},
+        {"story_id": "s6", "goal_id": "goal-B", "title": "B2"},
+        {"story_id": "s7", "goal_id": "goal-A", "title": "A4"},
+    ]
+    clustered = _cluster_candidate_stories(stories, target_count=5)
+    assert len(clustered) == 5
+    goal_a_stories = [s for s in clustered if s["goal_id"] == "goal-A"]
+    # All 4 stories of primary cluster goal-A must be included
+    assert len(goal_a_stories) == 4
+
+
 
 def _story_with_job(project_dir, job_status):
     story_id = cmd_story_create(title=f"Story with {job_status} job")
