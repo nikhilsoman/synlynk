@@ -46,6 +46,29 @@ document is the spec gating the next implementation plan
 - Grok-specific quota remediation. Grok's standing quota exclusion is an
   external fact (its own quota exhaustion), not a defect this spec fixes.
 
+## Amendments (Phase 3 spec review, 2026-11-17)
+
+A separate `synlynk decide --panel claude,agy,codex,muse` review of this spec
+against external best practices, SOTA multi-model platforms, architecture
+patterns, and build-vs-wrap alternatives (recorded in
+`project-docs/decisions/2026-11-17-comprehensive-architecture-review-of-the.md`)
+endorsed the spec's core shape unanimously and recommended seven amendments,
+folded into the sections below:
+
+1. A composite DB index backing the live routing query (Section 2).
+2. A `manifest_schema_version` field on the per-harness manifest (Section 3).
+3. Deterministic tie-breaking for the routing ranking step (Section 2).
+4. Billing-field validation at probe/onboard time, not blind trust (Section 3).
+5. A narrow `Router` interface boundary around routing logic (Section 2).
+6. Named, tunable scoring constants instead of inline magic numbers (Section 2).
+7. A tracked follow-up ticket for instruction-file-duplication centralization,
+   out of Phase 3 scope (Section 1).
+
+The same review rejected or deferred, as premature at synlynk's current
+scale, standardizing on a single external gateway (OpenRouter/LiteLLM) in
+place of per-harness adapters, and building a native synlynk harness —
+neither changes this spec.
+
 ## Section 1 — Eligibility vs. Routing Split
 
 **Eligibility** (policy, static, symmetric) is separated from **routing**
@@ -95,6 +118,15 @@ rather than merely *unweighted*.
   write one (Investigation 2 finding) — out of scope for this spec; file a
   tech-debt ticket instead of fixing it here, since it's unrelated to harness
   parity mechanics.
+- **Amendment 7 (decide-panel review):** `CLAUDE.md`/`AGENTS.md`/`GEMINI.md`
+  each carrying their own near-duplicate copy of the eligibility sentence
+  above is itself a tracked cost as harness count grows (noted independently
+  by all four panelists under the sustainability agenda item). File a
+  tech-debt ticket for a future centralization pass (e.g. one canonical
+  `docs/harness-eligibility.md` that the per-harness instruction files
+  `#include`/link to, rather than restating) — out of Phase 3 scope, since
+  Phase 3's instruction-file edit here is a one-time deletion, not a new
+  duplication pattern.
 
 ## Section 2 — Live Capability-Based Routing
 
@@ -118,16 +150,29 @@ remains available as future work if query cost ever becomes a real problem.
 
 ### Implementation
 
-New module `synlynk/routing.py`:
+New module `synlynk/routing.py`, structured as a narrow `Router` interface
+rather than a bare function (**Amendment 5**) so a second scoring strategy
+(e.g. a future gh:#1993 precomputed-artifact mode) can be swapped in later
+without touching `dispatch.py`'s call site:
 
 ```python
-def score_harnesses(task_type: str, db, eligible: list[str]) -> list[tuple[str, float, int]]:
-    """Return (harness, score, sample_count) sorted best-first.
+class Router(Protocol):
+    def score_harnesses(self, task_type: str, db, eligible: list[str]) -> list[tuple[str, float, int]]:
+        """Return (harness, score, sample_count) sorted best-first, ties broken
+        deterministically (see tie-breaking rule below).
 
-    score is None-safe: a harness below min_sample_size is excluded from
-    the ranking entirely (not scored at 0), so it never loses to an
-    under-sampled competitor by a fabricated low score.
-    """
+        score is None-safe: a harness below min_sample_size is excluded from
+        the ranking entirely (not scored at 0), so it never loses to an
+        under-sampled competitor by a fabricated low score.
+        """
+
+class LiveQueryRouter:
+    """Default Router: Approach 1, live query at dispatch time."""
+    def score_harnesses(self, task_type, db, eligible): ...
+
+# dispatch.py constructs one instance at module load and calls it; it does
+# not call score_harnesses() as a bare function.
+_default_router: Router = LiveQueryRouter()
 ```
 
 - Queries `capability_ratings` for median `pr_review_cycles` per
@@ -136,16 +181,42 @@ def score_harnesses(task_type: str, db, eligible: list[str]) -> list[tuple[str, 
   window the existing `AVG(quality)` measurement in policy.json's comment
   used — 14-day was too narrow for low-volume task types, 90-day balances
   recency against sample size).
+- **Amendment 1 (query cost under growth):** the decide panel's Codex
+  panelist flagged this as a blocking-grade risk, not a monitor-only one.
+  Add a composite index on `state.db` backing both queries:
+  ```sql
+  CREATE INDEX IF NOT EXISTS idx_capability_ratings_harness_task
+      ON capability_ratings (harness, task_type, created_at);
+  CREATE INDEX IF NOT EXISTS idx_cost_entries_harness_task
+      ON cost_entries (harness, task_type, created_at);
+  ```
+  Add both as a new migration (`synlynk/migrations/`, following the existing
+  `mNNNN_*.py` numbering) in the same PR as `routing.py`. The implementation
+  plan's testing section must include an `EXPLAIN QUERY PLAN` assertion that
+  the routing query uses these indexes, not a table scan, so a regression
+  here is caught in CI rather than discovered as dispatch latency later.
 - A harness qualifies for ranking only once it has `>= min_sample_size`
   (read from `.synlynk/policy.json`'s existing `capability_policy.min_sample_size`,
   currently 5) completed+merged jobs for that exact `task_type`.
 - Score = normalized rank combining lower `pr_review_cycles` (quality proxy)
   and lower `total_cost_usd` (cost proxy), equally weighted. Exact formula:
-  `score = -(pr_review_cycles_median) - (total_cost_usd_median / 10.0)` —
-  higher (less negative) is better; the `/10.0` divisor keeps the two terms
-  on comparable scales for this repo's typical $2-$15 per-merged-PR cost
-  range and typical 1-3 review-cycle range. This divisor is a tunable
-  constant documented at the top of `routing.py`, not derived data.
+  `score = -(pr_review_cycles_median) - (total_cost_usd_median / SCORE_COST_DIVISOR)` —
+  higher (less negative) is better. **Amendment 6:** `SCORE_COST_DIVISOR` is
+  a named module-level constant in `routing.py` (default `10.0`, chosen for
+  this repo's typical $2-$15 per-merged-PR cost range and typical 1-3
+  review-cycle range), not an inline magic number. Per Codex's review
+  comment, it is a `dict[task_type, float]` keyed by `task_type` with a
+  `"_default": 10.0` fallback, so a task type whose cost/cycle ratio differs
+  materially (e.g. `infra` jobs tend to run longer and cost more per cycle
+  than `content` jobs) can be tuned independently without a code change to
+  the formula itself — only a constant-table edit.
+- **Amendment 3 (deterministic tie-breaking):** when two harnesses' scores
+  are equal (common at low sample sizes, where medians collide), break ties
+  by, in order: (1) higher `sample_count` (more evidence wins), (2) if still
+  tied, alphabetical harness name. This is deterministic and auditable —
+  never a random or insertion-order tiebreak — so a routing decision can be
+  reproduced from `capability_ratings`/`cost_entries` state alone during a
+  later audit.
 - If zero eligible harnesses clear `min_sample_size` for the task_type,
   `score_harnesses` returns an empty ranked list and the caller falls back to
   round-robin: a `last_routed` cursor per task_type stored in a new
@@ -153,11 +224,11 @@ def score_harnesses(task_type: str, db, eligible: list[str]) -> list[tuple[str, 
   unscored dispatch so no single harness starves the others of a chance to
   accumulate samples (req. 1).
 - `_resolve_dispatch_agent`'s `auto` path (dispatch.py, the `requested_agent
-  == "auto"` branch) calls `score_harnesses(task_type, db, eligible_harnesses)`
-  instead of any fixed table lookup. `eligible_harnesses` is every harness
-  with a registered adapter (`get_adapter` succeeds) minus any in
-  `policy.json`'s `eligibility.excluded_harnesses` — this is the only place
-  eligibility and routing meet, and it is a filter-then-rank, never a
+  == "auto"` branch) calls `_default_router.score_harnesses(task_type, db,
+  eligible_harnesses)` instead of any fixed table lookup. `eligible_harnesses`
+  is every harness with a registered adapter (`get_adapter` succeeds) minus
+  any in `policy.json`'s `eligibility.excluded_harnesses` — this is the only
+  place eligibility and routing meet, and it is a filter-then-rank, never a
   lookup-table substitution.
 
 ## Section 3 — Harness Manifest + Onboarding/Probe Commands
@@ -168,6 +239,7 @@ def score_harnesses(task_type: str, db, eligible: list[str]) -> list[tuple[str, 
 
 ```json
 {
+  "manifest_schema_version": 1,
   "harness": "codex",
   "cli_version": "1.4.2",
   "cli_version_hash": "sha256:9f8a...",
@@ -189,6 +261,14 @@ def score_harnesses(task_type: str, db, eligible: list[str]) -> list[tuple[str, 
 ```
 
 Field notes:
+- **Amendment 2:** `manifest_schema_version` (integer, starts at `1`) is
+  required on every manifest. `discover_and_validate` refuses to write a
+  manifest without it, and any manifest reader (Section 4's preflight check,
+  `synlynk harness onboard`/`probe`) that encounters a missing or
+  higher-than-known `manifest_schema_version` treats the manifest as
+  unvalidated (same as a version-hash mismatch, Section 4) rather than
+  guessing at an unknown shape. This is what lets the manifest schema itself
+  evolve later without silently misreading old files.
 - `cli_version_hash` is `sha256` of the adapter's raw `--version` stdout —
   used for the cheap equality check in Section 4, not for display (display
   uses `cli_version`).
@@ -210,15 +290,26 @@ Field notes:
 - `synlynk harness onboard --harness <name>`: for a harness with no existing
   manifest. Steps: (1) call the adapter's version/help introspection, (2)
   write a draft manifest, (3) dispatch one real smoke-run task that exercises
-  a native flag and at least one MCP tool call, (4) on success, finalize the
-  manifest with `last_validation.passed: true`; on failure, write the
-  manifest with `passed: false` and print exactly what failed and why.
-- `synlynk harness probe --discover --harness <name>`: same steps 1-4 for a
+  a native flag and at least one MCP tool call, (4) **(Amendment 4) validate
+  `.synlynk/billing.json`'s `harness_billing[name]` entry exists and, for a
+  non-subscription `payment_mode`, that `cost_per_1k_tokens` is present and
+  a positive number** — a missing/invalid billing entry is a hard onboarding
+  failure (`HARNESS_BILLING_CONFIG_INVALID`), not a silent skip, since
+  Section 5's budget fallback depends on this value being trustworthy, not
+  merely present, (5) on success, finalize the manifest with
+  `last_validation.passed: true`; on failure, write the manifest with
+  `passed: false` and print exactly what failed and why.
+- `synlynk harness probe --discover --harness <name>`: same steps 1-5 for a
   harness that already has a manifest — used both by Section 4's
-  version-mismatch trigger and for a manual re-check.
+  version-mismatch trigger and for a manual re-check. Billing-field
+  validation (step 4) re-runs every time, not only at first onboarding, so a
+  `billing.json` edit that breaks a harness's rate is caught at the next
+  rediscovery rather than silently trusted until a budget bug surfaces.
 - Both commands share one internal function,
-  `synlynk/harness_manifest.py:discover_and_validate(harness)`, so onboarding
-  and rediscovery can never drift into two different validation standards.
+  `synlynk/harness_manifest.py:discover_and_validate(harness)` (inclusive of
+  the Amendment 4 billing check and the Amendment 2 schema-version stamp),
+  so onboarding and rediscovery can never drift into two different
+  validation standards.
 
 ## Section 4 — CLI-Version-Triggered Rediscovery
 
@@ -366,7 +457,10 @@ the implementation plan, each independently testable:
 
 1. Section 1 (policy/instruction-file eligibility change) — no behavior
    change yet, just removes the fixed-lane table and role-lock text.
-2. Section 2 (`routing.py` + `auto` path wiring) — routing now live-scored.
+2. Section 2 (new migration for the two composite indexes, then `routing.py`
+   as a `Router`/`LiveQueryRouter` pair + `auto` path wiring) — routing now
+   live-scored, with the indexes landing first so the query-plan test has
+   something to assert against.
 3. Section 3 (manifest schema + onboard/probe commands) — new capability,
    additive.
 4. Section 4 (version-triggered rediscovery) — depends on Section 3's
@@ -380,11 +474,19 @@ the implementation plan, each independently testable:
 
 ## Testing
 
-- `routing.py`: unit tests for `score_harnesses` — below-floor exclusion,
-  tie-breaking, empty-ranking round-robin fallback.
+- `routing.py`: unit tests for `LiveQueryRouter.score_harnesses` — below-floor
+  exclusion, the deterministic tie-breaking order (sample_count then
+  alphabetical, Amendment 3), empty-ranking round-robin fallback, and a
+  `per-task_type SCORE_COST_DIVISOR` override actually changing the ranking
+  (Amendment 6). A query-plan test asserting the routing query hits the new
+  `idx_capability_ratings_harness_task`/`idx_cost_entries_harness_task`
+  indexes via `EXPLAIN QUERY PLAN`, not a table scan (Amendment 1).
 - `harness_manifest.py`: unit test for `discover_and_validate` against a
   fake/mocked adapter (pass and fail cases); no live harness CLI calls in
-  the test suite.
+  the test suite. Additional cases: a manifest missing `manifest_schema_version`
+  or carrying an unknown version is treated as unvalidated (Amendment 2); a
+  missing or non-positive `cost_per_1k_tokens` for a non-subscription harness
+  fails onboarding/probe with `HARNESS_BILLING_CONFIG_INVALID` (Amendment 4).
 - Dispatch preflight: test that a version-hash mismatch triggers exactly one
   revalidation attempt, not an infinite loop, and fails closed if
   revalidation itself fails.
