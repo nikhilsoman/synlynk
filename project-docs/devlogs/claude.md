@@ -1,5 +1,49 @@
 # Claude Devlog
 
+## 2026-11-15 — Two early-adopter onboarding reports → 3 issues filed, same-day fix verified (PR #5303), orientation guide published
+
+- Investigated two early-adopter onboarding reports in depth: a screenshot of a DGX Spark/
+  litellm-gateway/multi-profile Claude Code setup, and a detailed pasted bug report about
+  `.synlynk/` being created on every CLI invocation (breaking `init`'s own "already initialized"
+  check). The screenshot turned out to show an unrelated, environment-independent bug, not the
+  DGX/litellm issue itself — separated the two root causes rather than conflating them.
+- Filed 3 issues with full RCA, suggested fixes, and step-by-step remedies for the affected
+  users: #5297 (`synlynk launch` wizard prints `[unknown]` job ID — `wizard.py`'s `job.get("job_id")`
+  typo vs. the real `"id"` key), #5298 (`claude` harness's `env_passthrough` allowlist in
+  `_constants.py` is empty, silently dropping `ANTHROPIC_BASE_URL`/`CLAUDE_CONFIG_DIR`/etc. from
+  dispatched subprocesses — breaks any litellm-gateway or multi-profile setup; also found
+  `probe_binding.py:_auth_config_path` ignores `CLAUDE_CONFIG_DIR` while `team.py` already
+  respects it), #5299 (`main()` calls `_reconcile_jobs()` unconditionally before subcommand
+  dispatch, which creates `.synlynk/` as a locking side effect — self-triggers within a single
+  first-ever `init --dry-run` call, confirmed worse than the original report implied; also fixed
+  a stale `claude-sonnet-4-6` string in generated CLAUDE.md). Also published a step-by-step
+  synlynk orientation guide as a Claude Artifact for the two adopters
+  (`https://claude.ai/artifact/3qSbPmSb2bnQ5FJRp5KWi7`).
+- When Nikhil later asked whether the tickets were fixed, found all 3 closed via one bundled PR
+  (#5303, merge commit `664cf06f`, same day) under a parent epic #5302. The PR's own language
+  ("awaiting Nikhil's review... before implementation plan creation") and an empty
+  `closedByPullRequestsReferences` on all 3 issues both looked like the project's well-documented
+  false-positive-closure pattern (`job-status-false-negative-rca-1377`, the "'Fixes #N' auto-close
+  trap" in `live17-wave-lessons`) — rather than trusting either signal, diffed the actual merge
+  commit against its parent, confirmed all 6 touched files matched my suggested fixes almost
+  verbatim, ran the PR's own new tests directly against `main` (5 passed), and live-reproduced
+  all 3 original symptoms in fresh scratch repos to confirm they're genuinely gone. **This time
+  the deeper check confirmed the fix rather than catching a false positive** — worth recording as
+  a balancing data point alongside this project's long run of caught false positives, so future
+  sessions don't calibrate toward assuming every "resolved" claim is wrong.
+- One nuance surfaced during live verification: `synlynk/coldstart.py:cmd_start()` still has an
+  unfixed, identical false-positive-existence-check bug, but it's dead code — the real
+  `synlynk start` CLI command routes to `cmd_quickstart()` instead (`cli.py` ~3736-3738);
+  `cmd_start` is referenced nowhere except its own definition and its own unit test. Not a gap in
+  the fix, just unreachable code worth knowing about if anyone looks at `coldstart.py` again.
+- No PR raised by me this session (issue filing + verification + artifact publish only), so the
+  Cost Capture Protocol's PR-gated backfill step doesn't strictly trigger — logged this native
+  session's estimated cost via `synlynk cost log` anyway (no `--pr`) per the broader Cost
+  Visibility goal, rather than leaving it uncaptured. Cleaned up the 3 disposable `/tmp/synlynk-
+  verify-fix*` scratch repos used for live reproduction (not git worktrees, just throwaway test
+  dirs — outside the formal Worktree Hygiene Protocol's scope but tidied anyway).
+[@claude]
+
 ## 2026-11-01 — Housekeeping verification finds corrupted AGENTS.md + 5 unpushed telemetry rows; PR #5024 opened, merge pending
 
 - Nikhil asked "all housekeeping and bookkeeping done?" after the v0.26.8 release ceremony — rather
