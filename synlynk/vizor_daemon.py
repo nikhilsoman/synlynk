@@ -857,6 +857,8 @@ def build_workspace_routing_handler():
                     self.send_error(404, f"Unknown workspace: {slug}")
                     return False
 
+                self._workspace_repo_path = ctx.repo_path
+
                 if subpath == "board":
                     from synlynk.autonomy import get_autonomy_mode
                     from synlynk.viz import generate_boardroom_html

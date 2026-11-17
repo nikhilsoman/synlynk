@@ -79,6 +79,9 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
 
     def _resolve_workspace_repo_path(self, path: str) -> str:
         """Resolve a scoped API path to its registered workspace repository."""
+        scoped_repo_path = getattr(self, "_workspace_repo_path", None)
+        if scoped_repo_path:
+            return scoped_repo_path
         slug = None
         if path.startswith("/w/"):
             slug = path.split("/", 3)[2]
@@ -558,7 +561,7 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         try:
             payload = self._read_json_body()
             from synlynk.roadmap_studio import approve_ticket
-            result = approve_ticket(payload.get("ticket_id"))
+            result = approve_ticket(payload.get("ticket_id"), repo_path=self._resolve_workspace_repo_path(self.path))
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
             self.send_error(400, str(exc) or "Invalid JSON")
             return
@@ -577,7 +580,7 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         try:
             payload = self._read_json_body()
             from synlynk.roadmap_studio import hold_ticket
-            result = hold_ticket(payload.get("ticket_id"))
+            result = hold_ticket(payload.get("ticket_id"), repo_path=self._resolve_workspace_repo_path(self.path))
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
             self.send_error(400, str(exc) or "Invalid JSON")
             return
@@ -596,7 +599,7 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         try:
             payload = self._read_json_body()
             from synlynk.roadmap_studio import revise_ticket
-            result = revise_ticket(payload.get("ticket_id"), payload.get("instructions", ""))
+            result = revise_ticket(payload.get("ticket_id"), payload.get("instructions", ""), repo_path=self._resolve_workspace_repo_path(self.path))
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
             self.send_error(400, str(exc) or "Invalid JSON")
             return
@@ -615,7 +618,7 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         try:
             payload = self._read_json_body()
             from synlynk.roadmap_studio import drop_story
-            result = drop_story(payload.get("story_id"))
+            result = drop_story(payload.get("story_id"), repo_path=self._resolve_workspace_repo_path(self.path))
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
             self.send_error(400, str(exc) or "Invalid JSON")
             return
@@ -634,7 +637,7 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         try:
             payload = self._read_json_body()
             from synlynk.roadmap_studio import reorder_stories
-            result = reorder_stories(payload.get("ticket_id"), payload.get("ordered_story_ids") or [])
+            result = reorder_stories(payload.get("ticket_id"), payload.get("ordered_story_ids") or [], repo_path=self._resolve_workspace_repo_path(self.path))
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
             self.send_error(400, str(exc) or "Invalid JSON")
             return
@@ -653,7 +656,7 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         try:
             payload = self._read_json_body()
             from synlynk.roadmap_studio import pin_story
-            result = pin_story(payload.get("ticket_id"), payload.get("story_id"))
+            result = pin_story(payload.get("ticket_id"), payload.get("story_id"), repo_path=self._resolve_workspace_repo_path(self.path))
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
             self.send_error(400, str(exc) or "Invalid JSON")
             return
