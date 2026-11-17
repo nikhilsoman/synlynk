@@ -174,11 +174,15 @@ def run_sweep_pass(assignee: str = "nikhilsoman") -> Dict[str, int]:
         pass
 
     for story in _ready_stories():
-        authority = check_authority(
-            "task_dispatch:implement",
-            role=story["role"],
-            repo_path=repo_path,
-        )
+        try:
+            authority = check_authority(
+                "task_dispatch:implement",
+                role=story["role"],
+                repo_path=repo_path,
+            )
+        except Exception:
+            summary["failed"] += 1
+            continue
         if not authority.allowed:
             summary["failed"] += 1
             continue
@@ -402,7 +406,7 @@ def check_and_trigger_post_release(conn=None, repo_root: str = ".") -> Optional[
         # Check for approved or active release proposals with constituent_story_ids
         row = conn.execute(
             "SELECT id, story_id, constituent_story_ids, status FROM approval_tickets "
-            "WHERE action='release_proposal' AND status IN ('approved', 'in_progress') "
+            "WHERE action='release_proposal' AND status IN ('approved', 'in_progress', 'resolved') "
             "ORDER BY rowid DESC LIMIT 1"
         ).fetchone()
         if not row:
