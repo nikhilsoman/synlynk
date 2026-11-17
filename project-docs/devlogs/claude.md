@@ -1,5 +1,43 @@
 # Claude Devlog
 
+## 2026-11-17 — PR #5332 review-dispatch housekeeping: reroute caught, circuit-breaker false negative root-caused (gh:#5349)
+
+- Dispatched the Hardened PR Review Policy's non-authoring review/merge for PR #5332 (the
+  2026-11-15 onboarding-issues devlog entry, which I authored). First attempt's capability
+  routing silently rerouted the requested `codex` harness to `claude` — would have violated the
+  cross-harness+model review requirement since I'm the PR author. Caught it from the dispatch
+  tool's own routing message before the job could act, killed it (`job-01f943cb`, zero files
+  touched), and redispatched with `--force-harness codex` to pin the harness correctly.
+- Satisfied the "100% GOVERNS adherence" dispatch-preflight gate by creating a new, honestly-
+  scoped story (`story-ac2478d2`) and linking it to an already-placed goal (`goal-85656c82`,
+  Developer Experience v1.0) rather than reusing a mismatched auto-linked story.
+- The forced-Codex job (`job-6f7cc9cf`) reported `FAILED (exit -9)` /
+  `circuit_breaker_tripped` / `circuit_breaker_killed_live_process` — but independently verifying
+  via `gh pr view 5332 --json state,mergedAt,mergeCommit,reviews` (never trust `synlynk jobs`
+  status alone, per `[[feedback]]`) showed it had actually succeeded: ran `synlynk pr check`,
+  posted a qa APPROVE, and squash-merged #5332 (commit `434755c3`). Root-caused the false
+  negative via `synlynk jobs --summary job-6f7cc9cf --json`: the job's auto-generated
+  effect-verification contract had `target: "pr:5303"` — the wrong PR. #5303 (the original
+  onboarding-fix PR) was only mentioned in the task text as background context; #5332 was the
+  actual target. The contract-target heuristic apparently prefers a PR number scanned from
+  free-text over the explicit dispatch target when the task text mentions more than one PR, so
+  its match predicates never resolved and the circuit breaker killed an already-successful
+  process. Checked for an existing issue first (two searches, both empty) before filing fresh as
+  gh:#5349, with the specific contract JSON and a suggested remedy (prefer the explicit
+  `--issue`/`--story` target over free-text PR scanning). Saved a corresponding project-memory
+  entry (`circuit-breaker-wrong-pr-target-5349.md`) since this is a distinct, previously-
+  undocumented fingerprint of the same bug class as `[[job-status-false-negative-rca-1377]]`.
+- Cleaned up both dispatch jobs' worktrees/branches per Worktree Hygiene Protocol immediately:
+  `job-01f943cb` (zero-change, killed) and `job-6f7cc9cf` (confirmed merged despite its own
+  status label) — both local branches deleted, no dangling remote branches.
+- Verified the Cost Capture Protocol had no gap: both dispatch jobs auto-captured
+  `cost_entries` rows as expected; `pr_number = NULL` on qa/reviewer-role rows matched the
+  established normal pattern for this project (not a capture bug), so no backfill needed.
+- Posted a cross-link status rollup on parent epic #5302 per the Multi-Task & Multi-Goal Series
+  Tracking Protocol, noting the devlog PR and its cross-harness Codex review/merge.
+- Marked `story-ac2478d2` done after independently confirming the real merge.
+[@claude]
+
 ## 2026-11-15 — Two early-adopter onboarding reports → 3 issues filed, same-day fix verified (PR #5303), orientation guide published
 
 - Investigated two early-adopter onboarding reports in depth: a screenshot of a DGX Spark/
