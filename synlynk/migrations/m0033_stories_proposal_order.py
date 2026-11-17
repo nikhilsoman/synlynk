@@ -18,7 +18,11 @@ def _up(conn: sqlite3.Connection) -> None:
         return
     cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
     if "proposal_order" not in cols:
-        conn.execute("ALTER TABLE stories ADD COLUMN proposal_order INTEGER")
+        try:
+            conn.execute("ALTER TABLE stories ADD COLUMN proposal_order INTEGER")
+        except sqlite3.OperationalError as exc:
+            if "duplicate column name" not in str(exc).lower():
+                raise
 
 
 MIGRATION = Migration(version=33, name="add_stories_proposal_order", up=_up)

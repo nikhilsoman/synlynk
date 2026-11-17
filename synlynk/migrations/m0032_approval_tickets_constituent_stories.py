@@ -19,7 +19,11 @@ def _up(conn: sqlite3.Connection) -> None:
         return
     cols = {row[1] for row in conn.execute("PRAGMA table_info(approval_tickets)")}
     if "constituent_story_ids" not in cols:
-        conn.execute("ALTER TABLE approval_tickets ADD COLUMN constituent_story_ids TEXT")
+        try:
+            conn.execute("ALTER TABLE approval_tickets ADD COLUMN constituent_story_ids TEXT")
+        except sqlite3.OperationalError as exc:
+            if "duplicate column name" not in str(exc).lower():
+                raise
 
 
 MIGRATION = Migration(version=32, name="add_approval_tickets_constituent_story_ids", up=_up)
