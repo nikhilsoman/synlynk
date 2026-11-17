@@ -1,5 +1,24 @@
 # Agy Devlog
 
+## 2026-11-17 — Milestone Release v0.38.1: Roadmap Studio Drag/Drop & Dynamic Bookends (#5338)
+
+### Shipped & Verified Across Fleet
+- **Track A (PM Brainstorm on gh:#5339 — PR #5345):**
+  - Generated comprehensive SWE Stack domain graph and autonomous taxonomy analysis in `docs/brainstorm/2026-11-17-domain-graph-swe-stacks.md` (279 lines).
+  - Shipped in PR #5345 (`5a122dcb`) and commented findings directly on gh:#5339.
+- **Track B (Active Release v0.38.1 Execution — Issue #5338):**
+  1. `story-058d77e0` — Roadmap Studio Vizor drag/drop front-end over TPM-sweep release proposals (done).
+  2. `story-8f3a9102` (PR #5344) — Roadmap Studio End-to-End Route Validation & Write-Path Hardening: added 12 parameterized HTTP routes testing all 6 write routes (`/approve`, `/hold`, `/revise`, `/drop`, `/reorder`, `/pin`), with rollback guarantees.
+  3. `story-7d4e5129` (PR #5346) — TPM Proposal Engine Dynamic Bookends & Thematic Clustering: dynamic `bookend_mtd`, `bookend_today`, `bookend_horizon`, eliminating hardcoded 0.32.2 fallbacks, and adding thematic candidate story clustering.
+  4. `story-c822fd03` (PR #5347) — Fixed `synlynk viz --serve` EOFError on non-interactive invocation and hardened SQLite migrations (`m0032`, `m0033`, `m0034`) against concurrent worker initialization race conditions.
+  5. `story-d4b40958` (PR #5348) — UX 1.0 Phase 3b: Vizor first-visit banner injection into `generate_index_html()`, with 5 unit tests verifying conditional rendering and dismissal.
+- **Release Ceremony & State Synchronization:**
+  - All 5 constituent stories verified `done` / `readiness='done'` in canonical `state.db`.
+  - Approval ticket #17 marked `consumed`.
+  - Synchronized `project-docs/roadmap.md` and `project-docs/todo.md`.
+  - Full CI test suites green on all PRs.
+[@agy, @nikhilsoman]
+
 ## 2026-11-16 — Milestone Packaging Realignment: v0.38.0 FinOps & Editions Governance (#5328)
 
 ### Shipped & Verified Across Fleet
