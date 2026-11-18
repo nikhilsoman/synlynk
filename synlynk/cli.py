@@ -1544,6 +1544,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
 
     relay_status_p = relay_sub.add_parser("status", help="Show relay health")
     relay_status_p.add_argument("--relay-url", default=None, dest="relay_url")
+    relay_status_p.add_argument("--json", action="store_true", help="Output machine-readable JSON")
 
     relay_send_p = relay_sub.add_parser("send", help="Send a message to an agent")
     relay_send_p.add_argument("--to-agent", required=True, dest="to_agent")
@@ -1574,9 +1575,10 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     relay_hub_init_p = relay_hub_sub.add_parser("init", help="Generate private NATS config with JetStream and authentication")
     relay_hub_init_p.add_argument("--listen", default="127.0.0.1:4222", help="NATS server bind address (default: 127.0.0.1:4222)")
     relay_hub_init_p.add_argument("--url", default="nats://127.0.0.1:4222", help="NATS URL used by this device")
-    relay_hub_connect_p = relay_hub_sub.add_parser("connect", help="Save managed settings locally; service connection is not implemented")
-    relay_hub_connect_p.add_argument("token", help="Managed workspace token (stored privately; no endpoint contacted)")
-    relay_hub_connect_p.add_argument("--url", default=None, help="Optional future managed service URL")
+    relay_hub_connect_p = relay_hub_sub.add_parser("connect", help="Connect workspace to a managed NATS hub")
+    relay_hub_connect_p.add_argument("token", help="Managed workspace token")
+    relay_hub_connect_p.add_argument("--url", default=None, help="Managed service URL (e.g. https://relay.synlynk.com)")
+    relay_hub_connect_p.add_argument("--probe", action="store_true", help="Perform preflight handshake probe")
     relay_device_p = relay_sub.add_parser("device", help="Manage self-hosted credentials; server reload required after changes")
     relay_device_sub = relay_device_p.add_subparsers(dest="relay_device_action")
     relay_device_add_p = relay_device_sub.add_parser("add", help="Mint a device and regenerate server authorization")

@@ -27,7 +27,7 @@
 - Modify: `synlynk/events.py`
 - Test: `tests/test_relay_hub.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # In tests/test_relay_hub.py
@@ -46,12 +46,12 @@ def test_hub_reconnected_event_type_is_accepted_by_envelope():
     assert envelope.payload["downtime_seconds"] == 12.5
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_relay_hub.py -k test_hub_reconnected_event_type_is_accepted_by_envelope -v`
 Expected: FAIL with `ValueError: Unknown event_type: hub_reconnected`
 
-- [ ] **Step 3: Update `synlynk/events.py`**
+- [x] **Step 3: Update `synlynk/events.py`**
 
 In `synlynk/events.py`, add `"hub_reconnected"` to `RELAY_EVENT_TYPES`:
 
@@ -65,7 +65,7 @@ RELAY_EVENT_TYPES = (
 )
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_relay_hub.py -k test_hub_reconnected_event_type_is_accepted_by_envelope -v`
 Expected: PASS
@@ -78,7 +78,7 @@ Expected: PASS
 - Modify: `synlynk/relay_hub.py`
 - Test: `tests/test_relay_hub.py`
 
-- [ ] **Step 1: Write tests for backoff calculation and state transitions**
+- [x] **Step 1: Write tests for backoff calculation and state transitions**
 
 ```python
 # In tests/test_relay_hub.py
@@ -120,12 +120,12 @@ def test_connection_supervisor_state_transitions():
     assert sup.state == "AUTH_FAILED"
 ```
 
-- [ ] **Step 2: Run test to verify failure**
+- [x] **Step 2: Run test to verify failure**
 
 Run: `pytest tests/test_relay_hub.py -k test_connection_supervisor -v`
 Expected: FAIL with `ImportError: cannot import name 'ConnectionSupervisor'`
 
-- [ ] **Step 3: Implement `ConnectionSupervisor` in `synlynk/relay_hub.py`**
+- [x] **Step 3: Implement `ConnectionSupervisor` in `synlynk/relay_hub.py`**
 
 ```python
 class ConnectionSupervisor:
@@ -175,7 +175,7 @@ class ConnectionSupervisor:
             self.state = "STOPPED"
 ```
 
-- [ ] **Step 4: Run test to verify passes**
+- [x] **Step 4: Run test to verify passes**
 
 Run: `pytest tests/test_relay_hub.py -k test_connection_supervisor -v`
 Expected: PASS
@@ -188,7 +188,7 @@ Expected: PASS
 - Modify: `synlynk/relay_hub.py`
 - Test: `tests/test_relay_hub.py`
 
-- [ ] **Step 1: Write test for reconnect event emissions and terminal auth handling**
+- [x] **Step 1: Write test for reconnect event emissions and terminal auth handling**
 
 ```python
 # In tests/test_relay_hub.py
@@ -198,8 +198,8 @@ def test_hub_adapter_emits_reconnect_and_disconnect_events():
     ...
 ```
 
-- [ ] **Step 2: Implement reconnect loop in `HubAdapter`**
-- [ ] **Step 3: Run pytest on `tests/test_relay_hub.py` to verify passes**
+- [x] **Step 2: Implement reconnect loop in `HubAdapter`**
+- [x] **Step 3: Run pytest on `tests/test_relay_hub.py` to verify passes**
 
 ---
 
@@ -211,10 +211,10 @@ def test_hub_adapter_emits_reconnect_and_disconnect_events():
 - Modify: `synlynk/cli.py`
 - Test: `tests/test_relay_hub.py`
 
-- [ ] **Step 1: Write test for `cmd_relay_status` text and json formatting**
-- [ ] **Step 2: Add `get_status_snapshot()` to `HubAdapter` and inspect `hub.json` when stopped**
-- [ ] **Step 3: Implement `--json` flag on `synlynk relay status`**
-- [ ] **Step 4: Run pytest on status tests to verify passes**
+- [x] **Step 1: Write test for `cmd_relay_status` text and json formatting**
+- [x] **Step 2: Add `get_status_snapshot()` to `HubAdapter` and inspect `hub.json` when stopped**
+- [x] **Step 3: Implement `--json` flag on `synlynk relay status`**
+- [x] **Step 4: Run pytest on status tests to verify passes**
 
 ---
 
@@ -224,9 +224,9 @@ def test_hub_adapter_emits_reconnect_and_disconnect_events():
 - Modify: `synlynk/relay_hub.py`
 - Test: `tests/test_relay_hub.py`
 
-- [ ] **Step 1: Write test for `cmd_relay_hub_connect` preflight validation**
-- [ ] **Step 2: Implement HTTP preflight probe prior to writing `hub.json`**
-- [ ] **Step 3: Verify rejection of invalid tokens and atomic storage on 200 OK**
+- [x] **Step 1: Write test for `cmd_relay_hub_connect` preflight validation**
+- [x] **Step 2: Implement HTTP preflight probe prior to writing `hub.json`**
+- [x] **Step 3: Verify rejection of invalid tokens and atomic storage on 200 OK**
 
 ---
 
@@ -235,9 +235,9 @@ def test_hub_adapter_emits_reconnect_and_disconnect_events():
 **Files:**
 - All modified files
 
-- [ ] **Step 1: Run complete unit test suite**
+- [x] **Step 1: Run complete unit test suite**
   ```sh
   python3 -m pytest tests/test_relay_hub.py tests/test_relay.py tests/test_relay_p2p.py -v
   ```
-- [ ] **Step 2: Verify `synlynk relay status` in terminal**
-- [ ] **Step 3: Verify git status is clean and format complies with conventions**
+- [x] **Step 2: Verify `synlynk relay status` in terminal**
+- [x] **Step 3: Verify git status is clean and format complies with conventions**

@@ -1213,6 +1213,7 @@ def test_all_retention_budgets():
 
 @pytest.mark.parametrize("event_type", (
     "hub_disconnected",
+    "hub_reconnected",
     "sync_gap_detected",
     "doc_drafted",
     "doc_updated",
@@ -1246,3 +1247,245 @@ def test_relay_hub_module_importable_without_nats_installed():
         capture_output=True, text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_connection_supervisor_backoff_bounds():
+    from synlynk.relay_hub import ConnectionSupervisor
+    sup = ConnectionSupervisor(base_delay=1.0, multiplier=1.5, max_delay=30.0)
+
+    for attempt in range(10):
+        delay = sup.calculate_delay(attempt)
+        ceiling = min(30.0, 1.0 * (1.5 ** attempt))
+        assert 0.0 <= delay <= ceiling
+
+    # Large attempt: delay capped at max_delay
+    delay_high = sup.calculate_delay(50)
+    assert 0.0 <= delay_high <= 30.0
+
+
+def test_connection_supervisor_state_transitions():
+    from synlynk.relay_hub import ConnectionSupervisor
+    sup = ConnectionSupervisor()
+    assert sup.state == "STOPPED"
+
+    sup.set_connecting()
+    assert sup.state == "CONNECTING"
+
+    sup.set_connected()
+    assert sup.state == "CONNECTED"
+    assert sup.attempt_count == 0
+    assert sup.connected_at is not None
+
+    sup.set_reconnecting(ConnectionRefusedError("connection refused"))
+    assert sup.state == "RECONNECTING"
+    assert sup.attempt_count == 1
+    assert "ConnectionRefusedError" in sup.last_error or "connection refused" in sup.last_error
+    assert sup.disconnected_at is not None
+
+    sup.set_auth_failed(PermissionError("Authorization Violation"))
+    assert sup.state == "AUTH_FAILED"
+    assert "Authorization Violation" in sup.last_error
+
+    sup.set_stopped()
+    assert sup.state == "STOPPED"
+
+
+def test_connection_supervisor_error_classification():
+    from synlynk.relay_hub import ConnectionSupervisor
+    sup = ConnectionSupervisor()
+
+    assert sup.is_terminal_error(PermissionError("Authorization Violation")) is True
+    assert sup.is_terminal_error(ValueError("Invalid credentials")) is True
+    assert sup.is_terminal_error(ConnectionRefusedError("dial tcp: connection refused")) is False
+    assert sup.is_terminal_error(TimeoutError("timed out")) is False
+    assert sup.is_terminal_error(OSError("network is unreachable")) is False
+
+
+def test_hub_adapter_lifecycle_and_status(tmp_path):
+    from synlynk.relay_hub import HubAdapter, HubStatusSnapshot, read_hub_status
+    broker, client = RelayBroker(), FakeNatsClient()
+    adapter = HubAdapter(broker, client, workspace_id="ws1", preview_dir=str(tmp_path / "previews"))
+    
+    # Before attach
+    status = adapter.get_status_snapshot()
+    assert isinstance(status, HubStatusSnapshot)
+    assert status.state == "STOPPED"
+    assert status.configured is True
+
+    # After attach
+    adapter.attach()
+    assert adapter.supervisor.state == "CONNECTED"
+    assert adapter.get_status_snapshot().state == "CONNECTED"
+
+    # Subscriber on broker to listen for lifecycle events
+    sub = broker.subscribe()
+
+    # Trigger retriable transport error
+    adapter._error(ConnectionRefusedError("connection refused"))
+    assert adapter.supervisor.state == "RECONNECTING"
+    assert adapter.supervisor.attempt_count == 1
+    
+    # Verify hub_disconnected event delivered to local broker
+    raw_event = sub.get(timeout=1.0)
+    event_data = json.loads(raw_event)
+    assert event_data["event_type"] == "hub_disconnected"
+    assert event_data["payload"]["terminal"] is False
+
+    # Trigger recovery
+    adapter._on_hub_connected()
+    assert adapter.supervisor.state == "CONNECTED"
+    
+    raw_event2 = sub.get(timeout=1.0)
+    event_data2 = json.loads(raw_event2)
+    assert event_data2["event_type"] == "hub_reconnected"
+
+    # Trigger terminal auth error
+    adapter._error(PermissionError("Authorization Violation"))
+    assert adapter.supervisor.state == "AUTH_FAILED"
+    
+    raw_event3 = sub.get(timeout=1.0)
+    event_data3 = json.loads(raw_event3)
+    assert event_data3["event_type"] == "hub_disconnected"
+    assert event_data3["payload"]["terminal"] is True
+
+    adapter.detach()
+    assert adapter.supervisor.state == "STOPPED"
+
+
+def test_read_hub_status(tmp_path):
+    from synlynk.relay_hub import read_hub_status
+
+    # Unconfigured dir
+    st1 = read_hub_status(config_dir=str(tmp_path / "empty"))
+    assert st1.configured is False
+    assert st1.state == "UNCONFIGURED"
+
+    # Valid hub.json
+    cfg_dir = tmp_path / "hub_cfg"
+    cfg_dir.mkdir()
+    (cfg_dir / "hub.json").write_text(json.dumps({
+        "workspace_id": "ws-prod",
+        "mode": "self-hosted",
+        "url": "nats://127.0.0.1:4222",
+    }))
+
+    st2 = read_hub_status(config_dir=str(cfg_dir))
+    assert st2.configured is True
+    assert st2.mode == "self-hosted"
+    assert st2.workspace_id == "ws-prod"
+    assert st2.hub_url == "nats://127.0.0.1:4222"
+    assert st2.state == "STOPPED"
+
+
+def test_cmd_relay_status_human_and_json(capsys, tmp_path):
+    from synlynk.relay import cmd_relay_status
+    import argparse
+
+    args = argparse.Namespace(relay_url="http://127.0.0.1:7432", json=False, config_dir=str(tmp_path))
+    cmd_relay_status(args)
+    captured = capsys.readouterr().out
+    assert "relay stopped at http://127.0.0.1:7432" in captured
+    assert "Hub Bridge: unconfigured" in captured
+
+    args_json = argparse.Namespace(relay_url="http://127.0.0.1:7432", json=True, config_dir=str(tmp_path))
+    cmd_relay_status(args_json)
+    captured_json = capsys.readouterr().out
+    data = json.loads(captured_json)
+    assert data["broker"]["running"] is False
+    assert data["hub"]["configured"] is False
+
+
+def test_probe_managed_hub_success_and_auth_error(monkeypatch):
+    from synlynk.relay_hub import probe_managed_hub
+    import urllib.request
+    import urllib.error
+    import io
+
+    class MockResponse:
+        def __init__(self, data):
+            self.data = data
+        def read(self):
+            return self.data
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+
+    # Success case
+    def mock_urlopen_success(req, timeout=None):
+        return MockResponse(json.dumps({"status": "authorized", "nats_url": "tls://managed.hub:4222"}).encode("utf-8"))
+
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen_success)
+    res = probe_managed_hub("https://relay.synlynk.com", "token123", "ws-prod")
+    assert res["status"] == "authorized"
+    assert res["nats_url"] == "tls://managed.hub:4222"
+
+    # 401 Unauthorized case
+    def mock_urlopen_401(req, timeout=None):
+        raise urllib.error.HTTPError("https://relay.synlynk.com", 401, "Unauthorized", {}, io.BytesIO(b""))
+
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen_401)
+    with pytest.raises(PermissionError) as exc_info:
+        probe_managed_hub("https://relay.synlynk.com", "bad_token", "ws-prod")
+    assert "rejected token (HTTP 401)" in str(exc_info.value)
+
+
+def test_cmd_relay_hub_connect(tmp_path, monkeypatch):
+    from synlynk.relay_hub import cmd_relay_hub_connect
+    import argparse
+    import urllib.request
+    import io
+
+    class MockResponse:
+        def __init__(self, data):
+            self.data = data
+        def read(self):
+            return self.data
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+
+    cfg_dir = tmp_path / "connect_test"
+
+    # Success without probe
+    args_default = argparse.Namespace(
+        workspace_id="ws-managed",
+        token="tok-456",
+        url="tls://custom.hub:4222",
+        config_dir=str(cfg_dir),
+        probe=False,
+    )
+    cmd_relay_hub_connect(args_default)
+    hub_json = json.loads((cfg_dir / "hub.json").read_text())
+    assert hub_json["workspace_id"] == "ws-managed"
+    assert hub_json["mode"] == "managed"
+    assert hub_json["url"] == "tls://custom.hub:4222"
+
+    # Connecting again to the same dir should fail
+    with pytest.raises(ValueError) as exc:
+        cmd_relay_hub_connect(args_default)
+    assert "Hub already configured" in str(exc.value)
+
+    # Failed probe should fail closed without writing config
+    cfg_dir_fail = tmp_path / "connect_fail"
+    def mock_urlopen_fail(req, timeout=None):
+        raise urllib.error.HTTPError("https://relay.synlynk.com", 403, "Forbidden", {}, io.BytesIO(b""))
+
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen_fail)
+    args_probe_fail = argparse.Namespace(
+        workspace_id="ws-managed-fail",
+        token="tok-bad",
+        url="https://relay.synlynk.com",
+        config_dir=str(cfg_dir_fail),
+        probe=True,
+    )
+    with pytest.raises(RuntimeError) as exc_fail:
+        cmd_relay_hub_connect(args_probe_fail)
+    assert "preflight rejected" in str(exc_fail.value)
+    assert not (cfg_dir_fail / "hub.json").exists()
+
+
+
+
+
