@@ -12,6 +12,7 @@
 | :---: | :---: | :--- | :--- | :---: | :---: | :---: |
 | **H1** | **`v0.38.1`** | Roadmap Studio v2: Interactive Drag/Drop Controls | [`dec-approve-studio`](decisions/2026-11-15-approve-roadmap-studio-design-pr-5286-do.md) | 🟢 Approved | 🟢 Landed | 🟢 **Ready for Build** |
 | **H2** | **`v0.39.0`** | Theme 6: The Cloud Wedge, NATS Relay & Swarms | [`dec-4e81b29a`](decisions/2026-11-11-decide-panel-roadmap-prioritization-and-backlog-sweep.md) | 🟢 Approved | 🟡 Drafting | 🟡 **Needs Plan Review** |
+| **H2.1** | **`v0.39.1`** | Theme 6 Fast-Follow: Hetzner Cloud Runner & Vertical Swarm Host | [gh:#5360](https://github.com/nikhilsoman/synlynk/issues/5360) | 🟢 Approved | 🟢 Drafting | 🟢 **Ready for Plan Review** |
 | **H3** | **`v0.40.0`** | Track 4: Intent-Based Engineering & IBPD Phase 3 | [`dec-f8835ba3`](decisions/2026-11-14-round-2-evaluation-context-round-1-dec-7.md) | 🟢 Approved | 🟡 Drafting | 🟡 **Needs Plan Review** |
 | **H4** | **`v0.41.0`** | Theme 2: Sovereign Silicon & Local Model Parity | [`dec-4e81b29a`](decisions/2026-11-11-decide-panel-roadmap-prioritization-and-backlog-sweep.md) | 🟡 In Strategy | 🔴 Needed | 🟠 **Needs Tech Spec** |
 | **H5** | **`v0.42.0`** | Theme 5: Ambient Co-Pilot & DevEx CLI Consolidation | [`dec-4e81b29a`](decisions/2026-11-11-decide-panel-roadmap-prioritization-and-backlog-sweep.md) | 🟡 Partial | 🔴 Needed | 🟠 **Needs Tech Spec** |
@@ -72,6 +73,31 @@
   - AWS instance sizing for the ephemeral runner (e.g. `c6i.xlarge` vs Spot `t4g`).
   - GitHub Actions issue trigger label naming (e.g. `run-remote-node` vs `synlynk-remote`).
   - Auth token secret storage and rotation strategy for NATS mesh.
+
+---
+
+### Horizon 2.1: `v0.39.1` — Theme 6 Fast-Follow: Hetzner Cloud Swarm Runner Driver & Vertical Milestone Host Orchestration
+* **Active Status:** `planned` (Tracking Issue: [gh:#5360](https://github.com/nikhilsoman/synlynk/issues/5360); Paired Monetization Epic: [gh:#5359](https://github.com/nikhilsoman/synlynk/issues/5359))
+* **Governing Goal:** `goal-d5323df6` (Theme 6: Ephemeral Swarm Execution Infrastructure Foundation)
+* **Strategy & Decisions:**
+  - Strategy: `synlynk.com` Platform Vision & Cloud Wedge Architecture
+  - Design Spec: `docs/superpowers/specs/2026-11-18-swarm-execution-infrastructure-and-hetzner-runner-design.md` (Approved, PR #5361)
+* **Target Code Subsystems:**
+  - `synlynk/runners/hetzner.py` (New: `HetznerRunnerDriver` over stdlib HTTP REST API)
+  - `synlynk/runners/manager.py` (Driver registration & lifecycle watchdog supervision)
+  - `synlynk/swarm.py` (Vertical Swarm Host dynamic sizing & NATS task queue drainer)
+  - `synlynk/cli.py` (`synlynk swarm lease` commands)
+* **Constituent Tasks:**
+  1. `HetznerRunnerDriver` scaffolding, schema & stdlib HTTP client (`backend`)
+  2. Server provisioning, dynamic host sizing (`cpx21`/`cpx31`/`cpx51`), and mock unit tests (`backend`)
+  3. Watchdog timers (OS cloud-init, shell trap, client supervisor) and scale-to-zero teardown (`backend`)
+  4. Vertical Swarm Host git worktree parallelism and NATS bundle sync (`backend`)
+  5. CLI wiring (`synlynk swarm lease`) and FinOps telemetry event emission (`backend`)
+  6. Full regression verification suite (`testing`)
+* **Workspace Owner Intervention Levers:**
+  - Hetzner Cloud location selection (Nuremberg `nbg1` default vs Falkenstein `fsn1` / Hillsboro `hil`).
+  - Default server type for unmeasured epics (`cpx31` vs `cpx51`).
+  - Cloud-init base distribution (`ubuntu-24.04` vs `debian-12`).
 
 ---
 
