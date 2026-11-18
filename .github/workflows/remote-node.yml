@@ -1,0 +1,115 @@
+name: Remote node (EC2)
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: Command to run on the ephemeral node
+        required: true
+        type: string
+      ami_id:
+        description: AMI ID available in the selected region
+        required: true
+        type: string
+      subnet_id:
+        description: Private subnet for the ephemeral node
+        required: true
+        type: string
+      security_group_id:
+        description: Security group permitted to reach the node
+        required: true
+        type: string
+      instance_type:
+        description: EC2 instance type
+        required: true
+        default: t3.micro
+        type: string
+      timeout_minutes:
+        description: Maximum command runtime before self-termination
+        required: true
+        default: 15
+        type: number
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  remote-node:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+
+      - name: Launch ephemeral EC2 node
+        id: launch
+        env:
+          COMMAND: ${{ inputs.command }}
+          AMI_ID: ${{ inputs.ami_id }}
+          SUBNET_ID: ${{ inputs.subnet_id }}
+          SECURITY_GROUP_ID: ${{ inputs.security_group_id }}
+          INSTANCE_TYPE: ${{ inputs.instance_type }}
+          TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          # Encode the operator command before embedding it in cloud-init so
+          # shell metacharacters cannot change the launcher's control flow.
+          command_b64=$(printf '%s' "$COMMAND" | base64 | tr -d '\n')
+          user_data=$(mktemp)
+          trap 'rm -f "$user_data"' EXIT
+          cat > "$user_data" <<EOF
+          #!/bin/bash
+          set -Eeuo pipefail
+          exec > >(logger -t synlynk-remote-node) 2>&1
+          finish() {
+            shutdown -h now || true
+          }
+          trap finish EXIT
+          command_b64='$command_b64'
+          command="\$(printf '%s' "\$command_b64" | base64 -d)"
+          timeout --signal=TERM --kill-after=30s "\${TIMEOUT_MINUTES}m" bash -lc "\$command"
+          EOF
+
+          instance_id=$(aws ec2 run-instances \
+            --image-id "$AMI_ID" \
+            --instance-type "$INSTANCE_TYPE" \
+            --subnet-id "$SUBNET_ID" \
+            --security-group-ids "$SECURITY_GROUP_ID" \
+            --instance-initiated-shutdown-behavior terminate \
+            --instance-market-options 'MarketType=spot,SpotOptions={InstanceInterruptionBehavior=terminate}' \
+            --user-data "file://$user_data" \
+            --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=synlynk-remote-node-${RUN_ID}},{Key=ManagedBy,Value=github-actions}]" \
+            --query 'Instances[0].InstanceId' --output text)
+          echo "instance_id=$instance_id" >> "$GITHUB_OUTPUT"
+          echo "Launched $instance_id"
+
+      - name: Wait for node startup
+        env:
+          INSTANCE_ID: ${{ steps.launch.outputs.instance_id }}
+        run: aws ec2 wait instance-running --instance-ids "$INSTANCE_ID"
+
+      - name: Record node lifecycle
+        if: always()
+        env:
+          INSTANCE_ID: ${{ steps.launch.outputs.instance_id }}
+        run: |
+          if [ -n "${INSTANCE_ID:-}" ]; then
+            aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
+              --query 'Reservations[0].Instances[0].{id:InstanceId,state:State.Name,private_ip:PrivateIpAddress}' \
+              --output json
+          fi
+
+      - name: Terminate node if it did not self-terminate
+        if: always()
+        env:
+          INSTANCE_ID: ${{ steps.launch.outputs.instance_id }}
+        run: |
+          if [ -n "${INSTANCE_ID:-}" ]; then
+            aws ec2 terminate-instances --instance-ids "$INSTANCE_ID" >/dev/null
+          fi
