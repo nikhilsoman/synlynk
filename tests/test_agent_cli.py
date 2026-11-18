@@ -352,7 +352,7 @@ def test_pr_check_cross_harness_review_accepts_different_model(project_dir, monk
     ok, _ = _seed_cross_harness_review_case(
         project_dir, monkeypatch, review_harness="codex", review_model="gpt-5.2-codex"
     )
-    assert ok
+    assert not ok
 
 
 def test_review_job_timestamp_treats_legacy_start_as_local(project_dir, monkeypatch):
@@ -651,7 +651,7 @@ def test_pr_check_native_reviewer_rejects_same_harness_and_model(project_dir, mo
 
 
 def test_pr_check_native_reviewer_rejects_same_model_on_same_harness(project_dir, monkeypatch):
-    """Same-harness/same-model native review is rejected; a different model is accepted."""
+    """Same-harness native review is rejected regardless of model."""
     import synlynk
     import synlynk.db as db
 
@@ -667,8 +667,30 @@ def test_pr_check_native_reviewer_rejects_same_model_on_same_harness(project_dir
 
     ok, message = db._cross_harness_review_verdict(conn, 2113)
 
-    assert ok
-    assert "reviewed by codex / gpt-5.2-codex (native cost record)" in message
+    assert not ok
+    assert "same harness" in message
+    conn.close()
+
+
+def test_pr_check_native_reviewer_rejects_different_model_on_same_harness(project_dir, monkeypatch):
+    """Enforced cross-harness review has no solo-harness carve-out."""
+    import synlynk
+    import synlynk.db as db
+
+    _enable_cross_harness_policy(project_dir, monkeypatch)
+    conn = synlynk._get_db()
+    _insert_implementation_job(conn, pr_number=2113, harness="codex", model="gpt-5.3-codex")
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, pr_number, agent_role) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("2026-10-08", "codex", "codex", "gpt-5.2-codex", "test", 2113, "qa"),
+    )
+    conn.commit()
+
+    ok, message = db._cross_harness_review_verdict(conn, 2113)
+
+    assert not ok
+    assert "same harness" in message
     conn.close()
 
 
