@@ -340,11 +340,61 @@ def relay_url(args=None):
 
 
 def cmd_relay_status(args):
+    url = relay_url(args)
+    broker_running = False
+    broker_status_code = None
     try:
-        with urllib.request.urlopen(relay_url(args) + "/events", timeout=1) as response:
-            print(f"relay running ({response.status}) at {relay_url(args)}")
+        with urllib.request.urlopen(url + "/events", timeout=1) as response:
+            broker_running = True
+            broker_status_code = response.status
     except Exception:
-        print(f"relay stopped at {relay_url(args)}")
+        pass
+
+    try:
+        from synlynk.relay_hub import read_hub_status
+        hub_status = read_hub_status(config_dir=getattr(args, "config_dir", None))
+    except Exception:
+        from synlynk.relay_hub import HubStatusSnapshot
+        hub_status = HubStatusSnapshot(configured=False, mode="unconfigured", state="UNCONFIGURED")
+
+    if getattr(args, "json", False):
+        payload = {
+            "broker": {
+                "running": broker_running,
+                "status_code": broker_status_code,
+                "endpoint": url,
+            },
+            "hub": {
+                "configured": hub_status.configured,
+                "mode": hub_status.mode,
+                "state": hub_status.state,
+                "hub_url": hub_status.hub_url,
+                "workspace_id": hub_status.workspace_id,
+                "device_id": hub_status.device_id,
+                "subscriptions": hub_status.subscriptions,
+                "sync_gap": hub_status.sync_gap,
+                "last_error": hub_status.last_error,
+                "retry_attempt": hub_status.retry_attempt,
+            }
+        }
+        print(json.dumps(payload, indent=2))
+        return
+
+    if broker_running:
+        print(f"relay running ({broker_status_code}) at {url}")
+    else:
+        print(f"relay stopped at {url}")
+
+    if hub_status.configured:
+        print(f"  Hub Bridge: configured ({hub_status.mode}) | state: {hub_status.state}")
+        if hub_status.hub_url:
+            print(f"    hub_url: {hub_status.hub_url}")
+        if hub_status.workspace_id:
+            print(f"    workspace_id: {hub_status.workspace_id}")
+        if hub_status.last_error:
+            print(f"    last_error: {hub_status.last_error}")
+    else:
+        print("  Hub Bridge: unconfigured")
 
 
 def cmd_relay_send(args):

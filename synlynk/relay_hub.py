@@ -26,6 +26,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import random
 import re
 import queue
 import secrets
@@ -33,6 +34,7 @@ import shlex
 import stat
 import tempfile
 import threading
+import time
 from types import SimpleNamespace
 import uuid
 
@@ -43,6 +45,87 @@ _LOG = logging.getLogger(__name__)
 
 DOC_PREVIEW_MAX_BYTES = 1_000_000
 _DOC_EVENTS = {"doc_drafted", "doc_updated"}
+
+
+class ConnectionSupervisor:
+    """Manages connection lifecycle state, attempt tracking, and backoff jitter."""
+
+    def __init__(self, base_delay: float = 1.0, multiplier: float = 1.5, max_delay: float = 60.0):
+        self.base_delay = base_delay
+        self.multiplier = multiplier
+        self.max_delay = max_delay
+        self.state = "STOPPED"
+        self.attempt_count = 0
+        self.last_error = None
+        self.connected_at: float | None = None
+        self.disconnected_at: float | None = None
+        self._lock = threading.Lock()
+
+    def calculate_delay(self, attempt: int) -> float:
+        ceiling = min(self.max_delay, self.base_delay * (self.multiplier ** attempt))
+        return random.uniform(0.0, ceiling)
+
+    def is_terminal_error(self, error: Exception | None) -> bool:
+        if error is None:
+            return False
+        if isinstance(error, (PermissionError,)):
+            return True
+        err_msg = str(error).lower()
+        terminal_patterns = (
+            "authorization violation",
+            "authorization failed",
+            "invalid credentials",
+            "permission denied",
+            "unauthorized",
+            "forbidden",
+            "revoked",
+        )
+        return any(pattern in err_msg for pattern in terminal_patterns)
+
+    def set_connecting(self):
+        with self._lock:
+            self.state = "CONNECTING"
+
+    def set_connected(self):
+        with self._lock:
+            self.state = "CONNECTED"
+            self.attempt_count = 0
+            self.connected_at = time.time()
+            self.last_error = None
+
+    def set_reconnecting(self, error: Exception):
+        with self._lock:
+            if self.state == "CONNECTED":
+                self.disconnected_at = time.time()
+            self.state = "RECONNECTING"
+            self.attempt_count += 1
+            self.last_error = str(error) or type(error).__name__
+
+    def set_auth_failed(self, error: Exception):
+        with self._lock:
+            self.state = "AUTH_FAILED"
+            self.last_error = str(error) or type(error).__name__
+
+    def set_stopped(self):
+        with self._lock:
+            self.state = "STOPPED"
+
+
+@dataclass
+class HubStatusSnapshot:
+    configured: bool
+    mode: str  # "self-hosted" | "managed" | "unconfigured"
+    state: str  # "STOPPED" | "CONNECTING" | "CONNECTED" | "RECONNECTING" | "AUTH_FAILED" | "UNCONFIGURED"
+    hub_url: str | None = None
+    workspace_id: str | None = None
+    device_id: str | None = None
+    subscriptions: list[str] | None = None
+    last_error: str | None = None
+    retry_attempt: int = 0
+    next_retry_seconds: float | None = None
+    sync_gap: bool = False
+
+
 
 
 async def _finish_before_cancelling(task):
@@ -513,6 +596,8 @@ class HubAdapter:
         self.max_seen = max_seen
         self.shutdown_timeout = shutdown_timeout
         self.last_error = None
+        self.supervisor = ConnectionSupervisor()
+        self._has_sync_gap = False
         self._seen = OrderedDict()
         self._lock = threading.RLock()
         self._lifecycle_lock = threading.Lock()
@@ -525,8 +610,63 @@ class HubAdapter:
 
     def _error(self, error):
         self.last_error = error
+        device = getattr(self.client, "device_id", None) or "local"
+        if self.supervisor.is_terminal_error(error):
+            self.supervisor.set_auth_failed(error)
+            try:
+                self.broker.publish(EventEnvelope.create(
+                    ActorIdentifier(self.workspace_id, device, "relay", "nats", ""),
+                    "hub_disconnected", {
+                        "origin_device_id": device,
+                        "reason": "authentication_failed",
+                        "error": type(error).__name__,
+                        "terminal": True,
+                    }
+                ))
+            except Exception:
+                pass
+        elif isinstance(error, (ConnectionError, TimeoutError, OSError)):
+            was_connected = (self.supervisor.state == "CONNECTED")
+            self.supervisor.set_reconnecting(error)
+            if was_connected:
+                next_delay = self.supervisor.calculate_delay(self.supervisor.attempt_count)
+                try:
+                    self.broker.publish(EventEnvelope.create(
+                        ActorIdentifier(self.workspace_id, device, "relay", "nats", ""),
+                        "hub_disconnected", {
+                            "origin_device_id": device,
+                            "reason": "connection_lost",
+                            "error": type(error).__name__,
+                            "retry_attempt": self.supervisor.attempt_count,
+                            "next_retry_seconds": round(next_delay, 2),
+                            "terminal": False,
+                        }
+                    ))
+                except Exception:
+                    pass
         # Do not log untrusted payloads, connection URLs or credentials.
         _LOG.warning("Hub bridge error: %s", type(error).__name__)
+
+    def _on_hub_connected(self):
+        with self._lock:
+            was_reconnecting = (self.supervisor.state == "RECONNECTING")
+            downtime = (time.time() - self.supervisor.disconnected_at) if self.supervisor.disconnected_at else 0.0
+            reconnect_attempt = self.supervisor.attempt_count
+            self.supervisor.set_connected()
+            if was_reconnecting:
+                device = getattr(self.client, "device_id", None) or "local"
+                try:
+                    self.broker.publish(EventEnvelope.create(
+                        ActorIdentifier(self.workspace_id, device, "relay", "nats", ""),
+                        "hub_reconnected", {
+                            "origin_device_id": device,
+                            "downtime_seconds": round(downtime, 2),
+                            "reconnect_attempt": reconnect_attempt,
+                            "resumed_streams": ["job", "agent", "sentinel", "doc", "custom"],
+                        }
+                    ))
+                except Exception as error:
+                    self.last_error = error
 
     def _remember(self, event_id):
         self._seen[event_id] = None
@@ -564,6 +704,7 @@ class HubAdapter:
             if self._closed:
                 raise RuntimeError("Owned transport has been closed")
             self._stop.clear()
+            self.supervisor.set_connecting()
             self._local_subscriber = self.broker.subscribe()
             with self._lock:
                 self._active = True
@@ -574,10 +715,15 @@ class HubAdapter:
                 else:
                     self._subscription = self.client.subscribe(
                         f"synlynk.{self.workspace_id}.>", self._on_hub_message)
+                self.supervisor.set_connected()
                 self._bridge_thread = threading.Thread(
                     target=self._pump_local_to_hub, name="relay-hub", daemon=True)
                 self._bridge_thread.start()
-            except BaseException:
+            except BaseException as exc:
+                if self.supervisor.is_terminal_error(exc):
+                    self.supervisor.set_auth_failed(exc)
+                else:
+                    self.supervisor.set_reconnecting(exc)
                 with self._lock:
                     self._active = False
                 self.broker.unsubscribe(self._local_subscriber)
@@ -592,6 +738,7 @@ class HubAdapter:
                 return
             with self._lock:
                 self._active = False
+            self.supervisor.set_stopped()
             self._stop.set()
             self.broker.unsubscribe(self._local_subscriber)
             try:
@@ -610,6 +757,23 @@ class HubAdapter:
                     raise TimeoutError("Hub bridge did not stop")
 
     stop = detach
+
+    def get_status_snapshot(self) -> HubStatusSnapshot:
+        device = getattr(self.client, "device_id", None) or "local"
+        url = getattr(self.client, "url", None)
+        return HubStatusSnapshot(
+            configured=True,
+            mode="managed" if getattr(self, "is_managed", False) else "self-hosted",
+            state=self.supervisor.state,
+            hub_url=url,
+            workspace_id=self.workspace_id,
+            device_id=device,
+            subscriptions=list(self.subscriptions) if self.subscriptions else None,
+            last_error=self.supervisor.last_error,
+            retry_attempt=self.supervisor.attempt_count,
+            next_retry_seconds=self.supervisor.calculate_delay(self.supervisor.attempt_count) if self.supervisor.state == "RECONNECTING" else None,
+            sync_gap=self._has_sync_gap,
+        )
 
     def _pump_local_to_hub(self):
         while not self._stop.is_set():
@@ -709,12 +873,49 @@ class HubAdapter:
             return "retry"
 
     def _on_sync_gap(self, stream, last_seq, earliest_seq):
+        self._has_sync_gap = True
         event = EventEnvelope.create(
             ActorIdentifier(self.workspace_id, "local", "relay", "nats", ""),
             "sync_gap_detected", {"stream": stream, "last_delivered_seq": last_seq,
                                   "earliest_seq": earliest_seq})
         # The outbound pump excludes these markers even after its ID cache evicts.
         self.broker.publish(event)
+
+
+def read_hub_status(config_dir=None, workspace_id=None) -> HubStatusSnapshot:
+    """Inspect hub configuration on disk when no adapter is actively running."""
+    directory = Path(config_dir or _default_config_dir()).expanduser().resolve()
+    hub_file = directory / "hub.json"
+    if not hub_file.exists():
+        ws_hub_file = Path(".synlynk/relay/hub.json")
+        if ws_hub_file.exists():
+            hub_file = ws_hub_file
+        else:
+            return HubStatusSnapshot(
+                configured=False,
+                mode="unconfigured",
+                state="UNCONFIGURED",
+            )
+    try:
+        with open(hub_file, "r") as f:
+            data = json.load(f)
+        mode = data.get("mode", "self-hosted")
+        ws = data.get("workspace_id") or workspace_id
+        url = data.get("url")
+        return HubStatusSnapshot(
+            configured=True,
+            mode=mode,
+            state="STOPPED",
+            hub_url=url,
+            workspace_id=ws,
+        )
+    except Exception as exc:
+        return HubStatusSnapshot(
+            configured=True,
+            mode="unknown",
+            state="CONFIG_ERROR",
+            last_error=str(exc),
+        )
 
 
 def _import_nats():
@@ -1055,18 +1256,69 @@ def cmd_relay_hub_init(args):
           f"--config-dir {shlex.quote(str(store.config_dir))}")
 
 
+def probe_managed_hub(url: str, token: str, workspace_id: str, timeout: float = 3.0) -> dict:
+    """Validate token and workspace with the managed hub before saving configuration."""
+    import urllib.request
+    import urllib.error
+
+    probe_url = url.rstrip("/")
+    if not (probe_url.startswith("http://") or probe_url.startswith("https://")):
+        probe_url = f"https://{probe_url}"
+    probe_endpoint = f"{probe_url}/v1/hub/preflight"
+
+    req_data = json.dumps({"workspace_id": workspace_id}).encode("utf-8")
+    req = urllib.request.Request(
+        probe_endpoint,
+        data=req_data,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "User-Agent": "synlynk-cli/0.38.1",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8")
+            return json.loads(raw) if raw else {"status": "authorized"}
+    except urllib.error.HTTPError as err:
+        if err.code in (401, 403):
+            raise PermissionError(f"Managed hub rejected token (HTTP {err.code}): invalid or expired workspace token")
+        raise RuntimeError(f"Managed hub preflight failed (HTTP {err.code}): {err.reason}")
+    except Exception as exc:
+        raise ConnectionError(f"Could not reach managed hub at {probe_url}: {exc}")
+
+
 def cmd_relay_hub_connect(args):
     directory = _config_dir(args)
     # Validate the workspace and reuse the existing private-directory contract.
     DeviceCredentialStore(args.workspace_id, directory)
     if (directory / "hub.json").exists():
         raise ValueError("Hub already configured; use a separate config directory")
+
+    do_probe = getattr(args, "probe", False)
+    target_url = getattr(args, "url", None)
+    if do_probe and target_url:
+        try:
+            probe_result = probe_managed_hub(target_url, args.token, args.workspace_id)
+            nats_url = probe_result.get("nats_url") or target_url
+        except Exception as exc:
+            raise RuntimeError(f"Managed hub preflight rejected: {exc}")
+    else:
+        nats_url = target_url
+
     _atomic_secret_write(directory / "hub.json", json.dumps({
-        "workspace_id": args.workspace_id, "mode": "managed", "token": args.token,
-        "url": args.url,
+        "workspace_id": args.workspace_id,
+        "mode": "managed",
+        "token": args.token,
+        "url": nats_url,
     }, indent=2))
-    print("Managed configuration saved locally. Managed service connection and device "
-          "registration are not implemented; no service was contacted.")
+
+    if do_probe:
+        print(f"Connected to managed hub for workspace '{args.workspace_id}'. Configuration saved.")
+    else:
+        print("Managed configuration saved locally. Managed service connection and device "
+              "registration are not implemented; no service was contacted.")
 
 
 def _validate_pattern(pattern):
