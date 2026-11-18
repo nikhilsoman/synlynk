@@ -23,6 +23,7 @@ from synlynk._constants import (
     GH_WRITE_HARNESS_PRIORITY as _GH_WRITE_HARNESS_PRIORITY,
     HARNESS_CAPABILITY_BASELINES,
     _CODEX_NETWORK_PERMISSION,
+    augment_path_for_harnesses,
 )
 from synlynk._lazy import pkg as _pkg
 from synlynk.harness_adapters.base import PermissionEnforcementError
@@ -1516,6 +1517,7 @@ def _build_subprocess_env(
     allowed = set(_ENV_ALLOWLIST_BASE) | set(baseline.get("env_passthrough", []))
     proc_env = {k: v for k, v in os.environ.items() if k in allowed}
     proc_env.update(overrides.get("env", {}))
+    proc_env["PATH"] = augment_path_for_harnesses(proc_env.get("PATH"))
 
     for var in baseline.get("headless_contract", {}).get("env_vars_required", []):
         if "=" in var:

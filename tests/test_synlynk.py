@@ -8101,6 +8101,7 @@ def test_install_service_macos(project_dir, monkeypatch):
     assert plistlib.loads(plist.encode())["KeepAlive"] is True
     assert plistlib.loads(plist.encode())["ThrottleInterval"] == 30
     assert plistlib.loads(plist.encode())["EnvironmentVariables"]["SYNLYNK_AUTONOMOUS"] == "1"
+    assert "PATH" in plistlib.loads(plist.encode())["EnvironmentVariables"]
     assert calls == [
         (["launchctl", "unload", str(plist_path)], {"check": False, "capture_output": True}),
         (["launchctl", "load", "-w", str(plist_path)], {"check": False}),
@@ -8146,6 +8147,7 @@ def test_install_service_linux(project_dir, monkeypatch):
     assert "ExecStart=/usr/bin/python3 -m synlynk daemon run" in unit
     assert "SYNLYNK_DAEMON_WORKSPACE_ROOT=" in unit
     assert "Environment=SYNLYNK_AUTONOMOUS=1" in unit
+    assert "Environment=PATH=" in unit
     assert "Restart=on-failure" in unit
     assert "RestartSec=30" in unit
     assert calls[0][0] == ["systemctl", "--user", "enable", "--now", "synlynk-daemon"]

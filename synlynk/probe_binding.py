@@ -7,7 +7,7 @@ import shutil
 import subprocess
 from typing import Any, Dict
 
-from synlynk._constants import HARNESS_CAPABILITY_BASELINES
+from synlynk._constants import HARNESS_CAPABILITY_BASELINES, augment_path_for_harnesses
 
 SYSTEM_DEPENDENCIES = {
     "git": {"min_version": "2.38", "install_hint": "brew install git"},
@@ -112,7 +112,8 @@ def _auth_config_path(harness_name: str) -> Path | None:
 
 
 def probe_harness_live(harness_name: str) -> Dict[str, Any]:
-    path = shutil.which(harness_name)
+    augmented_path = augment_path_for_harnesses()
+    path = shutil.which(harness_name) or shutil.which(harness_name, path=augmented_path)
     if not path:
         return {
             "harness": harness_name,
@@ -124,7 +125,13 @@ def probe_harness_live(harness_name: str) -> Dict[str, Any]:
 
     version = None
     try:
-        proc = subprocess.run([harness_name, "--version"], capture_output=True, text=True, timeout=5)
+        proc = subprocess.run(
+            [path, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            env={**os.environ, "PATH": augmented_path},
+        )
         if proc.returncode == 0:
             lines = (proc.stdout or proc.stderr or "").strip().splitlines()
             if lines:
