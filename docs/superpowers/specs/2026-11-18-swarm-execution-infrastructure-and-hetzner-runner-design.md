@@ -5,7 +5,7 @@
 **Date:** 2026-11-18  
 **Author:** AGY (`agy-2.x`)  
 **Domain:** `platform` · `backend`  
-**Governing Goal:** `goal-d5323df6` (Theme 6: Ephemeral Swarm Execution Infrastructure Foundation)  
+**Governing Goal:** `arc-goal-01C3FA0F` (Theme 6: Hetzner Cloud Swarm Runner & Vertical Milestone Host Orchestration; corrected 2026-11-18 from a stale `goal-d5323df6` reference that was never created in `goals` — see gh:#5373)  
 **Story ID:** `story-76f56329`  
 
 ---
