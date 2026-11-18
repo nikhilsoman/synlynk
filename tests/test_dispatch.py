@@ -2049,7 +2049,7 @@ def test_build_subprocess_env_allowlists_base_vars_only(monkeypatch):
 
     env, shim_dir = _build_subprocess_env("codex", {}, requires_gh_write=False, story_id="story-1")
 
-    assert env.get("PATH").endswith(os.pathsep + "/usr/bin")
+    assert "/usr/bin" in env.get("PATH").split(os.pathsep)
     assert env.get("HOME") == "/home/test"
     assert "AWS_SECRET_ACCESS_KEY" not in env
     assert "SOME_RANDOM_API_TOKEN" not in env

@@ -1517,7 +1517,8 @@ def _build_subprocess_env(
     allowed = set(_ENV_ALLOWLIST_BASE) | set(baseline.get("env_passthrough", []))
     proc_env = {k: v for k, v in os.environ.items() if k in allowed}
     proc_env.update(overrides.get("env", {}))
-    proc_env["PATH"] = augment_path_for_harnesses(proc_env.get("PATH"))
+    if "PATH" not in overrides.get("env", {}):
+        proc_env["PATH"] = augment_path_for_harnesses(proc_env.get("PATH"))
 
     for var in baseline.get("headless_contract", {}).get("env_vars_required", []):
         if "=" in var:
