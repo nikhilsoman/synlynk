@@ -183,10 +183,10 @@ def _up(conn: sqlite3.Connection) -> None:
         )
     """)
     cap_cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_ratings)")}
-    if {"agent", "task_type"} <= cap_cols:
+    if {"agent", "discipline"} <= cap_cols:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_capability_ratings_harness_task "
-            "ON capability_ratings(agent, task_type)"
+            "ON capability_ratings(agent, discipline)"
         )
     cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
     if {"agent", "type_id"} <= cost_cols:
@@ -199,17 +199,7 @@ def _up(conn: sqlite3.Connection) -> None:
 MIGRATION = Migration(version=35, name="routing_rotation_state", up=_up)
 ```
 
-Note: `capability_ratings` does not have a `task_type` column yet in this schema (confirmed via `PRAGMA table_info` during grounding — its domain-matching columns are `engg_domain`/`discipline`/`org_domain`/`role`/`stage`/`phase`, not `task_type`). Before writing this step for real, run:
-
-```bash
-python3 -c "
-import sqlite3
-conn = sqlite3.connect('.synlynk/workspace.json' if False else __import__('synlynk')._get_db().execute('PRAGMA database_list').fetchone()[2])
-" 2>/dev/null || true
-sqlite3 "$(find ~/.synlynk/workspaces -name state.db | head -1)" "PRAGMA table_info(capability_ratings)" | grep -i task_type
-```
-
-If that prints nothing (no `task_type` column exists), change the index to the nearest real equivalent column instead of a column that doesn't exist — use `discipline` in place of `task_type` for `idx_capability_ratings_harness_task` (i.e. `ON capability_ratings(agent, discipline)`), and update `LiveQueryRouter` in Task 3 to query by `discipline` for the `capability_ratings` side and `type_id` for the `cost_entries` side. Do not invent a `task_type` column on `capability_ratings` as part of this migration — that is a larger schema change outside this plan's scope if it turns out to be needed; confirm the real column name first and use it.
+Note: `capability_ratings` does not have a `task_type` column in this schema (confirmed via `PRAGMA table_info` during grounding — its domain-matching columns are `engg_domain`/`discipline`/`org_domain`/`role`/`stage`/`phase`, not `task_type`). The index above is named `idx_capability_ratings_harness_task` for readability but is built on the real `(agent, discipline)` columns, not a nonexistent `task_type` column — this matches `LiveQueryRouter`'s own queries in Task 3, which filter `capability_ratings` by `discipline` and `cost_entries` by `type_id`. Do not invent a `task_type` column on `capability_ratings` as part of this migration — that would be a larger schema change outside this plan's scope.
 
 - [ ] **Step 3: Run test to verify it passes**
 
@@ -308,6 +298,26 @@ def test_deterministic_tie_break_prefers_higher_sample_count_then_alphabetical()
     assert router.select(["agy", "codex"], "implement", conn) == "codex"
 
 
+def test_round_robin_rotates_only_sub_floor_harnesses_in_a_mixed_set():
+    """A harness that has already cleared SAMPLE_SIZE_FLOOR must not be
+    rotated into by round-robin just because another harness in the same
+    eligible set is still below the floor — round-robin is scoped to
+    below_floor, not the full eligible_harnesses list (dec-8ed62afa)."""
+    conn = _make_db()
+    for i in range(SAMPLE_SIZE_FLOOR):
+        conn.execute(
+            "INSERT INTO capability_ratings (story_id, agent, discipline, pr_review_cycles) "
+            "VALUES (?, 'codex', 'implement', ?)", (f"s{i}", 1.0)
+        )
+    conn.commit()
+    router = LiveQueryRouter()
+    # codex is at the floor already; grok and agy are below it. Only grok/agy
+    # should ever be picked here — codex must never appear in these picks.
+    picks = [router.select(["codex", "grok", "agy"], "implement", conn) for _ in range(4)]
+    assert "codex" not in picks
+    assert picks == ["grok", "agy", "grok", "agy"]
+
+
 def test_single_eligible_harness_short_circuits():
     conn = _make_db()
     router = LiveQueryRouter()
@@ -365,7 +375,7 @@ class LiveQueryRouter:
         samples = {h: self._sample_count(db_conn, h, task_type) for h in eligible_harnesses}
         below_floor = [h for h in eligible_harnesses if samples[h] < SAMPLE_SIZE_FLOOR]
         if below_floor:
-            return self._round_robin(db_conn, task_type, eligible_harnesses)
+            return self._round_robin(db_conn, task_type, below_floor)
 
         scored = [
             (self._score(db_conn, h, task_type), -samples[h], h)
@@ -420,7 +430,7 @@ class LiveQueryRouter:
 - [ ] **Step 3: Run tests to verify they pass**
 
 Run: `pytest tests/test_routing.py -v`
-Expected: PASS (5 tests)
+Expected: PASS (6 tests)
 
 - [ ] **Step 4: Commit**
 
@@ -824,7 +834,7 @@ from synlynk.dispatch import _preflight_dispatch
 def test_missing_manifest_triggers_inline_discovery(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = _preflight_dispatch(
-        "claude", task="test task", permissions=[], dispatch_flags=[],
+        "claude", dispatch_flags=[], _task_hint="test task", permissions=[],
         db_conn=None, force_agent=False,
     )
     assert os.path.exists(os.path.join(".synlynk", "harnesses", "claude.json"))
@@ -836,7 +846,7 @@ def test_version_hash_mismatch_fails_closed_without_force(tmp_path, monkeypatch)
     with open(".synlynk/harnesses/claude.json", "w") as f:
         json.dump({"harness": "claude", "cli_version_hash": "stale-hash-0000"}, f)
     result = _preflight_dispatch(
-        "claude", task="test task", permissions=[], dispatch_flags=[],
+        "claude", dispatch_flags=[], _task_hint="test task", permissions=[],
         db_conn=None, force_agent=False,
     )
     assert result is not None
@@ -850,14 +860,14 @@ def test_version_hash_mismatch_passes_with_force_harness(tmp_path, monkeypatch):
     with open(".synlynk/harnesses/claude.json", "w") as f:
         json.dump({"harness": "claude", "cli_version_hash": "stale-hash-0000"}, f)
     result = _preflight_dispatch(
-        "claude", task="test task", permissions=[], dispatch_flags=[],
+        "claude", dispatch_flags=[], _task_hint="test task", permissions=[],
         db_conn=None, force_agent=True,
     )
     assert not (isinstance(result, dict) and result.get("sentinel") == "HARNESS_MANIFEST_REVALIDATION_FAILED")
 ```
 
 Run: `pytest tests/test_dispatch_manifest_revalidation.py -v`
-Expected: FAIL — `test_missing_manifest_triggers_inline_discovery` fails because no manifest is written yet; adjust exact assertions after confirming `_preflight_dispatch`'s real parameter names via `grep -n "^def _preflight_dispatch" -A 20 synlynk/dispatch.py` before finalizing this test (the plan's draft signature here must match — if the real signature differs, use the real parameter names instead of guessing).
+Expected: FAIL — `test_missing_manifest_triggers_inline_discovery` fails because no manifest is written yet. `_preflight_dispatch`'s real signature (confirmed via `grep -n "^def _preflight_dispatch" -A 20 synlynk/dispatch.py`) is `_preflight_dispatch(harness_name: str, dispatch_flags: list, db_conn=None, _task_hint: str = "", permissions=None, force_agent=False, root=None, declared_requires=None, story_id=None, issue=None, pr=None, governs_story_id=_UNSUPPLIED)` — the task-description kwarg is `_task_hint`, not `task`; the test calls above already use the real name.
 
 - [ ] **Step 3: Add the manifest-revalidation check**
 
@@ -1003,13 +1013,8 @@ def test_local_reroute_without_allow_reroute_fails_closed(monkeypatch):
     class _FakeRequest:
         agent = "agy"  # pipeline rerouted away from "local"
 
-    class _FakePipeline:
-        def resolve(self, request):
-            return _FakeRequest()
-        def authorize(self, request):
-            return request
-
-    monkeypatch.setattr("synlynk.dispatch_pipeline.build_pipeline", lambda: _FakePipeline())
+    monkeypatch.setattr("synlynk.dispatch_pipeline.resolve", lambda request: _FakeRequest())
+    monkeypatch.setattr("synlynk.dispatch_pipeline.authorize", lambda request: None)
     with pytest.raises(RuntimeError) as exc:
         dispatch_agent("local", "test task", allow_reroute=False, skip_preflight=True)
     assert "allow-reroute" in str(exc.value).lower() or "allow_reroute" in str(exc.value).lower()
@@ -1019,13 +1024,8 @@ def test_local_reroute_with_allow_reroute_proceeds(monkeypatch):
     class _FakeRequest:
         agent = "agy"
 
-    class _FakePipeline:
-        def resolve(self, request):
-            return _FakeRequest()
-        def authorize(self, request):
-            return request
-
-    monkeypatch.setattr("synlynk.dispatch_pipeline.build_pipeline", lambda: _FakePipeline())
+    monkeypatch.setattr("synlynk.dispatch_pipeline.resolve", lambda request: _FakeRequest())
+    monkeypatch.setattr("synlynk.dispatch_pipeline.authorize", lambda request: None)
     # Should not raise for the reroute-gate reason (may still fail later for
     # unrelated environment reasons in a unit-test sandbox — only assert the
     # specific RuntimeError from the gate is absent).
@@ -1036,7 +1036,7 @@ def test_local_reroute_with_allow_reroute_proceeds(monkeypatch):
 ```
 
 Run: `pytest tests/test_dispatch_local_reroute_gate.py -v`
-Expected: FAIL — first confirm the exact mock points by reading `synlynk/dispatch.py:4753-4780` again at implementation time (the plan's `_FakePipeline`/`build_pipeline` names are illustrative; use the real `synlynk.dispatch_pipeline` symbol names found via `grep -n "^def \|^class " synlynk/dispatch_pipeline.py` before finalizing this test) — `TypeError: dispatch_agent() got an unexpected keyword argument 'allow_reroute'`
+Expected: FAIL with `TypeError: dispatch_agent() got an unexpected keyword argument 'allow_reroute'`. The mock points above use the real shape, confirmed via `grep -n "^def \|^class " synlynk/dispatch_pipeline.py`: the module is a flat set of functions (`resolve`, `authorize`, `prepare_worktree`, `spawn`, `observe`, `finalize`) with no `build_pipeline()` factory or pipeline class — `dispatch_agent` calls them directly as `from synlynk import dispatch_pipeline as pipeline; request = pipeline.resolve(request); pipeline.authorize(request)` (dispatch.py:4755-4769), and `authorize`'s return value is discarded, so the mock above only needs to control `resolve`'s return.
 
 - [ ] **Step 2: Add the `allow_reroute` parameter and gate**
 
@@ -1239,6 +1239,42 @@ def test_insert_cost_row_persists_requested_harness(tmp_path, monkeypatch):
     conn = sqlite3.connect(db_path)
     row = conn.execute("SELECT requested_harness FROM cost_entries").fetchone()
     assert row[0] == "local"
+
+
+def test_insert_cost_row_upsert_path_also_persists_requested_harness(tmp_path, monkeypatch):
+    """_insert_cost_row has a separate UPDATE path for an existing job_id row;
+    it must thread requested_harness too, not just the INSERT path."""
+    db_path = str(tmp_path / "state.db")
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE cost_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, session_date TEXT, agent TEXT, model TEXT,
+            input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER,
+            story_id TEXT, type_id TEXT, epic_id INTEGER, phase_id INTEGER,
+            total_cost_usd REAL, api_equivalent_usd REAL, actual_usd REAL, payment_mode TEXT,
+            notes TEXT, cost_source TEXT NOT NULL, estimate_basis TEXT, job_id TEXT,
+            recorded_at TEXT, dispatch_context TEXT, context_mode TEXT, session_id TEXT,
+            pr_number INTEGER, harness TEXT, agent_role TEXT, decision_revision INTEGER,
+            requested_harness TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr("synlynk._get_db", lambda *a, **k: sqlite3.connect(db_path))
+    _insert_cost_row(
+        session_date="2026-11-18", agent="agy", harness="agy", job_id="job-1",
+        cost_source="estimate", total_cost_usd=1.0, requested_harness="local",
+        db_path=db_path,
+    )
+    _insert_cost_row(
+        session_date="2026-11-18", agent="agy", harness="agy", job_id="job-1",
+        cost_source="actual", total_cost_usd=2.0, requested_harness="local",
+        db_path=db_path,
+    )
+    conn = sqlite3.connect(db_path)
+    rows = conn.execute("SELECT requested_harness FROM cost_entries WHERE job_id='job-1'").fetchall()
+    assert len(rows) == 1, "second call with the same job_id must UPDATE, not INSERT a second row"
+    assert rows[0][0] == "local"
 ```
 
 Run: `pytest tests/test_requested_harness_attribution.py -v`
@@ -1252,13 +1288,50 @@ In `synlynk/db.py`, add to the signature (after `agent_role: str = None,` near l
     requested_harness: str = None,
 ```
 
-Find the function's actual `INSERT INTO cost_entries` statement (confirmed during grounding this is further down in the same function body, not shown in the excerpt read so far — run `sed -n '2693,2913p' synlynk/db.py` at implementation time to find the real column/value list) and add `requested_harness` to both the column list and the values tuple, defaulting to `harness_val` (the already-computed `harness or agent` value at line 2736) when the caller didn't pass one explicitly:
+Place this line right after the existing `harness_val = harness or agent` (line 2736):
 
 ```python
     if requested_harness is None:
         requested_harness = harness_val
-```//
-Place this line right after `harness_val = harness or agent` (existing line 2736), then add `requested_harness` as a bound parameter in the real INSERT (match whatever placeholder style — `?` positional — the existing statement already uses).
+```
+
+`_insert_cost_row` has two write paths confirmed via `sed -n '2693,2913p' synlynk/db.py` — an `UPDATE cost_entries ... WHERE job_id=?` upsert path (taken when a row for `job_id` already exists) and the `INSERT INTO cost_entries` path below it (taken otherwise). Both must persist `requested_harness` or the upsert path would silently drop it on every update. Update the `UPDATE` statement (the one ending `...,compaction_event_type=COALESCE(?, compaction_event_type) WHERE job_id=?`) by adding a new `,requested_harness=COALESCE(?, requested_harness)` clause right before `WHERE job_id=?`, and add `requested_harness` to its parameter tuple right before the trailing `job_id,` value. Then change the real `INSERT INTO cost_entries` statement from:
+
+```python
+        conn.execute(
+            """INSERT INTO cost_entries
+                (session_date, agent, harness, agent_role, model, input_tokens, output_tokens, cache_read_tokens,
+                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, pr_number, decision_revision, turn_usage_json,
+                 estimated_input_tokens, estimated_output_tokens, estimated_cost_usd, compaction_event_type)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                session_date, agent_val, harness_val, role_val, model, input_tokens, output_tokens, cache_read_tokens,
+                cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, pr_number, decision_revision,
+                json.dumps(turn_breakdown, separators=(",", ":")) if turn_breakdown else None,
+                estimated_input_tokens, estimated_output_tokens, estimated_cost_usd, compaction_event_type,
+            ),
+        )
+```
+
+to:
+
+```python
+        conn.execute(
+            """INSERT INTO cost_entries
+                (session_date, agent, harness, agent_role, model, input_tokens, output_tokens, cache_read_tokens,
+                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, pr_number, decision_revision, turn_usage_json,
+                 estimated_input_tokens, estimated_output_tokens, estimated_cost_usd, compaction_event_type, requested_harness)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                session_date, agent_val, harness_val, role_val, model, input_tokens, output_tokens, cache_read_tokens,
+                cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, pr_number, decision_revision,
+                json.dumps(turn_breakdown, separators=(",", ":")) if turn_breakdown else None,
+                estimated_input_tokens, estimated_output_tokens, estimated_cost_usd, compaction_event_type, requested_harness,
+            ),
+        )
+```
+
+(This plan shows the INSERT path's exact before/after in full since it's the simpler of the two; apply the same column-list + value-tuple append pattern to the UPDATE path's `SET` clause and parameter tuple as described above.)
 
 - [ ] **Step 3: Thread it through from `_write_capability_rating`'s call site in `jobs.py`**
 
@@ -1319,6 +1392,7 @@ git commit -m "feat: persist requested_harness on cost_entries/capability_rating
 - [ ] **Step 1: Write the failing test**
 
 ```python
+import os
 from unittest.mock import patch
 
 from synlynk.harness_manifest import discover_and_validate
@@ -1326,17 +1400,24 @@ from synlynk.harness_manifest import discover_and_validate
 
 def test_discover_and_validate_runs_mcp_smoke_check_when_harness_declares_mcp_tools(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    import os
     os.makedirs(".synlynk/harnesses", exist_ok=True)
+    monkeypatch.setitem(
+        __import__("synlynk.harness_manifest", fromlist=["HARNESS_CAPABILITY_BASELINES"]).HARNESS_CAPABILITY_BASELINES,
+        "test-mcp-harness",
+        {"mcp_tools": ["some-tool"], "models": [], "dispatch_flags": {}, "panel_auth_check": {}, "cli": "echo"},
+    )
+    monkeypatch.setattr(
+        "synlynk.costs._payment_model_config_for_agent",
+        lambda harness: {"mode": "subscription"},
+    )
     with patch("synlynk.doctor._run_tc8", return_value={"passed": True, "servers_checked": 1}) as mock_tc8:
-        manifest = discover_and_validate("claude")
-    if manifest.get("mcp_tools"):
-        mock_tc8.assert_called_once()
-        assert manifest["last_validated_smoke_run"] is not None
+        manifest = discover_and_validate("test-mcp-harness")
+    mock_tc8.assert_called_once()
+    assert manifest["last_validated_smoke_run"] == {"passed": True, "servers_checked": 1}
 ```
 
 Run: `pytest tests/test_harness_manifest.py::test_discover_and_validate_runs_mcp_smoke_check_when_harness_declares_mcp_tools -v`
-Expected: FAIL (mock not called — no MCP smoke-run wired yet). If `claude`'s baseline has no `mcp_tools` entry, check `HARNESS_CAPABILITY_BASELINES` for a harness that does (`grep -n "mcp_tools" synlynk/_constants.py`) and use that harness in the test instead.
+Expected: FAIL (mock not called — no MCP smoke-run wired yet). This test injects a fake `test-mcp-harness` baseline entry rather than relying on a real harness declaring `mcp_tools`, because `HARNESS_CAPABILITY_BASELINES` has no `mcp_tools` key for any harness in this repo today (confirmed via `grep -n "mcp_tools" synlynk/_constants.py` returning nothing) — `discover_and_validate("claude")`'s `manifest["mcp_tools"]` is always `[]`, so a test gated on a real harness's baseline would be vacuous (the `if manifest.get("mcp_tools")` branch would never execute). The `_payment_model_config_for_agent` monkeypatch exists only to bypass the unrelated per-token-billing fail-closed check from Task 5 for this made-up harness name.
 
 - [ ] **Step 2: Wire the smoke-run into `discover_and_validate`**
 

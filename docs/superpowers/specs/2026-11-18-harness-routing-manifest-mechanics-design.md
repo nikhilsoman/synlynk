@@ -315,6 +315,15 @@ user's own billing mode (₹399/month flat subscription, Standard tier, not Cont
 `.synlynk/billing.json`'s existing subscription-mode path — this fix only adds the `credit_grants` fallback
 for non-subscription harnesses that currently fall through with no funding source at all.
 
+**Addendum (resolved during planning, 2026-11-18, flagged by Codex review of PR #5369):** this
+`credit_grants`-fallback requirement is **already satisfied by existing code** — `synlynk/quota.py:984-1063`
+(`_unexpired_credit_remaining` + `provider_pool_preflight`, wired into the budget preflight at
+`synlynk/dispatch.py:5060`) already sums `credit_grants` as a fallback funding source whenever a harness
+has no subscription-track quota row, and this path is already live. The implementation plan's Task 8
+therefore fixes only the `_HARDCODED_FALLBACK_RATES["muse-spark-1.3"]` constant above; it does not add a
+new `_billing_rate_per_1k_tokens` helper, since that would duplicate `provider_pool_preflight`'s existing
+fallback rather than close a real gap.
+
 ## Section 6 — Local-harness reroute fix (real call site)
 
 **Real call site found by direct code reading**, `synlynk/dispatch.py`, inside `dispatch_agent()`:
