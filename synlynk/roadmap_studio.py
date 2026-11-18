@@ -50,6 +50,17 @@ def _constituent_ids(ticket_row: dict) -> list[str]:
     return [str(sid) for sid in parsed] if isinstance(parsed, list) else []
 
 
+def _version_sort_key(version_str: str) -> tuple:
+    cleaned = (version_str or "").lstrip("v")
+    parts = []
+    for p in cleaned.split("."):
+        try:
+            parts.append((0, int(p)))
+        except ValueError:
+            parts.append((1, str(p)))
+    return tuple(parts)
+
+
 def studio_data(repo_path: str = ".", *, conn: Optional[sqlite3.Connection] = None) -> dict:
     """Return open/held release_proposal tickets (with resolved constituent stories) and the backlog pool."""
     active_conn, owns = _conn(conn, repo_path)
@@ -86,6 +97,8 @@ def studio_data(repo_path: str = ".", *, conn: Optional[sqlite3.Connection] = No
                     "stories": stories,
                 }
             )
+
+        tickets.sort(key=lambda t: _version_sort_key(t.get("release_version") or ""))
 
         backlog_rows = active_conn.execute(
             "SELECT story_id, title, role, estimated_tokens, gh_issue FROM stories "

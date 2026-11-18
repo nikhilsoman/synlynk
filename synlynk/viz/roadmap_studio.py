@@ -148,7 +148,7 @@ function wireDragAndDrop(){
 }
 
 async function load(){
-  const r=await fetch('api/roadmap_studio');
+  const r=await fetch('api/roadmap_studio?_=' + Date.now());
   if(!r.ok){document.getElementById('board').textContent='Roadmap Studio unavailable';return}
   studioData=await r.json();
   draw();

@@ -26,6 +26,7 @@ RELAY_EVENT_TYPES = (
     "goal_realigned",
     "governs_stage_advanced",
     "hub_disconnected",
+    "hub_reconnected",
     "sync_gap_detected",
     "doc_drafted",
     "doc_updated",
