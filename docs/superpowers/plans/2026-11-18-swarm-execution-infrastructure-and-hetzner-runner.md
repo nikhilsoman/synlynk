@@ -9,7 +9,7 @@
 **Tech Stack:** Python 3.10+ stdlib (urllib, json, threading, dataclasses), SQLite (`state.db`), Hetzner Cloud REST API, NATS JetStream Relay Hub. Zero new external dependencies.
 
 **Source Spec:** `docs/superpowers/specs/2026-11-18-swarm-execution-infrastructure-and-hetzner-runner-design.md` ([gh:#5360](https://github.com/nikhilsoman/synlynk/issues/5360))  
-**Governing Goal:** `goal-d5323df6` (Theme 6: Ephemeral Swarm Execution Infrastructure Foundation)  
+**Governing Goal:** `arc-goal-01C3FA0F` (Theme 6: Hetzner Cloud Swarm Runner & Vertical Milestone Host Orchestration; corrected 2026-11-18 from a stale `goal-d5323df6` reference that was never created in `goals` — see gh:#5373)  
 **Milestone:** `v0.39.1` (Theme 6 Fast-Follow)
 
 ---
