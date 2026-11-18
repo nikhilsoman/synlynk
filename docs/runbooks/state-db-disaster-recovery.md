@@ -98,6 +98,20 @@ synlynk backup encrypt /path/to/offline-dr/state/state-<timestamp>.db \
    synlynk checkpoint
    ```
 
+For a repeatable check against a customer-operated remote node, run the
+read-only restore verification helper from the repository checkout. It
+performs the restore dry-run, inventory, status, and checkpoint checks over
+SSH; it never passes `--apply`:
+
+```bash
+scripts/verify-dr-restore-remote.sh \
+  user@remote-node \
+  /tmp/state-snapshot.db \
+  /path/to/canonical/state.db \
+  '<PRODUCT_SLUG>' \
+  '<PRODUCT_ID>'
+```
+
 9. Record the result, elapsed time, restored snapshot hash, row-count evidence,
    and any follow-up in the DR ticket. Remove temporary plaintext and confirm
    that no private key or plaintext database was uploaded.
