@@ -90,6 +90,29 @@ def test_studio_data_returns_none_for_unset_ticket_theme(tmp_path):
         conn.close()
 
 
+def test_studio_data_sorts_tickets_naturally_by_version(tmp_path):
+    db_file = tmp_path / "state.db"
+    conn = sl._get_db(str(db_file))
+    conn.row_factory = sqlite3.Row
+    try:
+        _seed(conn)
+        # Insert out of order: v0.40.0, v0.39.0, v0.39.1
+        conn.execute(
+            "INSERT INTO approval_tickets (id, story_id, action, issue_url, status, constituent_story_ids, theme) VALUES "
+            "(2, 'v0.40.0', 'release_proposal', 'https://github.com/test/2', 'held', '[]', 'Theme 40'), "
+            "(3, 'v0.39.0', 'release_proposal', 'https://github.com/test/3', 'held', '[]', 'Theme 39'), "
+            "(4, 'v0.39.1', 'release_proposal', 'https://github.com/test/4', 'held', '[]', 'Theme 39.1')"
+        )
+        conn.commit()
+
+        from synlynk.roadmap_studio import studio_data
+
+        versions = [t["release_version"] for t in studio_data(conn=conn)["tickets"]]
+        assert versions == ["v0.33.0", "v0.39.0", "v0.39.1", "v0.40.0"]
+    finally:
+        conn.close()
+
+
 def test_approve_ticket_resolves_only_that_ticket(tmp_path):
     db_file = tmp_path / "state.db"
     conn = sl._get_db(str(db_file))

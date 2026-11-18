@@ -74,6 +74,7 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
     def _send_json_ok(self, payload: dict):
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.end_headers()
         self.wfile.write(json.dumps(payload).encode("utf-8"))
 
@@ -100,6 +101,14 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
                     return entry["repo_path"]
             except Exception:
                 pass
+        try:
+            from synlynk.vizor_daemon import _registered_workspaces
+
+            workspaces = _registered_workspaces()
+            if "synlynk" in workspaces and workspaces["synlynk"].get("repo_path"):
+                return workspaces["synlynk"]["repo_path"]
+        except Exception:
+            pass
         return "."
 
     def do_GET(self):
