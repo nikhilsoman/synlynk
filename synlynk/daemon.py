@@ -1014,6 +1014,10 @@ def _daemon_install_service(daemon_instance) -> None:
         return result
 
     try:
+        from synlynk._constants import augment_path_for_harnesses
+
+        service_path = augment_path_for_harnesses(os.environ.get("PATH"))
+
         if sys.platform == "darwin":
             launchagents_dir = os.path.join(home, "Library", "LaunchAgents")
             os.makedirs(launchagents_dir, exist_ok=True)
@@ -1044,6 +1048,8 @@ def _daemon_install_service(daemon_instance) -> None:
                       <string>{workspace_root}</string>
                       <key>SYNLYNK_AUTONOMOUS</key>
                       <string>1</string>
+                      <key>PATH</key>
+                      <string>{service_path}</string>
                     </dict>
                     <key>RunAtLoad</key>
                     <true/>
@@ -1090,6 +1096,7 @@ def _daemon_install_service(daemon_instance) -> None:
                 ExecStart={python_path} -m synlynk daemon run
                 Environment=SYNLYNK_DAEMON_WORKSPACE_ROOT={workspace_root}
                 Environment=SYNLYNK_AUTONOMOUS=1
+                Environment=PATH={service_path}
                 Restart=on-failure
                 RestartSec=30
 
