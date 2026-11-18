@@ -266,6 +266,7 @@ pm, review, deploy
 3. Build: Code implementation
 - Spec not committed = do not write plan.
 - Plan not committed = do not dispatch tasks.
+- **Plan committed → generate GOVERNS-linked stories for every task immediately and autonomously; this does not require separate user approval.** The milestone/release-proposal review (Roadmap Studio) is the approval gate, and it acts granularly on these stories (approve/hold/revise/drop/reorder/pin) — they must already exist for that review to have anything to act on. Approval gates *dispatch* of a story, not its creation. (Decided 2026-11-18, harness-parity redesign thread, gh:#5341.)
 
 ## Capability-Based Task Allocation
 
