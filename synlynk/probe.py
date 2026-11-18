@@ -829,8 +829,14 @@ def _run_tc1(harness_name: str, timeout: int = 5) -> dict:
         return {"requires_pty": False, "passed": False, "stdout_method": "not_found"}
 
 
-def _run_tc2(harness_name: str, flags_spec: dict) -> dict:
-    """TC-2: Flag compliance."""
+def _run_tc2(harness_name: str, flags_spec: dict, non_interactive_flags: list | None = None) -> dict:
+    """TC-2: Flag compliance.
+
+    Some harnesses (e.g. muse) expose their dispatch flags only under a
+    subcommand's own --help (e.g. `muse exec --help`), not the top-level
+    `muse --help`. Probe both and merge the help text so such flags are
+    correctly detected.
+    """
     if isinstance(flags_spec, dict):
         invalid_flags = list(flags_spec.get("invalid_flags", []))
         valid_flags = list(flags_spec.get("valid_flags", []))
@@ -838,17 +844,29 @@ def _run_tc2(harness_name: str, flags_spec: dict) -> dict:
     else:
         invalid_flags, valid_flags, required_flags = [], [], []
 
+    help_text = ""
+    harness_found = False
+    help_commands = [[harness_name, "--help"]]
+    if non_interactive_flags:
+        help_commands.append([harness_name, *non_interactive_flags, "--help"])
+
+    for cmd in help_commands:
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            help_text += (result.stdout or "") + (result.stderr or "")
+            harness_found = True
+        except (FileNotFoundError, PermissionError, OSError, subprocess.TimeoutExpired):
+            pass
+
+    if not harness_found:
+        return {"failed_flags": [], "passed": True}
+
     failed = []
-    try:
-        result = subprocess.run([harness_name, "--help"], capture_output=True, text=True, timeout=5)
-        help_text = (result.stdout or "") + (result.stderr or "")
-        expected_flags = list(dict.fromkeys(valid_flags + required_flags))
-        for flag in expected_flags:
-            flag_name = flag.lstrip("-")
-            if flag_name and flag_name not in help_text and flag not in help_text:
-                failed.append(flag)
-    except (FileNotFoundError, PermissionError, OSError, subprocess.TimeoutExpired):
-        pass
+    expected_flags = list(dict.fromkeys(valid_flags + required_flags))
+    for flag in expected_flags:
+        flag_name = flag.lstrip("-")
+        if flag_name and flag_name not in help_text and flag not in help_text:
+            failed.append(flag)
     return {"failed_flags": failed, "passed": len(failed) == 0}
 
 
