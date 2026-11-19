@@ -1412,18 +1412,16 @@ _SYSTEMD_UNIT_NAME = "synlynk-vizor-daemon.service"
 
 
 def _service_environment() -> dict:
-    local_bin = os.path.expanduser("~/.local/bin")
-    pyenv_shims = os.path.expanduser("~/.pyenv/shims")
+    from synlynk._constants import augment_path_for_harnesses
+
     exe_dir = str(Path(sys.executable).resolve().parent)
     path_parts = [exe_dir]
     if hasattr(sys, "base_prefix") and sys.prefix != sys.base_prefix:
         venv_bin = os.path.join(sys.prefix, "bin")
         if venv_bin not in path_parts:
             path_parts.append(venv_bin)
-    for p in ["/opt/homebrew/bin", "/usr/local/bin", local_bin, pyenv_shims, "/usr/bin", "/bin", "/usr/sbin", "/sbin"]:
-        if p not in path_parts:
-            path_parts.append(p)
-    default_path = ":".join(path_parts)
+    base_path = ":".join(path_parts)
+    default_path = augment_path_for_harnesses(base_path)
     return {
         "PATH": default_path,
         "PYTHONPATH": _synlynk_import_root(),

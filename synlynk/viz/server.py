@@ -41,6 +41,14 @@ def save_viz_note(notes_path, payload: dict) -> dict:
     notes_path.write_text(json.dumps(notes, indent=2))
     return {"ok": True}
 
+
+def capture_vizor_intent(payload: dict, conn=None) -> dict:
+    from synlynk.intent import capture_intent
+    return capture_intent(
+        (payload or {}).get("text"), source="vizor",
+        context=(payload or {}).get("context"), conn=conn,
+    )
+
 class VizorHandler(http.server.SimpleHTTPRequestHandler):
     """Serves viz-cache/ and handles Vizor POST routes."""
 
@@ -306,7 +314,7 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_OPTIONS(self):
         clean_path = self.path.split("?")[0]
-        valid_paths = ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref", "/roles/create", "/roles/charter/update", "/worktrees/clean", "/tools/install", "/api/tools/install", "/api/board/status", "/api/board/stage", "/graph/refresh", "/api/graph/refresh", "/api/v1/graph/refresh", "/api/roadmap_studio/approve", "/api/roadmap_studio/hold", "/api/roadmap_studio/revise", "/api/roadmap_studio/drop", "/api/roadmap_studio/reorder", "/api/roadmap_studio/pin")
+        valid_paths = ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref", "/roles/create", "/roles/charter/update", "/worktrees/clean", "/tools/install", "/api/tools/install", "/api/intent/capture", "/api/board/status", "/api/board/stage", "/graph/refresh", "/api/graph/refresh", "/api/v1/graph/refresh", "/api/roadmap_studio/approve", "/api/roadmap_studio/hold", "/api/roadmap_studio/revise", "/api/roadmap_studio/drop", "/api/roadmap_studio/reorder", "/api/roadmap_studio/pin")
         if clean_path not in valid_paths and not clean_path.endswith("/api/graph/refresh") and not clean_path.endswith("/api/tools/install"):
             self.send_error(404)
             return
@@ -341,6 +349,8 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_onboarding_topology_confirm(clean_path)
         elif clean_path == "/api/board/status" or clean_path.endswith("/api/board/status"):
             self._handle_board_status_request()
+        elif clean_path == "/api/intent/capture" or clean_path.endswith("/api/intent/capture"):
+            self._handle_intent_capture_request(clean_path)
         elif clean_path == "/api/board/stage" or clean_path.endswith("/api/board/stage"):
             self._handle_board_stage_request()
         elif clean_path == "/api/roadmap_studio/approve" or clean_path.endswith("/api/roadmap_studio/approve"):
@@ -875,6 +885,17 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         try:
             result = save_viz_note(_pkg().VIZ_NOTES_PATH, note)
         except ValueError as exc:
+            self.send_error(400, str(exc))
+            return
+        self._send_json_ok(result)
+
+    def _handle_intent_capture_request(self, path):
+        try:
+            payload = self._read_json_body()
+            context = dict(payload.get("context") or {})
+            context.setdefault("repo_path", self._resolve_workspace_repo_path(path))
+            result = capture_vizor_intent({**payload, "context": context})
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
             self.send_error(400, str(exc))
             return
         self._send_json_ok(result)

@@ -1,6 +1,7 @@
 """Shared constants used across synlynk modules."""
 
 from importlib.metadata import PackageNotFoundError, version as _package_version
+import os
 from pathlib import Path
 
 
@@ -378,3 +379,43 @@ def _role_dispatch_story_id(org_role: str) -> str:
     Never persisted to daemon_jobs.story_id or any other real-story-consuming field.
     """
     return f"__role_dispatch_{org_role}__"
+
+
+def augment_path_for_harnesses(existing_path: str | None = None) -> str:
+    """Ensure standard harness and runtime bin directories are on PATH.
+
+    Prevents 'command not found' (exit code 127) when synlynk daemon or dispatch
+    is run under minimal supervisor environments (such as launchd or systemd)
+    where interactive shell rc files (~/.zshrc, ~/.bashrc) are not loaded.
+    """
+    path_str = existing_path if existing_path is not None else os.environ.get("PATH", "")
+    parts = [p for p in path_str.split(os.pathsep) if p]
+    home = os.path.expanduser("~")
+
+    candidates = [
+        os.path.join(home, ".local", "bin"),
+        os.path.join(home, ".grok", "bin"),
+        os.path.join(home, ".synlynk", "bin"),
+        os.path.join(home, ".pyenv", "shims"),
+        "/opt/homebrew/bin",
+        "/opt/homebrew/sbin",
+        "/usr/local/bin",
+    ]
+
+    nvm_dir = os.environ.get("NVM_DIR", os.path.join(home, ".nvm"))
+    nvm_versions_dir = os.path.join(nvm_dir, "versions", "node")
+    if os.path.isdir(nvm_versions_dir):
+        try:
+            for v in sorted(os.listdir(nvm_versions_dir), reverse=True):
+                v_bin = os.path.join(nvm_versions_dir, v, "bin")
+                if os.path.isdir(v_bin) and v_bin not in candidates:
+                    candidates.append(v_bin)
+        except Exception:
+            pass
+
+    for candidate in candidates:
+        if candidate not in parts and os.path.isdir(candidate):
+            parts.append(candidate)
+
+    return os.pathsep.join(parts)
+

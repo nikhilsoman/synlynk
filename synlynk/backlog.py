@@ -560,7 +560,7 @@ def ingest_backlog(
 def mine_specs_and_decisions(
     repo_root: str = ".",
     db_conn=None,
-    limit: int = 50,
+    limit: int = 100,
 ) -> list[dict]:
     """Mine committed specs, plans, and decisions for ungrounded tasks and stage into backlog_items."""
     import os
@@ -588,7 +588,14 @@ def mine_specs_and_decisions(
 
             task_lines = re.findall(r"^-\s*\[\s*\]\s+(.+)$", content, re.MULTILINE)
             header_tasks = re.findall(r"^###\s+Task\s+\d+:\s*(.+)$", content, re.MULTILINE)
-            candidates = task_lines[:10] + header_tasks[:10]
+            if header_tasks:
+                candidates = list(header_tasks)
+                for tl in task_lines:
+                    tl_clean = tl.strip()
+                    if not re.match(r"^(\*\*)?Step\s+\d+", tl_clean, re.IGNORECASE) and not any(tl_clean in ht for ht in header_tasks):
+                        candidates.append(tl_clean)
+            else:
+                candidates = list(task_lines)
 
             stem = os.path.splitext(fname)[0]
             clean_stem = re.sub(r"^\d{4}-\d{2}-\d{2}-", "", stem)

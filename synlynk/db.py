@@ -434,6 +434,12 @@ def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
             f"implementing and reviewing jobs use the same harness+model "
             f"({implementing_identity[0]} / {implementing_identity[1]})"
         )
+    if implementing_identity[0] == reviewing_identity[0]:
+        return False, (
+            f"implementing and reviewing jobs use the same harness "
+            f"({implementing_identity[0]}); cross-harness review requires "
+            "a different harness even when the model differs"
+        )
     source = (
         _job_provenance_source(conn, implementation_job_id)
         if implementation_job_id else "native cost record"

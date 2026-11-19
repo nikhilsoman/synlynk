@@ -330,6 +330,9 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [282](./282-prTBD-v0.28.1.md) | PR #TBD — v0.28.1 Release | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-11-06 |
 | [283](./283-prTBD-v0.28.2.md) | PR #TBD — v0.28.2 Release | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-11-06 |
 | [99999](./v0.29.0-hacker-news-announcement.md) | Launch HN: Synlynk (v0.29.0 Dev Preview) — The Full-Stack Builder Harness | [#5165](https://github.com/nikhilsoman/synlynk/pull/5165) | 2026-11-07 |
+| [284](./284-prTBD-v0.30.0.md) | v0.30.0 Milestone Retrospective: Fleet Expansion & Agent Studio | [#5192](https://github.com/nikhilsoman/synlynk/pull/5192) | 2026-11-10 |
+| [285](./285-v0.31.0-milestone-retrospective.md) | v0.31.0 Milestone Retrospective: Autonomous Fleet Governance & Universal Archetypes | [#5195](https://github.com/nikhilsoman/synlynk/pull/5195) | 2026-11-10 |
+| [286](./286-prTBD-v0.38.2.md) | Milestone v0.38.2: Intent Capture Primitive & Remote DR Operations | [#5382](https://github.com/nikhilsoman/synlynk/pull/5382) | 2026-11-19 |
 
 ## Per-PR Post Template
 

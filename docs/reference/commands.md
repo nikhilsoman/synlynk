@@ -58,6 +58,8 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `decide` (primary) — goal
 - `goal create` (primary) — goal
 - `goal list` (primary) — goal
+- `intent capture` (primary) — goal
+- `intent list` (secondary) — goal
 - `session open` (primary) — sustain
 - `session status` (primary) — sustain
 - `session checkpoint` (secondary) — sustain

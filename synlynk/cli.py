@@ -323,7 +323,7 @@ def cmd_watch(args) -> None:
 _TOP_LEVEL_COMMANDS = (
     "help", "init", "quickstart", "upgrade", "fleet", "uninstall", "join", "start", "home", "testbed", "tool",
     "pack", "connector", "impact", "mesh", "spike", "team", "decide", "heal",
-    "audit-docs", "goal", "governs", "local", "models", "media", "scan", "workspace",
+    "audit-docs", "goal", "governs", "intent", "local", "models", "media", "scan", "workspace",
     "migrate", "rollback", "probe", "doctor", "worktree", "tui", "notify", "exit",
     "repair", "sync", "configure", "identity", "type", "whoami", "events", "session",
     "harness", "agent", "exec", "gh", "watch", "swarm", "daemon", "checkpoint", "status",
@@ -640,6 +640,12 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "--status", choices=["active", "done", "superseded"], default=None,
         help="Set goal status",
     )
+
+    intent_parser = subparsers.add_parser("intent", help="Capture and review intent proposals")
+    intent_sub = intent_parser.add_subparsers(dest="intent_action")
+    intent_capture_parser = intent_sub.add_parser("capture", help="Capture an intent proposal")
+    intent_capture_parser.add_argument("text")
+    intent_sub.add_parser("list", help="List captured intent proposals")
     goal_update_parser.add_argument(
         "--deadline", default=None, help="Set deadline in YYYY-MM-DD format",
     )
@@ -3815,6 +3821,14 @@ def main(argv=None) -> None:
             )
         else:
             help_parsers.get("goal", parser).print_help()
+    elif args.command == "intent":
+        from synlynk.intent import capture_intent, list_intents
+        if args.intent_action == "capture":
+            print(json.dumps(capture_intent(args.text), indent=2, sort_keys=True))
+        elif args.intent_action == "list":
+            print(json.dumps(list_intents(), indent=2, sort_keys=True))
+        else:
+            help_parsers.get("intent", parser).print_help()
     elif args.command == "governs":
         from synlynk.governs_cli import cmd_governs_sweep, cmd_governs, cmd_governs_start, cmd_governs_audit, cmd_governs_rephase, cmd_governs_reconcile_unplaced
         action = getattr(args, "governs_action", None)

@@ -6,15 +6,15 @@
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
 <p align="center">
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5798%20collected-brightgreen" alt="Tests"></a>
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.38.1-blue" alt="Version"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5826%20collected-brightgreen" alt="Tests"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.38.2-blue" alt="Version"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-Apache--2.0-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
 </p>
 
 Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. The Python CLI injects scoped project context into every dispatch, uses empirical harness allocation only after a harness has at least five completed, merged jobs for the relevant task type, and follows the documented interim policy until then. See the [empirical capability policy](docs/blog/244-chore-empirical-capability-policy.md) and [routing policy](.synlynk/policy.json). Synlynk also tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
-**v0.38.1:** Roadmap Studio Drag/Drop & Dynamic Bookends — Interactive Vizor drag-and-drop proposal controls, dynamic MTD/Today/Horizon bookends and thematic clustering, route write-path hardening, non-interactive viz --serve EOF handling, and first-visit banner injection (#5338, PRs #5344, #5346, #5347, #5348).
+**v0.38.2:** Harness Parity Phase 3 & Intent Capture — Intent capture primitive across terminal, Vizor cards, and TPM polling (#5247), remote DR restore verification (#5131), EC2 ephemeral host trigger from GitHub Actions (#5127), solo-harness carve-out (#5376), and LIVE-33 onboarding sovereign runner discovery (#5364).
 
 **v0.38.0:** FinOps Dual-Ledger Telemetry & Autonomous Daemon Resilience — Decoupled autonomous heal and TPM wake loops, guarded role authority checks, full post-release SOP automation, and dual-ledger token calibration (#5328, #5331, #5333).
 
