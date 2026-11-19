@@ -2046,6 +2046,8 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
         story_id = _role_dispatch_story_id(org_role)
 
     conn = _pkg("_get_db")()
+    from synlynk.db import _add_column_if_missing
+    _add_column_if_missing(conn, table="capability_ratings", column="requested_harness", definition="TEXT")
     if org_role:
         _ensure_role_dispatch_story(conn, org_role, story_id)
     exists = conn.execute("SELECT 1 FROM stories WHERE story_id=?", (story_id,)).fetchone()

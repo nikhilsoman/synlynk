@@ -1902,7 +1902,8 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                 context_mode      TEXT,
                 turn_usage_json   TEXT,
                 session_id        TEXT REFERENCES sessions(session_id),
-                pr_number         INTEGER
+                pr_number         INTEGER,
+                requested_harness TEXT
             );
             CREATE TABLE IF NOT EXISTS remediation_actions (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2740,6 +2741,7 @@ def _insert_cost_row(
 
     conn = _get_db(db_path) if db_path is not None else _get_db()
     try:
+        _add_column_if_missing(conn, table="cost_entries", column="requested_harness", definition="TEXT")
         harness_val = harness or agent
         agent_val = agent or harness
         if requested_harness is None:

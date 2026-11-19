@@ -277,6 +277,7 @@ def test_preflight_fires_drift_sentinel_on_version_change(tmp_path, monkeypatch)
     stub.chmod(0o755)
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("PATH", str(tmp_path) + ":" + os.environ["PATH"])
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(socket.socket, "connect", lambda self, addr: None)
     auth_state = tmp_path / ".gemini" / "antigravity-cli"
     auth_state.mkdir(parents=True, exist_ok=True)

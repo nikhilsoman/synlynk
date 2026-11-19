@@ -33,15 +33,21 @@ def _billing_rate_configured(harness: str) -> bool:
     if mode == "subscription":
         return True
     billing_path = os.path.join(".synlynk", "billing.json")
-    if not os.path.exists(billing_path):
-        return False
-    try:
-        with open(billing_path) as f:
-            billing = json.load(f)
-        rate = billing.get(harness, {}).get("cost_per_1k_tokens")
-        return isinstance(rate, dict) and "input" in rate and "output" in rate
-    except Exception:
-        return False
+    if os.path.exists(billing_path):
+        try:
+            with open(billing_path) as f:
+                billing = json.load(f)
+            rate = billing.get(harness, {}).get("cost_per_1k_tokens")
+            if not rate:
+                rate = billing.get("harness_billing", {}).get(harness, {}).get("cost_per_1k_tokens")
+            if isinstance(rate, dict) and "input" in rate and "output" in rate:
+                return True
+        except Exception:
+            pass
+    from synlynk import _DEFAULT_HARNESS_BILLING
+    if harness in _DEFAULT_HARNESS_BILLING:
+        return True
+    return False
 
 
 def discover_and_validate(harness: str) -> dict:

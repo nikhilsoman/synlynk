@@ -12,7 +12,7 @@ def test_harness_onboard_writes_manifest(tmp_path, monkeypatch):
     env = {**os.environ, "PYTHONPATH": REPO_ROOT}
     result = subprocess.run(
         [sys.executable, "-m", "synlynk.cli", "harness", "onboard", "--harness", "claude"],
-        capture_output=True, text=True, env=env,
+        capture_output=True, text=True, env=env, cwd=str(tmp_path),
     )
     assert result.returncode == 0, result.stderr
     assert (tmp_path / ".synlynk" / "harnesses" / "claude.json").exists()
@@ -26,7 +26,7 @@ def test_harness_probe_without_discover_reads_existing_manifest(tmp_path, monkey
     env = {**os.environ, "PYTHONPATH": REPO_ROOT}
     result = subprocess.run(
         [sys.executable, "-m", "synlynk.cli", "harness", "probe", "--harness", "claude"],
-        capture_output=True, text=True, env=env,
+        capture_output=True, text=True, env=env, cwd=str(tmp_path),
     )
     assert result.returncode == 0, result.stderr
     assert "abc123" in result.stdout
