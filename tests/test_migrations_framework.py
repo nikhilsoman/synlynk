@@ -508,3 +508,48 @@ def test_m0034_backfills_known_v0_36_1_theme(tmp_path):
     assert theme == "Milestone v0.36.1"
     conn.close()
 
+
+def test_m0035_creates_routing_rotation_state_and_supporting_indexes(tmp_path):
+    import sqlite3
+
+    from synlynk.migrations.m0035_routing_rotation_state import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        "CREATE TABLE capability_ratings (agent TEXT, task_type TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE cost_entries (agent TEXT, type_id TEXT)"
+    )
+    MIGRATION.up(conn)
+    MIGRATION.up(conn)
+
+    columns = {
+        row[1]: (row[2], row[3], row[4], row[5])
+        for row in conn.execute("PRAGMA table_info(routing_rotation_state)")
+    }
+    assert columns == {
+        "task_type": ("TEXT", 0, None, 1),
+        "rotation_index": ("INTEGER", 1, "0", 0),
+    }
+
+    indexes = {
+        row[1]
+        for row in conn.execute("PRAGMA index_list(routing_rotation_state)")
+    }
+    assert indexes == {"sqlite_autoindex_routing_rotation_state_1"}
+    assert conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='index' AND name=?",
+        ("idx_capability_ratings_harness_task",),
+    ).fetchone() is not None
+    assert conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='index' AND name=?",
+        ("idx_cost_entries_harness_task",),
+    ).fetchone() is not None
+
+    conn.execute("INSERT INTO routing_rotation_state (task_type) VALUES ('implement')")
+    assert conn.execute(
+        "SELECT rotation_index FROM routing_rotation_state WHERE task_type='implement'"
+    ).fetchone()[0] == 0
+    conn.close()
+
