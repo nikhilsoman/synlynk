@@ -1356,6 +1356,11 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         help="Bypass capability routing — dispatch to the exact harness specified",
     )
     dispatch_parser.add_argument(
+        "--allow-reroute", action="store_true", dest="allow_reroute",
+        help="Opt in to a silent local-harness reroute (e.g. to a capability fallback) "
+             "instead of failing closed. Only affects agent=local dispatches.",
+    )
+    dispatch_parser.add_argument(
         "--override", "--force", action="store_true", dest="override_claim",
         help="Force-take or preempt active story lease for this dispatch (gh:#2511, #2528)",
     )
@@ -3135,6 +3140,7 @@ def main(argv=None) -> None:
                                      getattr(args, "force_agent", False)
                                      or bool(getattr(args, "local_pilot_class", None))
                                  ),
+                                 allow_reroute=getattr(args, "allow_reroute", False),
                                  static_baseline=getattr(args, "static_baseline", False),
                                  requires_gh_write=_effective_requires_gh_write,
                                  task_type=_effective_task_type,
