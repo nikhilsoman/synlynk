@@ -1046,6 +1046,11 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     harness_run_parser.add_argument("--install-cron", action="store_true", dest="install_cron",
                                   help="Install local crontab entry for this harness")
     harness_sub.add_parser("list", help="List .agents/ configs and last run status")
+    harness_onboard_parser = harness_sub.add_parser("onboard", help="Discover a harness CLI and write its manifest")
+    harness_onboard_parser.add_argument("--harness", required=True)
+    harness_probe_parser = harness_sub.add_parser("probe", help="Read or rediscover a harness manifest")
+    harness_probe_parser.add_argument("--harness", required=True)
+    harness_probe_parser.add_argument("--discover", action="store_true")
 
     agent_parser = subparsers.add_parser("agent", help="Manage workspace agents (roles/charters)")
     agent_parser._synlynk_skip_taxonomy = True
@@ -3731,6 +3736,21 @@ def main(argv=None) -> None:
         else:
             help_parsers.get("instructions", parser).print_help()
     elif args.command == "harness":
+        if getattr(args, "harness_action", None) in {"onboard", "probe"}:
+            from synlynk.harness_manifest import discover_and_validate
+            action = args.harness_action
+            manifest_path = os.path.join(".synlynk", "harnesses", f"{args.harness}.json")
+            try:
+                if action == "onboard" or args.discover or not os.path.exists(manifest_path):
+                    manifest = discover_and_validate(args.harness)
+                else:
+                    with open(manifest_path) as handle:
+                        manifest = json.load(handle)
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                print(f"Error: {exc}", file=sys.stderr)
+                sys.exit(1)
+            print(json.dumps(manifest, indent=2))
+            return
         action = getattr(args, "harness_action", None)
         if action == "add":
             cmd_agent_add(args.name)
