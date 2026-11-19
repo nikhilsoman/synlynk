@@ -111,18 +111,6 @@ def find_roadmap_drift(conn) -> list[dict[str, Any]]:
     """
     findings: list[dict[str, Any]] = []
 
-    try:
-        has_goals = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name='goals'"
-        ).fetchone()
-        if not has_goals:
-            return []
-        count = conn.execute("SELECT COUNT(*) FROM goals").fetchone()[0]
-        if count == 0:
-            return []
-    except Exception:
-        return []
-
     unplaced_rows = conn.execute(
         "SELECT d.decision_id, d.goal_id, g.placement_status "
         "FROM decisions d JOIN goals g ON g.goal_id = d.goal_id "
