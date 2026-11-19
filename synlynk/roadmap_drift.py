@@ -30,6 +30,18 @@ def find_spec_goal_drift(
     """
     findings: list[dict[str, Any]] = []
 
+    try:
+        has_goals = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name='goals'"
+        ).fetchone()
+        if not has_goals:
+            return []
+        count = conn.execute("SELECT COUNT(*) FROM goals").fetchone()[0]
+        if count == 0:
+            return []
+    except Exception:
+        return []
+
     dirs = search_dirs or [
         os.path.join(repo_root, "docs", "superpowers", "specs"),
         os.path.join(repo_root, "docs", "superpowers", "plans"),
@@ -98,6 +110,18 @@ def find_roadmap_drift(conn) -> list[dict[str, Any]]:
       reported as an error) when run outside a repo checkout.
     """
     findings: list[dict[str, Any]] = []
+
+    try:
+        has_goals = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name='goals'"
+        ).fetchone()
+        if not has_goals:
+            return []
+        count = conn.execute("SELECT COUNT(*) FROM goals").fetchone()[0]
+        if count == 0:
+            return []
+    except Exception:
+        return []
 
     unplaced_rows = conn.execute(
         "SELECT d.decision_id, d.goal_id, g.placement_status "
