@@ -1,11 +1,13 @@
 ---
-title: "Milestone v0.38.2: Intent Capture Primitive & Remote DR Operations"
+title: "v0.38.2 Milestone Retrospective: Intent Capture Primitive & Remote DR Operations"
 date: 2026-11-19
 series: "Building the OS for Multi-Agent Development"
 post: 286
 pr: "#5382"
-status: shipped
 version: "0.38.2"
+author: "Synlynk Core Team"
+status: "published"
+tags: ["release", "intent-capture", "remote-dr", "harness-parity", "governance"]
 ---
 
 ## The Broader Goal at the End of the Previous Milestone
