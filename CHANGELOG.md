@@ -9,6 +9,25 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.38.2] - 2026-11-19
+### Added
+- **Intent Capture Primitive (#5247, PR #5382):**
+  - Foundational intent capture primitive in `synlynk/intent.py` supporting semantic matching across goals, stories, roadmap phases, docgraph, and impact AST graph (`story-intent-cap`).
+  - Added CLI commands `synlynk intent capture "<text>"` and `synlynk intent list` in `synlynk/cli.py`.
+  - Added authenticated Vizor endpoint `POST /api/intent/capture` in `synlynk/viz/write_routes.py` and "Flag as Intent" card action in `synlynk/viz/chrome.py`.
+  - Integrated GitHub issue and free-text comment polling into `run_tpm_wake_cycle()` in `synlynk/tpm_sweep.py`.
+- **Remote Operations & Disaster Recovery (#5127, #5131, PRs #5377, #5378):**
+  - Autonomous DR restore verification script for remote node environments (`story-18c543ac`, PR #5377).
+  - GitHub Actions trigger workflow for remote node on EC2 ephemeral host (`story-9069164d`, PR #5378).
+
+### Fixed
+- **Harness Review & Discovery Governance (#5370, PRs #5364, #5376):**
+  - Solo-harness-account carve-out preventing deadlock when `cross_harness_review_required` is enforced (`story-e31784d1`, PR #5376).
+  - LIVE-33 RCA addressing onboarding session dispatch order, publication verification, and sovereign runner discovery (`story-f15b99eb`, PR #5364).
+  - Daemon and subprocess PATH augmentation for harness binary discovery (`#5375`).
+
+---
+
 ## [v0.38.1] - 2026-11-17
 ### Added
 - **Roadmap Studio Drag/Drop & Dynamic Bookends (#5338, PRs #5344, #5346, #5347, #5348):**

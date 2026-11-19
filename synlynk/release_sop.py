@@ -178,11 +178,19 @@ def mark_milestone_shipped_in_db(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='approval_tickets'"
         ).fetchone()
         if has_table:
-            cur = conn.execute(
-                "UPDATE approval_tickets SET status='shipped' "
-                "WHERE (story_id=? OR story_id=?) AND status IN ('open', 'approved')",
-                (clean_ver, ver_tag),
-            )
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(approval_tickets)")}
+            if "consumed_at" in cols:
+                cur = conn.execute(
+                    "UPDATE approval_tickets SET status='shipped', consumed_at=CURRENT_TIMESTAMP "
+                    "WHERE (story_id=? OR story_id=?) AND status IN ('open', 'approved', 'resolved')",
+                    (clean_ver, ver_tag),
+                )
+            else:
+                cur = conn.execute(
+                    "UPDATE approval_tickets SET status='shipped' "
+                    "WHERE (story_id=? OR story_id=?) AND status IN ('open', 'approved', 'resolved')",
+                    (clean_ver, ver_tag),
+                )
             updated_count += getattr(cur, "rowcount", 0)
 
         # Mark roadmap phase shipped if table exists
