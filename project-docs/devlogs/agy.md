@@ -1,5 +1,34 @@
 # Agy Devlog
 
+## 2026-11-19 — Goal-Aware Packaging, Plan Mining Hardening & Harness Parity Phase 3 Landing
+
+### Shipped & Verified Across Fleet
+- **Step 3 Implementation & Release Hardening (PR #5392):**
+  - Removed arbitrary `[:10]` truncation cap in `mine_specs_and_decisions()` in `synlynk/backlog.py`, prioritizing top-level `### Task X:` headers as atomic backlog items.
+  - Implemented `_resolve_packaging_target(rel_ver, conn)` in `synlynk/tpm_sweep.py` per ratified decisions `dec-fcec4295` and `dec-db39a676`. Milestones targeting an active goal/arc package up to 12 constituent stories derived directly from that goal, while orphan pools use a 5-story maintenance theme.
+  - Added full test coverage across 53 unit tests in `test_phase6_backlog_burndown.py` and `test_tpm_l1_advisory.py`.
+  - Squash-merged PR #5392 to `main` at `093e2eda` via QA role authority.
+- **Harness Parity Phase 3 Spec & Architecture PR #5369 (gh:#5369):**
+  - Addressed QA findings regarding sub-floor routing notes, spec cross-references, and placeholder scrub.
+  - Linked `dec-8ed62afa` to `arc-goal-2416DC92` in `state.db`.
+  - Fixed false-positive roadmap drift checks in `synlynk/pr_check.py` and empty-goals behavior in `synlynk/roadmap_drift.py`.
+  - Passed all CI matrices (Python 3.10 and 3.12) and constitutional gates (`synlynk pr check`).
+  - Approved and squash-merged to `main` at `9695f066` via QA role authority.
+- **Milestone Proposal v0.38.3 Alignment (Issue #5389):**
+  - Updated Ticket #31 in `approval_tickets` and synchronized GitHub Issue #5389.
+  - Corrected milestone title to `[Proposal] v0.38.3: Harness Parity Phase 3: Live Routing + Manifest Mechanics`.
+  - Re-anchored constituent stories to the 12 active Phase 3 tasks (`story-346c028f` .. `story-c723345a`).
+- **Harness Parity Phase 3 Implementation & Release Landing (PR #5395):**
+  - Fully implemented all 14 tasks of Phase 3 (`docs/superpowers/plans/2026-11-18-harness-routing-manifest-mechanics.md`).
+  - Added `synlynk/routing.py` (`LiveQueryRouter`) and wired into fallback dispatch.
+  - Added `synlynk/harness_manifest.py` schema validation and auto-probe CLI subcommands (`synlynk harness onboard`, `synlynk harness probe`).
+  - Implemented migrations `m0035` (`routing_rotation_state`) and `m0036` (`requested_harness_attribution`).
+  - Handled SQLite concurrency column addition race recovery and isolated preflight tests in `tmp_path`.
+  - Ran full test suite: 100% green CI on GitHub Actions across 7 workflow checks (5,834 tests passed, 16 skipped, 3 xfailed).
+  - Executed constitutional PR check and QA sign-off; squash-merged PR #5395 to `main` at `d373042f`.
+  - Marked all 14 constituent stories and epic `story-e1b2c9d7` done in `state.db`.
+[@agy, @nikhilsoman]
+
 ## 2026-11-17 — Milestone Release v0.38.1: Roadmap Studio Drag/Drop & Dynamic Bookends (#5338)
 
 ### Shipped & Verified Across Fleet
