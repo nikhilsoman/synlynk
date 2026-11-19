@@ -742,6 +742,7 @@ def test_wake_cycle_includes_comment_verdict(monkeypatch, tmp_path):
         lambda role: tpm_mod.AutonomyLevel.L1_ADVISORY,
     )
     monkeypatch.setattr(tpm_mod, "dispatch_tpm_advisory_proposal", lambda: None)
+    monkeypatch.setattr(tpm_mod, "poll_and_capture_github_intents", lambda conn=None: {"captured": 0})
 
     # Stub poll_and_process_proposal_comments to return a known verdict
     fake_verdict = {"verdict": "approved", "promoted_count": 2, "dropped_stories": [], "prioritized_stories": [], "revision_instructions": []}
@@ -1072,6 +1073,116 @@ def test_dispatch_tpm_advisory_proposal_supersedes_stale_proposals(monkeypatch, 
         assert old_status == "superseded"
     finally:
         conn.close()
+
+
+def test_package_next_release_proposal_goal_aware_ceiling_twelve(tmp_path):
+    """Verify package_next_release_proposal packages up to 12 stories from the target goal (dec-fcec4295)."""
+    import sqlite3
+    from synlynk.tpm_sweep import package_next_release_proposal
+
+    conn = sqlite3.connect(tmp_path / "test.db")
+    try:
+        conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, role TEXT, estimated_tokens INTEGER, gh_issue TEXT, readiness TEXT, status TEXT, goal_id TEXT, priority INTEGER)")
+        conn.execute("CREATE TABLE goals (id INTEGER PRIMARY KEY, goal_id TEXT, outcome TEXT, phase_title TEXT, status TEXT, roadmap_priority TEXT)")
+        
+        conn.execute("INSERT INTO goals (id, goal_id, outcome, phase_title, status, roadmap_priority) VALUES (1, 'goal-big', 'Big Outcome', 'Big Phase Title', 'active', 'P1')")
+        
+        # 14 stories under goal-big
+        for i in range(1, 15):
+            conn.execute(
+                "INSERT INTO stories (story_id, title, readiness, status, goal_id, priority) VALUES (?, ?, 'ready', 'open', 'goal-big', ?)",
+                (f"s-{i}", f"Big Story {i}", i),
+            )
+        conn.commit()
+
+        proposal = package_next_release_proposal(conn=conn, repo_root=str(tmp_path))
+        assert proposal is not None
+        assert proposal["theme"] == "Big Phase Title"
+        # Must package 12 stories (phase ceiling)
+        assert len(proposal["stories"]) == 12
+        packaged_ids = [s["story_id"] for s in proposal["stories"]]
+        # Highest priority stories first
+        assert "s-14" in packaged_ids
+        assert "s-13" in packaged_ids
+        assert "s-1" not in packaged_ids  # overflow
+    finally:
+        conn.close()
+
+
+def test_package_next_release_proposal_orphan_stories_use_maintenance_theme(tmp_path):
+    """Verify orphan stories without an active feature goal use Maintenance theme and cap at 5 (dec-fcec4295)."""
+    import sqlite3
+    from synlynk.tpm_sweep import package_next_release_proposal
+
+    conn = sqlite3.connect(tmp_path / "test.db")
+    try:
+        conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, role TEXT, estimated_tokens INTEGER, gh_issue TEXT, readiness TEXT, status TEXT, goal_id TEXT, priority INTEGER)")
+        conn.execute("CREATE TABLE goals (id INTEGER PRIMARY KEY, goal_id TEXT, outcome TEXT, phase_title TEXT, status TEXT, roadmap_priority TEXT)")
+        conn.execute("CREATE TABLE roadmap_arcs (id INTEGER PRIMARY KEY, version TEXT, title TEXT, status TEXT, goal_id TEXT)")
+
+        # Feature arc with NO uncompleted stories
+        conn.execute("INSERT INTO roadmap_arcs (id, version, title, status, goal_id) VALUES (1, 'v0.39.0', 'Future Feature Arc', 'planned', 'goal-empty')")
+
+        # 8 orphan stories with no goal
+        for i in range(1, 9):
+            conn.execute(
+                "INSERT INTO stories (story_id, title, readiness, status, goal_id, priority) VALUES (?, ?, 'ready', 'open', NULL, ?)",
+                (f"s-orphan-{i}", f"Orphan Story {i}", i),
+            )
+        conn.commit()
+
+        proposal = package_next_release_proposal(conn=conn, repo_root=str(tmp_path))
+        assert proposal is not None
+        # Must not steal the feature arc title
+        assert proposal["theme"] == "Maintenance & Operational Hardening"
+        # Must cap at 5 stories
+        assert len(proposal["stories"]) == 5
+    finally:
+        conn.close()
+
+
+def test_package_next_release_proposal_explicit_arc_goal_alignment(tmp_path):
+    """Verify proposal matches explicit roadmap arc goal even when unrelated ready stories exist."""
+    import sqlite3
+    from synlynk.tpm_sweep import package_next_release_proposal
+
+    # Write VERSION file as 0.38.2 so next proposal version is v0.38.3
+    (tmp_path / "VERSION").write_text("0.38.2\n")
+
+    conn = sqlite3.connect(tmp_path / "test.db")
+    try:
+        conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, role TEXT, estimated_tokens INTEGER, gh_issue TEXT, readiness TEXT, status TEXT, goal_id TEXT, priority INTEGER)")
+        conn.execute("CREATE TABLE goals (id INTEGER PRIMARY KEY, goal_id TEXT, outcome TEXT, phase_title TEXT, status TEXT, roadmap_priority TEXT)")
+        conn.execute("CREATE TABLE roadmap_arcs (id INTEGER PRIMARY KEY, version TEXT, title TEXT, status TEXT, goal_id TEXT)")
+
+        # Arc for v0.38.3 linked to goal-phase3
+        conn.execute("INSERT INTO roadmap_arcs (id, version, title, status, goal_id) VALUES (1, 'v0.38.3', 'Harness Parity Phase 3', 'in_progress', 'goal-phase3')")
+
+        # Unrelated ready stories under goal-other
+        for i in range(1, 6):
+            conn.execute(
+                "INSERT INTO stories (story_id, title, readiness, status, goal_id, priority) VALUES (?, ?, 'ready', 'open', 'goal-other', ?)",
+                (f"s-other-{i}", f"Other Story {i}", i),
+            )
+
+        # Draft stories under goal-phase3
+        for i in range(1, 8):
+            conn.execute(
+                "INSERT INTO stories (story_id, title, readiness, status, goal_id, priority) VALUES (?, ?, 'draft', 'open', 'goal-phase3', ?)",
+                (f"s-phase3-{i}", f"Phase 3 Story {i}", i),
+            )
+        conn.commit()
+
+        proposal = package_next_release_proposal(conn=conn, repo_root=str(tmp_path))
+        assert proposal is not None
+        assert proposal["release_version"] == "v0.38.3"
+        assert proposal["theme"] == "Harness Parity Phase 3"
+        assert len(proposal["stories"]) == 7
+        for s in proposal["stories"]:
+            assert s["goal_id"] == "goal-phase3"
+    finally:
+        conn.close()
+
 
 
 
