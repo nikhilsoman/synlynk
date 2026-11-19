@@ -67,6 +67,13 @@ def discover_and_validate(harness: str) -> dict:
         "cli_version_hash": _cli_version_hash(baseline.get("cli", harness)),
         "last_validated_smoke_run": None,
     }
+    if manifest["mcp_tools"]:
+        from synlynk.doctor import _run_tc8
+        tc8_result = _run_tc8()
+        manifest["last_validated_smoke_run"] = {
+            "passed": tc8_result.get("passed", False),
+            "servers_checked": tc8_result.get("servers_checked"),
+        }
     os.makedirs(_MANIFEST_DIR, exist_ok=True)
     with open(os.path.join(_MANIFEST_DIR, f"{harness}.json"), "w") as f:
         json.dump(manifest, f, indent=2)
