@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>v0.38.2 Milestone Retrospective: Intent Capture Primitive &amp; Remote DR Operations | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Nov 19, 2026</span>
+        
+          <span class="blog-post-pr">PR #5382</span>
+        
+      </div>
+      <h1 class="blog-post-title">v0.38.2 Milestone Retrospective: Intent Capture Primitive &amp; Remote DR Operations</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous Milestone</h2>
+<p>With v0.38.1 shipping the dynamic Roadmap Studio controls and bookends, the next architectural requirement was bootstrapping Track 4 of Master Roadmap Phase 3: the Intent Capture primitive. In parallel, operational resilience required verified remote node disaster recovery restore scripts and solo-harness account review safety.</p>
+<h2>What This Milestone Shipped</h2>
+<p>Milestone v0.38.2 completes all constituent tasks across 5 core pull requests:</p>
+<ol>
+<li><strong>Intent Capture Primitive (gh:#5247, PR #5382):</strong>
+<ul>
+<li>Direct intent ingestion across terminal (<code>synlynk intent capture</code>), Vizor UI cards (&quot;Flag as Intent&quot;), and background TPM polling of unlinked GitHub issues and free-text comments.</li>
+<li>Lexical semantic matching against active goals, stories, and roadmap arcs to route user intent directly into governed proposals without friction.</li>
+</ul>
+</li>
+<li><strong>Disaster Recovery &amp; Remote Runner Execution (gh:#5127, gh:#5131, PRs #5377, #5378):</strong>
+<ul>
+<li>Automated DR restore verification harness for remote EC2 ephemeral host instances.</li>
+<li>GitHub Actions automated dispatch triggering remote runner execution hermetically.</li>
+</ul>
+</li>
+<li><strong>Governance &amp; Discovery Hardening (PRs #5364, #5376):</strong>
+<ul>
+<li>Solo-harness-account carve-out ensuring solo developer workspaces never deadlock on cross-harness review gates.</li>
+<li>Root-cause resolution for LIVE-33 onboarding publication ordering and sovereign runner discovery.</li>
+</ul>
+</li>
+</ol>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>The system now proactively listens to operational conversation across GitHub issues, comments, and browser chrome, transforming loose human statements into structured intent proposals linked to project goals.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
