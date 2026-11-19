@@ -307,10 +307,13 @@ def _fetch_github_intent_events(conn=None) -> list[dict]:
                     match = re.search(r"(?:issues/|#)(\d+)", str(value))
                     if match:
                         linked.add(int(match.group(1)))
-        response = run_gh_as_role(
-            "tpm", ["issue", "list", "--state", "open", "--limit", "100", "--json", "number,title,body,url"], timeout=15,
-        )
-        if response.returncode != 0:
+        try:
+            response = run_gh_as_role(
+                "tpm", ["issue", "list", "--state", "open", "--limit", "100", "--json", "number,title,body,url"], timeout=15,
+            )
+            if response.returncode != 0:
+                return []
+        except Exception:
             return []
         events = []
         for issue in json.loads(response.stdout or "[]"):
@@ -888,7 +891,7 @@ def _derive_dynamic_bookends(rel_ver: str, conn, repo_root: str = ".") -> dict:
     }
 
 
-def _cluster_candidate_stories(stories_list: list[dict], target_count: int = 5) -> list[dict]:
+def _cluster_candidate_stories(stories_list: list[dict], target_count: int = 12) -> list[dict]:
     """Cluster candidate stories by thematic goal and subsystem proximity."""
     if len(stories_list) <= target_count:
         return stories_list
@@ -917,12 +920,91 @@ def _cluster_candidate_stories(stories_list: list[dict], target_count: int = 5) 
     return clustered
 
 
-def _resolve_roadmap_metadata(rel_ver: str, conn, repo_root: str = ".") -> dict:
+def _resolve_packaging_target(rel_ver: str, conn) -> tuple[Optional[str], Optional[str]]:
+    """Resolve (target_goal_id, theme) for release proposal packaging per dec-fcec4295."""
+    clean_ver = rel_ver.lstrip("v")
+    if conn is None:
+        return None, None
+
+    has_arcs = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name='roadmap_arcs'"
+    ).fetchone()
+    has_goals = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name='goals'"
+    ).fetchone()
+
+    arc_cols = {row[1] for row in conn.execute("PRAGMA table_info(roadmap_arcs)").fetchall()} if has_arcs else set()
+    goal_cols = {row[1] for row in conn.execute("PRAGMA table_info(goals)").fetchall()} if has_goals else set()
+
+    # 1. Check if rel_ver is explicitly bound in roadmap_arcs with active stories
+    if has_arcs and "goal_id" in arc_cols:
+        arc_row = conn.execute(
+            "SELECT goal_id, title FROM roadmap_arcs WHERE (version=? OR version=?) AND title IS NOT NULL LIMIT 1",
+            (rel_ver, clean_ver),
+        ).fetchone()
+        if arc_row and arc_row[0]:
+            gid, title = arc_row[0], arc_row[1]
+            has_stories = conn.execute(
+                "SELECT 1 FROM stories WHERE (goal_id=? OR goal_id=?) AND status NOT IN ('done', 'archived') LIMIT 1",
+                (gid, gid),
+            ).fetchone()
+            if has_stories:
+                return gid, title
+
+    # 2. Find next active arc with uncompleted stories
+    if has_arcs and "goal_id" in arc_cols:
+        active_arcs = conn.execute(
+            "SELECT goal_id, title FROM roadmap_arcs WHERE status NOT IN ('shipped', 'done') AND goal_id IS NOT NULL ORDER BY id ASC"
+        ).fetchall()
+        for gid, title in active_arcs:
+            has_stories = conn.execute(
+                "SELECT 1 FROM stories WHERE (goal_id=? OR goal_id=?) AND status NOT IN ('done', 'archived') LIMIT 1",
+                (gid, gid),
+            ).fetchone()
+            if has_stories:
+                return gid, title
+
+    # 3. Find active uncompleted goal in goals table with uncompleted stories
+    if has_goals:
+        p_title = "phase_title" if "phase_title" in goal_cols else "NULL"
+        outcome = "outcome" if "outcome" in goal_cols else "NULL"
+        r_pri_order = "COALESCE(roadmap_priority, 'P9') ASC," if "roadmap_priority" in goal_cols else ""
+        active_goals = conn.execute(
+            f"SELECT goal_id, id, {outcome}, {p_title} FROM goals "
+            f"WHERE status NOT IN ('done', 'archived') "
+            f"ORDER BY {r_pri_order} id ASC"
+        ).fetchall()
+        for gid, num_id, outc, ptitle in active_goals:
+            target_gid = gid or str(num_id)
+            has_stories = conn.execute(
+                "SELECT 1 FROM stories WHERE (goal_id=? OR goal_id=?) AND status NOT IN ('done', 'archived') LIMIT 1",
+                (target_gid, str(num_id)),
+            ).fetchone()
+            if has_stories:
+                theme = ptitle or outc or f"Goal {target_gid}"
+                return target_gid, theme
+
+    # 4. Check if any stories with any goal exist
+    any_goal_story = conn.execute(
+        "SELECT s.goal_id FROM stories s "
+        "WHERE s.status NOT IN ('done', 'archived') AND s.goal_id IS NOT NULL AND s.goal_id != '' "
+        "ORDER BY s.rowid ASC LIMIT 1"
+    ).fetchone()
+    if any_goal_story and any_goal_story[0]:
+        return any_goal_story[0], None
+
+    # 5. Only orphan stories remain
+    return None, "Maintenance & Operational Hardening"
+
+
+def _resolve_roadmap_metadata(
+    rel_ver: str, conn, repo_root: str = ".", explicit_theme: Optional[str] = None
+) -> dict:
     """Dynamically resolve proposal theme and bookends from Approach C roadmap views, goals, and git state."""
     clean_ver = rel_ver.lstrip("v")
-    theme = None
+    theme = explicit_theme
 
-    if conn is not None:
+    if not theme and conn is not None:
         try:
             has_arcs = conn.execute(
                 "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name='roadmap_arcs'"
@@ -967,7 +1049,9 @@ def _resolve_roadmap_metadata(rel_ver: str, conn, repo_root: str = ".") -> dict:
     }
 
 
-def package_next_release_proposal(conn=None, repo_root: str = ".") -> Optional[dict]:
+def package_next_release_proposal(
+    conn=None, repo_root: str = ".", target_goal_id: Optional[str] = None
+) -> Optional[dict]:
     """Package unblocked backlog stories into a single-release proposal."""
     from synlynk.db import _get_db
 
@@ -980,54 +1064,6 @@ def package_next_release_proposal(conn=None, repo_root: str = ".") -> Optional[d
         ).fetchone()
         if not has_table:
             return None
-
-        has_goals = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name='goals'"
-        ).fetchone()
-
-        if has_goals:
-            query = (
-                "SELECT s.story_id, s.title, s.role, s.estimated_tokens, s.gh_issue, s.goal_id "
-                "FROM stories s "
-                "LEFT JOIN goals g ON s.goal_id = g.goal_id OR s.goal_id = g.id "
-                "WHERE (s.readiness='advisory' OR (s.readiness IN ('ready', 'draft') AND s.status NOT IN ('done', 'archived'))) "
-                "  AND (g.status IS NULL OR g.status NOT IN ('done', 'archived')) "
-                "ORDER BY CASE s.readiness WHEN 'advisory' THEN 1 WHEN 'ready' THEN 2 ELSE 3 END, "
-                "  COALESCE(g.roadmap_priority, 'P9') ASC, "
-                "  COALESCE(s.priority, 0) DESC, "
-                "  s.rowid DESC LIMIT 15"
-            )
-        else:
-            query = (
-                "SELECT story_id, title, role, estimated_tokens, gh_issue, goal_id FROM stories "
-                "WHERE (readiness='advisory' OR (readiness IN ('ready', 'draft') AND status NOT IN ('done', 'archived'))) "
-                "ORDER BY CASE readiness WHEN 'advisory' THEN 1 WHEN 'ready' THEN 2 ELSE 3 END, rowid ASC LIMIT 15"
-            )
-        rows = conn.execute(query).fetchall()
-        if not rows:
-            return None
-
-        candidate_stories = []
-        for r in rows:
-            sid, title, role, tokens, gh_issue, gid = r[0], r[1], r[2] or "dev", r[3] or 25000, r[4], r[5]
-            inum = int(gh_issue) if gh_issue and str(gh_issue).isdigit() else None
-            candidate_stories.append({
-                "story_id": sid,
-                "issue_number": inum,
-                "title": title,
-                "role": role,
-                "goal_id": gid,
-                "harness": _resolve_harness(role, repo_root),
-                "estimated_tokens": tokens,
-                "estimated_cost_usd": round(tokens * 0.000002, 2),
-                "status": "Ready",
-            })
-
-        # Apply thematic clustering to select the top 5 proximal stories
-        clustered_stories = _cluster_candidate_stories(candidate_stories, target_count=5)
-        role_breakdown: dict[str, list[str]] = {}
-        for s in clustered_stories:
-            role_breakdown.setdefault(s["role"], []).append(s["title"])
 
         # Dynamically determine version from VERSION file or latest git tag
         version_str = None
@@ -1064,7 +1100,92 @@ def package_next_release_proposal(conn=None, repo_root: str = ".") -> Optional[d
             version_str = "0.38.1"
 
         rel_ver = f"v{version_str}"
-        meta = _resolve_roadmap_metadata(rel_ver, conn, repo_root=repo_root)
+
+        has_goals = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name='goals'"
+        ).fetchone()
+        has_arcs = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name='roadmap_arcs'"
+        ).fetchone()
+
+        resolved_target_goal, resolved_theme = target_goal_id, None
+        if not resolved_target_goal:
+            resolved_target_goal, resolved_theme = _resolve_packaging_target(rel_ver, conn)
+        elif has_goals:
+            goal_cols = {row[1] for row in conn.execute("PRAGMA table_info(goals)").fetchall()}
+            p_title = "phase_title" if "phase_title" in goal_cols else "NULL"
+            outcome = "outcome" if "outcome" in goal_cols else "NULL"
+            grow = conn.execute(
+                f"SELECT {outcome}, {p_title} FROM goals WHERE goal_id=? OR id=? LIMIT 1",
+                (resolved_target_goal, resolved_target_goal),
+            ).fetchone()
+            if grow:
+                resolved_theme = grow[1] or grow[0]
+
+        if resolved_target_goal:
+            # Goal-aware packaging per dec-fcec4295: package ready/draft stories sharing target_goal_id up to ~12 stories
+            rows = conn.execute(
+                "SELECT s.story_id, s.title, s.role, s.estimated_tokens, s.gh_issue, s.goal_id "
+                "FROM stories s "
+                "WHERE (s.goal_id = ? OR s.goal_id = ?) "
+                "  AND s.status NOT IN ('done', 'archived') "
+                "ORDER BY CASE s.readiness WHEN 'ready' THEN 1 WHEN 'draft' THEN 2 WHEN 'advisory' THEN 3 ELSE 4 END, "
+                "  COALESCE(s.priority, 0) DESC, "
+                "  s.rowid ASC LIMIT 12",
+                (resolved_target_goal, resolved_target_goal),
+            ).fetchall()
+            target_cap = 12
+        else:
+            # Orphan / maintenance stories: flat cap of 5 stories under maintenance theme
+            if has_goals:
+                query = (
+                    "SELECT s.story_id, s.title, s.role, s.estimated_tokens, s.gh_issue, s.goal_id "
+                    "FROM stories s "
+                    "LEFT JOIN goals g ON s.goal_id = g.goal_id OR s.goal_id = g.id "
+                    "WHERE (s.readiness='advisory' OR (s.readiness IN ('ready', 'draft') AND s.status NOT IN ('done', 'archived'))) "
+                    "  AND (s.goal_id IS NULL OR s.goal_id = '' OR g.id IS NULL) "
+                    "ORDER BY CASE s.readiness WHEN 'advisory' THEN 1 WHEN 'ready' THEN 2 ELSE 3 END, "
+                    "  COALESCE(s.priority, 0) DESC, "
+                    "  s.rowid DESC LIMIT 5"
+                )
+            else:
+                query = (
+                    "SELECT story_id, title, role, estimated_tokens, gh_issue, goal_id FROM stories "
+                    "WHERE (readiness='advisory' OR (readiness IN ('ready', 'draft') AND status NOT IN ('done', 'archived'))) "
+                    "ORDER BY CASE readiness WHEN 'advisory' THEN 1 WHEN 'ready' THEN 2 ELSE 3 END, rowid ASC LIMIT 5"
+                )
+            rows = conn.execute(query).fetchall()
+            target_cap = 5
+            resolved_theme = resolved_theme or "Maintenance & Operational Hardening"
+
+        if not rows:
+            return None
+
+        candidate_stories = []
+        for r in rows:
+            sid, title, role, tokens, gh_issue, gid = r[0], r[1], r[2] or "dev", r[3] or 25000, r[4], r[5]
+            inum = int(gh_issue) if gh_issue and str(gh_issue).isdigit() else None
+            candidate_stories.append({
+                "story_id": sid,
+                "issue_number": inum,
+                "title": title,
+                "role": role,
+                "goal_id": gid,
+                "harness": _resolve_harness(role, repo_root),
+                "estimated_tokens": tokens,
+                "estimated_cost_usd": round(tokens * 0.000002, 2),
+                "status": "Ready",
+            })
+
+        # Apply clustering with the goal-aware cap
+        clustered_stories = _cluster_candidate_stories(candidate_stories, target_count=target_cap)
+        role_breakdown: dict[str, list[str]] = {}
+        for s in clustered_stories:
+            role_breakdown.setdefault(s["role"], []).append(s["title"])
+
+        meta = _resolve_roadmap_metadata(
+            rel_ver, conn, repo_root=repo_root, explicit_theme=resolved_theme
+        )
 
         return {
             "release_version": rel_ver,

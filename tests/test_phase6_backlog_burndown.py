@@ -207,3 +207,24 @@ def test_run_backlog_burndown_sweep(tmp_path):
             assert res["sprint_staged"] is not None
             assert res["sprint_staged"]["domain"] == "backend"
             assert res["sprint_staged"]["count"] == 3
+
+
+def test_mine_specs_and_decisions_does_not_truncate_at_ten(tmp_path):
+    """Verify plans with >10 tasks (e.g. 24 tasks) are not truncated at 10 (dec-fcec4295)."""
+    plans_dir = tmp_path / "docs" / "superpowers" / "plans"
+    plans_dir.mkdir(parents=True)
+    plan_file = plans_dir / "2026-11-18-large-24-task-plan.md"
+
+    tasks_content = ["# Large Plan with 24 Tasks\n\n"]
+    for i in range(1, 25):
+        tasks_content.append(f"### Task {i}: Implement feature component {i}\n\n- [ ] **Step 1: Write test**\n- [ ] **Step 2: Implement**\n\n")
+    plan_file.write_text("".join(tasks_content))
+
+    mined = mine_specs_and_decisions(repo_root=str(tmp_path), db_conn=None, limit=100)
+    spec_items = [m for m in mined if m["source_type"] == "spec"]
+
+    # Must mine all 24 tasks without 10-item truncation
+    assert len(spec_items) == 24
+    for i in range(1, 25):
+        assert any(f"Implement feature component {i}" in m["title"] for m in spec_items)
+
