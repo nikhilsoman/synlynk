@@ -109,3 +109,37 @@ class TestResolveDispatchAgent(unittest.TestCase):
         with patch("sys.stdout") as stdout:
             self._resolve("auto", cap_score=0.72)
         self.assertIn("Routing to:", stdout.write.call_args_list[0].args[0])
+
+
+def _make_db_with_floor(agent: str, task_type: str, cycles: float, n: int):
+    import sqlite3
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE capability_ratings (story_id TEXT, agent TEXT, discipline TEXT, pr_review_cycles REAL)")
+    conn.execute("CREATE TABLE cost_entries (agent TEXT, type_id TEXT, total_cost_usd REAL)")
+    conn.execute("CREATE TABLE routing_rotation_state (task_type TEXT PRIMARY KEY, cursor INTEGER NOT NULL DEFAULT 0, updated_at TEXT)")
+    for i in range(n):
+        conn.execute(
+            "INSERT INTO capability_ratings (story_id, agent, discipline, pr_review_cycles) VALUES (?, ?, ?, ?)",
+            (f"s{i}", agent, task_type, cycles),
+        )
+    conn.commit()
+    return conn
+
+
+def test_auto_consults_live_router_instead_of_static_fallback(tmp_path):
+    from synlynk.dispatch import _resolve_dispatch_agent
+    config_path = tmp_path / "workspace.json"
+    config_path.write_text(json.dumps({"local_fallback": "agy", "local_auto_threshold": 0.5}))
+    conn = _make_db_with_floor("codex", "implement", 1.0, 5)
+    for i in range(5):
+        conn.execute(
+            "INSERT INTO capability_ratings (story_id, agent, discipline, pr_review_cycles) VALUES (?, ?, ?, ?)",
+            (f"g{i}", "grok", "implement", 3.0),
+        )
+    conn.commit()
+    with patch("synlynk.dispatch._preflight_local_silent", return_value=False), \
+         patch("synlynk.dispatch._eligible_harnesses_for_task_type", return_value=["codex", "grok"]):
+        result = _resolve_dispatch_agent("auto", "implement", conn, config_path=str(config_path))
+    # codex has the better (lower) score, must win over the hardcoded "agy" default.
+    assert result == "codex"
+
