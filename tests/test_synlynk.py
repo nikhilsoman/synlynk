@@ -5846,6 +5846,7 @@ def test_preflight_blocks_invalid_flag():
 
 
 def test_preflight_blocks_unreachable_endpoint(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     import socket
     import sqlite3
     import synlynk as sl

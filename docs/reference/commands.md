@@ -34,6 +34,8 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `harness add` (secondary) — open
 - `harness configure` (secondary) — open
 - `harness list` (secondary) — open
+- `harness onboard` (secondary) — open
+- `harness probe` (secondary) — open
 - `config set` (secondary) — open
 - `config nudges` (secondary) — open
 - `whoami` (secondary) — open

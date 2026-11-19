@@ -2054,6 +2054,7 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
         return
 
     agent = job.get("agent", "unknown")
+    requested_harness = job.get("requested_harness") or agent
     if agent not in HARNESS_CAPABILITY_BASELINES:
         conn.close()
         known_agents = ", ".join(sorted(HARNESS_CAPABILITY_BASELINES))
@@ -2166,24 +2167,31 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
     }
     ed25519_sig = _pkg("_sign_capability_rating")(sig_payload)
 
-    conn.execute(
-        """INSERT INTO capability_ratings
+    insert_rating_sql = """INSERT INTO capability_ratings
            (story_id, agent, model_version, model_at_dispatch, model_at_completion, split_model,
             engg_domain, discipline, org_domain, role, stage, stack_tags, industry, phase,
             signal_source, quality, quality_auto,
             verifier_agent, verifier_model,
             test_pass_rate, build_success,
             dispatch_rework, micro_rework, pr_review_cycles,
-            duration_vs_estimate, verified_by_ci, correct, ed25519_sig)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-        (story_id, agent, model_version, model_at_dispatch, model_at_completion, split_model,
+            duration_vs_estimate, verified_by_ci, correct, ed25519_sig, requested_harness)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"""
+    insert_rating_params = (story_id, agent, model_version, model_at_dispatch, model_at_completion, split_model,
          engg_domain, story_discipline, org_domain, role, stage, stack_tags, industry, phase,
          signal_source, quality, quality_auto,
          verifier_agent_val, verifier_model,
          signals["test_pass_rate"], signals["build_success"],
          dispatch_rework, micro_rework, signals.get("pr_review_cycles"),
-         None, signals.get("verified_by_ci"), correct, ed25519_sig)
-    )
+         None, signals.get("verified_by_ci"), correct, ed25519_sig, requested_harness)
+    try:
+        conn.execute(insert_rating_sql, insert_rating_params)
+    except sqlite3.OperationalError as exc:
+        if "has no column named requested_harness" in str(exc).lower():
+            from synlynk.db import _add_column_if_missing
+            _add_column_if_missing(conn, table="capability_ratings", column="requested_harness", definition="TEXT")
+            conn.execute(insert_rating_sql, insert_rating_params)
+        else:
+            raise
     conn.commit()
     conn.close()
 

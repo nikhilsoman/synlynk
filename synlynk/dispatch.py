@@ -260,6 +260,24 @@ def _read_local_threshold(config_path=".synlynk/workspace.json") -> float:
         return 0.5
 
 
+def _eligible_harnesses_for_task_type(task_type: str, config_path: str = ".synlynk/policy.json") -> list[str]:
+    """Read the primary + fallback harness list for a task_type from policy.json.
+
+    Returns [] if policy.json is missing, malformed, or the task_type has no
+    entry — callers must fall back to _read_local_fallback() in that case.
+    """
+    try:
+        with open(config_path) as handle:
+            policy = json.load(handle)
+        allocation = policy["overrides"]["dev_authority"]["task_allocation"].get(task_type)
+        if not allocation:
+            return []
+        harnesses = [allocation["harness"]] + list(allocation.get("fallback", []))
+        return [h for h in harnesses if h != "local"]
+    except Exception:
+        return []
+
+
 # Last auto-routing fallback, consumed by the CLI when it records the job.
 # Overwritten on the next fallback. Never changes the harness that was chosen.
 _pending_routing_fallback: Optional[dict] = None
@@ -339,7 +357,14 @@ def _resolve_dispatch_agent(
     if requested_agent is not None and requested_agent != "auto":
         return requested_agent
 
-    fallback = _read_local_fallback(config_path)
+    eligible = _eligible_harnesses_for_task_type(task_type)
+    if len(eligible) > 1:
+        from synlynk.routing import LiveQueryRouter
+        fallback = LiveQueryRouter().select(eligible, task_type, db)
+    elif eligible:
+        fallback = eligible[0]
+    else:
+        fallback = _read_local_fallback(config_path)
     # Preserve established auto-routing for callers that have not explicitly
     # opted a task into the graduated pilot. The Local Pilot is an additive,
     # narrow cohort; it must not redefine the legacy `auto` contract.
@@ -4167,6 +4192,41 @@ def _preflight_dispatch(
                 "reason": f"Flag {f!r} is invalid for agent '{harness_name}' (LIVE-1 class error)",
             }
 
+    if harness_name in HARNESS_CAPABILITY_BASELINES:
+        try:
+            from synlynk.harness_manifest import _cli_version_hash, discover_and_validate
+
+            manifest_path = os.path.join(".synlynk", "harnesses", f"{harness_name}.json")
+            if not os.path.exists(manifest_path):
+                discover_and_validate(harness_name)
+            else:
+                with open(manifest_path) as f:
+                    manifest = json.load(f)
+                current_hash = _cli_version_hash(baseline.get("cli", harness_name))
+                if manifest.get("cli_version_hash") != current_hash and not force_agent:
+                    return {
+                        "passed": False,
+                        "sentinel": "HARNESS_MANIFEST_REVALIDATION_FAILED",
+                        "reason": (
+                            f"{harness_name}'s CLI version changed since its manifest was "
+                            f"written (manifest={manifest.get('cli_version_hash')}, "
+                            f"current={current_hash}); re-run `synlynk harness probe "
+                            f"--harness {harness_name} --discover` or pass --force-harness."
+                        ),
+                    }
+                if manifest.get("cli_version_hash") != current_hash and force_agent:
+                    discover_and_validate(harness_name)
+        except ValueError:
+            # Billing-config failures from discover_and_validate surface through
+            # the same manifest-check sentinel rather than crashing preflight.
+            return {
+                "passed": False,
+                "sentinel": "HARNESS_MANIFEST_REVALIDATION_FAILED",
+                "reason": f"{harness_name}'s manifest could not be (re)validated; see HARNESS_BILLING_CONFIG_INVALID.",
+            }
+        except Exception:
+            pass
+
     if isinstance(flags_spec, dict):
         valid_flags = list(flags_spec.get("valid_flags", []))
         required_flags = list(flags_spec.get("required_flags", []))
@@ -4582,6 +4642,7 @@ def _verify_dispatch_story_lease(story_id: str, override: bool = False, conn=Non
 def dispatch_agent(agent: str, task: str, story_id: str = None,
                    agent_id: str = None,
                    force_agent: bool = False,
+                   allow_reroute: bool = False,
                    context_mode: str = None,
                    cycle: str = "work",
                    skip_preflight: bool = False,
@@ -4774,6 +4835,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     probed_agent = take_probed_dispatch_harness()
     initial_agent = agent
     agent = request.agent
+    if agent != initial_agent and initial_agent == "local" and not allow_reroute and not force_agent:
+        raise RuntimeError(
+            f"Refusing silent reroute from local to {agent}: pass --allow-reroute "
+            f"to opt in, or --force-harness local to pin it."
+        )
     if local_pilot_requested and agent == "local" and not local_pilot_receipt:
         raise RuntimeError(
             "Local Pilot dispatch refused: local execution requires a valid admitted "

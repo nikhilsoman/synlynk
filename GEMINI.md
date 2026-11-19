@@ -93,6 +93,9 @@ task, not the Agent (role) doing the work
 | implement / test / css / templates / content / subpages | Agy | implement, test, css, templates, content, subpages |
 | implement / test / canvas / js / infra | Grok | implement, test, canvas, js, infra |
 | implement / test / refactor / cli-plumbing | Codex | implement, test, refactor, cli-plumbing |
+
+**Live routing note:** the table above is the binding eligibility/default authority for every task type. When a dispatch resolves `agent="auto"` and the task does not route to `local`, `synlynk/routing.py`'s `LiveQueryRouter` picks among the table's primary harness + its `fallback` list for that task type, ranked by live `capability_ratings`/`cost_entries` data once a harness×task_type pair reaches 5 samples; below that floor it round-robins across the same eligible set instead of defaulting to one hardcoded harness. This changes *which eligible harness* auto-dispatch picks — it never adds or removes a harness from a task type's eligibility, which stays governed by this table.
+
 Do not start a task outside your role column without explicit approval from Claude.
 
 **GitHub write routing (#426):** Route any task that requires GitHub write actions to **Codex by default**, then Grok, Claude, and Agy (measured 2026-10-14, `capability_ratings` 14-day `AVG(quality)`, n≥5: codex 9.04 n=410, grok 8.55 n=176, claude 8.19 n=170, agy 7.58 n=89; local n=2 and muse n=1 excluded). `_GH_WRITE_HARNESS_PRIORITY` is `("codex", "grok", "claude", "agy")`. The pre-2026-10-04 heuristic that omitted Codex and listed Grok last is retired (PR #1271, job `job-836e13a4`).

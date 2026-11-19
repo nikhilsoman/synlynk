@@ -158,6 +158,7 @@ CREATE TABLE IF NOT EXISTS capability_ratings (
     note                  TEXT,
     pr_number             INTEGER,
     ed25519_sig           TEXT,
+    requested_harness     TEXT,
     ts                    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
