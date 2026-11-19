@@ -230,6 +230,29 @@ def check_pr_roadmap_gate(
     from synlynk.roadmap_drift import classify_roadmap_drift, find_roadmap_drift
 
     findings = find_roadmap_drift(conn)
+
+    # Scope findings to decision records modified in this PR
+    touched_decision_ids = set()
+    for f in decision_files:
+        base = os.path.basename(f)
+        for m in re.findall(r"dec-[a-zA-Z0-9_-]+", base):
+            touched_decision_ids.add(m)
+        full_p = os.path.join(repo_root, f)
+        if os.path.isfile(full_p):
+            try:
+                with open(full_p, "r", encoding="utf-8") as fp:
+                    content = fp.read(4096)
+                for m in re.findall(r"dec-[a-zA-Z0-9_-]+", content):
+                    touched_decision_ids.add(m)
+            except Exception:
+                pass
+
+    if touched_decision_ids:
+        findings = [
+            f for f in findings
+            if f.get("decision_id") in touched_decision_ids
+        ]
+
     status, detail = classify_roadmap_drift(findings)
 
     return {

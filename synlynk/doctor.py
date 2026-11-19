@@ -1784,7 +1784,9 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
 
             tc0 = _pkg("_run_tc0")(agent, baseline)
             tc1 = _pkg("_run_tc1")(agent)
-            tc2 = _pkg("_run_tc2")(agent, baseline.get("dispatch_flags", {}))
+            tc2 = _pkg("_run_tc2")(
+                agent, baseline.get("dispatch_flags", {}), baseline.get("non_interactive_flags", [])
+            )
             endpoints = []
             for ep in baseline.get("network_deps", {}).get("required_endpoints", []):
                 host, _, port_s = ep.rpartition(":")

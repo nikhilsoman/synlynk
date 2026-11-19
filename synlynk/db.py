@@ -4578,12 +4578,18 @@ def cmd_roadmap_add(
     phase_title: str = None,
     priority: str = None,
     story_id: str = None,
+    goal_id: str = None,
     role: str = "pm",
 ) -> None:
     """Add or update a roadmap arc, or a phase within an existing arc.
 
     If phase_title is None: create/update the arc row identified by `version`.
     If phase_title is set: add a phase to the arc `version` (which must already exist).
+
+    goal_id: link the arc to an existing (or to-be-created) goal_id instead of letting
+    the roadmap_arcs view's INSTEAD OF INSERT trigger fabricate a synthetic
+    'arc-goal-<hex>' shadow goal. On an existing arc, retargets it onto goal_id
+    (unplacing whatever other goal previously claimed this arc_version). See gh:#5373.
     """
     from synlynk import _GREEN, _RESET, _get_db
     from synlynk.policy import check_authority
@@ -4604,11 +4610,29 @@ def cmd_roadmap_add(
                     "UPDATE roadmap_arcs SET title=?, status=?, target_date=?, notes=? WHERE version=?",
                     (title, status, target_date, notes, version),
                 )
+                if goal_id:
+                    current_goal = conn.execute(
+                        "SELECT goal_id FROM roadmap_arcs WHERE version=?", (version,)
+                    ).fetchone()
+                    if current_goal and current_goal[0] != goal_id:
+                        conn.execute(
+                            "INSERT OR IGNORE INTO goals (goal_id, outcome, criterion, kind) VALUES (?, ?, ?, ?)",
+                            (goal_id, title or version, "Outcome for " + version, "feature"),
+                        )
+                        conn.execute(
+                            "UPDATE goals SET arc_version=NULL, placement_status='unplaced' "
+                            "WHERE arc_version=? AND goal_id != ?",
+                            (version, goal_id),
+                        )
+                        conn.execute(
+                            "UPDATE goals SET arc_version=?, placement_status='placed' WHERE goal_id=?",
+                            (version, goal_id),
+                        )
             else:
                 conn.execute(
-                    "INSERT INTO roadmap_arcs (version, title, status, target_date, notes) "
-                    "VALUES (?, ?, ?, ?, ?)",
-                    (version, title, status, target_date, notes),
+                    "INSERT INTO roadmap_arcs (version, title, status, target_date, notes, goal_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (version, title, status, target_date, notes, goal_id),
                 )
         else:
             if not arc_row:

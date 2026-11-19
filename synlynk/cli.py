@@ -1811,6 +1811,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     roadmap_add_parser.add_argument("--phase-title", default=None, dest="phase_title")
     roadmap_add_parser.add_argument("--priority", default=None)
     roadmap_add_parser.add_argument("--story-id", default=None, dest="story_id")
+    roadmap_add_parser.add_argument("--goal-id", default=None, dest="goal_id")
     roadmap_add_parser.add_argument("--role", default="pm")
 
     roadmap_update_parser = roadmap_sub.add_parser("update", help="Update a roadmap phase")
@@ -3472,6 +3473,7 @@ def main(argv=None) -> None:
                     phase_title=args.phase_title,
                     priority=args.priority,
                     story_id=args.story_id,
+                    goal_id=args.goal_id,
                     role=args.role,
                 )
             except ValueError as e:
