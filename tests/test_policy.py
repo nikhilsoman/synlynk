@@ -297,6 +297,16 @@ def test_repo_policy_routes_muse_only_to_implement_and_test_fallbacks():
     assert "muse" not in table["gh_write"]["fallback"]
 
 
+def test_repo_policy_declares_phase3_gh_write_eligibility():
+    repo_root = Path(__file__).resolve().parent.parent
+    policy = json.loads((repo_root / ".synlynk" / "policy.json").read_text())
+    eligibility = policy["capability_policy"]["eligibility"]["gh_write"]
+
+    assert eligibility["eligible_harnesses"] == ["claude", "codex", "agy", "grok"]
+    assert eligibility["ineligible_harnesses"] == ["muse"]
+    assert "eligibility is separate from routing" in eligibility["note"]
+
+
 def test_check_authority_gh_write_stays_allocation_only(tmp_path, monkeypatch):
     """gh_write is in task_allocation and not owned by the compatibility matrix."""
     monkeypatch.setenv("HOME", str(tmp_path))
