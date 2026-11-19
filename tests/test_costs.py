@@ -148,6 +148,21 @@ def test_non_codex_cache_read_stays_an_additive_pool(monkeypatch):
     assert value.api_equivalent_usd == pytest.approx(expected)
 
 
+def test_muse_spark_13_uses_its_provider_billing_rate(monkeypatch):
+    from synlynk import costs
+
+    monkeypatch.setattr(costs, "_payment_model_config_for_agent", lambda agent: {"mode": "pay_as_you_go"})
+
+    value = costs.resolve_payment_value(
+        "muse",
+        1_000_000,
+        1_000_000,
+        model="muse-spark-1.3",
+    )
+
+    assert value.api_equivalent_usd == pytest.approx(5.50)
+
+
 def test_zero_cost_harness_has_api_value_but_no_cash_outlay(monkeypatch):
     import synlynk
     monkeypatch.setattr(synlynk, "load_config", lambda: {
