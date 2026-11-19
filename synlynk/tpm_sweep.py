@@ -271,6 +271,75 @@ def run_sweep_pass(assignee: str = "nikhilsoman") -> Dict[str, int]:
     return summary
 
 
+def poll_and_capture_github_intents(events=None, conn=None) -> dict:
+    """Capture normalized free-text GitHub issue/comment events.
+
+    Provider polling remains in the TPM layer so GitHub role identity and
+    credentials never leak into the storage primitive.  Callers may supply
+    events (daemon adapters/tests); an empty cadence is a safe no-op.
+    """
+    from synlynk.intent import capture_github_intents
+
+    normalized = list(events) if events is not None else _fetch_github_intent_events(conn)
+    result = capture_github_intents(normalized, conn=conn)
+    # Preserve supplied events for the thin adapter contract while exposing
+    # counts to the production no-argument wake cycle.
+    return normalized if events is not None else result
+
+
+def _fetch_github_intent_events(conn=None) -> list[dict]:
+    """Fetch open, unlinked issues and their comments through the TPM App role."""
+    import json
+    import re
+
+    from synlynk.db import _get_db
+    from synlynk.gh_role import run_gh_as_role
+
+    own_conn = conn is None
+    if own_conn:
+        conn = _get_db()
+    try:
+        linked = set()
+        if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stories'").fetchone():
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
+            if "gh_issue" in cols:
+                for (value,) in conn.execute("SELECT gh_issue FROM stories WHERE gh_issue IS NOT NULL"):
+                    match = re.search(r"(?:issues/|#)(\d+)", str(value))
+                    if match:
+                        linked.add(int(match.group(1)))
+        response = run_gh_as_role(
+            "tpm", ["issue", "list", "--state", "open", "--limit", "100", "--json", "number,title,body,url"], timeout=15,
+        )
+        if response.returncode != 0:
+            return []
+        events = []
+        for issue in json.loads(response.stdout or "[]"):
+            number = int(issue["number"])
+            if number not in linked:
+                events.append({
+                    "id": f"issue:{number}", "kind": "issue",
+                    "text": f"{issue.get('title', '')}\n\n{issue.get('body', '')}".strip(),
+                    "url": issue.get("url", ""),
+                })
+            comments_response = run_gh_as_role(
+                "tpm", ["issue", "view", str(number), "--json", "comments"], timeout=15,
+            )
+            if comments_response.returncode != 0:
+                continue
+            for comment in json.loads(comments_response.stdout or "{}").get("comments", []):
+                events.append({
+                    "id": f"comment:{comment.get('id') or comment.get('url')}",
+                    "kind": "comment", "text": comment.get("body", ""),
+                    "url": comment.get("url", issue.get("url", "")),
+                })
+        return events
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return []
+    finally:
+        if own_conn:
+            conn.close()
+
+
 def run_tpm_wake_cycle() -> dict:
     """Run the TPM wake-cycle SOP: intake, triage, ambiguity routing, sweep.
 
@@ -325,6 +394,10 @@ def run_tpm_wake_cycle() -> dict:
     # Poll comments on any open release-proposal issue and act on verdicts
     comment_result = poll_and_process_proposal_comments()
 
+    # Intent polling shares this existing TPM cadence; provider adapters pass
+    # normalized issue/comment events through the shared capture primitive.
+    intent_result = poll_and_capture_github_intents()
+
     # Check if any approved release milestone has all constituent stories done
     post_release_result = check_and_trigger_post_release()
 
@@ -363,6 +436,7 @@ def run_tpm_wake_cycle() -> dict:
         "triaged": len(triaged_items),
         "routed": routed,
         "sweep": sweep_result,
+        "intent_capture": intent_result,
         "proposal_comment_verdict": comment_result.get("verdict") if comment_result else None,
         "post_release": post_release_result,
         "burndown": burndown_result,

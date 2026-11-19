@@ -60,6 +60,27 @@ def _live_js(port: int) -> str:
     document.removeEventListener('click', requestOnce);
   }}, {{ once: true }});
 
+  document.addEventListener('contextmenu', function(event) {{
+    const card = event.target.closest && event.target.closest('.card,.sc,.prop-card');
+    if (!card) return;
+    event.preventDefault();
+    const text = window.prompt('Flag as Intent', (card.innerText || '').trim().slice(0, 500));
+    if (!text || !text.trim()) return;
+    fetch('/api/intent/capture', {{
+      method: 'POST',
+      headers: window.vizorAuthHeaders({{'Content-Type': 'application/json'}}),
+      body: JSON.stringify({{
+        text: text.trim(),
+        context: {{card_id: card.id || '', page: window.location.pathname}}
+      }})
+    }}).then(function(response) {{
+      if (!response.ok) throw new Error('intent capture failed');
+      return response.json();
+    }}).then(function() {{
+      card.dataset.intentCaptured = 'true';
+    }}).catch(function(error) {{ window.alert(error.message); }});
+  }});
+
   setInterval(checkManifest, 60000);
   checkManifest();
 }})();
