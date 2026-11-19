@@ -2054,6 +2054,7 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
         return
 
     agent = job.get("agent", "unknown")
+    requested_harness = job.get("requested_harness") or agent
     if agent not in HARNESS_CAPABILITY_BASELINES:
         conn.close()
         known_agents = ", ".join(sorted(HARNESS_CAPABILITY_BASELINES))
@@ -2174,15 +2175,15 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
             verifier_agent, verifier_model,
             test_pass_rate, build_success,
             dispatch_rework, micro_rework, pr_review_cycles,
-            duration_vs_estimate, verified_by_ci, correct, ed25519_sig)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            duration_vs_estimate, verified_by_ci, correct, ed25519_sig, requested_harness)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (story_id, agent, model_version, model_at_dispatch, model_at_completion, split_model,
          engg_domain, story_discipline, org_domain, role, stage, stack_tags, industry, phase,
          signal_source, quality, quality_auto,
          verifier_agent_val, verifier_model,
          signals["test_pass_rate"], signals["build_success"],
          dispatch_rework, micro_rework, signals.get("pr_review_cycles"),
-         None, signals.get("verified_by_ci"), correct, ed25519_sig)
+         None, signals.get("verified_by_ci"), correct, ed25519_sig, requested_harness)
     )
     conn.commit()
     conn.close()
