@@ -759,16 +759,10 @@ def _payment_model_config_for_agent(agent: str) -> dict:
         billing["mode"] = billing.get("payment_mode", billing.get("mode", "pay_as_you_go"))
         return billing
     payment_models = config.get("payment_models", {})
-    if isinstance(payment_models, dict) and agent in payment_models:
-        agent_cfg = payment_models.get(agent, {})
-        if isinstance(agent_cfg, dict):
-            return agent_cfg
-    from synlynk import _DEFAULT_HARNESS_BILLING
-    if agent in _DEFAULT_HARNESS_BILLING:
-        billing = dict(_DEFAULT_HARNESS_BILLING[agent])
-        billing["mode"] = billing.get("payment_mode", "subscription")
-        return billing
-    return {"mode": "pay_as_you_go"}
+    if not isinstance(payment_models, dict):
+        return {"mode": "pay_as_you_go"}
+    agent_cfg = payment_models.get(agent, {})
+    return agent_cfg if isinstance(agent_cfg, dict) else {"mode": "pay_as_you_go"}
 
 
 def _subscription_actual_usd(

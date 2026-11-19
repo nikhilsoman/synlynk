@@ -2492,7 +2492,11 @@ def _add_column_if_missing(
     SQLite reports the losing operation as ``duplicate column name``; that
     specific result means the requested repair is already complete.
     """
-    columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+    try:
+        res = conn.execute(f"PRAGMA table_info({table})")
+        columns = {row[1] for row in res}
+    except Exception:
+        return
     if column in columns:
         return
     try:
@@ -2741,7 +2745,6 @@ def _insert_cost_row(
 
     conn = _get_db(db_path) if db_path is not None else _get_db()
     try:
-        _add_column_if_missing(conn, table="cost_entries", column="requested_harness", definition="TEXT")
         harness_val = harness or agent
         agent_val = agent or harness
         if requested_harness is None:
@@ -2850,8 +2853,7 @@ def _insert_cost_row(
                 (job_id,),
             ).fetchone()
             if existing:
-                conn.execute(
-                    """UPDATE cost_entries SET
+                update_sql = """UPDATE cost_entries SET
                         session_date=?,
                         agent=?,
                         harness=COALESCE(?, harness),
@@ -2881,8 +2883,8 @@ def _insert_cost_row(
                         ,estimated_cost_usd=COALESCE(estimated_cost_usd, ?)
                         ,compaction_event_type=COALESCE(?, compaction_event_type)
                         ,requested_harness=COALESCE(?, requested_harness)
-                    WHERE job_id=?""",
-                    (
+                    WHERE job_id=?"""
+                update_params = (
                         session_date,
                         agent_val,
                         harness_val,
@@ -2913,8 +2915,15 @@ def _insert_cost_row(
                         compaction_event_type,
                         requested_harness,
                         job_id,
-                    ),
                 )
+                try:
+                    conn.execute(update_sql, update_params)
+                except sqlite3.OperationalError as exc:
+                    if "has no column named requested_harness" in str(exc).lower():
+                        _add_column_if_missing(conn, table="cost_entries", column="requested_harness", definition="TEXT")
+                        conn.execute(update_sql, update_params)
+                    else:
+                        raise
                 conn.commit()
                 _maybe_alert_cost_estimate_drift(
                     conn, job_id=job_id, harness=harness_val,
@@ -2922,13 +2931,12 @@ def _insert_cost_row(
                     estimated_cost_usd=estimated_cost_usd,
                 )
                 return
-        conn.execute(
-            """INSERT INTO cost_entries
+        insert_sql = """INSERT INTO cost_entries
                 (session_date, agent, harness, agent_role, model, input_tokens, output_tokens, cache_read_tokens,
                  cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, pr_number, decision_revision, turn_usage_json,
                  estimated_input_tokens, estimated_output_tokens, estimated_cost_usd, compaction_event_type, requested_harness)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+        insert_params = (
                 session_date,
                 agent_val,
                 harness_val,
@@ -2959,8 +2967,15 @@ def _insert_cost_row(
                 estimated_cost_usd,
                 compaction_event_type,
                 requested_harness,
-            ),
         )
+        try:
+            conn.execute(insert_sql, insert_params)
+        except sqlite3.OperationalError as exc:
+            if "has no column named requested_harness" in str(exc).lower():
+                _add_column_if_missing(conn, table="cost_entries", column="requested_harness", definition="TEXT")
+                conn.execute(insert_sql, insert_params)
+            else:
+                raise
         conn.commit()
         _maybe_alert_cost_estimate_drift(
             conn, job_id=job_id, harness=harness_val,
