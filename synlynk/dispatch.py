@@ -4148,6 +4148,40 @@ def _preflight_dispatch(
 
     baseline = HARNESS_CAPABILITY_BASELINES.get(harness_name, {})
 
+    try:
+        from synlynk.harness_manifest import _cli_version_hash, discover_and_validate
+
+        manifest_path = os.path.join(".synlynk", "harnesses", f"{harness_name}.json")
+        if not os.path.exists(manifest_path):
+            discover_and_validate(harness_name)
+        else:
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+            current_hash = _cli_version_hash(baseline.get("cli", harness_name))
+            if manifest.get("cli_version_hash") != current_hash and not force_agent:
+                return {
+                    "passed": False,
+                    "sentinel": "HARNESS_MANIFEST_REVALIDATION_FAILED",
+                    "reason": (
+                        f"{harness_name}'s CLI version changed since its manifest was "
+                        f"written (manifest={manifest.get('cli_version_hash')}, "
+                        f"current={current_hash}); re-run `synlynk harness probe "
+                        f"--harness {harness_name} --discover` or pass --force-harness."
+                    ),
+                }
+            if manifest.get("cli_version_hash") != current_hash and force_agent:
+                discover_and_validate(harness_name)
+    except ValueError:
+        # Billing-config failures from discover_and_validate surface through
+        # the same manifest-check sentinel rather than crashing preflight.
+        return {
+            "passed": False,
+            "sentinel": "HARNESS_MANIFEST_REVALIDATION_FAILED",
+            "reason": f"{harness_name}'s manifest could not be (re)validated; see HARNESS_BILLING_CONFIG_INVALID.",
+        }
+    except Exception:
+        pass
+
     if db_conn:
         try:
             _row = db_conn.execute(
