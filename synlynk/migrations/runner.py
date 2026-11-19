@@ -27,6 +27,7 @@ from synlynk.migrations.m0032_approval_tickets_constituent_stories import MIGRAT
 from synlynk.migrations.m0033_stories_proposal_order import MIGRATION as M0033
 from synlynk.migrations.m0034_approval_tickets_theme import MIGRATION as M0034
 from synlynk.migrations.m0035_routing_rotation_state import MIGRATION as M0035
+from synlynk.migrations.m0036_requested_harness_attribution import MIGRATION as M0036
 from synlynk.wal_ledger import write_transaction
 
 # Static, explicitly-imported registry. Append future Migration entries here
@@ -34,7 +35,7 @@ from synlynk.wal_ledger import write_transaction
 MIGRATIONS: list[Migration] = [
     M0016, M0017, M0018, M0019, M0020, M0021, M0022, M0023,
     M0024, M0025, M0026, M0027, M0028, M0029, M0030, M0031,
-    M0032, M0033, M0034, M0035,
+    M0032, M0033, M0034, M0035, M0036,
 ]
 
 
