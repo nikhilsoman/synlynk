@@ -4641,6 +4641,7 @@ def _verify_dispatch_story_lease(story_id: str, override: bool = False, conn=Non
 def dispatch_agent(agent: str, task: str, story_id: str = None,
                    agent_id: str = None,
                    force_agent: bool = False,
+                   allow_reroute: bool = False,
                    context_mode: str = None,
                    cycle: str = "work",
                    skip_preflight: bool = False,
@@ -4833,6 +4834,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     probed_agent = take_probed_dispatch_harness()
     initial_agent = agent
     agent = request.agent
+    if agent != initial_agent and initial_agent == "local" and not allow_reroute and not force_agent:
+        raise RuntimeError(
+            f"Refusing silent reroute from local to {agent}: pass --allow-reroute "
+            f"to opt in, or --force-harness local to pin it."
+        )
     if local_pilot_requested and agent == "local" and not local_pilot_receipt:
         raise RuntimeError(
             "Local Pilot dispatch refused: local execution requires a valid admitted "
