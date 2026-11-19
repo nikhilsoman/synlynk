@@ -12,6 +12,7 @@ WRITE_ROUTES = {
     "note": "proxy",
     "sentinel/ack": "keep",
     "sentinel/issue": "keep",
+    "intent/capture": "keep",
     "roles/create": "keep",
     "roles/charter/update": "keep",
     "dispatch": "hide",
