@@ -260,6 +260,27 @@ def _read_local_threshold(config_path=".synlynk/workspace.json") -> float:
         return 0.5
 
 
+def _eligible_harnesses_for_task_type(
+    task_type: str, config_path: str = ".synlynk/policy.json"
+) -> list[str]:
+    """Return the policy-defined frontier harnesses for ``task_type``.
+
+    The task allocation table remains the eligibility authority.  Missing or
+    malformed policy data returns an empty list so callers can preserve the
+    legacy configured fallback.
+    """
+    try:
+        with open(config_path) as handle:
+            policy = json.load(handle)
+        allocation = policy["overrides"]["dev_authority"]["task_allocation"].get(task_type)
+        if not allocation:
+            return []
+        harnesses = [allocation["harness"]] + list(allocation.get("fallback", []))
+        return [harness for harness in harnesses if harness != "local"]
+    except Exception:
+        return []
+
+
 # Last auto-routing fallback, consumed by the CLI when it records the job.
 # Overwritten on the next fallback. Never changes the harness that was chosen.
 _pending_routing_fallback: Optional[dict] = None
@@ -339,7 +360,15 @@ def _resolve_dispatch_agent(
     if requested_agent is not None and requested_agent != "auto":
         return requested_agent
 
-    fallback = _read_local_fallback(config_path)
+    eligible = _eligible_harnesses_for_task_type(task_type)
+    if len(eligible) > 1:
+        from synlynk.routing import LiveQueryRouter
+
+        fallback = LiveQueryRouter().select(eligible, task_type, db)
+    elif eligible:
+        fallback = eligible[0]
+    else:
+        fallback = _read_local_fallback(config_path)
     # Preserve established auto-routing for callers that have not explicitly
     # opted a task into the graduated pilot. The Local Pilot is an additive,
     # narrow cohort; it must not redefine the legacy `auto` contract.

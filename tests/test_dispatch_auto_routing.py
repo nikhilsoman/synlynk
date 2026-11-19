@@ -6,6 +6,29 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 
+def test_auto_consults_live_router_for_non_local_fallback(tmp_path, monkeypatch):
+    """Auto routing ranks the policy-eligible frontier harnesses."""
+    import synlynk.dispatch as dispatch_mod
+
+    monkeypatch.chdir(tmp_path)
+    config_path = tmp_path / "workspace.json"
+    config_path.write_text(json.dumps({"local_fallback": "agy"}))
+    monkeypatch.setattr(dispatch_mod, "_preflight_local_silent", lambda: False)
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_eligible_harnesses_for_task_type",
+        lambda task_type: ["codex", "grok"],
+    )
+
+    with patch("synlynk.routing.LiveQueryRouter.select", return_value="codex") as select:
+        result = dispatch_mod._resolve_dispatch_agent(
+            "auto", "implement", None, config_path=str(config_path)
+        )
+
+    assert result == "codex"
+    select.assert_called_once_with(["codex", "grok"], "implement", None)
+
+
 def test_read_local_fallback_reads_workspace_json(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk")
