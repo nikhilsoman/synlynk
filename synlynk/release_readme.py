@@ -587,13 +587,14 @@ def sync_readme_for_release(
             r"\*\*v\d+\.\d+\.\d+:\*\*[^\n]*",
             f"**v{ver_clean}:** {hero_summary}",
             content,
+            count=1,
         )
 
     if COMMANDS_START in content and COMMANDS_END in content:
-        generated = _generated_command_section().strip()
-        prefix = content.split(COMMANDS_START)[0] + COMMANDS_START + "\n"
-        suffix = "\n" + COMMANDS_END + content.split(COMMANDS_END)[1]
-        content = prefix + generated + suffix
+        pattern = re.compile(
+            re.escape(COMMANDS_START) + r".*?" + re.escape(COMMANDS_END), re.DOTALL
+        )
+        content = pattern.sub(_generated_command_section().strip(), content)
 
     with open(readme_path, "w", encoding="utf-8") as f:
         f.write(content)

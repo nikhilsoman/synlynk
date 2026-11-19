@@ -617,3 +617,10 @@ chase the `pr_number`-NULL pattern as a broader dispatch pipeline bug.
   merge, sweep the parent worktree/branch including its now-existing remote copy, then pick up
   #5249/#5251/#5252 as real backlog — #5250 is the smaller one).
 [@claude]
+
+## 2026-11-19 — Bug-report intake brainstorm (from banner ticket gh:#5368 + "no user-filed tickets" finding)
+
+- Finding: all issues since 11-15 are bot-authored; no tracked user intake path. Existing: thin `.github/ISSUE_TEMPLATE/bug_report.md` (no diagnostics), `synlynk doctor` (many HealthChecks), `bearings.py` (session-start card), `support_engineer.py` (signal collection agent). No `synlynk report`.
+- Proposed (pending Nikhil's pick): A) YAML issue form; B) `synlynk report` redacted diagnostic bundle w/ preview; C) flight-recorder ring buffer + failure footers + bearings/task-boundary hint + Vizor "Report issue" button + triage ingestion. Recommended layered A+B+C in 3 slices.
+- Open question: intake destination (public GH issue vs private-first). Spec not yet written.
+[@claude]
