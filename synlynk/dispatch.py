@@ -4156,6 +4156,26 @@ def _preflight_dispatch(
                 except (FileNotFoundError, subprocess.TimeoutExpired):
                     pass
 
+    try:
+        from synlynk.harness_manifest import _cli_version_hash, discover_and_validate
+
+        manifest_path = os.path.join(".synlynk", "harnesses", f"{harness_name}.json")
+        baseline_cli = baseline.get("cli", harness_name)
+        if not os.path.exists(manifest_path):
+            discover_and_validate(harness_name)
+        else:
+            with open(manifest_path) as handle:
+                manifest = json.load(handle)
+            current_hash = _cli_version_hash(baseline_cli)
+            if manifest.get("cli_version_hash") != current_hash:
+                if not force_agent:
+                    return {"passed": False, "sentinel": "HARNESS_MANIFEST_REVALIDATION_FAILED",
+                            "reason": f"{harness_name}'s CLI version changed since its manifest was written."}
+                discover_and_validate(harness_name)
+    except Exception as exc:
+        return {"passed": False, "sentinel": "HARNESS_MANIFEST_REVALIDATION_FAILED",
+                "reason": f"{harness_name}'s manifest could not be validated: {exc}"}
+
     flags_spec = baseline.get("dispatch_flags", {})
     invalid_flags = set(flags_spec.get("invalid_flags", [])) if isinstance(flags_spec, dict) else set()
     for flag in dispatch_flags or []:
