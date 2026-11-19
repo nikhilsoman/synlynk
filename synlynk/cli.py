@@ -1046,6 +1046,12 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     harness_run_parser.add_argument("--install-cron", action="store_true", dest="install_cron",
                                   help="Install local crontab entry for this harness")
     harness_sub.add_parser("list", help="List .agents/ configs and last run status")
+    harness_onboard_parser = harness_sub.add_parser("onboard", help="Discover a harness's CLI shape and write its manifest")
+    harness_onboard_parser.add_argument("--harness", required=True)
+    harness_probe_parser = harness_sub.add_parser("probe", help="Read or re-discover a harness manifest")
+    harness_probe_parser.add_argument("--harness", required=True)
+    harness_probe_parser.add_argument("--discover", action="store_true",
+        help="Re-run discovery instead of reading the existing manifest")
 
     agent_parser = subparsers.add_parser("agent", help="Manage workspace agents (roles/charters)")
     agent_parser._synlynk_skip_taxonomy = True
@@ -3744,6 +3750,27 @@ def main(argv=None) -> None:
             )
         elif action == "list":
             cmd_agent_list()
+        elif action == "onboard":
+            from synlynk.harness_manifest import discover_and_validate
+            try:
+                manifest = discover_and_validate(args.harness)
+                print(json.dumps(manifest, indent=2))
+            except ValueError as exc:
+                print(f"Error: {exc}", file=sys.stderr)
+                sys.exit(1)
+        elif action == "probe":
+            from synlynk.harness_manifest import discover_and_validate
+            manifest_path = os.path.join(".synlynk", "harnesses", f"{args.harness}.json")
+            if args.discover or not os.path.exists(manifest_path):
+                try:
+                    manifest = discover_and_validate(args.harness)
+                except ValueError as exc:
+                    print(f"Error: {exc}", file=sys.stderr)
+                    sys.exit(1)
+            else:
+                with open(manifest_path) as f:
+                    manifest = json.load(f)
+            print(json.dumps(manifest, indent=2))
         else:
             help_parsers.get("harness", parser).print_help()
     elif args.command == "ops":
