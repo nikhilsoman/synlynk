@@ -211,6 +211,33 @@ def test_db_shape_uses_registered_canonical_ledger(monkeypatch, tmp_path):
     assert rb._collect_db_shape()["row_count"] == 3
 
 
+def test_state_db_resolver_uses_project_root_from_nested_directory(
+    monkeypatch, tmp_path
+):
+    project = tmp_path / "project"
+    nested = project / "docs" / "pm"
+    nested.mkdir(parents=True)
+    (project / ".synlynk").mkdir()
+    (project / ".synlynk" / "config.json").write_text(
+        json.dumps({"schema_version": 1, "identity_slug": "synlynk"})
+    )
+    expected = tmp_path / "synlynk-state.db"
+    seen = []
+    monkeypatch.chdir(nested)
+    monkeypatch.delenv("SYNLYNK_STATE_DB_PATH", raising=False)
+    monkeypatch.setattr("synlynk._project_root", lambda: str(project))
+    monkeypatch.setattr(
+        "synlynk.product_store.state_db_path",
+        lambda slug: seen.append(slug) or expected,
+    )
+    monkeypatch.setattr(
+        "synlynk.state_registry.canonical_path", lambda slug, default: default
+    )
+
+    assert rb._state_db_path_read_only() == expected
+    assert seen == ["synlynk"]
+
+
 def test_no_fake_secret_appears_in_rendered_body(monkeypatch, tmp_path):
     fakes = {
         "ANTHROPIC_API_KEY": "sk-FAKEKEY0123456789abcdef",

@@ -219,10 +219,11 @@ def _state_db_path_read_only() -> Path:
     override = os.environ.get("SYNLYNK_STATE_DB_PATH")
     if override:
         return Path(override)
+    from synlynk import _project_root
     from synlynk.product_store import identity_slug_from_config, state_db_path
     from synlynk.state_registry import canonical_path
 
-    slug = identity_slug_from_config(Path.cwd())
+    slug = identity_slug_from_config(Path(_project_root()))
     fallback = Path(state_db_path(slug))
     return Path(canonical_path(slug, fallback))
 
