@@ -57,6 +57,17 @@ def test_collector_failure_yields_unavailable(monkeypatch, tmp_path):
     assert bundle["doctor"] == "unavailable"
 
 
+def test_salt_write_failure_withholds_identity(monkeypatch, tmp_path):
+    def fail_salt(path):
+        raise PermissionError("read-only home")
+
+    monkeypatch.setattr(rb, "_salt", fail_salt)
+
+    bundle = rb.collect_bundle(salt_path=tmp_path / "salt")
+
+    assert bundle["identity"] == "unavailable"
+
+
 def test_render_contains_fingerprint_line_and_description(tmp_path):
     body = rb.render_body(
         rb.collect_bundle(salt_path=tmp_path / "s"), description="init fails"
@@ -118,3 +129,11 @@ def test_no_fake_secret_appears_in_rendered_body(monkeypatch, tmp_path):
     )
     for needle in [*fakes.values(), "secret-hostname", "zebulon"]:
         assert needle not in body
+
+
+def test_collect_bundle_does_not_initialize_bare_directory(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+
+    rb.collect_bundle(salt_path=tmp_path / "outside-local-synlynk-salt")
+
+    assert not (tmp_path / ".synlynk").exists()

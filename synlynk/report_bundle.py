@@ -117,13 +117,15 @@ def _collect_doctor() -> list[dict[str, str]]:
 
     rows = []
     for check in HEALTH_CHECKS:
+        check_name = getattr(check, "__name__", "check")
+        if check_name == "_hc_identity_roles" and not Path(".synlynk").is_dir():
+            rows.append({"id": "identity_roles", "status": "unavailable"})
+            continue
         try:
             result = check()
             rows.append({"id": result.name, "status": result.status})
         except Exception:
-            rows.append(
-                {"id": getattr(check, "__name__", "check"), "status": "unavailable"}
-            )
+            rows.append({"id": check_name, "status": "unavailable"})
     return rows
 
 
@@ -235,8 +237,10 @@ def collect_bundle(
         },
         "remote": normalize_remote(_git("config", "--get", "remote.origin.url"))
         or "none",
-        "identity": salted_hash(
-            f"{os.environ.get('USER', '')}@{platform.node()}", salt_path
+        "identity": _safe(
+            lambda: salted_hash(
+                f"{os.environ.get('USER', '')}@{platform.node()}", salt_path
+            )
         ),
     }
     bundle["fingerprint"] = fingerprint(failing, command, exit_code, first_error)

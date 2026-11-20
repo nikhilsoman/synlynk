@@ -79,3 +79,12 @@ def test_issue_form_has_required_bundle_field():
     text = Path(".github/ISSUE_TEMPLATE/bug_report.yml").read_text()
     assert "id: bundle" in text and "required: true" in text
     assert not Path(".github/ISSUE_TEMPLATE/bug_report.md").exists()
+
+
+def test_cli_reconciliation_does_not_initialize_bare_directory(monkeypatch, tmp_path):
+    from synlynk.jobs import _reconcile_jobs
+
+    monkeypatch.chdir(tmp_path)
+    _reconcile_jobs()
+
+    assert not (tmp_path / ".synlynk").exists()
