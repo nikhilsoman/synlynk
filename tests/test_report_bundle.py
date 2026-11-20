@@ -169,6 +169,22 @@ def test_db_shape_handles_uri_delimiters_in_filename(tmp_path):
     assert rb._collect_db_shape(db_path)["row_count"] == 1
 
 
+def test_db_shape_resolves_product_store_without_state_db_env(monkeypatch, tmp_path):
+    db_path = tmp_path / "product" / "state.db"
+    db_path.parent.mkdir()
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("CREATE TABLE stories (id INTEGER)")
+        conn.executemany("INSERT INTO stories VALUES (?)", [(1,), (2,)])
+
+    monkeypatch.delenv("SYNLYNK_STATE_DB_PATH", raising=False)
+    monkeypatch.setattr(
+        "synlynk.product_store.identity_slug_from_config", lambda root: "demo"
+    )
+    monkeypatch.setattr("synlynk.product_store.state_db_path", lambda slug: db_path)
+
+    assert rb._collect_db_shape()["row_count"] == 2
+
+
 def test_no_fake_secret_appears_in_rendered_body(monkeypatch, tmp_path):
     fakes = {
         "ANTHROPIC_API_KEY": "sk-FAKEKEY0123456789abcdef",

@@ -215,12 +215,20 @@ def _quote_identifier(identifier: str) -> str:
     return '"' + identifier.replace('"', '""') + '"'
 
 
+def _state_db_path_read_only() -> Path:
+    override = os.environ.get("SYNLYNK_STATE_DB_PATH")
+    if override:
+        return Path(override)
+    from synlynk.product_store import identity_slug_from_config, state_db_path
+
+    slug = identity_slug_from_config(Path.cwd())
+    return Path(state_db_path(slug))
+
+
 def _collect_db_shape(db_path: Path | str | None = None) -> dict[str, int]:
     """Return aggregate state-DB schema and row counts, never row content."""
     if db_path is None:
-        from synlynk import get_state_db_path
-
-        db_path = get_state_db_path()
+        db_path = _state_db_path_read_only()
     path = Path(db_path).expanduser().resolve()
     with sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True, timeout=5.0) as conn:
         user_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
