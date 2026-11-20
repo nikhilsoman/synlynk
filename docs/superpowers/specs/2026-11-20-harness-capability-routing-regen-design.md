@@ -17,6 +17,21 @@ exploration-spend cap) are folded into Sections 1–5 below. No implementation
 begins until this revision is itself committed and GOVERNS-linked, per the
 panel's decision.
 
+**Revision 3 (2026-11-20):** PR #5415 (this spec's commit) was reviewed
+cross-harness (codex, qa role, per the Hardened PR Review Policy) and got
+`REQUEST_CHANGES` on two blocking gaps left open by Revision 2: (1) Section 2's raw
+terms (`raw_rework`, `raw_cost_time`) didn't say which rows feed each
+median/mean or what happens when a harness has zero non-null rows for a
+sub-statistic in a cell; (2) Section 3's `not_yet_calibrated` computation used an
+"is_calibrated on *any* task_type" rule that contradicted Section 2's own per-cell
+`is_calibrated(harness, task_type)` criterion — a harness could be labeled
+calibrated overall while sub-floor on nearly every cell. Both are fixed in place
+below: Section 2 gains an explicit missing-value/neutral-substitution rule
+matching the existing missing-correctness pattern; Section 3's calibration output
+is restructured into a per-cell `calibration_detail` map plus a strict
+zero-cells-calibrated `not_yet_calibrated` aggregate, so the two sections can no
+longer disagree on what "calibrated" means.
+
 ## Why
 
 Nikhil asked whether all 5 core harnesses (claude, codex, agy, grok, muse) are active
@@ -150,6 +165,38 @@ w1 = 2.0, w2 = 1.0, w3 = 1.0   (confirmed by Nikhil 2026-11-20; success weighted
                                  heaviest so a cheap, fast, wrong answer never wins)
 ```
 
+**Missing-value denominators and behavior (resolves decide-panel review finding on
+PR #5415 — the earlier revision left this undefined).** Each raw term above is
+actually two or three independent sub-statistics, and each one is computed over its
+own non-null rows only, never over the whole cell indiscriminately:
+
+- `median(pr_review_cycles)` for harness `h` in this cell: computed over rows where
+  `capability_ratings.pr_review_cycles IS NOT NULL`. If `h` has **zero** non-null
+  `pr_review_cycles` rows in the cell, that sub-statistic contributes `0` (neutral,
+  not a penalty or a reward) to `raw_rework(h)`, and this substitution is logged
+  per-harness per-cell (panel finding 1's audit requirement extends to this case too).
+- `mean(dispatch_rework != 0 OR micro_rework != 0)` for harness `h`: computed over
+  rows where **at least one of** `dispatch_rework`/`micro_rework` is non-null (a row
+  with both null is excluded from this sub-statistic's denominator, not counted as a
+  0). If `h` has zero rows with either column non-null, this sub-statistic is `0`
+  (neutral), logged the same way.
+- `median(total_cost_usd)` for harness `h`: computed over `cost_entries` rows (joined
+  per the join rule above) where `total_cost_usd IS NOT NULL`. Zero non-null rows →
+  this sub-statistic is `0` (neutral), logged.
+- `median(duration_vs_estimate)` for harness `h`: computed over rows where
+  `duration_vs_estimate IS NOT NULL`. Zero non-null rows → `0` (neutral), logged.
+- **Cell-wide degenerate case:** if, for a given sub-statistic, *every* eligible
+  harness in the cell has zero non-null rows (so every harness gets the same `0`
+  neutral substitution), `min == max == 0` for that sub-statistic and `norm` is `0`
+  for all harnesses by the existing tie rule above — the sub-statistic drops out of
+  the score for that cell, same treatment as the missing-correctness degenerate case
+  below, and is logged as degenerate rather than left to look like real signal.
+- This neutral-substitution rule is deliberately the same shape as the
+  missing-correctness default immediately below (prefer a cell-local neutral value
+  over a hardcoded 0/1 that silently rewards or punishes sparse data) — one
+  consistent missing-data policy across every term in the formula, not a special case
+  for `success_ratio` alone.
+
 Min-max normalization within the cell (not a fixed global scale) is deliberate: it
 keeps the formula scale-invariant per cell — multiplying every harness's cost by a
 constant, or every duration by a constant, does not change the ranking, which is the
@@ -197,20 +244,41 @@ New CLI subcommand `synlynk capability regen` (wired the same way existing `tool
    `gh_write_verified`), and `cost_entries` from the canonical `state.db`
    (`~/.synlynk/registry.json` → `canonical_path`, per the Stray-local-state.db
    correction already in memory).
-2. Computes, per harness: total sample count, and `not_yet_calibrated` membership via
-   the **same `is_calibrated(harness, task_type)` function Section 2 defines**
-   (`sample_count >= SAMPLE_SIZE_FLOOR` on that task_type) — a harness is dropped from
-   `not_yet_calibrated` only once `is_calibrated` is true for **at least one**
-   task_type, and the rewritten `note` lists *which* task_types it's calibrated on, not
-   just a yes/no, so the one-criterion-per-tool mismatch the panel flagged can't
-   recur. `can_gh_write` is computed from `daemon_jobs`: `true` if any
+2. Computes, per harness, a **per-task_type** calibration map using the **same
+   `is_calibrated(harness, task_type)` function Section 2 defines**
+   (`sample_count >= SAMPLE_SIZE_FLOOR` on that task_type) — this is the single source
+   of truth for calibration state, and nothing in this command aggregates it into an
+   "any task_type" shortcut (that was the earlier draft's bug, caught on PR #5415's
+   review: it let a harness be labeled calibrated overall while sub-floor on nearly
+   every individual cell, directly contradicting Section 2's per-cell criterion).
+   Concretely, `policy.json`'s `capability_policy` block changes shape:
+   - `capability_policy.calibration_detail`: `{harness: {task_type: bool}}` — the full,
+     unaggregated per-cell truth, one entry per `task_allocation` task_type, computed
+     fresh from `is_calibrated()` every regen run. This is the field routing-adjacent
+     tooling and humans should read for "is harness X calibrated on task_type Y" —
+     never infer it from `not_yet_calibrated` membership.
+   - `capability_policy.not_yet_calibrated`: list of harnesses where
+     `calibration_detail[harness]` has **zero** `task_type` entries `True` (i.e. the
+     harness has not cleared the floor on *any* cell at all) — the strict, unambiguous
+     aggregate that cannot contradict the per-cell criterion, because "zero cells
+     calibrated" and "at least one cell calibrated" are the only two states a harness
+     can be in with respect to this list, and the list only ever asserts the former.
+     A harness calibrated on some but not all task_types is **never** in this list and
+     **never** described as uniformly calibrated anywhere in the regenerated output —
+     its mixed state is only ever represented via `calibration_detail`.
+   - The rewritten `note` summarizes `calibration_detail` per harness (e.g.
+     "codex: calibrated on 9/16 task_types; muse: calibrated on 0/16") instead of a
+     bare yes/no, so a human skimming `policy.json` sees the per-cell picture at a
+     glance without having to cross-reference `calibration_detail` by hand.
+   `can_gh_write` is computed from `daemon_jobs`: `true` if any
    `gh_write_verified = 1` row exists for that harness, `false` only if every
    `requires_gh_write = 1` attempt resolved `gh_write_verified = 0`/`false` with zero
    `true` rows, and a third state — `"unproven"` — if the harness has
    `requires_gh_write = 1` attempts but none yet resolved true or false (covers muse's
    current 5-attempts/0-verified state honestly, instead of collapsing it into a flat
    `false`).
-3. Rewrites only `capability_policy.not_yet_calibrated`, `capability_policy.note`, and
+3. Rewrites only `capability_policy.calibration_detail`,
+   `capability_policy.not_yet_calibrated`, `capability_policy.note`, and
    `capability_policy.eligibility.*.can_gh_write` in `.synlynk/policy.json` — leaves
    `dev_authority.task_allocation` and every other block untouched, per `dec-0a6db720`.
    The rewritten `note` records the query timestamp and the harness-level counts, same
@@ -286,12 +354,19 @@ longer applies to it.
   `synlynk capability regen`'s `not_yet_calibrated` computation both call the same
   function and agree on the same fixture data.
 - Unit tests for `synlynk capability regen`: in-memory `state.db` fixture with known
-  `capability_ratings`/`daemon_jobs` rows → assert the three rewritten `policy.json`
-  fields match expected output; assert every other key in `policy.json` is
-  **semantically equal** (parsed-value comparison, not byte-identical) before/after
-  (proves the "only rewrite these three fields" contract); failure-mode tests for
-  missing canonical path, locked DB, and malformed existing `policy.json`; test that
-  `--dry-run` writes nothing and prints the expected diff.
+  `capability_ratings`/`daemon_jobs` rows → assert the four rewritten `policy.json`
+  fields (`calibration_detail`, `not_yet_calibrated`, `note`,
+  `eligibility.*.can_gh_write`) match expected output; assert every other key in
+  `policy.json` is **semantically equal** (parsed-value comparison, not byte-identical)
+  before/after (proves the "only rewrite these four fields" contract); failure-mode
+  tests for missing canonical path, locked DB, and malformed existing `policy.json`;
+  test that `--dry-run` writes nothing and prints the expected diff.
+- Unit test for the `not_yet_calibrated`/`calibration_detail` consistency rule
+  specifically: a harness calibrated on exactly one of several task_types must appear
+  in `calibration_detail` with that one `task_type: true` entry and must **not** appear
+  in `not_yet_calibrated` (proves partial calibration is never collapsed into either
+  "fully calibrated" or "not yet calibrated"); a harness calibrated on zero task_types
+  must appear in `not_yet_calibrated` and have every `calibration_detail` entry `false`.
 - Integration test: widen one task_type's `fallback` in a test `policy.json`, run a
   handful of simulated sub-floor dispatches through `LiveQueryRouter.select`, assert
   the round-robin cursor visits the newly-added harness (proves Section 1 actually
