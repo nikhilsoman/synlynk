@@ -63,3 +63,19 @@ def test_gh_unavailable_falls_back_to_url_and_file(monkeypatch, tmp_path):
         _body(), "t", answer=lambda _: "y", interactive=True, local_dir=tmp_path
     )
     assert "issues/new" in out or out.endswith(".md")
+
+
+def test_report_registered_in_taxonomy_and_parser():
+    from synlynk.cli import build_parser
+    from synlynk.taxonomy import COMMAND_TAXONOMY
+
+    assert any(entry["command"] == "report" for entry in COMMAND_TAXONOMY)
+    assert build_parser().parse_args(["report"]).command == "report"
+
+
+def test_issue_form_has_required_bundle_field():
+    from pathlib import Path
+
+    text = Path(".github/ISSUE_TEMPLATE/bug_report.yml").read_text()
+    assert "id: bundle" in text and "required: true" in text
+    assert not Path(".github/ISSUE_TEMPLATE/bug_report.md").exists()

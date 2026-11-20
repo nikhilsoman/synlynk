@@ -842,6 +842,21 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     doctor_parser.add_argument("--version", action="store_true",
                                help="Report read-only version-authority status")
 
+    report_parser = subparsers.add_parser(
+        "report", help="File a redacted, previewed bug report"
+    )
+    report_parser.add_argument(
+        "--last",
+        action="store_true",
+        help="Build the report from the most recent failed command (Part 2)",
+    )
+    report_parser.add_argument(
+        "--clear-flight",
+        action="store_true",
+        dest="clear_flight",
+        help="Delete the local flight-recorder buffer (Part 2)",
+    )
+
     worktree_parser = subparsers.add_parser(
         "worktree", help="Audit and clean up stale git worktrees/branches"
     )
@@ -4064,6 +4079,10 @@ def main(argv=None) -> None:
         )
     elif args.command == "doctor":
         sys.exit(cmd_doctor(args))
+    elif args.command == "report":
+        from synlynk.report_cmd import cmd_report
+
+        sys.exit(cmd_report(args))
     elif args.command == "worktree":
         from synlynk.worktree import cmd_worktree_audit, cmd_worktree_clean
         action = getattr(args, "worktree_action", None)
