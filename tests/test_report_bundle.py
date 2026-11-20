@@ -101,3 +101,20 @@ def test_db_shape_contains_counts_but_no_row_content(tmp_path):
 
     assert shape == {"user_version": 9, "table_count": 1, "row_count": 2}
     assert "secret" not in repr(shape)
+
+
+def test_no_fake_secret_appears_in_rendered_body(monkeypatch, tmp_path):
+    fakes = {
+        "ANTHROPIC_API_KEY": "sk-FAKEKEY0123456789abcdef",
+        "ANTHROPIC_AUTH_TOKEN": "tok-FAKEAUTH0123456789",
+        "USER": "zebulon-secret-user",
+        "HOME": str(tmp_path / "zebulon-home"),
+    }
+    for key, value in fakes.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr(rb.platform, "node", lambda: "secret-hostname.internal")
+    body = rb.render_body(
+        rb.collect_bundle(salt_path=tmp_path / "salt"), description=""
+    )
+    for needle in [*fakes.values(), "secret-hostname", "zebulon"]:
+        assert needle not in body
