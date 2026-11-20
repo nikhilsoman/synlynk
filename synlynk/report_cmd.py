@@ -129,16 +129,20 @@ def cmd_report(args=None) -> int:
         return 2
     description = ""
     withheld = []
-    if sys.stdin.isatty():
+    visible_terminal = sys.stdin.isatty() and sys.stdout.isatty()
+    if visible_terminal:
         description = _input("What went wrong? (one line, optional): ").strip()
     bundle = collect_bundle()
-    if bundle.get("remote") not in (None, "none") and sys.stdin.isatty():
-        include_remote = _input(
-            f"Include repository remote {bundle['remote']}? [y/N] "
-        ).strip().lower()
-        if include_remote != "y":
-            bundle.pop("remote", None)
-            withheld.append("remote")
+    remote = bundle.pop("remote", None)
+    if remote not in (None, "none"):
+        withheld.append("remote")
+        if visible_terminal:
+            include_remote = _input(
+                "Include the repository identity in the public report? [y/N] "
+            ).strip().lower()
+            if include_remote == "y":
+                bundle["remote"] = remote
+                withheld.remove("remote")
     body = render_body(bundle, description, withheld=withheld)
     result = confirm_and_file(
         body, title=f"[report] {description or 'bug report'}"[:100]

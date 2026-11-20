@@ -324,7 +324,7 @@ _TOP_LEVEL_COMMANDS = (
     "help", "init", "quickstart", "upgrade", "fleet", "uninstall", "join", "start", "home", "testbed", "tool",
     "pack", "connector", "impact", "mesh", "spike", "team", "decide", "heal",
     "audit-docs", "goal", "governs", "intent", "local", "models", "media", "scan", "workspace",
-    "migrate", "rollback", "probe", "doctor", "worktree", "tui", "notify", "exit",
+    "migrate", "rollback", "probe", "doctor", "report", "worktree", "tui", "notify", "exit",
     "repair", "sync", "configure", "identity", "type", "whoami", "events", "session",
     "harness", "agent", "exec", "gh", "watch", "swarm", "daemon", "checkpoint", "status",
     "backup", "state", "ops", "selftest", "config", "sentinel", "dispatch", "jobs", "relay",
@@ -2533,16 +2533,17 @@ def main(argv=None) -> None:
         print(f"synlynk {VERSION}")
         return
 
-    # Non-intrusive background update check
-    try:
-        from synlynk.upgrade import check_for_updates_background, get_update_notice
+    # Reporting is read-only until the user explicitly files or saves a draft.
+    if not cli_tokens or cli_tokens[0] != "report":
+        try:
+            from synlynk.upgrade import check_for_updates_background, get_update_notice
 
-        check_for_updates_background()
-        notice = get_update_notice()
-        if notice and sys.stderr.isatty() and not any(t in cli_tokens for t in ["--json", "pack", "--raw"]):
-            print(f"\n  {notice}\n", file=sys.stderr)
-    except Exception:
-        pass
+            check_for_updates_background()
+            notice = get_update_notice()
+            if notice and sys.stderr.isatty() and not any(t in cli_tokens for t in ["--json", "pack", "--raw"]):
+                print(f"\n  {notice}\n", file=sys.stderr)
+        except Exception:
+            pass
 
     fast_entrypoint = _package._FAST_CLI
     selected_command = _command_from_argv(cli_tokens)
@@ -2661,7 +2662,7 @@ def main(argv=None) -> None:
             _cmd_name = tok
             break
     _repo_initialized = os.path.exists(".synlynk/config.json") or os.path.exists(".synlynk/workspace.json")
-    if _repo_initialized or _cmd_name != "init":
+    if _cmd_name != "report" and (_repo_initialized or _cmd_name != "init"):
         _reconcile_jobs()
         try:
             from synlynk.capability_watch import spawn_staleness_check_thread

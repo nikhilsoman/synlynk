@@ -80,10 +80,11 @@ def test_gh_unavailable_falls_back_to_url_and_file(monkeypatch, tmp_path):
 
 
 def test_report_registered_in_taxonomy_and_parser():
-    from synlynk.cli import build_parser
+    from synlynk.cli import _TOP_LEVEL_COMMANDS, build_parser
     from synlynk.taxonomy import COMMAND_TAXONOMY
 
     assert any(entry["command"] == "report" for entry in COMMAND_TAXONOMY)
+    assert "report" in _TOP_LEVEL_COMMANDS
     assert build_parser().parse_args(["report"]).command == "report"
 
 
@@ -142,6 +143,38 @@ def test_cmd_report_can_withhold_remote(monkeypatch):
     assert rc.cmd_report() == 1
     assert "github.com/private/repo" not in captured["body"]
     assert "Withheld: remote." in captured["body"]
+
+
+def test_noninteractive_cmd_report_withholds_remote(monkeypatch):
+    bundle = {"remote": "github.com/private/repo", "fingerprint": "abc123abc123"}
+    captured = {}
+    monkeypatch.setattr(rc.sys.stdin, "isatty", lambda: False)
+    monkeypatch.setattr(rc, "collect_bundle", lambda: bundle.copy())
+    monkeypatch.setattr(
+        rc,
+        "confirm_and_file",
+        lambda body, title: captured.update(body=body, title=title),
+    )
+
+    assert rc.cmd_report() == 1
+    assert "github.com/private/repo" not in captured["body"]
+    assert "Withheld: remote." in captured["body"]
+
+
+def test_remote_consent_prompt_does_not_echo_remote(monkeypatch):
+    bundle = {"remote": "github.com/private/repo", "fingerprint": "abc123abc123"}
+    prompts = []
+    answers = iter(["boom", "n"])
+    monkeypatch.setattr(rc.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(
+        rc, "_input", lambda prompt: prompts.append(prompt) or next(answers)
+    )
+    monkeypatch.setattr(rc, "collect_bundle", lambda: bundle.copy())
+    monkeypatch.setattr(rc, "confirm_and_file", lambda body, title: None)
+
+    rc.cmd_report()
+
+    assert all("github.com/private/repo" not in prompt for prompt in prompts)
 
 
 def test_reserved_part_two_flags_do_not_start_filing(capsys):

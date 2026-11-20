@@ -30,6 +30,9 @@ def test_remote_withholds_local_paths_queries_and_ambiguous_values():
         == "github.com/o/r"
     )
     assert rb.normalize_remote("/Users/alice/private/repo") == "none"
+    assert rb.normalize_remote("C:/Users/alice/private/repo") == "none"
+    assert rb.normalize_remote("host:/home/alice/private/repo") == "none"
+    assert rb.normalize_remote("https://[malformed/repo") == "none"
 
 
 def test_fingerprint_ignores_variable_parts():
@@ -56,6 +59,29 @@ def test_collect_emits_only_allowlisted_fields(monkeypatch, tmp_path):
     assert bundle["env_set"]["ANTHROPIC_API_KEY"] is True
     body = rb.render_body(bundle, description="")
     assert "CANARY" not in body and "gw.example.com" not in body
+
+
+def test_env_set_uses_name_membership_even_for_empty_value(monkeypatch, tmp_path):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+
+    bundle = rb.collect_bundle(salt_path=tmp_path / "salt")
+
+    assert bundle["env_set"]["ANTHROPIC_API_KEY"] is True
+
+
+def test_harness_collection_uses_configured_cli(monkeypatch):
+    looked_up = []
+
+    def which(executable):
+        looked_up.append(executable)
+        return f"/bin/{executable}"
+
+    monkeypatch.setattr(rb.shutil, "which", which)
+    rows = rb._collect_harnesses()
+
+    assert "aider" in looked_up
+    assert "synlynk" in looked_up
+    assert all(row["version"] == "unavailable" for row in rows)
 
 
 def test_collector_failure_yields_unavailable(monkeypatch, tmp_path):

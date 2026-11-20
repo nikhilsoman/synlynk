@@ -83,23 +83,29 @@ def salted_hash(value: str, salt_path: Path = _DEFAULT_SALT_PATH) -> str:
 
 def normalize_remote(url: str) -> str:
     value = url.strip()
-    if not value:
+    if not value or re.match(r"^[A-Za-z]:[\\/]", value):
         return "none"
     scp_match = re.fullmatch(r"(?:[^@/:]+@)?([^/:]+):(.+)", value)
     if scp_match and "://" not in value:
         host, path = scp_match.groups()
-    else:
-        parsed = urllib.parse.urlsplit(value)
-        if parsed.scheme not in {"http", "https", "ssh", "git"} or not parsed.hostname:
+        if path.startswith("/"):
             return "none"
-        host, path = parsed.hostname, parsed.path
+    else:
+        try:
+            parsed = urllib.parse.urlsplit(value)
+            parsed_host = parsed.hostname
+        except ValueError:
+            return "none"
+        if parsed.scheme not in {"http", "https", "ssh", "git"} or not parsed_host:
+            return "none"
+        host, path = parsed_host, parsed.path
     segments = [segment for segment in path.strip("/").split("/") if segment]
     if segments:
         segments[-1] = re.sub(r"\.git$", "", segments[-1])
     safe_segment = re.compile(r"[A-Za-z0-9._-]+")
     if (
         not re.fullmatch(r"[A-Za-z0-9.-]+", host)
-        or len(segments) < 2
+        or len(segments) != 2
         or any(not safe_segment.fullmatch(segment) for segment in segments)
     ):
         return "none"
@@ -146,8 +152,12 @@ def _collect_harnesses() -> list[dict[str, object]]:
     from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 
     return [
-        {"name": name, "binary_found": shutil.which(name) is not None}
-        for name in sorted(HARNESS_CAPABILITY_BASELINES)
+        {
+            "name": name,
+            "binary_found": shutil.which(config.get("cli", name)) is not None,
+            "version": "unavailable",
+        }
+        for name, config in sorted(HARNESS_CAPABILITY_BASELINES.items())
     ]
 
 
@@ -273,7 +283,7 @@ def collect_bundle(
         if "pipx" in sys.prefix
         else ("venv" if sys.prefix != sys.base_prefix else "other"),
         "harnesses": _safe(_collect_harnesses),
-        "env_set": {name: bool(os.environ.get(name)) for name in _env_names()},
+        "env_set": {name: name in os.environ for name in _env_names()},
         "doctor": doctor,
         "config_schema": _safe(_collect_config_schema),
         "policy_schema": _safe(_collect_policy_schema),
