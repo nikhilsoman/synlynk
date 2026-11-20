@@ -35,8 +35,8 @@ The collector only emits fields from a fixed schema:
 Anything outside the schema is not collected. Normalization of allowed fields:
 
 - Home directory becomes `~`.
-- Username and hostname become a short stable hash (lets maintainers correlate reports without identifying anyone).
-- Git remotes keep only `host/owner/repo`, credentials stripped.
+- Username and hostname become a short hash **salted with a per-install random salt stored locally** (an unsalted hash of low-entropy inputs can be confirmed by guessing). Stable per install, so maintainers can correlate reports without identifying anyone.
+- Git remotes keep only `host/owner/repo`, credentials stripped. `owner/repo` can name a private repo, so it is shown in the preview and the user can drop it individually.
 
 **Free text** (log tails, stderr) is the risk surface:
 
@@ -44,13 +44,15 @@ Anything outside the schema is not collected. Normalization of allowed fields:
 - Passed through existing redaction helpers plus a secret-pattern scan.
 - A scan hit blocks submission until the offending line is removed.
 
-**Preview is mandatory.** The full rendered body is printed; filing requires an explicit interactive `y`. There is no `--yes` bypass for the filing step. Fields the tool refused to include are listed as "withheld".
+**Preview is mandatory.** The full rendered body is printed, headed by a notice that the report will be **public and indexed, and that edits or deletes do not remove cached copies**. Filing requires an explicit interactive `y`. There is no `--yes` bypass for the filing step. Fields the tool refused to include are listed as "withheld". The secret-pattern scan gates the **entire body**, not only free-text fields, because individually allowlisted fields can leak in combination (for example a private-repo remote plus failing check IDs).
+
+**Frozen contract (PR 1).** The bundle schema and fingerprint format are compatibility interfaces, defined once in a single canonical module. The issue form's required fields, the CLI renderer, the CI `intake` check, and the Vizor route all derive from that definition. Vizor's `VIZOR_META` payload gets the same allowlist test as the CLI.
 
 **Filing:** `gh issue create` with the user's own `gh` login, using the `bug_report.yml` form (labels `bug`, `early-adopter`). If `gh` is unauthenticated or offline, fall back to a prefilled `issues/new` URL plus a local `.md` file.
 
 ### 2. Capture and surfaces
 
-**Flight recorder:** `.synlynk/flight.jsonl`, ring buffer of the last 50 invocations. Record fields: timestamp, command name, exit code, duration, first line of any error, `failed` flag. Only flag names are stored, never free-text argument values (prompts, `--task`). Writes never raise and never change the exit code. The recorder **must not create `.synlynk/`** in an uninitialized directory (guards against the #5299 class). On by default; local only; contents leave the machine only through the Section 1 preview opt-in.
+**Flight recorder:** `.synlynk/flight.jsonl`, ring buffer of the last 50 invocations. Record fields: timestamp, command name, exit code, duration, first line of any error, `failed` flag. Only flag names are stored, never free-text argument values (prompts, `--task`). Writes never raise and never change the exit code. The recorder **must not create `.synlynk/`** in an uninitialized directory (guards against the #5299 class). The first error line is run through the redaction helpers **at write time**, so the local file is safe to copy or attach. On by default; local only; contents leave the machine only through the Section 1 preview opt-in. **Off-switch:** `synlynk report --clear-flight` deletes the buffer, and a config flag (`flight_recorder: false`) disables it; the recorder's privacy policy is stated in the CLI help.
 
 **Commands:** `synlynk report` (interactive: asks what went wrong, optional one-line description) and `synlynk report --last` (built from the most recent failed record plus the Section 1 bundle). Add both to `COMMAND_TAXONOMY` in `synlynk/taxonomy.py`.
 
@@ -63,9 +65,9 @@ Anything outside the schema is not collected. Normalization of allowed fields:
 
 **Issue form:** `.github/ISSUE_TEMPLATE/bug_report.yml` replaces `bug_report.md`. A required `bundle` textarea is filled by the CLI; hand-typed fields (what you were doing / expected / actual) are optional. Labels: `bug`, `early-adopter`. A footer states what was and was not collected.
 
-**Triage:** an `intake` CI check flags issues with no bundle and comments with `synlynk report` instructions. The PM bot treats `early-adopter` issues as a signal: dedup by fingerprint, link related tickets, assign severity per the Live Issues SOP.
+**Triage (comment-only):** the CI check and PM bot never auto-label, auto-close, or otherwise mutate the issue beyond posting a comment. An `intake` CI check flags issues with no bundle and comments with `synlynk report` instructions. The PM bot treats `early-adopter` issues as a signal: dedup by fingerprint, link related tickets, assign severity per the Live Issues SOP.
 
-**Fingerprint (settled):** first 12 hex chars of `sha256` over: sorted failing doctor check IDs, command name, exit code, and the first error line normalized (numbers, paths, and hashes stripped). Stored in the issue body as `fingerprint: <hex>` for exact-match dedup.
+**Fingerprint (settled):** first 12 hex chars of `sha256` over: sorted failing doctor check IDs, command name, exit code, and the first error line normalized (numbers, paths, and hashes stripped). Normalization must strip everything variable before hashing, and the `fingerprint: <hex>` line is part of the previewed body, so the user sees exactly what is published. Used for exact-match dedup.
 
 ### 3. Testing and errors
 
@@ -78,7 +80,11 @@ Anything outside the schema is not collected. Normalization of allowed fields:
 - Vizor DOM test: the action exists and its payload has only allowed fields (the style of test #5368 notes was missing).
 - Filing: fake `gh` verifies the preview gate; without `y` nothing is filed, and `--yes` does not skip preview.
 
-**Errors:** a failed collector yields "unavailable" for that field; the report still builds. Offline or unauthenticated `gh` falls back to URL + local file. A secret the user will not remove means the tool refuses to file and explains why.
+- Whole-body scan test: a body whose individual fields are each allowlisted but jointly leak (private-repo remote plus identifying check IDs) is flagged.
+- Salt test: two installs produce different hashes for the same username and hostname; one install is stable across runs.
+- End-to-end preview and fallback flows run in both interactive and non-interactive terminals.
+
+**Errors:** the prefilled-URL fallback caps the bundle size and puts overflow in the local `.md` file. A failed collector yields "unavailable" for that field; the report still builds. Offline or unauthenticated `gh` falls back to URL + local file. A secret the user will not remove means the tool refuses to file and explains why.
 
 ## Sequencing (one feature per PR; docs in their own PRs)
 
@@ -94,7 +100,11 @@ Parent tracking issue and GOVERNS goal are created at spec-save time. Stories fo
 - Telemetry beyond the user-initiated report.
 - Fixing #5368 itself (tracked separately).
 
+## Review record
+
+DECIDE panel (claude, agy, codex, grok) recorded as `dec-049b4dbf` (`project-docs/decisions/2026-11-20-approve-bug-report-intake-design-docs-su.md`): approved with eight conditions, all folded into this spec: salted identity hash, write-time recorder redaction, recorder off-switch, private-repo remote handling, public-permanence warning plus whole-body scan, fingerprint normalization and previewed line, frozen bundle contract, and the smaller items (URL-fallback cap, comment-only triage, interactive/non-interactive e2e tests). Panel approval is advisory; Nikhil's sign-off is still required.
+
 ## Open questions for review
 
-- Whether flight recorder default-on is acceptable to Nikhil (spec assumes yes: local-only).
-- Whether `report` should also accept `--private` later for a non-public destination (out of scope here; public chosen).
+- Flight recorder default-on is resolved as yes, with the documented off-switch.
+- `--private` (non-public destination) is out of scope; public GitHub was chosen.

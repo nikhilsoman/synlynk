@@ -1,0 +1,114 @@
+<!-- generated - source of truth is state.db -->
+---
+decision_id: dec-049b4dbf
+topic: "Approve bug-report intake design (docs/superpowers/specs/2026-11-20-bug-report-intake-design.md): public-GitHub destination, allowlist collector, mandatory preview, flight recorder default-on, 3-PR sequencing"
+date: 2026-11-20
+panel: [claude, agy, codex, grok]
+status: approved
+---
+
+## Topic
+Approve bug-report intake design (docs/superpowers/specs/2026-11-20-bug-report-intake-design.md): public-GitHub destination, allowlist collector, mandatory preview, flight recorder default-on, 3-PR sequencing
+
+## Panel Inputs
+
+### claude
+[model=sonnet; version=2.1.327 (Claude Code)]
+
+**Position: approve with three amendments.** The design is sound. Allowlist collection, mandatory preview and no-surprise filing are the right shape for a public destination.
+
+**What's strong**
+- Allowlist rather than scrubbing is the correct primitive. Env vars are recorded as set or unset only, and the canary tests prove it.
+- No `--yes` bypass on the filing step. This is a real invariant, and it matches the standing "invariants always hold" feedback.
+- The flight recorder's no-create-`.synlynk/` guard addresses the #5299 bug class directly.
+- The three PRs are cleanly separable. PR 1 delivers value alone, and the recorder and triage layer on top.
+
+**Gaps to close before approval**
+1. **The hash of username and hostname is reversible by guessing.** Low-entropy inputs hashed without a salt can be confirmed against a known name. Use a per-install random salt stored locally. A hash that is stable per install still lets maintainers correlate reports.
+2. **Public GitHub is permanent.** Edits and deletes don't remove content that was scraped or cached. The preview should say so ("this will be public and indexed"), and the secret-pattern scan should be a hard gate on the whole body, not only on free text. Several allowlisted fields can still leak in combination. Examples are git remote `owner/repo` for a private repo, failing doctor IDs and state.db shapes. Show the private-repo remote in the preview and let the user drop it individually.
+3. **The recorder default-on needs a trust boundary.** The first line of an error often embeds paths, prompt fragments or tokens. Run it through the same redaction as free text *at write time*, not only at report time, so the local file is safe to attach. Add `synlynk report --clear-flight` or a documented disable switch. Answer the open question as "yes, with a documented off-switch".
+4. **The fingerprint carries no secret.** Confirm that normalization strips everything before hashing, and that the `fingerprint:` line is part of the previewed body.
+
+**Smaller points**
+- The `gh` fallback to a prefilled URL has length limits. Cap the bundle, or put overflow in the local `.md` file.
+- The `intake` CI check and PM bot in PR 3 are the only parts that act without the user. Keep them comment-only, never auto-label or close.
+- Vizor's route and `VIZOR_META` payload need the same allowlist test as the CLI.
+
+**Recommendation:** approve the public-GitHub destination, the allowlist collector, the mandatory preview and the three-PR sequencing. Make a salted identity hash and write-time redaction in the recorder conditions of PR 1 and PR 2. Add the recorder off-switch and the "this is public" warning to the spec before the plan is written.
+
+### agy
+[model=default; version=1.5.13]
+
+**Last completed task:** `docs(specs): bug-report intake design — synlynk report, flight recorder, early-adopter issue form (gh:#5368)`  
+**Next task:** Decision panel review and sign-off on [2026-11-20-bug-report-intake-design.md](file:///Users/nikhilsoman/dev/synlynk/.worktrees/chore+bug-report-intake-spec/docs/superpowers/specs/2026-11-20-bug-report-intake-design.md).
+
+---
+
+The bug-report intake design spec directly resolves the breakdown surfaced by #5368: the complete absence of user-authored issue filings since mid-November, which forced adopters to rely on relay intermediaries (#5297–#5299, #5363).
+
+### Analysis
+
+1. **Public-GitHub Destination & Allowlist Collection:** Directing reports to public GitHub issues eliminates intake friction. The spec’s central security choice—strict allowlist schema collection rather than heuristic scrubbing—is the correct posture. Emitting only categorical values (e.g., doctor check IDs, binary versions, environment variable set/unset presence without values), stripping credentials from Git remotes, and hashing hostnames/usernames effectively eliminates accidental credential or PII leaks in a public venue.
+2. **Mandatory Preview Gate:** Requiring interactive confirmation without a `--yes` bypass ensures intentionality. Treating free-text stderr/log snippets as an explicit, per-line opt-in with automated secret-scan blocking guarantees users have full inspection and veto power before any payload leaves their workstation.
+3. **Flight Recorder Default-On:** Enabling the 50-record local ring buffer by default is essential for capturing transient failures without requiring users to reproduce them manually under debug flags. Capturing only invocation metadata and flag names—never argument values or user prompts—keeps storage lean and safe. Critically, forbidding the recorder from creating `.synlynk/` in uninitialized directories prevents repeating the #5299 side-effect defect. Since the buffer stays entirely local until explicitly shared, default-on is low risk.
+4. **3-PR Sequencing:** The proposed breakdown (PR 1: issue form, allowlist collector, redaction, preview, filing; PR 2: flight recorder, `--last`, CLI footers, and bearings; PR 3: Vizor integration, CI checks, and dedup triage) decouples data safety primitives from user-facing surfaces, ensuring each milestone is testable and low-risk.
+
+### Recommendation
+
+**Position:** I recommend **unconditional approval** of the design spec ([2026-11-20-bug-report-intake-design.md](file:///Users/nikhilsoman/dev/synlynk/.worktrees/chore+bug-report-intake-spec/docs/superpowers/specs/2026-11-20-bug-report-intake-design.md)). The allowlist model and mandatory preview provide robust privacy protection for public GitHub filing, while default-on local flight recording restores the diagnostic feedback loop synlynk needs from early adopters.
+
+### codex
+[model=default; version=codex-cli 0.169.1]
+
+The design addresses the core failure mode well: early-adopter reports become actionable without turning private runtime state into public issue content. The fixed allowlist is materially safer than broad collection followed by scrubbing, especially for environment variables, state data, and Git metadata. Mandatory preview is appropriate for a public-GitHub destination; it gives users an understandable consent boundary and makes withheld data visible. The secret-scan refusal rule is also stronger than silently attempting imperfect redaction.
+
+The flight recorder is justified if its local-only, bounded, flag-name-only behavior is enforced. The uninitialized-directory guard is essential, since diagnostic behavior must not create new side effects in precisely the environments where users are reporting failures. Default-on recording may still surprise users, so the CLI should clearly document it and provide a supported disable/configuration path if policy permits. The proposed tests cover the highest-risk leakage and concurrency cases, though the preview and fallback flows deserve end-to-end coverage across interactive and non-interactive terminals.
+
+The three-PR sequence is sensible: it delivers a useful filing path first, then adds local context, then integrates Vizor and triage. The main risk is that PR 3 depends on stable bundle and fingerprint contracts from PR 1, so those schemas should be treated as compatibility interfaces before implementation begins. The issue form, CLI renderer, and CI checker must share one canonical definition of required bundle fields.
+
+I recommend approving the design, conditional on documenting the recorder’s user-facing disable/privacy policy and freezing the bundle/fingerprint contract in PR 1. With those safeguards, the public destination, allowlist collector, mandatory preview, default-on recorder, and staged delivery form a coherent and appropriately conservative intake strategy.
+
+### grok
+[model=default; version=grok 1.0.77 (50ca579fa996) [stable]]
+
+I'll read the bug-report intake design and the surrounding decision context, then give a clear recommendation.**Approve the design.** Public GitHub issues, an allowlist collector, a mandatory preview, a default-on local flight recorder, and the three-PR sequence are the right shape for early-adopter intake.
+
+Public issues match how adopters already reach the tracker, and filing with the user's own `gh` login removes the relay. The allowlist is the correct privacy control: version, harness presence, doctor statuses, schema versions, `state.db` counts, and set/unset environment names are enough for triage. Refusing to read secret values, withholding anything outside the schema, and blocking on a secret-pattern hit in opted-in free text keep the public body small. A mandatory rendered preview with an explicit `y`, and no `--yes` bypass, is the right last gate. The unauthenticated fallback (prefilled URL plus a local Markdown file) covers the offline case without a second submission path.
+
+Two fields still need to be treated as sensitive, not as ordinary schema. `host/owner/repo` can name a private client repository. The flight recorder's first error line can echo a token or a path even when flag values are dropped. Both should pass through the existing redaction helpers and the secret scan before they can appear in an issue, and the error line should be redacted at write time so `flight.jsonl` is safe if it is later copied or synced. The username and hostname hash should use a salt that stays on the machine. Preview already lists withheld fields; these two belong in that list unless the user opts in.
+
+Default-on for the recorder is acceptable: last 50 invocations, flag names only, local file, writes that cannot change the exit code, and no `.synlynk/` creation in an uninitialized directory. That closes the #5299 class.
+
+PR 1 (form, collector, redaction, preview, filing) is the safety-critical slice and should land first. PR 2 adds capture and the hints that make `--last` useful. PR 3 can share one bundle contract across Vizor, the intake check, and PM-bot dedup. A parent issue and GOVERNS stories at plan-commit time match the series protocol. `--private` stays out of scope.
+
+I recommend approving this spec with those redaction conditions written into the collector and recorder sections before the plan is cut.
+
+## Synthesis
+## Panel synthesis
+
+**Where the panel agrees.** All four members endorse the core design. That covers the public-GitHub destination, the allowlist collector (no scrubbing), the mandatory preview with no `--yes` bypass, the default-on local flight recorder with the no-create-`.synlynk/` guard, and the 3-PR sequencing. Agy approved unconditionally. Claude, Codex and Grok approved with conditions, and those conditions mostly overlap.
+
+**Conditions to write into the spec before the plan is cut:**
+
+1. **Salted identity hash** (Claude, Grok). Hash username and hostname with a per-install random salt kept locally. An unsalted hash of low-entropy inputs can be confirmed by guessing.
+2. **Recorder redaction at write time** (Claude, Grok). Run the first error line through the redaction helpers before it is written to `flight.jsonl`. That keeps the local file safe to copy or attach.
+3. **Recorder off-switch** (Claude, Codex). Document a disable path, such as `synlynk report --clear-flight` or a config flag. Document the recorder's privacy policy in the CLI help. This answers the spec's open question as "yes, default-on, with an off-switch".
+4. **Git remote `owner/repo` is sensitive** (Claude, Grok). It can name a private repo. Show it in the preview and let the user drop it individually.
+5. **Public-permanence warning, plus a secret scan over the whole body** (Claude). The preview should state that the report will be public and indexed. The secret-pattern scan should gate the entire body, not only the free-text fields.
+6. **Fingerprint** (Claude). Confirm normalization strips everything before hashing. The `fingerprint:` line must appear in the previewed body.
+7. **Freeze the bundle and fingerprint contract in PR 1** (Codex). Treat these as compatibility interfaces. The issue form, CLI renderer, CI `intake` check and Vizor route must share one canonical definition of required fields. Vizor's `VIZOR_META` payload gets the same allowlist test as the CLI.
+8. **Smaller items** (Claude, Codex):
+   - Cap the bundle size for the prefilled-URL fallback and put overflow in the local `.md` file.
+   - Keep the PR 3 CI check and PM bot comment-only, with no auto-label or close.
+   - Add end-to-end tests for the preview and fallback flows in both interactive and non-interactive terminals.
+
+**Housekeeping:** per the series protocol, create a parent tracking issue and GOVERNS-linked stories when the plan is committed, not at dispatch time. `--private` stays out of scope.
+
+I haven't edited the spec. The next step is to fold items 1–8 into `docs/superpowers/specs/2026-11-20-bug-report-intake-design.md` and commit them to this branch. Per your global instructions, the list should also go into a devlog entry, since it's a numbered set of recommendations. Tell me if you want me to do both.
+
+Decision: Approve the bug-report intake design. That covers the public-GitHub destination, the allowlist collector, the mandatory no-bypass preview, the default-on flight recorder, and the 3-PR sequence. Approval is conditional on amending the spec with the eight items above before the plan is written. These are the salted identity hash, write-time recorder redaction with a documented off-switch, the private-remote and public-permanence handling, the whole-body secret scan, and a frozen shared bundle and fingerprint contract in PR 1. The salted hash and write-time redaction are binding conditions of PR 1 and PR 2.
+
+## Decision
+Decision: Approve the bug-report intake design. That covers the public-GitHub destination, the allowlist collector, the mandatory no-bypass preview, the default-on flight recorder, and the 3-PR sequence. Approval is conditional on amending the spec with the eight items above before the plan is written. These are the salted identity hash, write-time recorder redaction with a documented off-switch, the private-remote and public-permanence handling, the whole-body secret scan, and a frozen shared bundle and fingerprint contract in PR 1. The salted hash and write-time redaction are binding conditions of PR 1 and PR 2.
+
+> Signatures: see 2026-11-20-approve-bug-report-intake-design-docs-su.json
