@@ -21,6 +21,13 @@ ROLLBACK_DIR = os.path.join(".synlynk", "rollback")
 MANIFEST_PATH = os.path.join(ROLLBACK_DIR, "last.json")
 ARCHIVE_DIR = os.path.join(ROLLBACK_DIR, "archive")
 
+_BOLD = "\033[1m"
+_GREEN = "\033[32m"
+_YELLOW = "\033[33m"
+_CYAN = "\033[36m"
+_DIM = "\033[2m"
+_RESET = "\033[0m"
+
 
 def _new_op_id() -> str:
     return uuid.uuid4().hex[:8]
@@ -156,9 +163,31 @@ def _expand_owned_directory(path: str, outputs: list) -> list:
                 continue
             if os.path.basename(full).startswith(".sentinel-"):
                 continue
+            if _is_harness_temp_path(full):
+                continue
             if os.path.exists(full):
                 kept.append(full)
     return kept
+
+
+def _is_harness_temp_path(path: str) -> bool:
+    """Check if a path is under an ephemeral harness temp directory.
+
+    Harness discovery and execution processes (codex, agy, grok, claude)
+    write temporary files to directories like .codex/tmp/, .agy/tmp/, etc.
+    These should not be stashed as they conflict when restored.
+    """
+    norm = os.path.normpath(path)
+    harness_temp_patterns = (
+        ".codex/tmp/",
+        ".agy/tmp/",
+        ".grok/tmp/",
+        ".claude/tmp/",
+    )
+    return any(
+        norm == pattern.rstrip("/") or norm.startswith(pattern)
+        for pattern in harness_temp_patterns
+    )
 
 
 def _stash_paths(untracked_paths: list) -> list:
@@ -194,6 +223,10 @@ def _stash_paths(untracked_paths: list) -> list:
         # disappear between `git status` and `git stash` for the same reason.
         if os.path.basename(path).startswith(".sentinel-"):
             continue
+        # Harness temp directories contain ephemeral probe/cache files that
+        # conflict when restoring the stash after the operation completes.
+        if _is_harness_temp_path(path):
+            continue
         # A missing untracked path may have disappeared before we invoke
         # stash.  Keep missing tracked paths, especially deletions, in the
         # pathspec so the stash can preserve them across a rollback.
@@ -227,7 +260,8 @@ def _stash_dirty_paths(stash_ref: str, untracked_paths: list) -> None:
             )
 
 
-def _pop_stash(stash_ref: str) -> None:
+def _pop_stash(stash_ref: str, op_type: Optional[str] = None, fatal: bool = True) -> None:
+    """Pop stash by ref. If fatal=False and op_type is 'init', print warning instead of raising."""
     listing = subprocess.run(["git", "stash", "list"], capture_output=True, text=True)
     if listing is None or listing.returncode != 0:
         return
@@ -241,7 +275,13 @@ def _pop_stash(stash_ref: str) -> None:
             )
             if popped.returncode != 0:
                 detail = (popped.stderr or popped.stdout or "").strip()
-                raise RuntimeError(f"git stash pop failed for {stash_id}: {detail}")
+                error_msg = f"git stash pop failed for {stash_id}: {detail}"
+                if not fatal and op_type == "init":
+                    print(f"  {_YELLOW}⚠ {error_msg}{_RESET}")
+                    print(f"  {_DIM}Your working tree state may be incomplete. "
+                          f"Run 'git status' to verify and 'synlynk rollback --last' to restore if needed.{_RESET}")
+                else:
+                    raise RuntimeError(error_msg)
             break
 
 
@@ -319,7 +359,7 @@ def rollback_checkpoint(op_type: str, untracked_paths: Optional[list] = None):
         raise
     else:
         if stash_ref:
-            _pop_stash(stash_ref)
+            _pop_stash(stash_ref, op_type=op_type, fatal=(op_type != "init"))
 
 
 _SCRIPT_INSTALL_PATHS = ("~/.synlynk/bin", "~/.synlynk/lib")

@@ -501,3 +501,38 @@ def test_cmd_rollback_no_manifest_prints_message(tmp_path, monkeypatch, capsys):
     rollback.cmd_rollback(last=True)
     captured = capsys.readouterr()
     assert "no rollback checkpoint" in captured.out.lower()
+
+
+def test_stash_paths_excludes_harness_temp_directories(tmp_path, monkeypatch):
+    """Regression test for gh:#5424: ephemeral harness temp files should not be stashed.
+
+    When discovery probes or harness processes write temporary files to ephemeral
+    directories like .codex/tmp/, .agy/tmp/, etc., these should be excluded from
+    the rollback stash to avoid conflicts when the stash is restored.
+    """
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "real.txt").write_text("real\n")
+    (tmp_path / ".codex" / "tmp" / "arg0-macos" / "abc123" / "apply_patch").parent.mkdir(parents=True)
+    (tmp_path / ".codex" / "tmp" / "arg0-macos" / "abc123" / "apply_patch").write_text("temp\n")
+    (tmp_path / ".codex" / "tmp" / "arg0-macos" / "abc123" / ".lock").write_text("lock\n")
+    (tmp_path / ".agy" / "tmp" / "probe" / ".sentinel").parent.mkdir(parents=True)
+    (tmp_path / ".agy" / "tmp" / "probe" / ".sentinel").write_text("sentinel\n")
+    (tmp_path / ".grok" / "tmp" / "cache" / "model.bin").parent.mkdir(parents=True)
+    (tmp_path / ".grok" / "tmp" / "cache" / "model.bin").write_text("model\n")
+
+    status = """ M real.txt
+?? .codex/tmp/arg0-macos/abc123/apply_patch
+?? .codex/tmp/arg0-macos/abc123/.lock
+?? .agy/tmp/probe/.sentinel
+?? .grok/tmp/cache/model.bin
+"""
+
+    def fake_run(args, **kwargs):
+        assert args == ["git", "status", "--porcelain"]
+        return subprocess.CompletedProcess(args, 0, stdout=status, stderr="")
+
+    monkeypatch.setattr(rollback.subprocess, "run", fake_run)
+
+    # Only real.txt should be stashed, all temp files should be excluded
+    stashed = rollback._stash_paths([])
+    assert stashed == ["real.txt"]
