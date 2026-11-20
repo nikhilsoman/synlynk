@@ -9,6 +9,26 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.38.3] - 2026-11-20
+### Added
+- **Harness Parity Phase 3: Live Routing & Manifest Mechanics (#5369, #5389, PR #5395):**
+  - Live query routing engine (`synlynk/routing.py`, `LiveQueryRouter`) ranking eligible execution harnesses using a 14-day rolling window of empirical capability ratings and cost history, falling back to rotation state (`m0035_routing_rotation_state`).
+  - Autonomous harness manifest schema and validation subsystem (`synlynk/harness_manifest.py`) discovering and attesting version hashes, execution contracts, tool support, and billing models.
+  - New CLI commands `synlynk harness onboard` and `synlynk harness probe` for dynamic harness introspection.
+  - Automated CLI-version-hash preflight rediscovery during dispatch, sentinel site audits, and fail-closed gates for local harness rerouting (`--allow-reroute`).
+  - Attribution threading and database migration `m0036_requested_harness_attribution` recording `requested_harness` alongside executing harness in `cost_entries` and `capability_ratings`.
+- **Goal-Aware Release Packaging & Plan Mining (#5372, PR #5392):**
+  - Uncapped top-level task mining in `synlynk/backlog.py` (`mine_specs_and_decisions()`), extracting full atomic task plans from specification headers.
+  - Goal-aware release proposal packaging (`_resolve_packaging_target()` in `synlynk/tpm_sweep.py`) clustering up to 12 active constituent stories under strategic roadmap arcs per decisions `dec-fcec4295` and `dec-db39a676`.
+
+### Fixed
+- **Billing & Verification Safeguards (PR #5395, PR #5369):**
+  - Fixed Muse billing rate lookup falling back to subscription defaults under standard configuration.
+  - Hardened concurrent SQLite schema updates (`_add_column_if_missing`) against thread-contention locks.
+  - Fixed roadmap drift verification on pull requests lacking decision record modifications.
+
+---
+
 ## [v0.38.2] - 2026-11-19
 ### Added
 - **Intent Capture Primitive (#5247, PR #5382):**
