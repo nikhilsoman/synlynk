@@ -587,6 +587,40 @@ def _wiz_screen_landing() -> None:
     _wiz_prompt("press enter to start setup — takes about 2 minutes")
     _pkg("_wiz_read_key")()
 
+
+def _wiz_configure_openrouter_byok() -> str:
+    """Configure and verify an OpenRouter key for this wizard session."""
+    import getpass
+
+    print(f"\n  {_BOLD}Connect OpenRouter{_RESET}")
+    print(f"  {_DIM}Paste OPENROUTER_API_KEY; input is hidden and the key stays in this session.{_RESET}")
+    try:
+        key = getpass.getpass("  OPENROUTER_API_KEY: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print(f"\n  {_YELLOW}OpenRouter setup cancelled.{_RESET}")
+        return ""
+
+    if not key:
+        print(f"  {_YELLOW}No OPENROUTER_API_KEY entered; continuing without a home harness.{_RESET}")
+        return ""
+
+    os.environ["OPENROUTER_API_KEY"] = key
+    try:
+        from synlynk.gateway import cmd_gateway_probe
+        from synlynk.registry import configure_openrouter
+
+        configure_openrouter()
+        print(f"\n  {_DIM}Validating OpenRouter connection…{_RESET}")
+        if cmd_gateway_probe("openrouter") == 0:
+            return "openrouter"
+    except Exception as exc:
+        print(f"  {_YELLOW}OpenRouter setup failed: {exc}{_RESET}")
+        return ""
+
+    print(f"  {_YELLOW}OpenRouter validation failed; continuing without a home harness.{_RESET}")
+    return ""
+
+
 def _wiz_screen_harness(scan: dict) -> str:
     """Screen 1 — choose home harness. Returns chosen harness name."""
     _wiz_clear()
@@ -601,10 +635,10 @@ def _wiz_screen_harness(scan: dict) -> str:
 
     if not harnesses:
         print(f"  {_YELLOW}⚠ No harnesses found on PATH.{_RESET}")
-        print(f"  {_DIM}Install claude, gemini, or codex then re-run `synlynk scan`.{_RESET}")
-        _wiz_prompt("press enter to continue with no home harness")
-        _pkg("_wiz_read_key")()
-        return ""
+        print(f"  {_DIM}Use OpenRouter now, or install claude, gemini, or codex later.{_RESET}")
+        print(f"  {_CYAN}[O]{_RESET} OpenRouter BYOK  {_DIM}— use an API key instead{_RESET}")
+        _wiz_prompt("press O to connect OpenRouter · enter to continue without a home harness")
+        return _wiz_configure_openrouter_byok() if _pkg("_wiz_read_key")().lower() == "o" else ""
 
     print(f"  {_DIM}scan found:{_RESET}")
     for h in harnesses:
@@ -615,12 +649,15 @@ def _wiz_screen_harness(scan: dict) -> str:
     for i, h in enumerate(harnesses, 1):
         default_note = "  (default)" if h["name"] == home else ""
         print(f"  {_CYAN}[{i}]{_RESET} {h['name']}{_DIM}{default_note}{_RESET}")
+    print(f"  {_CYAN}[O]{_RESET} OpenRouter BYOK  {_DIM}— use an API key instead{_RESET}")
 
-    _wiz_prompt("enter number to select · enter to use default")
+    _wiz_prompt("enter number · O for OpenRouter · enter to use default")
     key = _pkg("_wiz_read_key")()
 
     if key in ("\r", "\n", ""):
         return home or (harnesses[0]["name"] if harnesses else "")
+    if key.lower() == "o":
+        return _wiz_configure_openrouter_byok()
     try:
         idx = int(key) - 1
         if 0 <= idx < len(harnesses):
