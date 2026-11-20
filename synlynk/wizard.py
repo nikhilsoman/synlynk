@@ -164,7 +164,11 @@ def guard_dirty_worktree(repo_dir: str = ".", backup_dir: str = None) -> Optiona
     return BackupResult(tar_path, stash_created=stash_created, dirty=True)
 
 
-def cmd_launch_ftue(dry_run: bool = False, list_mode: bool = False) -> None:
+def cmd_launch_ftue(
+    dry_run: bool = False,
+    list_mode: bool = False,
+    workspace: dict = None,
+) -> bool:
     """FTUE task picker TUI - Screen 1 -> Screen 2 -> dispatch
     - dry_run: print selected tasks without TUI or dispatch
     - list_mode: print full template pool with trigger conditions
@@ -179,20 +183,23 @@ def cmd_launch_ftue(dry_run: bool = False, list_mode: bool = False) -> None:
             marker = "●" if t["id"] in core_ids else "○"
             print(f"  {marker} {t['id']:<24}  {t['cycle']:<8}  {t['agent']:<8}  {cond_str}")
         print()
-        return
+        return True
 
-    try:
-        scan = _pkg("run_workspace_scan")(deep=False)
-    except Exception:
-        scan = {
-            "workspace_name": os.path.basename(os.getcwd()) or "workspace",
-            "topology": "single",
-            "repos": [{"name": os.path.basename(os.getcwd()), "stack_labels": []}],
-            "harnesses": [], "agents": [], "skills": [],
-            "test_ratio": 1.0, "readme_word_count": 0,
-            "has_ci": False, "has_docs": False,
-            "has_type_hints": False, "has_orm": False,
-        }
+    if workspace is None:
+        try:
+            scan = _pkg("run_workspace_scan")(deep=False)
+        except Exception:
+            scan = {
+                "workspace_name": os.path.basename(os.getcwd()) or "workspace",
+                "topology": "single",
+                "repos": [{"name": os.path.basename(os.getcwd()), "stack_labels": []}],
+                "harnesses": [], "agents": [], "skills": [],
+                "test_ratio": 1.0, "readme_word_count": 0,
+                "has_ci": False, "has_docs": False,
+                "has_type_hints": False, "has_orm": False,
+            }
+    else:
+        scan = workspace
 
     tasks = _pkg("_select_launch_tasks")(scan)
 
@@ -204,12 +211,12 @@ def cmd_launch_ftue(dry_run: bool = False, list_mode: bool = False) -> None:
             est_str = f"~{int(est * 60)}m" if est < 1 else f"~{int(est)}h"
             print(f"  [{i}] {t['id']:<24} {t['cycle']:<8}  {t['agent']:<8}  {est_str}")
         print()
-        return
+        return True
 
     while True:
         chosen = _launch_screen_tasks(tasks, scan)
         if chosen is None:
-            return
+            return True
 
         confirmed, prompt = _launch_screen_preview(chosen, scan)
         if not confirmed:
@@ -228,7 +235,8 @@ def cmd_launch_ftue(dry_run: bool = False, list_mode: bool = False) -> None:
                   f"  {_DIM}Log: synlynk logs --job {job_id}{_RESET}\n")
         except Exception as exc:
             print(f"\n  {_YELLOW}⚠ Dispatch failed: {exc}{_RESET}\n")
-        return
+            return False
+        return True
 
 _WIZ_PRODUCT_BLURB = (
     "Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.\n"
@@ -848,7 +856,7 @@ def _wiz_screen_roles(scan: dict) -> dict:
 
     return roles
 
-def _wiz_screen_launch(workspace: dict, scan: dict, auto_launch: bool = False) -> None:
+def _wiz_screen_launch(workspace: dict, scan: dict, auto_launch: bool = False) -> bool:
     """Screen 6 — launch cheat sheet. Final screen."""
     _wiz_clear()
     _wiz_header(step=6, total=6)
@@ -875,7 +883,8 @@ def _wiz_screen_launch(workspace: dict, scan: dict, auto_launch: bool = False) -
     _wiz_prompt("done · run `synlynk launch` to pick your first task")
     _pkg("_wiz_read_key")()
     if auto_launch:
-        _pkg("cmd_launch_ftue")()
+        return _pkg("cmd_launch_ftue")(workspace=workspace)
+    return True
 
 def _launch_screen_cycles() -> None:
     """Screen 3 — cycles explainer. Any key returns to Screen 1."""
@@ -1117,8 +1126,10 @@ def wizard_init(scan: dict = None, dry_run: bool = False) -> None:
 
     # ── Screen 6: Launch cheat sheet ─────────────────────────────────────
     cfg = _pkg("load_config")()
-    _pkg("_wiz_screen_launch")(workspace, scan,
-                                auto_launch=cfg.get("auto_launch_after_wizard", True))
+    launched = _pkg("_wiz_screen_launch")(workspace, scan,
+                                           auto_launch=cfg.get("auto_launch_after_wizard", True))
+    if launched is False:
+        return
 
     # ── Commit-on-complete: write all state ───────────────────────────────
     if not dry_run:
