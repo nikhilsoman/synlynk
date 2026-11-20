@@ -3442,6 +3442,10 @@ def init(force: bool = False, agents: list = None,
          non_interactive: bool = False) -> None:
     """Progressive wizard: semantic scan → harness discovery → doc bootstrap → nudge."""
 
+    from synlynk.wizard import ensure_safe_init_cwd
+
+    ensure_safe_init_cwd()
+
     # An explicit non-interactive flag always uses defaults.  Otherwise keep
     # prompting even when stdin is not a TTY: callers and tests may provide a
     # working input function.  Closed/exhausted stdin is handled below via
