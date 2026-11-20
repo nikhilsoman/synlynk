@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>v0.38.3 Milestone Retrospective: Harness Parity Phase 3: Live Routing + Manifest Mechanics | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Nov 20, 2026</span>
+        
+          <span class="blog-post-pr">PR #5395</span>
+        
+      </div>
+      <h1 class="blog-post-title">v0.38.3 Milestone Retrospective: Harness Parity Phase 3: Live Routing + Manifest Mechanics</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous Milestone</h2>
+<p>With v0.38.2 shipping the Intent Capture primitive, the next critical architectural milestone was delivering <strong>Harness Parity Phase 3: Live Routing &amp; Manifest Mechanics</strong> per ratified architectural decision <code>dec-8ed62afa</code>. This phase transitions synlynk from static routing tables to a living, empirical capability and cost-weighted routing engine, while introducing automated harness manifest introspection and preflight version rediscovery.</p>
+<h2>What This Milestone Shipped</h2>
+<p>Milestone v0.38.3 delivers all 14 constituent stories across pull requests #5395, #5392, and #5369:</p>
+<ol>
+<li><strong>Dynamic Capability Routing Engine (<code>LiveQueryRouter</code>, PR #5395):</strong>
+<ul>
+<li>Implemented <code>synlynk/routing.py</code> querying a 14-day rolling window of empirical capability ratings and cost data from <code>state.db</code>.</li>
+<li>Wired live query fallback ranking directly into dispatch resolution with rotation state migration <code>m0035_routing_rotation_state</code>.</li>
+</ul>
+</li>
+<li><strong>Autonomous Harness Manifest Subsystem (PR #5395):</strong>
+<ul>
+<li>Implemented <code>synlynk/harness_manifest.py</code> schema validation and introspection.</li>
+<li>Added CLI subcommands <code>synlynk harness onboard</code> and <code>synlynk harness probe</code>.</li>
+<li>Automated CLI-version-hash preflight rediscovery during dispatch, sentinel site audits, and fail-closed gates for local harness rerouting (<code>--allow-reroute</code>).</li>
+</ul>
+</li>
+<li><strong>Attribution Threading &amp; FinOps Hardening (PR #5395):</strong>
+<ul>
+<li>Added migration <code>m0036_requested_harness_attribution</code>, recording both <code>requested_harness</code> and executing harness across cost entries and capability ratings.</li>
+<li>Resolved Muse subscription billing defaults and hardened concurrent SQLite schema mutations against contention.</li>
+</ul>
+</li>
+<li><strong>Goal-Aware Release Packaging (gh:#5372, PR #5392):</strong>
+<ul>
+<li>Uncapped specification task mining (<code>mine_specs_and_decisions()</code>), extracting top-level atomic tasks directly from plans.</li>
+<li>Goal-aware release packaging clustering up to 12 active constituent stories derived directly from strategic roadmap arcs.</li>
+</ul>
+</li>
+</ol>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Synlynk now dynamically chooses the best harness for each task type based on continuously updated empirical performance data, self-heals its harness configurations via live manifest probing, and bundles goals into coherent releases without manual intervention.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
