@@ -32,6 +32,19 @@ is restructured into a per-cell `calibration_detail` map plus a strict
 zero-cells-calibrated `not_yet_calibrated` aggregate, so the two sections can no
 longer disagree on what "calibrated" means.
 
+**Revision 4 (2026-11-20):** re-review (codex, qa role) confirmed the Section 3
+calibration-semantics fix but caught a flaw in Revision 3's missing-value fix: the
+hardcoded-`0` substitution for a missing rework/cost/duration sub-statistic is not
+actually neutral — because `raw_rework`/`raw_cost_time` are deficit-style (lower is
+better), a `0` substitution makes the missing-data harness look **best** whenever
+any other harness has a real positive value, which is a reward, not neutrality, and
+contradicted the revision's own stated principle. Fixed in place: the missing-value
+substitution now uses the median of the same sub-statistic across the other
+eligible harnesses in the cell (identical in shape to the `success_ratio`
+substitution already in this section), with the `0`/`0` fallback reserved strictly
+for the cell-wide case where no harness has any data for that sub-statistic. A
+neutrality-proving test is added to the Testing section.
+
 ## Why
 
 Nikhil asked whether all 5 core harnesses (claude, codex, agy, grok, muse) are active
@@ -166,31 +179,54 @@ w1 = 2.0, w2 = 1.0, w3 = 1.0   (confirmed by Nikhil 2026-11-20; success weighted
 ```
 
 **Missing-value denominators and behavior (resolves decide-panel review finding on
-PR #5415 — the earlier revision left this undefined).** Each raw term above is
-actually two or three independent sub-statistics, and each one is computed over its
-own non-null rows only, never over the whole cell indiscriminately:
+PR #5415 — the earlier revision left this undefined, and a first attempted fix was
+itself caught by re-review: substituting a hardcoded `0` for a missing sub-statistic
+is not neutral under this formula. `raw_rework`/`raw_cost_time` are deficit-style —
+lower is better — so a hardcoded `0` makes the missing-data harness look **best**
+whenever any other eligible harness has a real positive value, which is a reward for
+sparse data, not neutrality, and directly contradicts the "prefer a cell-local
+neutral value" principle stated below. The fix mirrors the missing-correctness
+default exactly, with no exception.).** Each raw term above is actually two or three
+independent sub-statistics, and each one is computed over its own non-null rows
+only, never over the whole cell indiscriminately:
 
 - `median(pr_review_cycles)` for harness `h` in this cell: computed over rows where
   `capability_ratings.pr_review_cycles IS NOT NULL`. If `h` has **zero** non-null
-  `pr_review_cycles` rows in the cell, that sub-statistic contributes `0` (neutral,
-  not a penalty or a reward) to `raw_rework(h)`, and this substitution is logged
-  per-harness per-cell (panel finding 1's audit requirement extends to this case too).
+  `pr_review_cycles` rows in the cell, this sub-statistic takes the **median of the
+  same sub-statistic across the other eligible harnesses in the cell that do have at
+  least one non-null row** — the identical cell-local-median substitution rule used
+  for `success_ratio` below, applied here with no special case. This substitution is
+  logged per-harness per-cell (panel finding 1's audit requirement extends to this
+  case too).
 - `mean(dispatch_rework != 0 OR micro_rework != 0)` for harness `h`: computed over
   rows where **at least one of** `dispatch_rework`/`micro_rework` is non-null (a row
   with both null is excluded from this sub-statistic's denominator, not counted as a
-  0). If `h` has zero rows with either column non-null, this sub-statistic is `0`
-  (neutral), logged the same way.
+  0). If `h` has zero rows with either column non-null, this sub-statistic takes the
+  median of the same sub-statistic across the other eligible harnesses in the cell
+  that have at least one qualifying row, logged the same way.
 - `median(total_cost_usd)` for harness `h`: computed over `cost_entries` rows (joined
   per the join rule above) where `total_cost_usd IS NOT NULL`. Zero non-null rows →
-  this sub-statistic is `0` (neutral), logged.
+  this sub-statistic takes the median of the same sub-statistic across the other
+  eligible harnesses in the cell with at least one non-null row, logged.
 - `median(duration_vs_estimate)` for harness `h`: computed over rows where
-  `duration_vs_estimate IS NOT NULL`. Zero non-null rows → `0` (neutral), logged.
+  `duration_vs_estimate IS NOT NULL`. Zero non-null rows → the median of the same
+  sub-statistic across the other eligible harnesses in the cell with at least one
+  non-null row, logged.
 - **Cell-wide degenerate case:** if, for a given sub-statistic, *every* eligible
-  harness in the cell has zero non-null rows (so every harness gets the same `0`
-  neutral substitution), `min == max == 0` for that sub-statistic and `norm` is `0`
-  for all harnesses by the existing tie rule above — the sub-statistic drops out of
-  the score for that cell, same treatment as the missing-correctness degenerate case
-  below, and is logged as degenerate rather than left to look like real signal.
+  harness in the cell has zero non-null rows (so there is no other harness to take a
+  median from), that sub-statistic is `0` for every harness in the cell **only in
+  this exhausted case** — `min == max == 0`, `norm` is `0` for all harnesses by the
+  existing tie rule above, the sub-statistic drops out of the score for that cell,
+  same treatment as the missing-correctness degenerate case below, and this is logged
+  as degenerate rather than left to look like real signal. This `0` fallback is never
+  reached while at least one eligible harness in the cell has real data for that
+  sub-statistic — the median-of-others substitution always applies first.
+- Required test (added to the Testing section below): a harness with zero non-null
+  rows for one sub-statistic, alongside at least one other eligible harness with real
+  (non-tied) data for that sub-statistic, must score **identically** on that term to
+  a harness whose actual value happened to equal the cell-local median exactly —
+  proving the substitution is neutral (matches the median) rather than advantageous
+  (would otherwise win outright) or disadvantageous (would otherwise lose outright).
 - This neutral-substitution rule is deliberately the same shape as the
   missing-correctness default immediately below (prefer a cell-local neutral value
   over a hardcoded 0/1 that silently rewards or punishes sparse data) — one
@@ -349,7 +385,13 @@ longer applies to it.
   (single harness, or all harnesses tied on a term, → `norm = 0`); (e) weight
   application matches the `2.0/1.0/1.0` formula exactly; (f) **scale-invariance test**
   — multiply every harness's cost and duration by a constant factor (e.g. 1000x) and
-  assert the resulting ranking of harnesses is unchanged.
+  assert the resulting ranking of harnesses is unchanged; (g) **missing-sub-statistic
+  neutrality test** — a harness with zero non-null rows for one sub-statistic
+  (e.g. `pr_review_cycles`) scores identically on that term to a harness whose real
+  value equals the cell-local median of the other eligible harnesses exactly, proving
+  the median-of-others substitution is neutral and not a reward/penalty; (h) the
+  cell-wide degenerate case (every eligible harness has zero non-null rows for a
+  sub-statistic) falls back to `0`/`0` for all and that term drops out, logged.
 - Unit test for `is_calibrated()`: confirms `LiveQueryRouter.select`'s floor check and
   `synlynk capability regen`'s `not_yet_calibrated` computation both call the same
   function and agree on the same fixture data.
