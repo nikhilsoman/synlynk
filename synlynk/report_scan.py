@@ -6,6 +6,8 @@ import re
 from synlynk.logs import _SECRET_PATTERNS
 
 _EXTRA_PATTERNS = [
+    re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),
+    re.compile(r"sk-ant-[A-Za-z0-9_-]{20,}"),
     re.compile(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^/\s:@]+:[^/\s@]+@"),
     re.compile(r"(?i)bearer\s+[A-Za-z0-9._~+/-]{16,}"),
     re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[=:]\s*\S{8,}"),

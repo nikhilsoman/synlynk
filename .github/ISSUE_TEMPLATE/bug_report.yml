@@ -14,10 +14,13 @@ body:
       required: true
   - type: textarea
     id: doing
-    attributes: {label: What were you doing?}
+    attributes:
+      label: "What were you doing?"
   - type: textarea
     id: expected
-    attributes: {label: Expected}
+    attributes:
+      label: Expected
   - type: textarea
     id: actual
-    attributes: {label: Actual}
+    attributes:
+      label: Actual

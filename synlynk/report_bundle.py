@@ -16,6 +16,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import urllib.parse
 from pathlib import Path
 
 BUNDLE_SCHEMA_VERSION = 1
@@ -48,12 +49,32 @@ def normalize_path(path: str) -> str:
 
 def _salt(salt_path: Path) -> bytes:
     if salt_path.exists():
-        return salt_path.read_bytes()
+        salt = salt_path.read_bytes()
+        if len(salt) != 16:
+            raise ValueError("invalid report salt")
+        return salt
     salt_path.parent.mkdir(parents=True, exist_ok=True)
     salt = secrets.token_bytes(16)
-    salt_path.write_bytes(salt)
-    os.chmod(salt_path, 0o600)
-    return salt
+    temporary = salt_path.with_name(f".{salt_path.name}.{secrets.token_hex(8)}.tmp")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(salt)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temporary, salt_path)
+            return salt
+        except FileExistsError:
+            winning_salt = salt_path.read_bytes()
+            if len(winning_salt) != 16:
+                raise ValueError("invalid report salt")
+            return winning_salt
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def salted_hash(value: str, salt_path: Path = _DEFAULT_SALT_PATH) -> str:
@@ -61,10 +82,28 @@ def salted_hash(value: str, salt_path: Path = _DEFAULT_SALT_PATH) -> str:
 
 
 def normalize_remote(url: str) -> str:
-    url = re.sub(r"^[a-z+]+://", "", url.strip())
-    url = re.sub(r"^[^@/]+(:[^@/]*)?@", "", url)
-    url = url.replace(":", "/", 1) if re.match(r"^[^/]+:[^/0-9]", url) else url
-    return re.sub(r"\.git$", "", url)
+    value = url.strip()
+    if not value:
+        return "none"
+    scp_match = re.fullmatch(r"(?:[^@/:]+@)?([^/:]+):(.+)", value)
+    if scp_match and "://" not in value:
+        host, path = scp_match.groups()
+    else:
+        parsed = urllib.parse.urlsplit(value)
+        if parsed.scheme not in {"http", "https", "ssh", "git"} or not parsed.hostname:
+            return "none"
+        host, path = parsed.hostname, parsed.path
+    segments = [segment for segment in path.strip("/").split("/") if segment]
+    if segments:
+        segments[-1] = re.sub(r"\.git$", "", segments[-1])
+    safe_segment = re.compile(r"[A-Za-z0-9._-]+")
+    if (
+        not re.fullmatch(r"[A-Za-z0-9.-]+", host)
+        or len(segments) < 2
+        or any(not safe_segment.fullmatch(segment) for segment in segments)
+    ):
+        return "none"
+    return "/".join([host.lower(), *segments])
 
 
 _VARIABLE = [
@@ -116,10 +155,20 @@ def _collect_doctor() -> list[dict[str, str]]:
     from synlynk.doctor import HEALTH_CHECKS
 
     rows = []
+    read_only_checks = {
+        "_hc_python_version",
+        "_hc_cli_entrypoint_health",
+        "_hc_project_init",
+        "_hc_identity_slug",
+        "_hc_config_schema",
+        "_hc_policy_schema",
+        "_hc_docs_dir",
+        "_hc_instruction_files",
+    }
     for check in HEALTH_CHECKS:
         check_name = getattr(check, "__name__", "check")
-        if check_name == "_hc_identity_roles" and not Path(".synlynk").is_dir():
-            rows.append({"id": "identity_roles", "status": "unavailable"})
+        if check_name not in read_only_checks:
+            rows.append({"id": check_name.removeprefix("_hc_"), "status": "unavailable"})
             continue
         try:
             result = check()
@@ -163,7 +212,7 @@ def _collect_db_shape(db_path: Path | str | None = None) -> dict[str, int]:
 
         db_path = get_state_db_path()
     path = Path(db_path).expanduser().resolve()
-    with sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5.0) as conn:
+    with sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True, timeout=5.0) as conn:
         user_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
         table_names = [
             row[0]

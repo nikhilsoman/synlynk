@@ -14,3 +14,8 @@ def test_flags_credentialed_url_and_bearer():
 
 def test_clean_text_has_no_hits():
     assert find_secrets("synlynk 0.38.3 on darwin, doctor: 3 warn") == []
+
+
+def test_flags_fine_grained_github_and_anthropic_tokens():
+    assert find_secrets("github_pat_" + "A" * 40)
+    assert find_secrets("sk-ant-api03-" + "A" * 40)

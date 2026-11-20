@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 
 from synlynk import report_bundle as rb
 
@@ -20,6 +21,15 @@ def test_salted_hash_differs_across_installs_and_is_stable(tmp_path):
 def test_remote_strips_credentials():
     assert rb.normalize_remote("https://tok:x@github.com/o/r.git") == "github.com/o/r"
     assert rb.normalize_remote("git@github.com:o/r.git") == "github.com/o/r"
+
+
+def test_remote_withholds_local_paths_queries_and_ambiguous_values():
+    assert rb.normalize_remote("file:///Users/alice/private/repo") == "none"
+    assert (
+        rb.normalize_remote("https://tok@github.com/o/r.git?access_token=secret#x")
+        == "github.com/o/r"
+    )
+    assert rb.normalize_remote("/Users/alice/private/repo") == "none"
 
 
 def test_fingerprint_ignores_variable_parts():
@@ -68,6 +78,16 @@ def test_salt_write_failure_withholds_identity(monkeypatch, tmp_path):
     assert bundle["identity"] == "unavailable"
 
 
+def test_concurrent_salt_creation_is_stable_and_owner_only(tmp_path):
+    salt_path = tmp_path / "install" / "report_salt"
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        hashes = list(pool.map(lambda _: rb.salted_hash("alice", salt_path), range(20)))
+
+    assert len(set(hashes)) == 1
+    assert len(salt_path.read_bytes()) == 16
+    assert salt_path.stat().st_mode & 0o777 == 0o600
+
+
 def test_render_contains_fingerprint_line_and_description(tmp_path):
     body = rb.render_body(
         rb.collect_bundle(salt_path=tmp_path / "s"), description="init fails"
@@ -114,6 +134,15 @@ def test_db_shape_contains_counts_but_no_row_content(tmp_path):
     assert "secret" not in repr(shape)
 
 
+def test_db_shape_handles_uri_delimiters_in_filename(tmp_path):
+    db_path = tmp_path / "state?#.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("CREATE TABLE stories (id INTEGER)")
+        conn.execute("INSERT INTO stories VALUES (1)")
+
+    assert rb._collect_db_shape(db_path)["row_count"] == 1
+
+
 def test_no_fake_secret_appears_in_rendered_body(monkeypatch, tmp_path):
     fakes = {
         "ANTHROPIC_API_KEY": "sk-FAKEKEY0123456789abcdef",
@@ -137,3 +166,29 @@ def test_collect_bundle_does_not_initialize_bare_directory(monkeypatch, tmp_path
     rb.collect_bundle(salt_path=tmp_path / "outside-local-synlynk-salt")
 
     assert not (tmp_path / ".synlynk").exists()
+
+
+def test_doctor_collection_does_not_run_mutating_or_network_checks(monkeypatch):
+    import synlynk.doctor as doctor
+
+    forbidden = {"_hc_model_registry", "_hc_identity_roles", "_hc_version_current"}
+    called = []
+
+    def fake_check(name):
+        def check():
+            called.append(name)
+            raise AssertionError(name)
+
+        check.__name__ = name
+        return check
+
+    monkeypatch.setattr(
+        doctor,
+        "HEALTH_CHECKS",
+        [fake_check(name) for name in sorted(forbidden)],
+    )
+
+    rows = rb._collect_doctor()
+
+    assert called == []
+    assert all(row["status"] == "unavailable" for row in rows)
