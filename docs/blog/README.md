@@ -333,6 +333,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [284](./284-prTBD-v0.30.0.md) | v0.30.0 Milestone Retrospective: Fleet Expansion & Agent Studio | [#5192](https://github.com/nikhilsoman/synlynk/pull/5192) | 2026-11-10 |
 | [285](./285-v0.31.0-milestone-retrospective.md) | v0.31.0 Milestone Retrospective: Autonomous Fleet Governance & Universal Archetypes | [#5195](https://github.com/nikhilsoman/synlynk/pull/5195) | 2026-11-10 |
 | [286](./286-prTBD-v0.38.2.md) | Milestone v0.38.2: Intent Capture Primitive & Remote DR Operations | [#5382](https://github.com/nikhilsoman/synlynk/pull/5382) | 2026-11-19 |
+| [287](./287-prTBD-v0.38.3.md) | Milestone v0.38.3: Harness Parity Phase 3: Live Routing & Manifest Mechanics | [#5395](https://github.com/nikhilsoman/synlynk/pull/5395) | 2026-11-20 |
 
 ## Per-PR Post Template
 
