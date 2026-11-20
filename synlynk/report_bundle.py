@@ -220,9 +220,11 @@ def _state_db_path_read_only() -> Path:
     if override:
         return Path(override)
     from synlynk.product_store import identity_slug_from_config, state_db_path
+    from synlynk.state_registry import canonical_path
 
     slug = identity_slug_from_config(Path.cwd())
-    return Path(state_db_path(slug))
+    fallback = Path(state_db_path(slug))
+    return Path(canonical_path(slug, fallback))
 
 
 def _collect_db_shape(db_path: Path | str | None = None) -> dict[str, int]:

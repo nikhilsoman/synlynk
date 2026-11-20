@@ -181,8 +181,34 @@ def test_db_shape_resolves_product_store_without_state_db_env(monkeypatch, tmp_p
         "synlynk.product_store.identity_slug_from_config", lambda root: "demo"
     )
     monkeypatch.setattr("synlynk.product_store.state_db_path", lambda slug: db_path)
+    monkeypatch.setattr(
+        "synlynk.state_registry.canonical_path", lambda slug, default: default
+    )
 
     assert rb._collect_db_shape()["row_count"] == 2
+
+
+def test_db_shape_uses_registered_canonical_ledger(monkeypatch, tmp_path):
+    fallback = tmp_path / "fallback.db"
+    canonical = tmp_path / "canonical.db"
+    for path, count in ((fallback, 1), (canonical, 3)):
+        with sqlite3.connect(path) as conn:
+            conn.execute("CREATE TABLE stories (id INTEGER)")
+            conn.executemany(
+                "INSERT INTO stories VALUES (?)", [(index,) for index in range(count)]
+            )
+
+    monkeypatch.delenv("SYNLYNK_STATE_DB_PATH", raising=False)
+    monkeypatch.setattr(
+        "synlynk.product_store.identity_slug_from_config", lambda root: "demo"
+    )
+    monkeypatch.setattr("synlynk.product_store.state_db_path", lambda slug: fallback)
+    monkeypatch.setattr(
+        "synlynk.state_registry.canonical_path",
+        lambda slug, default: canonical,
+    )
+
+    assert rb._collect_db_shape()["row_count"] == 3
 
 
 def test_no_fake_secret_appears_in_rendered_body(monkeypatch, tmp_path):
