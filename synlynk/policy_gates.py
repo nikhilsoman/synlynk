@@ -21,13 +21,7 @@ def gate_mode(gate_section: str, mode_key: str) -> str:
     """Return 'enforce' (default) or 'observe' for a gate's mode flag."""
     overrides = _read_repo_policy_overrides()
     value = overrides.get(gate_section, {}).get(mode_key)
-    if value in ("enforce", "observe"):
-        return value
-    if gate_section == "governs_authority" and mode_key == "require_linked_goal_mode":
-        from synlynk.editions import get_active_edition
-        if get_active_edition() == "personal":
-            return "observe"
-    return "enforce"
+    return value if value in ("enforce", "observe") else "enforce"
 
 
 _INSUFFICIENT_DATA_MARKERS = (
