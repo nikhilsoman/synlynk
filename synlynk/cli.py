@@ -2527,6 +2527,16 @@ def main(argv=None) -> None:
         print(f"synlynk {VERSION}")
         return
 
+    selected_command = _command_from_argv(cli_tokens)
+    if selected_command == "init":
+        from synlynk.wizard import ensure_safe_init_cwd
+
+        try:
+            ensure_safe_init_cwd()
+        except RuntimeError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            raise SystemExit(2) from exc
+
     # Non-intrusive background update check
     try:
         from synlynk.upgrade import check_for_updates_background, get_update_notice
@@ -2539,7 +2549,6 @@ def main(argv=None) -> None:
         pass
 
     fast_entrypoint = _package._FAST_CLI
-    selected_command = _command_from_argv(cli_tokens)
     if cli_tokens and cli_tokens[0] == "help":
         parser = build_parser(selected_command="help" if fast_entrypoint else None)
         args = parser.parse_args(cli_tokens)
