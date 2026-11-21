@@ -324,7 +324,7 @@ _TOP_LEVEL_COMMANDS = (
     "help", "init", "quickstart", "upgrade", "fleet", "uninstall", "join", "start", "home", "testbed", "tool",
     "pack", "connector", "impact", "mesh", "spike", "team", "decide", "heal",
     "audit-docs", "goal", "governs", "intent", "local", "models", "media", "scan", "workspace",
-    "migrate", "rollback", "probe", "doctor", "worktree", "tui", "notify", "exit",
+    "migrate", "rollback", "probe", "doctor", "report", "worktree", "tui", "notify", "exit",
     "repair", "sync", "configure", "identity", "type", "whoami", "events", "session",
     "harness", "agent", "exec", "gh", "watch", "swarm", "daemon", "checkpoint", "status",
     "backup", "state", "ops", "selftest", "config", "sentinel", "dispatch", "jobs", "relay",
@@ -852,6 +852,21 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
                                help="Provision recommended ecosystem tools if missing")
     doctor_parser.add_argument("--version", action="store_true",
                                help="Report read-only version-authority status")
+
+    report_parser = subparsers.add_parser(
+        "report", help="File a redacted, previewed bug report"
+    )
+    report_parser.add_argument(
+        "--last",
+        action="store_true",
+        help="Build the report from the most recent failed command (Part 2)",
+    )
+    report_parser.add_argument(
+        "--clear-flight",
+        action="store_true",
+        dest="clear_flight",
+        help="Delete the local flight-recorder buffer (Part 2)",
+    )
 
     worktree_parser = subparsers.add_parser(
         "worktree", help="Audit and clean up stale git worktrees/branches"
@@ -2539,16 +2554,17 @@ def main(argv=None) -> None:
             print(f"error: {exc}", file=sys.stderr)
             raise SystemExit(2) from exc
 
-    # Non-intrusive background update check
-    try:
-        from synlynk.upgrade import check_for_updates_background, get_update_notice
+    # Reporting is read-only until the user explicitly files or saves a draft.
+    if not cli_tokens or cli_tokens[0] != "report":
+        try:
+            from synlynk.upgrade import check_for_updates_background, get_update_notice
 
-        check_for_updates_background()
-        notice = get_update_notice()
-        if notice and sys.stderr.isatty() and not any(t in cli_tokens for t in ["--json", "pack", "--raw"]):
-            print(f"\n  {notice}\n", file=sys.stderr)
-    except Exception:
-        pass
+            check_for_updates_background()
+            notice = get_update_notice()
+            if notice and sys.stderr.isatty() and not any(t in cli_tokens for t in ["--json", "pack", "--raw"]):
+                print(f"\n  {notice}\n", file=sys.stderr)
+        except Exception:
+            pass
 
     fast_entrypoint = _package._FAST_CLI
     if cli_tokens and cli_tokens[0] == "help":
@@ -2666,7 +2682,7 @@ def main(argv=None) -> None:
             _cmd_name = tok
             break
     _repo_initialized = os.path.exists(".synlynk/config.json") or os.path.exists(".synlynk/workspace.json")
-    if _repo_initialized or _cmd_name != "init":
+    if _cmd_name != "report" and (_repo_initialized or _cmd_name != "init"):
         _reconcile_jobs()
         try:
             from synlynk.capability_watch import spawn_staleness_check_thread
@@ -4092,6 +4108,10 @@ def main(argv=None) -> None:
         )
     elif args.command == "doctor":
         sys.exit(cmd_doctor(args))
+    elif args.command == "report":
+        from synlynk.report_cmd import cmd_report
+
+        sys.exit(cmd_report(args))
     elif args.command == "worktree":
         from synlynk.worktree import cmd_worktree_audit, cmd_worktree_clean
         action = getattr(args, "worktree_action", None)

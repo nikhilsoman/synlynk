@@ -38,6 +38,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `harness probe` (secondary) — open
 - `config set` (secondary) — open
 - `config nudges` (secondary) — open
+- `report` (primary) — sustain
 - `whoami` (secondary) — open
 
 ## Tier 1 — Goal

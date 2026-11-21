@@ -6,7 +6,7 @@
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
 <p align="center">
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5859%20collected-brightgreen" alt="Tests"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5934%20collected-brightgreen" alt="Tests"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.38.3-blue" alt="Version"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-Apache--2.0-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
@@ -152,6 +152,7 @@ Commands are grouped by where you'll reach for them in a typical project lifecyc
 - `synlynk scan`
 - `synlynk join`
 - `synlynk governs`
+- `synlynk report`
 - `synlynk preflight`
 - `synlynk status`
 - `synlynk watch`
@@ -159,5 +160,4 @@ Commands are grouped by where you'll reach for them in a typical project lifecyc
 
 Full command reference: [docs/reference/commands.md](docs/reference/commands.md)
 
-<!-- commands:end -->
 <!-- commands:end -->
