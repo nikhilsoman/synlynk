@@ -3444,7 +3444,7 @@ def init(force: bool = False, agents: list = None,
 
     from synlynk.wizard import ensure_safe_init_cwd
 
-    ensure_safe_init_cwd()
+    ensure_safe_init_cwd(require_git=bool(non_interactive))
 
     # An explicit non-interactive flag always uses defaults.  Otherwise keep
     # prompting even when stdin is not a TTY: callers and tests may provide a
