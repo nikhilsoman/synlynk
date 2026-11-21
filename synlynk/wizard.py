@@ -1452,6 +1452,9 @@ def cmd_wizard_init(
 
     elapsed = time.time() - start_time
     print(f"\n  {_GREEN}✓{_RESET} Zero-risk onboarding completed in {elapsed:.2f}s\n")
+    from synlynk.report_cmd import report_hint
+
+    print(f"  {_DIM}{report_hint()}{_RESET}\n")
 
     current_stage = _advance_wizard_onboarding_state(repo_dir, ws_name)
     first_win_cycle = _execute_first_win_onboarding_cycle(

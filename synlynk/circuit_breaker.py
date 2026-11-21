@@ -291,13 +291,16 @@ def evaluate_job_circuit_breaker(
     job["cost_usd"] = cost_usd
 
     # 7. Write critical Sentinel Alert
+    from synlynk.report_cmd import report_hint
+
     sentinel_file = sentinel_path or ".synlynk/sentinel.md"
     _write_sentinel_alert(
         "CRITICAL",
         "TOKEN_CIRCUIT_BREAKER_TRIPPED",
         f"Job {job.get('id')} on agent '{job.get('agent')}' tripped the in-flight "
         f"circuit breaker ({reason}); process cleanup "
-        f"{'verified' if killed else 'remains unverified'}.",
+        f"{'verified' if killed else 'remains unverified'}. "
+        f"{report_hint(job.get('id'))}",
         sentinel_file,
     )
     if not killed:
