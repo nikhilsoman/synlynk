@@ -125,8 +125,17 @@ def install_shim() -> str:
     return shim_dir
 
 
-def shim_env() -> str:
-    return f'export PATH="{install_shim()}:$PATH"'
+def shim_env(role: Optional[str] = None) -> str:
+    """Print exports for ``eval "$(synlynk gh --shim-env)"``.
+
+    When ``role`` is set, also export ``SYNLYNK_GH_ROLE`` so git's
+    ``credential.helper`` invocation of the shim can resolve a role token
+    (gh:#5242). ``--shim-env`` previously dropped ``--role``.
+    """
+    lines = [f'export PATH="{install_shim()}:$PATH"']
+    if role:
+        lines.append(f"export SYNLYNK_GH_ROLE={shlex.quote(role)}")
+    return "\n".join(lines)
 
 
 def run_shim(args: list, env: Optional[Mapping[str, str]] = None, shim_dir: Optional[str] = None) -> int:
