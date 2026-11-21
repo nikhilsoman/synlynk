@@ -733,10 +733,15 @@ def _wiz_screen_workspace_name_pick(scan: dict) -> dict:
     # Repo picker
     repos = scan.get("repos", [])
     _DOTFILE_NAMES = {"dotfiles", ".dotfiles", "dotfile"}
-    selected = [r["name"] not in _DOTFILE_NAMES for r in repos]
+    current_repo = os.path.abspath(os.getcwd())
+    selected = [
+        r["name"] not in _DOTFILE_NAMES
+        and os.path.abspath(os.path.expanduser(r.get("path", ""))) == current_repo
+        for r in repos
+    ]
 
     print(f"\n  {_DIM}repos to include:{_RESET}  "
-          f"{_DIM}(space to toggle, enter to confirm){_RESET}\n")
+          f"{_DIM}(enter a number to toggle, enter to confirm){_RESET}\n")
     for i, (r, sel) in enumerate(zip(repos, selected)):
         stack = ", ".join(r["stack_labels"]) or "unknown"
         check = f"{_TEAL}[✓]{_RESET}" if sel else f"{_DIM}[ ]{_RESET}"
@@ -746,8 +751,8 @@ def _wiz_screen_workspace_name_pick(scan: dict) -> dict:
     _wiz_prompt("number to toggle · a to add · enter to confirm")
 
     while True:
-        key = _pkg("_wiz_read_key")()
-        if key in ("\r", "\n", ""):
+        key = sys.stdin.readline().strip()
+        if not key:
             break
         if key == "a":
             print(f"\n  {_DIM}path to repo:{_RESET} ", end="", flush=True)
@@ -1089,18 +1094,20 @@ def _launch_screen_tasks(tasks: list, scan: dict):
         if key.isdigit() and 1 <= int(key) <= len(tasks):
             return tasks[int(key) - 1]
 
-def wizard_init(scan: dict = None, dry_run: bool = False) -> None:
+def wizard_init(scan: dict = None, dry_run: bool = False, discover: bool = False) -> None:
     """Run the FTUE wizard. All state is held in memory until Screen 6.
 
     scan: pre-built ScanResult dict (used by tests and when called from init()).
           If None, runs run_workspace_scan() automatically (Phase 0).
     dry_run: if True, skip writing workspace config + context.md at the end.
+    discover: if True, scan ambient workspace locations for additional repos.
     """
     # ── Phase 0: silent scan (skipped if scan provided) ───────────────────
     if scan is None:
         print(f"\n  {_CYAN}›{_RESET} scanning your environment...")
         try:
-            scan = _pkg("run_workspace_scan")(deep=False)
+            roots = None if discover else [os.getcwd()]
+            scan = _pkg("run_workspace_scan")(roots=roots, deep=False)
             repo_names = ", ".join(r["name"] for r in scan["repos"])
             harness_names = ", ".join(h["name"] for h in scan["harnesses"]) or "none"
             stacks = sorted({l for r in scan["repos"] for l in r["stack_labels"]})
