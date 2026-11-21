@@ -63,6 +63,32 @@ _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _TITLE_MAX_LEN = 240  # Headroom under GitHub's practical 256-character limit.
 
 
+def story_arc_version(conn, story_id: str) -> str | None:
+    """Return the roadmap arc containing a story through its linked goal."""
+    row = conn.execute(
+        """
+        SELECT arc_version
+        FROM (
+            SELECT rp.arc_version, 0 AS link_order
+            FROM stories s
+            JOIN goals g ON g.goal_id = s.goal_id
+            JOIN roadmap_phases rp ON rp.id = g.phase_id
+            WHERE s.story_id = ?
+            UNION ALL
+            SELECT rp.arc_version, 1 AS link_order
+            FROM goal_contributions gc
+            JOIN goals g ON g.goal_id = gc.goal_id
+            JOIN roadmap_phases rp ON rp.id = g.phase_id
+            WHERE gc.story_id = ?
+        )
+        ORDER BY link_order
+        LIMIT 1
+        """,
+        (story_id, story_id),
+    ).fetchone()
+    return row[0] if row else None
+
+
 def _render_arc_description(conn, arc_id: int) -> str:
     notes_row = conn.execute(
         "SELECT notes FROM roadmap_arcs WHERE id=?",
