@@ -42,7 +42,15 @@ def cmd_policy_check_merge(role: str) -> int:
     Intended to be run by a dispatched reviewer agent before it calls
     `gh pr merge` itself, per the project's PR Review Discipline convention
     ("the reviewer alone must merge"). Non-zero exit means: do not merge.
+    An untrusted instruction receipt blocks here as well as in the gh shim,
+    so a reviewer that does run this check cannot treat the warning as advisory.
     """
+    from synlynk.gh_shim import instruction_receipt_merge_refusal
+
+    refusal = instruction_receipt_merge_refusal(["pr", "merge"], env=os.environ)
+    if refusal:
+        print(f"BLOCKED: {refusal}")
+        return 1
     result = check_authority("merge", role=role, repo_path=os.getcwd())
     if not result.allowed:
         print(f"BLOCKED: role {role!r} is not authorized to merge — {result.reason}")

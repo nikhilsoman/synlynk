@@ -12,7 +12,7 @@ from synlynk.dispatch import (
     _isolated_gh_config_dir,
     _resolve_dispatch_gh_token,
 )
-from synlynk.gh_shim import record_host_auth_gh_call
+from synlynk.gh_shim import instruction_receipt_merge_refusal, record_host_auth_gh_call
 
 
 def get_role_gh_env(role: str) -> dict[str, str]:
@@ -66,6 +66,11 @@ def cmd_gh(role: str, gh_args: list) -> int:
     if not args:
         print("  usage: synlynk gh --role <role> -- <gh-args>", file=sys.stderr)
         raise SystemExit(1)
+
+    refusal = instruction_receipt_merge_refusal(args, env=os.environ)
+    if refusal:
+        print(refusal, file=sys.stderr)
+        return 1
 
     env = get_role_gh_env(role)
     if not env.get("GH_TOKEN"):
