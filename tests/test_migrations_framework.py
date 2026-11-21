@@ -627,3 +627,155 @@ def test_m0037_handles_database_without_goals_table(tmp_path):
     assert alias_cols == {"old_uid", "new_uid", "uid_kind", "reason", "created_at"}
     conn.close()
 
+
+def test_m0038_rewrites_entity_id_from_positional_id_to_arc_uid(tmp_path):
+    import sqlite3
+    from synlynk.migrations.m0038_github_sync_map_uid_cutover import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        "CREATE TABLE goals (id INTEGER PRIMARY KEY, goal_id TEXT, outcome TEXT, "
+        "arc_version TEXT, phase_title TEXT, placement_status TEXT, arc_uid TEXT, phase_uid TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE github_sync_map (entity_type TEXT, entity_id TEXT, github_number INTEGER, "
+        "github_node_id TEXT, content_hash TEXT, last_synced_at TEXT, "
+        "PRIMARY KEY (entity_type, entity_id))"
+    )
+    conn.execute(
+        "INSERT INTO goals VALUES (1, 'g1', 'First', 'v1.0.0', NULL, 'placed', 'arc-first', NULL)"
+    )
+    conn.execute(
+        "INSERT INTO github_sync_map (entity_type, entity_id, github_number) "
+        "VALUES ('roadmap_arc', '1', 50)"
+    )
+    conn.commit()
+
+    MIGRATION.up(conn)
+    conn.commit()
+
+    row = conn.execute(
+        "SELECT entity_id FROM github_sync_map WHERE entity_type='roadmap_arc' AND github_number=50"
+    ).fetchone()
+    assert row == ("arc-first",)
+    conn.close()
+
+
+def test_m0038_deletes_the_two_live34_confirmed_bad_rows(tmp_path):
+    import sqlite3
+    from synlynk.migrations.m0038_github_sync_map_uid_cutover import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        "CREATE TABLE goals (id INTEGER PRIMARY KEY, goal_id TEXT, outcome TEXT, "
+        "arc_version TEXT, phase_title TEXT, placement_status TEXT, arc_uid TEXT, phase_uid TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE github_sync_map (entity_type TEXT, entity_id TEXT, github_number INTEGER, "
+        "github_node_id TEXT, content_hash TEXT, last_synced_at TEXT, "
+        "PRIMARY KEY (entity_type, entity_id))"
+    )
+    conn.execute(
+        "INSERT INTO github_sync_map (entity_type, entity_id, github_number) "
+        "VALUES ('roadmap_arc', '2', 21)"
+    )
+    conn.execute(
+        "INSERT INTO github_sync_map (entity_type, entity_id, github_number) "
+        "VALUES ('roadmap_arc', '10', 29)"
+    )
+    conn.commit()
+
+    MIGRATION.up(conn)
+    conn.commit()
+
+    remaining = conn.execute(
+        "SELECT entity_id FROM github_sync_map WHERE entity_type='roadmap_arc'"
+    ).fetchall()
+    assert remaining == []
+    conn.close()
+
+
+def test_m0038_is_idempotent(tmp_path):
+    import sqlite3
+    from synlynk.migrations.m0038_github_sync_map_uid_cutover import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        "CREATE TABLE goals (id INTEGER PRIMARY KEY, goal_id TEXT, outcome TEXT, "
+        "arc_version TEXT, phase_title TEXT, placement_status TEXT, arc_uid TEXT, phase_uid TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE github_sync_map (entity_type TEXT, entity_id TEXT, github_number INTEGER, "
+        "github_node_id TEXT, content_hash TEXT, last_synced_at TEXT, "
+        "PRIMARY KEY (entity_type, entity_id))"
+    )
+    conn.execute(
+        "INSERT INTO goals VALUES (1, 'g1', 'First', 'v1.0.0', NULL, 'placed', 'arc-first', NULL)"
+    )
+    conn.execute(
+        "INSERT INTO github_sync_map (entity_type, entity_id, github_number) "
+        "VALUES ('roadmap_arc', '1', 50)"
+    )
+    conn.commit()
+
+    MIGRATION.up(conn)
+    conn.commit()
+    MIGRATION.up(conn)
+    conn.commit()
+
+    rows = conn.execute(
+        "SELECT entity_id FROM github_sync_map WHERE entity_type='roadmap_arc'"
+    ).fetchall()
+    assert rows == [("arc-first",)]
+    conn.close()
+
+
+def test_m0038_maps_positional_id_across_distinct_arc_versions(tmp_path):
+    """roadmap_arcs.id is ROW_NUMBER() over distinct arc_version, not goals.id."""
+    import sqlite3
+    from synlynk.migrations.m0038_github_sync_map_uid_cutover import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        "CREATE TABLE goals (id INTEGER PRIMARY KEY, goal_id TEXT, outcome TEXT, "
+        "arc_version TEXT, phase_title TEXT, placement_status TEXT, arc_uid TEXT, phase_uid TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE github_sync_map (entity_type TEXT, entity_id TEXT, github_number INTEGER, "
+        "github_node_id TEXT, content_hash TEXT, last_synced_at TEXT, "
+        "PRIMARY KEY (entity_type, entity_id))"
+    )
+    # Goal insert order is the reverse of arc_version order, and v1.0.0 has
+    # two goals. roadmap_arcs.id 1 is v1.0.0 and id 3 is v3.0.0. Entity id
+    # '2' is the LIVE-34 deletion, so the surviving check is positional id 3.
+    conn.execute(
+        "INSERT INTO goals VALUES (1, 'g-v3', 'Third', 'v3.0.0', NULL, 'placed', 'arc-third', NULL)"
+    )
+    conn.execute(
+        "INSERT INTO goals VALUES (2, 'g-v1a', 'First A', 'v1.0.0', NULL, 'placed', 'arc-first', NULL)"
+    )
+    conn.execute(
+        "INSERT INTO goals VALUES (3, 'g-v1b', 'First B', 'v1.0.0', 'Phase', 'placed', 'arc-first', 'phase-1')"
+    )
+    conn.execute(
+        "INSERT INTO goals VALUES (4, 'g-v2', 'Second', 'v2.0.0', NULL, 'placed', 'arc-second', NULL)"
+    )
+    conn.execute(
+        "INSERT INTO github_sync_map (entity_type, entity_id, github_number) "
+        "VALUES ('roadmap_arc', '1', 50)"
+    )
+    conn.execute(
+        "INSERT INTO github_sync_map (entity_type, entity_id, github_number) "
+        "VALUES ('roadmap_arc', '3', 77)"
+    )
+    conn.commit()
+
+    MIGRATION.up(conn)
+    conn.commit()
+
+    rows = dict(conn.execute(
+        "SELECT github_number, entity_id FROM github_sync_map WHERE entity_type='roadmap_arc'"
+    ).fetchall())
+    assert rows == {50: "arc-first", 77: "arc-third"}
+    conn.close()
+
