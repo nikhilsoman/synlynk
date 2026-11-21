@@ -2072,6 +2072,33 @@ def test_build_subprocess_env_includes_env_passthrough_vars(monkeypatch):
     shim_dir.cleanup()
 
 
+@pytest.mark.parametrize(
+    ("agent", "base_url", "api_key", "port"),
+    [
+        ("codex", "OPENAI_BASE_URL", "OPENAI_API_KEY", 8000),
+        ("agy", "GEMINI_BASE_URL", "GEMINI_API_KEY", 4000),
+    ],
+)
+def test_build_subprocess_env_retains_universal_proxy_credentials(
+    monkeypatch, agent, base_url, api_key, port
+):
+    """Codex and Agy dispatches retain explicit OpenAI-compatible proxies."""
+    from synlynk.dispatch import _build_subprocess_env
+
+    endpoint = f"http://127.0.0.1:{port}/v1"
+    monkeypatch.setenv(base_url, endpoint)
+    monkeypatch.setenv(api_key, "local-test-key")
+
+    env, shim_dir = _build_subprocess_env(
+        agent, {}, requires_gh_write=False, story_id="story-1"
+    )
+    try:
+        assert env[base_url] == endpoint
+        assert env[api_key] == "local-test-key"
+    finally:
+        shim_dir.cleanup()
+
+
 def test_build_subprocess_env_applies_headless_contract_required_vars():
     from synlynk.dispatch import _build_subprocess_env
     import synlynk.dispatch as dispatch_mod
