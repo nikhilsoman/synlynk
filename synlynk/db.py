@@ -4075,23 +4075,21 @@ def _try_sync_arc_by_version(version: str) -> None:
 def _try_sync_story(story_id: str) -> None:
     """Best-effort GitHub Issue sync for a single story. Never raises."""
     from synlynk import _get_db
-    from synlynk.gh_sync import sync_story
+    from synlynk.gh_sync import story_arc_version, sync_story
     from synlynk.github_repo import resolve_owner_repo
 
     conn = None
     try:
         owner, repo = resolve_owner_repo()
         conn = _get_db()
-        phase = conn.execute(
-            "SELECT arc_version FROM roadmap_phases WHERE story_id=?", (story_id,)
-        ).fetchone()
+        arc_version = story_arc_version(conn, story_id)
         milestone_number = None
-        if phase:
+        if arc_version:
             mapped = conn.execute(
                 "SELECT gm.github_number FROM github_sync_map gm "
                 "JOIN roadmap_arcs ra ON ra.id = CAST(gm.entity_id AS INTEGER) "
                 "WHERE gm.entity_type='roadmap_arc' AND ra.version=?",
-                (phase[0],),
+                (arc_version,),
             ).fetchone()
             milestone_number = mapped[0] if mapped else None
         sync_story(

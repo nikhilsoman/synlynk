@@ -28,16 +28,14 @@ def run_backfill(conn, owner: str, repo: str, role: str = "pm") -> dict:
         ).fetchall()
     ]
     for story_id in story_ids:
-        phase = conn.execute(
-            "SELECT arc_version FROM roadmap_phases WHERE story_id=?", (story_id,)
-        ).fetchone()
+        arc_version = gh_sync.story_arc_version(conn, story_id)
         milestone_number = None
-        if phase:
+        if arc_version:
             mapped = conn.execute(
                 "SELECT gm.github_number FROM github_sync_map gm "
                 "JOIN roadmap_arcs ra ON ra.id = CAST(gm.entity_id AS INTEGER) "
                 "WHERE gm.entity_type='roadmap_arc' AND ra.version=?",
-                (phase[0],),
+                (arc_version,),
             ).fetchone()
             milestone_number = mapped[0] if mapped else None
         gh_sync.sync_story(
