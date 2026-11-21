@@ -154,12 +154,12 @@ class Cli:
 @pytest.fixture
 def cli(tmp_path) -> Cli:
     """Provides a Cli helper with a fresh initialized synlynk project."""
-    instance = Cli(tmp_path)
-    result = instance.run("init")
-    assert result.returncode == 0, f"init failed:\n{result.stdout}\n{result.stderr}"
     subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
     subprocess.run(["git", "config", "user.email", "codex@example.com"], cwd=tmp_path, capture_output=True, check=True)
     subprocess.run(["git", "config", "user.name", "Codex"], cwd=tmp_path, capture_output=True, check=True)
+    instance = Cli(tmp_path)
+    result = instance.run("init")
+    assert result.returncode == 0, f"init failed:\n{result.stdout}\n{result.stderr}"
     subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True)
     subprocess.run(["git", "commit", "--no-verify", "-m", "init"], cwd=tmp_path, capture_output=True, check=True)
     return instance
@@ -168,6 +168,9 @@ def cli(tmp_path) -> Cli:
 @pytest.fixture
 def uninit_cli(tmp_path) -> Cli:
     """Provides a Cli helper for a bare directory with no synlynk project."""
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.email", "codex@example.com"], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.name", "Codex"], cwd=tmp_path, capture_output=True, check=True)
     return Cli.from_dir(tmp_path)
 
 

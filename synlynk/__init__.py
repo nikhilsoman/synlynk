@@ -3439,8 +3439,13 @@ def init(force: bool = False, agents: list = None,
          org: str = None, repo: str = None, project_id: str = None,
          mode: str = "solo", dry_run: bool = False, quiet: bool = False,
          replace_generated_docs: bool = False,
-         non_interactive: bool = False) -> None:
+         non_interactive: bool = False,
+         require_git: bool = False) -> None:
     """Progressive wizard: semantic scan → harness discovery → doc bootstrap → nudge."""
+
+    from synlynk.wizard import ensure_safe_init_cwd
+
+    ensure_safe_init_cwd(require_git=require_git)
 
     # An explicit non-interactive flag always uses defaults.  Otherwise keep
     # prompting even when stdin is not a TTY: callers and tests may provide a
