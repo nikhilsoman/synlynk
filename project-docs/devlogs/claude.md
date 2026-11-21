@@ -624,3 +624,14 @@ chase the `pr_number`-NULL pattern as a broader dispatch pipeline bug.
 - Proposed (pending Nikhil's pick): A) YAML issue form; B) `synlynk report` redacted diagnostic bundle w/ preview; C) flight-recorder ring buffer + failure footers + bearings/task-boundary hint + Vizor "Report issue" button + triage ingestion. Recommended layered A+B+C in 3 slices.
 - Open question: intake destination (public GH issue vs private-first). Spec not yet written.
 [@claude]
+
+## 2026-11-20 — Bug-report intake spec, Vizor banner fix shipped, two tooling bugs found
+
+- Supersedes the 11-19 open questions: destination decided as **public GitHub issues**; allowlist-not-scrubbing collector, mandatory preview (no `--yes`), default-on local flight recorder. Spec on PR #5420 (epic gh:#5419), awaiting Nikhil's sign-off before the plan is written.
+- DECIDE panel (claude/agy/codex/grok, dec-049b4dbf) approved with 8 conditions, all folded into the spec: salted per-install identity hash; write-time redaction in the recorder; recorder off-switch (`report --clear-flight`, config flag); git remote `owner/repo` shown and individually droppable; public-permanence warning + whole-body secret scan; fingerprint normalization and a previewed `fingerprint:` line; frozen bundle/fingerprint contract in PR 1; smaller items (URL-fallback cap, comment-only triage, interactive/non-interactive e2e tests).
+- Vizor banner (gh:#5368) shipped via PR #5421 (merge 0240bf51): Codex implemented (job-ba353186), Claude requested changes (gate keys `pending_approvable_prs`/`reviewer_dispatch` were never populated, so the banner could never render; persistence test only matched substrings), Codex reworked (job-4052895c), Claude approved, qa merged via Grok (job-45220baf). Duplicate PR #5422 closed. Goal goal-db652d93, story story-8e60426a, v0.39.0 phase 17.
+- Found: `synlynk roadmap add --phase-title ... --goal-id ...` silently ignores `--goal-id`, which cost two blocked dispatches. Use `synlynk governs rephase <goal> --phase-id N --reason ...` to place a goal. Filed gh:#5423.
+- Found: `test_e2e.py::test_init_force_reruns_without_error` is flaky on main (about 1 in 3). Cause: `init --force` rollback stash conflicts on ephemeral `.codex/tmp/arg0-macos/*` files created by the codex discovery probe. Filed gh:#5424; goal-7ddc0d0e, story-ef4299fd, v0.39.0 phase 15.
+- Ops lessons: role App token cache went stale (restart the daemon refreshes it; `daemon --install-service` is the durable fix); git push needs the role token via `http.extraheader` because the credential helper goes through the gh shim; `synlynk pr check` needs `GH_TOKEN` set to the role token or its sentinel check fails closed; zsh `GID` is a read-only variable.
+- Cost: native PM work logged for #5420 (450K in / 45K out, est.) and #5421 (150K in / 10K out, est.).
+[@claude]
