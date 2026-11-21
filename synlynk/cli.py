@@ -1,7 +1,10 @@
 import argparse
+import contextlib
+import io
 import json
 import os
 import sys
+import time
 from pathlib import Path
 import re
 
@@ -2534,7 +2537,7 @@ def _run_fast_observability_command(cli_tokens, selected_command):
 
 
 
-def main(argv=None) -> None:
+def _dispatch_command(argv=None) -> None:
     import synlynk as _package
 
     cli_tokens = list(argv) if argv is not None else sys.argv[1:]
@@ -4402,6 +4405,82 @@ def main(argv=None) -> None:
         sys.exit(cmd_spec_lint(args))
     else:
         parser.print_help()
+
+
+class _StderrTee(io.StringIO):
+    """Capture stderr while preserving the command's normal output stream."""
+
+    def __init__(self, target):
+        super().__init__()
+        self.target = target
+
+    def write(self, text):
+        self.target.write(text)
+        return super().write(text)
+
+    def flush(self):
+        self.target.flush()
+        super().flush()
+
+    def __getattr__(self, name):
+        return getattr(self.target, name)
+
+
+def _system_exit_code(exc: SystemExit) -> int:
+    if exc.code is None:
+        return 0
+    if isinstance(exc.code, int):
+        return exc.code
+    return 1
+
+
+def run_with_recorder(argv=None) -> int:
+    """Run the CLI and best-effort record its outcome without changing it."""
+    cli_tokens = list(argv) if argv is not None else sys.argv[1:]
+    selected_command = _command_from_argv(cli_tokens)
+    if selected_command == "report":
+        result = _dispatch_command(cli_tokens)
+        return result if isinstance(result, int) else 0
+
+    started = time.monotonic()
+    stderr_capture = _StderrTee(sys.stderr)
+    exit_code = 0
+    error = ""
+    try:
+        with contextlib.redirect_stderr(stderr_capture):
+            result = _dispatch_command(cli_tokens)
+        exit_code = result if isinstance(result, int) else 0
+        return exit_code
+    except SystemExit as exc:
+        exit_code = _system_exit_code(exc)
+        raise
+    except BaseException as exc:
+        exit_code = 1
+        error = str(exc)
+        raise
+    finally:
+        captured_lines = [line for line in stderr_capture.getvalue().splitlines() if line]
+        if captured_lines:
+            error = captured_lines[0]
+        try:
+            from synlynk import flight_recorder
+
+            flight_recorder.record(
+                os.getcwd(),
+                command=selected_command or "",
+                flags=cli_tokens,
+                exit_code=exit_code,
+                duration=time.monotonic() - started,
+                error=error,
+            )
+        except Exception:
+            pass
+        if exit_code != 0:
+            print("Something wrong? Run `synlynk report --last`.", file=sys.stderr)
+
+
+def main(argv=None) -> int:
+    return run_with_recorder(argv)
 
 if __name__ == "__main__":
     main()

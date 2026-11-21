@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from synlynk import flight_recorder as fr
 
 
@@ -92,3 +94,55 @@ def test_off_switch_and_clear(tmp_path):
     fr.record(tmp_path, "c", [], 0, 0.0, "")
     fr.clear(tmp_path)
     assert not (synlynk_dir / "flight.jsonl").exists()
+
+
+def test_cli_failure_records_and_prints_footer(tmp_path, monkeypatch, capsys):
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.chdir(tmp_path)
+    import synlynk.cli as cli
+
+    monkeypatch.setattr(cli, "_dispatch_command", lambda args: 1)
+
+    rc = cli.run_with_recorder(["doctor"])
+
+    assert rc == 1
+    assert "synlynk report --last" in capsys.readouterr().err
+    record = json.loads(
+        (tmp_path / ".synlynk" / "flight.jsonl").read_text().splitlines()[-1]
+    )
+    assert record["command"] == "doctor"
+    assert record["exit_code"] == 1
+
+
+def test_cli_system_exit_is_recorded_and_reraised(tmp_path, monkeypatch):
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.chdir(tmp_path)
+    import synlynk.cli as cli
+
+    def fail(_args):
+        print("specific failure", file=cli.sys.stderr)
+        raise SystemExit(7)
+
+    monkeypatch.setattr(cli, "_dispatch_command", fail)
+
+    with pytest.raises(SystemExit) as raised:
+        cli.run_with_recorder(["doctor"])
+
+    assert raised.value.code == 7
+    record = json.loads(
+        (tmp_path / ".synlynk" / "flight.jsonl").read_text().splitlines()[-1]
+    )
+    assert record["exit_code"] == 7
+    assert record["error"] == "specific failure"
+
+
+def test_report_command_is_not_recorded_or_given_footer(tmp_path, monkeypatch, capsys):
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.chdir(tmp_path)
+    import synlynk.cli as cli
+
+    monkeypatch.setattr(cli, "_dispatch_command", lambda args: 1)
+
+    assert cli.run_with_recorder(["report", "--last"]) == 1
+    assert not (tmp_path / ".synlynk" / "flight.jsonl").exists()
+    assert "synlynk report --last" not in capsys.readouterr().err
