@@ -920,10 +920,16 @@ def test_try_sync_story_assigns_phase_milestone_through_story_goal(tmp_path, mon
     conn.executescript(
         """
         CREATE TABLE roadmap_arcs (id INTEGER PRIMARY KEY, version TEXT);
-        CREATE TABLE roadmap_phases (
-            id INTEGER PRIMARY KEY, arc_version TEXT, story_id TEXT
+        CREATE TABLE goals (
+            goal_id TEXT PRIMARY KEY, phase_id INTEGER, arc_version TEXT,
+            phase_title TEXT, story_id TEXT
         );
-        CREATE TABLE goals (goal_id TEXT PRIMARY KEY, phase_id INTEGER);
+        CREATE VIEW roadmap_phases AS
+        SELECT ROW_NUMBER() OVER (ORDER BY arc_version, phase_title) AS id,
+               arc_version, MIN(story_id) AS story_id
+        FROM goals
+        WHERE arc_version IS NOT NULL AND phase_title IS NOT NULL
+        GROUP BY arc_version, phase_title;
         CREATE TABLE stories (story_id TEXT PRIMARY KEY, goal_id TEXT);
         CREATE TABLE goal_contributions (goal_id TEXT, story_id TEXT);
         CREATE TABLE github_sync_map (
@@ -932,11 +938,15 @@ def test_try_sync_story_assigns_phase_milestone_through_story_goal(tmp_path, mon
         );
 
         INSERT INTO roadmap_arcs VALUES (1, 'v1.0.0');
-        INSERT INTO roadmap_phases VALUES (10, 'v1.0.0', 'story-first');
-        INSERT INTO goals VALUES ('goal-phase', 10);
+        INSERT INTO roadmap_arcs VALUES (2, 'v0.26.10');
+        INSERT INTO goals VALUES
+            ('goal-unrelated', NULL, 'v0.26.10', 'Earlier phase', 'story-unrelated');
+        INSERT INTO goals VALUES
+            ('goal-phase', 1, 'v1.0.0', 'Target phase', 'story-first');
         INSERT INTO stories VALUES ('story-first', 'goal-phase');
         INSERT INTO stories VALUES ('story-second', 'goal-phase');
         INSERT INTO github_sync_map VALUES ('roadmap_arc', '1', 77);
+        INSERT INTO github_sync_map VALUES ('roadmap_arc', '2', 21);
         """
     )
     conn.close()

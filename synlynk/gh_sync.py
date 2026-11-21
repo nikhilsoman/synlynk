@@ -69,18 +69,17 @@ def story_arc_version(conn, story_id: str) -> str | None:
         """
         SELECT arc_version
         FROM (
-            SELECT rp.arc_version, 0 AS link_order
+            SELECT g.arc_version, 0 AS link_order
             FROM stories s
             JOIN goals g ON g.goal_id = s.goal_id
-            JOIN roadmap_phases rp ON rp.id = g.phase_id
             WHERE s.story_id = ?
             UNION ALL
-            SELECT rp.arc_version, 1 AS link_order
+            SELECT g.arc_version, 1 AS link_order
             FROM goal_contributions gc
             JOIN goals g ON g.goal_id = gc.goal_id
-            JOIN roadmap_phases rp ON rp.id = g.phase_id
             WHERE gc.story_id = ?
         )
+        WHERE arc_version IS NOT NULL
         ORDER BY link_order
         LIMIT 1
         """,
