@@ -37,6 +37,7 @@ def generate_bearings_block() -> str:
         "- **Operational Discipline:**",
         "  - Session wake/sweep: Keep background daemons alive with `tpm wake` / `tpm sweep`.",
         "  - Review findings: PR findings require a dispatched reviewer agent, never an ad hoc manual menu.",
+        "  - Something wrong? Run `synlynk report --last` (redacted, previewed, public GitHub issue).",
         BEARINGS_END_MARKER,
     ]
     return "\n".join(lines)
