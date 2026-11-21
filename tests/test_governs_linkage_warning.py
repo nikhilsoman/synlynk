@@ -1,5 +1,7 @@
 """GOVERNS linkage preflight is a warning until #1990's hard-fail ships."""
 
+import json
+
 import synlynk as sl
 import synlynk.dispatch as dispatch_mod
 
@@ -22,8 +24,16 @@ def _quiet_unrelated_preflight(monkeypatch):
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **k: _FakeProc())
 
 
+def _set_governed_edition(project_dir):
+    config_path = project_dir / ".synlynk" / "config.json"
+    config = json.loads(config_path.read_text())
+    config["edition"] = "team"
+    config_path.write_text(json.dumps(config))
+
+
 def test_dispatch_warns_and_proceeds_without_governs_linkage(project_dir, monkeypatch, capsys):
     _quiet_unrelated_preflight(monkeypatch)
+    _set_governed_edition(project_dir)
     import synlynk.policy_gates as pg
     monkeypatch.setattr(pg, "gate_mode", lambda gate, key, repo_root=".": "observe")
 
@@ -47,6 +57,7 @@ def test_dispatch_warns_and_proceeds_without_governs_linkage(project_dir, monkey
 def test_dispatch_hard_fails_without_governs_linkage_in_enforce_mode(project_dir, monkeypatch):
     import pytest
     _quiet_unrelated_preflight(monkeypatch)
+    _set_governed_edition(project_dir)
 
     with pytest.raises(RuntimeError, match="Dispatch rejected: task is not linked to a GOVERNS story"):
         sl.dispatch_agent(
@@ -109,6 +120,7 @@ def test_dispatch_explicit_unlinked_story_still_hard_fails(project_dir, monkeypa
     import pytest
 
     _quiet_unrelated_preflight(monkeypatch)
+    _set_governed_edition(project_dir)
     conn = sl._get_db()
     conn.execute(
         "INSERT INTO stories (story_id, title, goal_id) VALUES (?, ?, NULL)",
