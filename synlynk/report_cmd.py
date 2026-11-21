@@ -16,6 +16,12 @@ URL_BODY_CAP = 6000
 _input = input
 
 
+def report_hint(job_id: str | None = None) -> str:
+    """Return the shared, privacy-safe bug-report prompt."""
+    job_suffix = f" (job {job_id})" if job_id else ""
+    return f"Something wrong? Run `synlynk report --last`{job_suffix}."
+
+
 def _gh_issue_create(title: str, body: str) -> str:
     result = subprocess.run(
         [

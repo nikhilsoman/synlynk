@@ -4476,7 +4476,9 @@ def run_with_recorder(argv=None) -> int:
         except Exception:
             pass
         if exit_code != 0:
-            print("Something wrong? Run `synlynk report --last`.", file=sys.stderr)
+            from synlynk.report_cmd import report_hint
+
+            print(report_hint(), file=sys.stderr)
 
 
 def main(argv=None) -> int:

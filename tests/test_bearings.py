@@ -55,3 +55,15 @@ def test_cmd_bearings_inject_file(tmp_path):
     assert "## Session Bearings & Constitutional Invariants" in content
     assert "<!-- synlynk:bearings:start -->" in content
 
+
+def test_bearings_block_mentions_report():
+    assert "synlynk report --last" in generate_bearings_block()
+
+
+def test_report_hint_includes_failed_job_id():
+    from synlynk.report_cmd import report_hint
+
+    assert report_hint("job-123") == (
+        "Something wrong? Run `synlynk report --last` (job job-123)."
+    )
+
