@@ -4360,15 +4360,10 @@ def _preflight_dispatch(
     from synlynk.policy_gates import gate_mode
 
     governs_mode = gate_mode("governs_authority", "require_linked_goal_mode")
-    from synlynk.editions import require_linked_goal_mode
 
-    # Personal workspaces start without a roadmap by design. The FTUE launch
-    # additionally supplies a synthetic story marker, which is deliberately
-    # not persisted or validated as a governed story.
-    if (
-        caller_story_id == _FTUE_FIRST_WIN_STORY_ID
-        or not require_linked_goal_mode()
-    ):
+    # The FTUE launch supplies a synthetic story marker for the first win, which
+    # is deliberately not persisted or validated as a governed story.
+    if caller_story_id == _FTUE_FIRST_WIN_STORY_ID:
         return {"passed": True, "sentinel": None, "reason": None}
 
     if _task_hint and not linkage_resolvable:
