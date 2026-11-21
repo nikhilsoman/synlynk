@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from synlynk import report_cmd as rc
 
 
@@ -26,6 +28,50 @@ def test_non_interactive_never_files(monkeypatch, tmp_path):
         _body(), "t", answer=lambda _: "y", interactive=False, local_dir=tmp_path
     )
     assert calls == [] and out.endswith(".md")
+
+
+def test_non_interactive_bare_directory_saves_report_to_temp(monkeypatch, tmp_path):
+    """Guard against recreating the #5299 bare-directory initialization bug."""
+    temp_dir = tmp_path / "temp"
+    temp_dir.mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(rc.tempfile, "gettempdir", lambda: str(temp_dir))
+
+    out = rc.confirm_and_file(_body(), "t", interactive=False)
+
+    assert not (tmp_path / ".synlynk").exists()
+    assert out is not None and out.startswith(str(temp_dir))
+    assert (temp_dir / Path(out).name).read_text() == _body()
+
+
+def test_non_interactive_existing_local_directory_saves_report_there(monkeypatch, tmp_path):
+    local_dir = tmp_path / ".synlynk"
+    local_dir.mkdir()
+    monkeypatch.chdir(tmp_path)
+
+    out = rc.confirm_and_file(_body(), "t", interactive=False)
+
+    assert out is not None and Path(out).resolve().parent == local_dir
+    assert Path(out).read_text() == _body()
+
+
+def test_gh_failure_bare_directory_saves_report_to_temp(monkeypatch, tmp_path):
+    temp_dir = tmp_path / "temp"
+    temp_dir.mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(rc.tempfile, "gettempdir", lambda: str(temp_dir))
+    monkeypatch.setattr(
+        rc,
+        "_gh_issue_create",
+        lambda *args, **kwargs: (_ for _ in ()).throw(FileNotFoundError("gh")),
+    )
+
+    out = rc.confirm_and_file(_body(), "t", answer=lambda _: "y", interactive=True)
+
+    assert out is not None and "issues/new" in out
+    assert not (tmp_path / ".synlynk").exists()
+    saved = list(temp_dir.glob("synlynk-report-*.md"))
+    assert len(saved) == 1 and saved[0].read_text() == _body()
 
 
 def test_secret_in_body_blocks_filing(monkeypatch, tmp_path):
