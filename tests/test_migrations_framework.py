@@ -508,3 +508,122 @@ def test_m0034_backfills_known_v0_36_1_theme(tmp_path):
     assert theme == "Milestone v0.36.1"
     conn.close()
 
+
+def test_m0037_adds_uid_columns_and_aliases_table(tmp_path):
+    import sqlite3
+    from synlynk.migrations.m0037_goals_arc_phase_uid import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        """CREATE TABLE goals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            goal_id TEXT UNIQUE,
+            outcome TEXT, criterion TEXT, status TEXT,
+            arc_version TEXT, phase_title TEXT, placement_status TEXT
+        )"""
+    )
+    conn.commit()
+
+    MIGRATION.up(conn)
+    conn.commit()
+
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(goals)")}
+    assert "arc_uid" in cols
+    assert "phase_uid" in cols
+
+    alias_cols = {row[1] for row in conn.execute("PRAGMA table_info(roadmap_uid_aliases)")}
+    assert alias_cols == {"old_uid", "new_uid", "uid_kind", "reason", "created_at"}
+    conn.close()
+
+
+def test_m0037_backfills_one_uid_per_arc_and_phase_group(tmp_path):
+    import sqlite3
+    from synlynk.migrations.m0037_goals_arc_phase_uid import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        """CREATE TABLE goals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            goal_id TEXT UNIQUE,
+            outcome TEXT, criterion TEXT, status TEXT,
+            arc_version TEXT, phase_title TEXT, placement_status TEXT
+        )"""
+    )
+    conn.execute(
+        "INSERT INTO goals (goal_id, outcome, criterion, status, arc_version, phase_title, placement_status) "
+        "VALUES ('g1', 'o1', 'c1', 'done', 'v1.0.0', NULL, 'placed')"
+    )
+    conn.execute(
+        "INSERT INTO goals (goal_id, outcome, criterion, status, arc_version, phase_title, placement_status) "
+        "VALUES ('g2', 'o2', 'c2', 'active', 'v1.0.0', 'Phase A', 'placed')"
+    )
+    conn.execute(
+        "INSERT INTO goals (goal_id, outcome, criterion, status, arc_version, phase_title, placement_status) "
+        "VALUES ('g3', 'o3', 'c3', 'active', 'v1.0.0', 'Phase A', 'placed')"
+    )
+    conn.execute(
+        "INSERT INTO goals (goal_id, outcome, criterion, status, arc_version, phase_title, placement_status) "
+        "VALUES ('g4', 'o4', 'c4', 'active', NULL, NULL, 'unplaced')"
+    )
+    conn.commit()
+
+    MIGRATION.up(conn)
+    conn.commit()
+
+    rows = {
+        row[0]: (row[1], row[2])
+        for row in conn.execute("SELECT goal_id, arc_uid, phase_uid FROM goals")
+    }
+    assert rows["g1"][0] == rows["g2"][0] == rows["g3"][0]
+    assert rows["g1"][0] is not None
+    assert rows["g2"][1] == rows["g3"][1]
+    assert rows["g2"][1] is not None
+    assert rows["g1"][1] is None  # g1 has no phase_title
+    assert rows["g4"] == (None, None)  # unplaced goals get no uid
+    conn.close()
+
+
+def test_m0037_is_idempotent(tmp_path):
+    import sqlite3
+    from synlynk.migrations.m0037_goals_arc_phase_uid import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        """CREATE TABLE goals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            goal_id TEXT UNIQUE,
+            outcome TEXT, criterion TEXT, status TEXT,
+            arc_version TEXT, phase_title TEXT, placement_status TEXT
+        )"""
+    )
+    conn.execute(
+        "INSERT INTO goals (goal_id, outcome, criterion, status, arc_version, phase_title, placement_status) "
+        "VALUES ('g1', 'o1', 'c1', 'done', 'v1.0.0', NULL, 'placed')"
+    )
+    conn.commit()
+
+    MIGRATION.up(conn)
+    conn.commit()
+    first_uid = conn.execute("SELECT arc_uid FROM goals WHERE goal_id='g1'").fetchone()[0]
+
+    MIGRATION.up(conn)
+    conn.commit()
+    second_uid = conn.execute("SELECT arc_uid FROM goals WHERE goal_id='g1'").fetchone()[0]
+
+    assert first_uid == second_uid
+    conn.close()
+
+
+def test_m0037_handles_database_without_goals_table(tmp_path):
+    import sqlite3
+    from synlynk.migrations.m0037_goals_arc_phase_uid import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+
+    MIGRATION.up(conn)
+    conn.commit()
+
+    alias_cols = {row[1] for row in conn.execute("PRAGMA table_info(roadmap_uid_aliases)")}
+    assert alias_cols == {"old_uid", "new_uid", "uid_kind", "reason", "created_at"}
+    conn.close()
+
