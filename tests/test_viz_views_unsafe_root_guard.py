@@ -1,5 +1,5 @@
 """Regression test: a workspace registered with repo_path "/" must not trigger
-a filesystem-root os.walk from build_workspace_views_snapshot() (gh:#5333)."""
+a filesystem-root os.walk from build_workspace_views_snapshot() (gh:#5330)."""
 
 import sqlite3
 
