@@ -21,7 +21,7 @@ def test_init_refuses_non_git_directory_before_creating_workspace_files(tmp_path
     monkeypatch.chdir(tmp_path)
 
     with pytest.raises(RuntimeError, match="valid Git repository root"):
-        synlynk.init(non_interactive=True)
+        synlynk.init(non_interactive=True, require_git=True)
 
     assert not (tmp_path / ".synlynk").exists()
 
