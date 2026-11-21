@@ -30,9 +30,10 @@ def _up(conn: sqlite3.Connection) -> None:
     for entity_id, github_number in rows:
         if not entity_id.isdigit():
             continue  # already migrated to a uid in a prior run
-        # roadmap_arcs.id is ROW_NUMBER() OVER (ORDER BY arc_version) on
-        # one row per arc_version, not goals.id. Match that population so a
-        # multi-goal arc does not shift later positional ids.
+        # Positional entity_id is 1-based over distinct arc_version
+        # (placed goals only), the same population and order as the derived
+        # arc view. goals.id is not that index, so a multi-goal arc must not
+        # shift later rows.
         arc_uid = conn.execute(
             "SELECT arc_uid FROM ("
             "SELECT CASE WHEN COUNT(DISTINCT arc_uid) = 1 THEN MIN(arc_uid) ELSE NULL END AS arc_uid "
