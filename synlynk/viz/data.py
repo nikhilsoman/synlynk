@@ -12,6 +12,7 @@ import tempfile
 import threading
 import time
 from typing import Optional
+from urllib.parse import urlsplit
 from synlynk.observatory import build_job_observatory_snapshot
 from synlynk.viz_views import build_workspace_views_snapshot
 from synlynk.scan import _query_repo_file_tree
@@ -19,6 +20,26 @@ def _pkg():
     """Package namespace tests and the Vizor daemon rebind."""
     import synlynk.viz as viz
     return viz
+
+
+def report_issue_payload(route: str, meta: dict) -> dict:
+    """Build the public-safe Vizor issue payload from allowlisted fields."""
+    from synlynk.report_bundle import fingerprint
+
+    route_path = urlsplit(str(route or "")).path or "/"
+    version = str((meta or {}).get("version") or "unavailable")
+    if not re.fullmatch(r"[A-Za-z0-9._+-]{1,64}", version):
+        version = "unavailable"
+
+    issue_fingerprint = str((meta or {}).get("fingerprint") or "")
+    if not re.fullmatch(r"[0-9a-f]{12}", issue_fingerprint):
+        issue_fingerprint = fingerprint([], f"vizor:{route_path}", 0, "")
+
+    return {
+        "route": route_path,
+        "version": version,
+        "fingerprint": issue_fingerprint,
+    }
 
 
 def load_workspace_sentinel_alerts(sentinel_path: str, *, active_only: bool = False) -> list:
