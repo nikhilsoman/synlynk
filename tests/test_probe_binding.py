@@ -39,6 +39,31 @@ def test_probe_harness_live_active_mock():
         assert res["status"] == "verified"
 
 
+@pytest.mark.parametrize(
+    ("harness", "base_url"),
+    [
+        ("codex", "http://127.0.0.1:8000/v1"),
+        ("agy", "http://127.0.0.1:4000/v1"),
+    ],
+)
+def test_probe_harness_live_reports_configured_proxy_endpoint(
+    monkeypatch, harness, base_url
+):
+    """Configured local gateway ports remain visible to the harness probe."""
+    env_var = "OPENAI_BASE_URL" if harness == "codex" else "GEMINI_BASE_URL"
+    monkeypatch.setenv(env_var, base_url)
+    with patch("shutil.which", return_value=f"/usr/local/bin/{harness}"), patch(
+        "subprocess.run",
+        side_effect=[
+            MagicMock(returncode=0, stdout=f"{harness} 1.2.3\n", stderr=""),
+            MagicMock(returncode=1, stdout="", stderr="not logged in"),
+        ],
+    ):
+        res = probe_harness_live(harness)
+
+    assert res["proxy_base_url"] == base_url
+
+
 def test_probe_binding_selects_one_harness(monkeypatch):
     monkeypatch.setattr("synlynk.probe_binding.probe_all_dependencies", lambda: {"git": {"installed": True}})
     monkeypatch.setattr(

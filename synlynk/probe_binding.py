@@ -26,6 +26,11 @@ _ENV_KEYS = {
     "grok": ["XAI_API_KEY"],
 }
 
+_PROXY_BASE_URL_KEYS = {
+    "codex": "OPENAI_BASE_URL",
+    "agy": "GEMINI_BASE_URL",
+}
+
 
 def probe_dependency(name: str) -> Dict[str, Any]:
     spec = SYSTEM_DEPENDENCIES.get(name, {})
@@ -177,7 +182,7 @@ def probe_harness_live(harness_name: str) -> Dict[str, Any]:
                 status = "verified"
                 message = "Authentication verified via session configuration"
 
-    return {
+    result = {
         "harness": harness_name,
         "installed": True,
         "path": path,
@@ -186,6 +191,10 @@ def probe_harness_live(harness_name: str) -> Dict[str, Any]:
         "status": status,
         "message": message,
     }
+    proxy_env = _PROXY_BASE_URL_KEYS.get(harness_name)
+    if proxy_env and os.environ.get(proxy_env):
+        result["proxy_base_url"] = os.environ[proxy_env]
+    return result
 
 
 def probe_all_harnesses() -> Dict[str, Dict[str, Any]]:

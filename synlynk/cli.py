@@ -333,7 +333,7 @@ _TOP_LEVEL_COMMANDS = (
     "instructions", "marketing", "roles", "release", "viz", "provenance",
     "backfill-capability-ratings",
     "board", "concierge", "addon", "autonomy", "context",
-    "gateway", "spec",
+    "gateway", "spec", "onboard",
 )
 
 
@@ -432,6 +432,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
                                   "Use '.' for repos that keep docs at the repo root.")
     init_parser.add_argument("--wizard", action="store_true",
                              help="Run the FTUE guided setup wizard")
+    init_parser.add_argument("--discover", action="store_true",
+                             help="With --wizard, discover repositories beyond the current directory")
     init_parser.add_argument("--quickstart", action="store_true",
                              help="Run the 5-stage automated FTUE onboarding journey")
     init_parser.add_argument("--brownfield", action="store_true",
@@ -441,6 +443,15 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
                              help="Allow init/brownfield to replace generated 4-docs on a migrated ledger (off by default)")
     init_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
                              help="Preview what init would write without writing anything")
+
+    onboard_parser = subparsers.add_parser("onboard", help="Inspect and repair onboarding artifacts")
+    onboard_sub = onboard_parser.add_subparsers(dest="onboard_action")
+    onboard_repair_parser = onboard_sub.add_parser(
+        "repair", help="Repair known #5413 onboarding artifacts (dry-run by default)"
+    )
+    onboard_mode = onboard_repair_parser.add_mutually_exclusive_group()
+    onboard_mode.add_argument("--dry-run", action="store_true", help="Preview repairs (default)")
+    onboard_mode.add_argument("--apply", action="store_true", help="Apply only conservative repairs")
 
     new_parser = subparsers.add_parser("new", help="Start Greenfield Guided Onboarding for a blank-canvas project")
     new_parser.add_argument("intent", nargs="?", default="", help="Project intent or description")
@@ -2533,6 +2544,16 @@ def main(argv=None) -> None:
         print(f"synlynk {VERSION}")
         return
 
+    selected_command = _command_from_argv(cli_tokens)
+    if selected_command == "init":
+        from synlynk.wizard import ensure_safe_init_cwd
+
+        try:
+            ensure_safe_init_cwd()
+        except RuntimeError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            raise SystemExit(2) from exc
+
     # Reporting is read-only until the user explicitly files or saves a draft.
     if not cli_tokens or cli_tokens[0] != "report":
         try:
@@ -2546,7 +2567,6 @@ def main(argv=None) -> None:
             pass
 
     fast_entrypoint = _package._FAST_CLI
-    selected_command = _command_from_argv(cli_tokens)
     if cli_tokens and cli_tokens[0] == "help":
         parser = build_parser(selected_command="help" if fast_entrypoint else None)
         args = parser.parse_args(cli_tokens)
@@ -2709,7 +2729,10 @@ def main(argv=None) -> None:
                 print(f"\n✦ FTUE Onboarding complete. First win prepared on {res['first_win_task'].get('branch')}.")
             return
         elif getattr(args, "wizard", False):
-            wizard_init(dry_run=getattr(args, "dry_run", False))
+            wizard_init(
+                dry_run=getattr(args, "dry_run", False),
+                discover=getattr(args, "discover", False),
+            )
         else:
             agents = [a.strip() for a in args.agents.split(",") if a.strip()]
             if getattr(args, "docs_dir", None):
@@ -2721,6 +2744,11 @@ def main(argv=None) -> None:
                  non_interactive=getattr(args, "non_interactive", False),
                  dry_run=getattr(args, "dry_run", False),
                  replace_generated_docs=getattr(args, "replace_generated_docs", False))
+    elif args.command == "onboard":
+        if getattr(args, "onboard_action", None) == "repair":
+            from synlynk.onboard_repair import cmd_onboard_repair
+            sys.exit(cmd_onboard_repair(dry_run=not getattr(args, "apply", False)))
+        help_parsers.get("onboard", parser).print_help()
     elif args.command == "new":
         from synlynk.greenfield.orchestrator import GreenfieldOrchestrator
         raw_intent = getattr(args, "intent", "") or ""

@@ -133,6 +133,7 @@ def dispatch_first_win_remediation(
         job = dispatch_agent(
             agent=target_agent,
             task=prompt,
+            story_id="story-ftue-firstwin",
             requires_gh_write=True,
             force_agent=True,
         )

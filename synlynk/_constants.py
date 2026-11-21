@@ -157,7 +157,7 @@ HARNESS_CAPABILITY_BASELINES = {
             ],
         },
         "roles": ["builder", "verifier"],
-        "env_passthrough": [],
+        "env_passthrough": ["OPENAI_BASE_URL", "OPENAI_API_KEY"],
         "strengths": ["code completion", "inline edits", "fast iteration", "pr review", "code inspection"],
     },
     "agy": {
@@ -199,7 +199,7 @@ HARNESS_CAPABILITY_BASELINES = {
             ],
         },
         "roles": ["builder", "verifier"],
-        "env_passthrough": [],
+        "env_passthrough": ["GEMINI_BASE_URL", "GEMINI_API_KEY"],
         "strengths": ["multimodal", "large context", "search-augmented"],
     },
     "grok": {
