@@ -42,7 +42,8 @@ def _gh_issue_create(title: str, body: str) -> str:
 
 
 def _write_local(body: str, local_dir: Path) -> str:
-    local_dir.mkdir(parents=True, exist_ok=True)
+    if not local_dir.is_dir():
+        raise OSError(f"Report directory does not exist: {local_dir}")
     path = local_dir / f"synlynk-report-{__import__('secrets').token_hex(6)}.md"
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, "w") as handle:
