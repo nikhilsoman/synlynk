@@ -269,6 +269,16 @@ def get_active_edition(config: Optional[Dict[str, Any]] = None) -> str:
     return config.get("edition", "personal")
 
 
+def require_linked_goal_mode(config: Optional[Dict[str, Any]] = None) -> bool:
+    """Return whether this edition requires GOVERNS goal linkage by default.
+
+    Personal workspaces are intentionally able to complete their first local
+    win without roadmap setup. Team and Enterprise retain the linked-goal
+    default for their governed workflows.
+    """
+    return get_active_edition(config) != "personal"
+
+
 def is_capability_enabled(capability_name: str, config: Optional[Dict[str, Any]] = None) -> bool:
     """Return True if capability is allowed and enabled under current config."""
     import json
