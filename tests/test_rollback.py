@@ -501,3 +501,38 @@ def test_cmd_rollback_no_manifest_prints_message(tmp_path, monkeypatch, capsys):
     rollback.cmd_rollback(last=True)
     captured = capsys.readouterr()
     assert "no rollback checkpoint" in captured.out.lower()
+
+
+def test_stash_paths_expands_collapsed_harness_directory_and_excludes_temp_files(tmp_path, monkeypatch):
+    """Regression for gh:#5424 using real porcelain's collapsed directory form."""
+    monkeypatch.chdir(tmp_path)
+    _init_git_repo(tmp_path)
+    (tmp_path / ".codex" / "settings.json").parent.mkdir()
+    (tmp_path / ".codex" / "settings.json").write_text("{\"model\": \"test\"}\n")
+    (tmp_path / ".codex" / "tmp" / "arg0-macos" / "abc123" / "apply_patch").parent.mkdir(parents=True)
+    (tmp_path / ".codex" / "tmp" / "arg0-macos" / "abc123" / "apply_patch").write_text("temp\n")
+    status = subprocess.run(
+        ["git", "status", "--porcelain"], capture_output=True, text=True, check=True
+    )
+    assert status.stdout == "?? .codex/\n"
+    assert rollback._stash_paths([]) == [".codex/settings.json"]
+
+
+def test_pop_stash_warns_without_raising_for_failed_init_restore(monkeypatch, capsys):
+    stash_ref = "synlynk-rollback-test"
+
+    def fake_run(args, **kwargs):
+        if args == ["git", "stash", "list"]:
+            return subprocess.CompletedProcess(
+                args, 0, stdout=f"stash@{{0}}: On main: {stash_ref}\n", stderr=""
+            )
+        assert args == ["git", "stash", "pop", "stash@{0}"]
+        return subprocess.CompletedProcess(args, 1, stdout="", stderr="restore conflict")
+
+    monkeypatch.setattr(rollback.subprocess, "run", fake_run)
+
+    rollback._pop_stash(stash_ref, op_type="init", fatal=False)
+
+    captured = capsys.readouterr()
+    assert "git stash pop failed for stash@{0}: restore conflict" in captured.out
+    assert "working tree state may be incomplete" in captured.out
