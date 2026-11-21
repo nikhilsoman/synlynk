@@ -223,9 +223,41 @@ def test_remote_consent_prompt_does_not_echo_remote(monkeypatch):
     assert all("github.com/private/repo" not in prompt for prompt in prompts)
 
 
-def test_reserved_part_two_flags_do_not_start_filing(capsys):
+def test_last_uses_most_recent_failed_record(tmp_path, monkeypatch):
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.chdir(tmp_path)
+    from synlynk import flight_recorder as fr
+
+    fr.record(tmp_path, "dispatch", ["--task"], 1, 1.0, "boom at /x/y line 7")
+    seen = {}
+    monkeypatch.setattr(
+        rc,
+        "confirm_and_file",
+        lambda body, title, **kwargs: seen.update(body=body) or "url",
+    )
     from types import SimpleNamespace
 
-    assert rc.cmd_report(SimpleNamespace(last=True, clear_flight=False)) == 2
-    assert rc.cmd_report(SimpleNamespace(last=False, clear_flight=True)) == 2
-    assert "Part 2" in capsys.readouterr().err
+    assert rc.cmd_report(SimpleNamespace(last=True, clear_flight=False)) == 0
+    assert "dispatch" in seen["body"]
+    assert "fingerprint: " in seen["body"]
+
+
+def test_clear_flight_deletes_buffer(tmp_path, monkeypatch):
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.chdir(tmp_path)
+    from synlynk import flight_recorder as fr
+
+    fr.record(tmp_path, "c", [], 1, 0.0, "e")
+    from types import SimpleNamespace
+
+    assert rc.cmd_report(SimpleNamespace(last=False, clear_flight=True)) == 0
+    assert not (tmp_path / ".synlynk" / "flight.jsonl").exists()
+
+
+def test_last_without_failed_record_returns_one(tmp_path, monkeypatch, capsys):
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.chdir(tmp_path)
+    from types import SimpleNamespace
+
+    assert rc.cmd_report(SimpleNamespace(last=True, clear_flight=False)) == 1
+    assert "No failed command recorded" in capsys.readouterr().out
