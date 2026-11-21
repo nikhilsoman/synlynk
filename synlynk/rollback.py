@@ -140,6 +140,16 @@ def _dir_contains_owned(path: str, outputs: list) -> bool:
     )
 
 
+def _dir_contains_harness_temp_path(path: str) -> bool:
+    """Return whether a collapsed status directory contains harness temp files."""
+    for dirpath, dirnames, _filenames in os.walk(path):
+        if _is_harness_temp_path(dirpath):
+            return True
+        if any(_is_harness_temp_path(os.path.join(dirpath, name)) for name in dirnames):
+            return True
+    return False
+
+
 def _expand_owned_directory(path: str, outputs: list) -> list:
     """List stashable children of a directory that also holds owned paths.
 
@@ -233,7 +243,10 @@ def _stash_paths(untracked_paths: list) -> list:
         if not os.path.exists(path) and status == "??":
             continue
         entries = [path]
-        if os.path.isdir(path) and _dir_contains_owned(path, outputs):
+        if os.path.isdir(path) and (
+            _dir_contains_owned(path, outputs)
+            or _dir_contains_harness_temp_path(path)
+        ):
             entries = _expand_owned_directory(path, outputs)
         for entry in entries:
             if entry not in paths:
