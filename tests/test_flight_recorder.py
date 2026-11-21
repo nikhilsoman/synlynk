@@ -1,4 +1,5 @@
 import json
+import io
 
 import pytest
 
@@ -134,6 +135,97 @@ def test_cli_system_exit_is_recorded_and_reraised(tmp_path, monkeypatch):
     )
     assert record["exit_code"] == 7
     assert record["error"] == "specific failure"
+
+
+def test_cli_stderr_wrapper_preserves_target_stream_capabilities(monkeypatch):
+    import synlynk.cli as cli
+
+    class Target:
+        encoding = "utf-8"
+        errors = "surrogateescape"
+        buffer = io.BytesIO()
+
+        def write(self, text):
+            return len(text)
+
+        def flush(self):
+            pass
+
+        def isatty(self):
+            return True
+
+        def fileno(self):
+            return 42
+
+        def writable(self):
+            return True
+
+    target = Target()
+    monkeypatch.setattr(cli.sys, "stderr", target)
+    observed = {}
+
+    def inspect_stderr(_args):
+        observed["isatty"] = cli.sys.stderr.isatty()
+        observed["fileno"] = cli.sys.stderr.fileno()
+        observed["encoding"] = cli.sys.stderr.encoding
+        observed["errors"] = cli.sys.stderr.errors
+        observed["writable"] = cli.sys.stderr.writable()
+        observed["buffer"] = cli.sys.stderr.buffer
+        return 0
+
+    monkeypatch.setattr(cli, "_dispatch_command", inspect_stderr)
+
+    assert cli.run_with_recorder(["doctor"]) == 0
+    assert observed == {
+        "isatty": True,
+        "fileno": 42,
+        "encoding": "utf-8",
+        "errors": "surrogateescape",
+        "writable": True,
+        "buffer": target.buffer,
+    }
+
+
+def test_stderr_tee_retains_only_bounded_first_nonempty_line():
+    import synlynk.cli as cli
+
+    class Target:
+        written = 0
+
+        def write(self, text):
+            self.written += len(text)
+            return len(text)
+
+        def flush(self):
+            pass
+
+    target = Target()
+    tee = cli._StderrTee(target)
+    tee.write("\nfirst failure\n")
+    tee.write("x" * (1024 * 1024))
+
+    assert tee.first_line == "first failure"
+    assert len(tee.first_line) <= 2048
+    assert target.written == len("\nfirst failure\n") + 1024 * 1024
+
+
+def test_cli_records_first_stderr_line_from_bounded_capture(tmp_path, monkeypatch):
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.chdir(tmp_path)
+    import synlynk.cli as cli
+
+    def fail(_args):
+        print("first failure", file=cli.sys.stderr)
+        print("later detail", file=cli.sys.stderr)
+        return 1
+
+    monkeypatch.setattr(cli, "_dispatch_command", fail)
+
+    assert cli.run_with_recorder(["doctor"]) == 1
+    record = json.loads(
+        (tmp_path / ".synlynk" / "flight.jsonl").read_text().splitlines()[-1]
+    )
+    assert record["error"] == "first failure"
 
 
 def test_report_command_is_not_recorded_or_given_footer(tmp_path, monkeypatch, capsys):

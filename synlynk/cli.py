@@ -1,6 +1,5 @@
 import argparse
 import contextlib
-import io
 import json
 import os
 import sys
@@ -4407,20 +4406,31 @@ def _dispatch_command(argv=None) -> None:
         parser.print_help()
 
 
-class _StderrTee(io.StringIO):
-    """Capture stderr while preserving the command's normal output stream."""
+class _StderrTee:
+    """Forward stderr while retaining only a bounded first non-empty line."""
+
+    _MAX_CAPTURED_LINE = 2048
 
     def __init__(self, target):
-        super().__init__()
         self.target = target
+        self.first_line = ""
 
     def write(self, text):
-        self.target.write(text)
-        return super().write(text)
+        result = self.target.write(text)
+        if not self.first_line:
+            for character in text:
+                if character in "\r\n":
+                    if self.first_line:
+                        break
+                    continue
+                if len(self.first_line) < self._MAX_CAPTURED_LINE:
+                    self.first_line += character
+                if len(self.first_line) == self._MAX_CAPTURED_LINE:
+                    break
+        return result
 
     def flush(self):
-        self.target.flush()
-        super().flush()
+        return self.target.flush()
 
     def __getattr__(self, name):
         return getattr(self.target, name)
@@ -4459,9 +4469,8 @@ def run_with_recorder(argv=None) -> int:
         error = str(exc)
         raise
     finally:
-        captured_lines = [line for line in stderr_capture.getvalue().splitlines() if line]
-        if captured_lines:
-            error = captured_lines[0]
+        if stderr_capture.first_line:
+            error = stderr_capture.first_line
         try:
             from synlynk import flight_recorder
 
