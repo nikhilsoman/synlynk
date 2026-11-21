@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import re
+import sys
 import time
 
 from synlynk.gh_shim import run_gh
@@ -159,6 +160,22 @@ def sync_arc(conn, arc_id: int, owner: str, repo: str, role: str = "pm") -> None
 
     if mapped:
         github_number = mapped[0]
+        live_milestone = _gh_api_json(
+            [
+                f"repos/{owner}/{repo}/milestones/{github_number}",
+                "--method",
+                "GET",
+            ],
+            role=role,
+        )
+        live_title = live_milestone.get("title") if live_milestone else None
+        if live_title != fields["title"]:
+            print(
+                f"warning: refusing to sync arc {arc_id}: expected mapped milestone "
+                f"title {fields['title']!r}, found {live_title!r}",
+                file=sys.stderr,
+            )
+            return
         result = _gh_api_json(
             [f"repos/{owner}/{repo}/milestones/{github_number}", "--method", "PATCH"]
             + [f"-f{k}={v}" for k, v in payload.items()],

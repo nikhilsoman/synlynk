@@ -465,6 +465,86 @@ def test_sync_arc_skips_patch_when_content_hash_unchanged(tmp_path, monkeypatch)
     conn.close()
 
 
+def _mapped_arc_connection(tmp_path):
+    import sqlite3
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        "CREATE TABLE roadmap_arcs (id INTEGER PRIMARY KEY, version TEXT, title TEXT, "
+        "status TEXT, target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN)"
+    )
+    conn.execute(
+        "CREATE TABLE github_sync_map (entity_type TEXT, entity_id TEXT, github_number INTEGER, "
+        "github_node_id TEXT, content_hash TEXT, last_synced_at TEXT, "
+        "PRIMARY KEY (entity_type, entity_id))"
+    )
+    conn.execute(
+        "CREATE TABLE roadmap_phases ("
+        "id INTEGER PRIMARY KEY, arc_version TEXT, phase_title TEXT, status TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE cost_entries (actual_usd REAL, estimate_basis TEXT, epic_id INTEGER)"
+    )
+    conn.execute(
+        "INSERT INTO roadmap_arcs VALUES "
+        "(1, 'v1.0.0', 'First release', 'planned', NULL, 'Updated notes', 1)"
+    )
+    conn.execute(
+        "INSERT INTO github_sync_map VALUES "
+        "('roadmap_arc', '1', 99, 'MI_abc', 'stale-hash', datetime('now'))"
+    )
+    conn.commit()
+    return conn
+
+
+def test_sync_arc_warns_and_skips_patch_when_mapped_title_has_drifted(
+    tmp_path, monkeypatch, capsys
+):
+    from synlynk import gh_sync
+
+    conn = _mapped_arc_connection(tmp_path)
+    calls = []
+
+    def fake_gh_api_json(args, **kwargs):
+        calls.append(args)
+        assert args[1:3] == ["--method", "GET"]
+        return {"number": 99, "node_id": "MI_wrong", "title": "v0.9.0"}
+
+    monkeypatch.setattr(gh_sync, "_gh_api_json", fake_gh_api_json)
+
+    gh_sync.sync_arc(conn, arc_id=1, owner="o", repo="r")
+
+    assert len(calls) == 1
+    assert not any("PATCH" in call for call in calls)
+    warning = capsys.readouterr().err
+    assert "arc 1" in warning
+    assert "v1.0.0" in warning
+    assert "v0.9.0" in warning
+    conn.close()
+
+
+def test_sync_arc_patches_when_mapped_live_title_matches(tmp_path, monkeypatch):
+    from synlynk import gh_sync
+
+    conn = _mapped_arc_connection(tmp_path)
+    calls = []
+
+    def fake_gh_api_json(args, **kwargs):
+        calls.append(args)
+        if args[1:3] == ["--method", "GET"]:
+            return {"number": 99, "node_id": "MI_abc", "title": "v1.0.0"}
+        return {"number": 99, "node_id": "MI_abc", "title": "v1.0.0"}
+
+    monkeypatch.setattr(gh_sync, "_gh_api_json", fake_gh_api_json)
+
+    gh_sync.sync_arc(conn, arc_id=1, owner="o", repo="r")
+
+    assert len(calls) == 2
+    assert calls[0][1:3] == ["--method", "GET"]
+    assert calls[1][1:3] == ["--method", "PATCH"]
+    conn.close()
+
+
 def test_sync_arc_noop_when_not_milestone_eligible(tmp_path, monkeypatch):
     import sqlite3
 

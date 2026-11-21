@@ -2791,6 +2791,18 @@ def main(argv=None) -> None:
             sys.exit(0)
         gh_args = getattr(args, "gh_args", []) or []
         if gh_args and gh_args[0] == "sync-roadmap":
+            allowed_flags = {"--dry-run", "--backfill"}
+            unsupported = [token for token in gh_args[1:] if token not in allowed_flags]
+            if unsupported:
+                print(
+                    "usage: synlynk gh sync-roadmap [--dry-run] [--backfill]",
+                    file=sys.stderr,
+                )
+                print(
+                    f"error: unrecognized argument: {unsupported[0]}",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
             from synlynk.gh_sync_cli import cmd_sync_roadmap
             from synlynk.github_repo import resolve_owner_repo
             owner, repo = resolve_owner_repo()
