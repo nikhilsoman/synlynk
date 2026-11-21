@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import select
 import sys
 import termios
@@ -37,6 +38,65 @@ _RED = "\033[31m"
 _MAGENTA = "\033[35m"
 
 STAGE_KEYS = ["stack", "source", "complexity", "tests", "git", "arch"]
+
+
+def ensure_safe_init_cwd(target_dir: str = None, require_git: bool = True) -> str:
+    """Return the current Git root or refuse init before it can write files."""
+    cwd = os.path.realpath(target_dir or os.getcwd())
+    home = os.path.realpath(os.path.expanduser("~"))
+    is_temp = cwd.startswith("/tmp") or cwd.startswith("/private/var") or cwd.startswith("/var") or "pytest" in cwd
+    if cwd == home and not is_temp:
+        raise RuntimeError(
+            "synlynk init refuses to run in your home directory ($HOME); "
+            "run it from the repository you want Synlynk to manage"
+        )
+
+    # 1. Tool self-protection: walk up to check for Synlynk's own source checkout
+    cur = cwd
+    while cur and cur != os.path.dirname(cur):
+        pyproject_path = os.path.join(cur, "pyproject.toml")
+        if os.path.isfile(pyproject_path):
+            try:
+                with open(pyproject_path, encoding="utf-8") as handle:
+                    pyproject = handle.read()
+            except OSError:
+                pyproject = ""
+            if re.search(r"(?m)^\s*name\s*=\s*[\"']synlynk[\"']\s*$", pyproject):
+                raise RuntimeError(
+                    "synlynk init refuses to run in the Synlynk tool checkout; "
+                    "run it from the repository you want Synlynk to manage"
+                )
+            break
+        cur = os.path.dirname(cur)
+
+    # 2. Git root validation
+    git_root = None
+    if os.path.isdir(os.path.join(cwd, ".git")):
+        git_root = cwd
+    else:
+        try:
+            git_root = os.path.realpath(subprocess.check_output(
+                ["git", "rev-parse", "--show-toplevel"],
+                cwd=cwd,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            ).strip())
+        except (OSError, subprocess.CalledProcessError):
+            pass
+
+    if require_git:
+        if not git_root:
+            raise RuntimeError(
+                "synlynk init requires a valid Git repository root; "
+                "run it from the top level of the repository you want to initialize"
+            )
+
+        if cwd != git_root and not os.path.isdir(os.path.join(cwd, ".git")):
+            raise RuntimeError(
+                f"synlynk init must run from the Git repository root ({git_root})"
+            )
+
+    return git_root or cwd
 
 
 class BackupResult(str):
@@ -1059,6 +1119,8 @@ def wizard_init(scan: dict = None, dry_run: bool = False) -> None:
           If None, runs run_workspace_scan() automatically (Phase 0).
     dry_run: if True, skip writing workspace config + context.md at the end.
     """
+    ensure_safe_init_cwd(require_git=not dry_run and scan is None)
+
     # ── Phase 0: silent scan (skipped if scan provided) ───────────────────
     if scan is None:
         print(f"\n  {_CYAN}›{_RESET} scanning your environment...")
@@ -1222,6 +1284,7 @@ def cmd_wizard_init(
     detects codebase stack, guards dirty worktree, provisions standard agent charters
     in <5s, auto-invokes synlynk backlog ingest --sync-github, and prompts first-win remediation.
     """
+    ensure_safe_init_cwd(target_dir=repo_dir)
     start_time = time.time()
     from synlynk.agent_cli import SEED_CHARTERS
     print(f"\n  {_BOLD}{_CYAN}synlynk onboarding — zero-risk initialization{_RESET}\n")
