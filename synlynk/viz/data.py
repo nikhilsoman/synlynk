@@ -385,6 +385,50 @@ def _repo_github_url(repo_path: str) -> Optional[str]:
     slug = slug[:-4] if slug.endswith(".git") else slug
     return f"https://github.com/{slug}" if slug else None
 
+
+def _load_pending_approvable_prs() -> list[dict]:
+    """Return open, non-draft PRs that GitHub currently considers clean."""
+    try:
+        result = subprocess.run(
+            [
+                "gh", "pr", "list", "--state", "open",
+                "--json", "number,isDraft,mergeStateStatus",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if result.returncode != 0:
+        return []
+    try:
+        pull_requests = json.loads(result.stdout or "[]")
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(pull_requests, list):
+        return []
+    return [
+        pull_request
+        for pull_request in pull_requests
+        if isinstance(pull_request, dict)
+        and not pull_request.get("isDraft")
+        and pull_request.get("mergeStateStatus") == "CLEAN"
+    ]
+
+
+def _merge_routes_through_reviewer_dispatch() -> bool:
+    """Whether policy delegates every merge to a review role."""
+    try:
+        from synlynk.policy import load_policy
+
+        can_merge = load_policy(repo_path=os.getcwd()).get("merge_authority", {}).get("can_merge", [])
+    except Exception:
+        return False
+    if not isinstance(can_merge, list) or not can_merge:
+        return False
+    return set(can_merge).issubset({"qa", "reviewer", "architect"})
+
 def generate_viz_data(db_path: Optional[str] = None) -> dict:
     def _ts() -> str:
         return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -499,6 +543,8 @@ def generate_viz_data(db_path: Optional[str] = None) -> dict:
             "notes": _load_json_optional(_pkg().VIZ_NOTES_PATH, default={}),
             "jobs": observatory.get("jobs", []),
             "actions": _load_action_history(),
+            "pending_approvable_prs": _load_pending_approvable_prs(),
+            "reviewer_dispatch": _merge_routes_through_reviewer_dispatch(),
             "ecosystem": {},
             "observatory": observatory,
         }

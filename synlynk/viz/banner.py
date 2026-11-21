@@ -5,6 +5,13 @@ def _compute_underused_feature_banner(data: dict) -> Optional[str]:
     if not isinstance(jobs, list) or len(jobs) < 10:
         return None
 
+    # approve/kill is useful only while a user has an approvable PR. Workspaces
+    # that delegate review/merge work to a reviewer job should not be prompted
+    # to take that manual path.
+    pending_prs = data.get("pending_approvable_prs")
+    if not pending_prs or data.get("reviewer_dispatch"):
+        return None
+
     approve_kill_used = any(
         isinstance(job, dict)
         and str(job.get("status") or "").strip().lower() in {"approved", "killed"}
