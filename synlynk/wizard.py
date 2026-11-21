@@ -1295,7 +1295,7 @@ def cmd_wizard_init(
     detects codebase stack, guards dirty worktree, provisions standard agent charters
     in <5s, auto-invokes synlynk backlog ingest --sync-github, and prompts first-win remediation.
     """
-    ensure_safe_init_cwd(target_dir=repo_dir)
+    ensure_safe_init_cwd(target_dir=repo_dir, require_git=False)
     start_time = time.time()
     from synlynk.agent_cli import SEED_CHARTERS
     print(f"\n  {_BOLD}{_CYAN}synlynk onboarding — zero-risk initialization{_RESET}\n")
