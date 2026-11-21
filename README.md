@@ -152,6 +152,7 @@ Commands are grouped by where you'll reach for them in a typical project lifecyc
 - `synlynk scan`
 - `synlynk join`
 - `synlynk governs`
+- `synlynk report`
 - `synlynk preflight`
 - `synlynk status`
 - `synlynk watch`
