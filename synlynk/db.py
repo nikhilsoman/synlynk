@@ -4089,7 +4089,7 @@ def _try_sync_story(story_id: str) -> None:
         if phase:
             mapped = conn.execute(
                 "SELECT gm.github_number FROM github_sync_map gm "
-                "JOIN roadmap_arcs ra ON ra.id = CAST(gm.entity_id AS INTEGER) "
+                "JOIN roadmap_arcs ra ON ra.arc_uid = gm.entity_id "
                 "WHERE gm.entity_type='roadmap_arc' AND ra.version=?",
                 (phase[0],),
             ).fetchone()
