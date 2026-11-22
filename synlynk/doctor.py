@@ -544,6 +544,55 @@ def _hc_roadmap_decision_drift() -> HealthCheck:
     )
 
 
+def _hc_roadmap_uid_consistency() -> HealthCheck:
+    """Warn when an arc_version or (arc_version, phase_title) group has more
+    than one arc_uid/phase_uid -- the roadmap_arcs/roadmap_phases views
+    surface this as a NULL uid, which breaks github_sync_map lookups."""
+    try:
+        conn = _pkg("_get_db")()
+        try:
+            diverged_arcs = conn.execute(
+                "SELECT arc_version FROM goals "
+                "WHERE placement_status = 'placed' AND arc_version IS NOT NULL "
+                "GROUP BY arc_version HAVING COUNT(DISTINCT arc_uid) > 1"
+            ).fetchall()
+            diverged_phases = conn.execute(
+                "SELECT arc_version, phase_title FROM goals "
+                "WHERE placement_status = 'placed' AND arc_version IS NOT NULL "
+                "AND phase_title IS NOT NULL "
+                "GROUP BY arc_version, phase_title HAVING COUNT(DISTINCT phase_uid) > 1"
+            ).fetchall()
+        finally:
+            conn.close()
+    except Exception as exc:
+        return HealthCheck(
+            "roadmap_uid_consistency",
+            "warn",
+            f"roadmap uid consistency check unavailable: {exc}",
+        )
+
+    if not diverged_arcs and not diverged_phases:
+        return HealthCheck(
+            "roadmap_uid_consistency",
+            "ok",
+            "every arc/phase group has exactly one uid",
+        )
+
+    parts = []
+    if diverged_arcs:
+        parts.append("arcs: " + ", ".join(row[0] for row in diverged_arcs))
+    if diverged_phases:
+        parts.append(
+            "phases: " + ", ".join(f"{av}/{pt}" for av, pt in diverged_phases)
+        )
+    return HealthCheck(
+        "roadmap_uid_consistency",
+        "warn",
+        "uid divergence found -- " + "; ".join(parts),
+        fix="Investigate via `sqlite3 state.db \"SELECT goal_id, arc_uid FROM goals WHERE arc_version='<version>'\"` and reconcile with synlynk.roadmap_identity.merge_arcs",
+    )
+
+
 def _hc_loop_goals_operating_stories() -> HealthCheck:
     """Verify all active kind='loop' goals have a live operating story."""
     try:
@@ -1663,6 +1712,7 @@ HEALTH_CHECKS = [
     _hc_todo_drift,
     _hc_roadmap_merge_parity,
     _hc_roadmap_decision_drift,
+    _hc_roadmap_uid_consistency,
     _hc_loop_goals_operating_stories,
     _hc_editions_config,
     _hc_identity_key,
