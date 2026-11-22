@@ -232,6 +232,44 @@ def _seed_arc(conn, version="v0.13.0", title="State Engine", status="planned"):
     conn.commit()
 
 
+def test_try_sync_arc_by_version_passes_arc_uid(tmp_path, monkeypatch):
+    import synlynk
+    from synlynk import db, gh_sync, github_repo
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE roadmap_arcs (id INTEGER PRIMARY KEY, version TEXT UNIQUE, arc_uid TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO roadmap_arcs (id, version, arc_uid) VALUES (?, ?, ?)",
+        (42, "v1.2.3", "arc-known-uid"),
+    )
+    conn.commit()
+    conn.close()
+
+    sync_calls = []
+    monkeypatch.setattr(synlynk, "_get_db", lambda: sqlite3.connect(db_path))
+    monkeypatch.setattr(
+        github_repo, "resolve_owner_repo", lambda: ("example-owner", "example-repo")
+    )
+    monkeypatch.setattr(
+        gh_sync,
+        "sync_arc",
+        lambda _conn, **kwargs: sync_calls.append(kwargs),
+    )
+
+    db._try_sync_arc_by_version("v1.2.3")
+
+    assert sync_calls == [
+        {
+            "arc_uid": "arc-known-uid",
+            "owner": "example-owner",
+            "repo": "example-repo",
+        }
+    ]
+
+
 def test_generate_roadmap_md_creates_file_pre_migration(project_dir):
     from synlynk import _get_db
 

@@ -174,12 +174,17 @@ def _sync_arc_create_args(tmp_path, monkeypatch, target_date):
     conn = sqlite3.connect(tmp_path / "state.db")
     conn.execute(
         "CREATE TABLE roadmap_arcs (id INTEGER PRIMARY KEY, version TEXT, title TEXT, "
-        "status TEXT, target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN)"
+        "status TEXT, target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN, arc_uid TEXT)"
     )
     conn.execute(
         "CREATE TABLE github_sync_map (entity_type TEXT, entity_id TEXT, github_number INTEGER, "
         "github_node_id TEXT, content_hash TEXT, last_synced_at TEXT, "
         "PRIMARY KEY (entity_type, entity_id))"
+    )
+    conn.execute(
+        "CREATE TABLE roadmap_uid_aliases ("
+        "old_uid TEXT PRIMARY KEY, new_uid TEXT NOT NULL, uid_kind TEXT NOT NULL, "
+        "reason TEXT NOT NULL)"
     )
     conn.execute(
         "CREATE TABLE roadmap_phases ("
@@ -190,7 +195,7 @@ def _sync_arc_create_args(tmp_path, monkeypatch, target_date):
     )
     conn.execute(
         "INSERT INTO roadmap_arcs VALUES (1, 'v1.0.0', 'First release', "
-        "'planned', ?, NULL, 1)",
+        "'planned', ?, NULL, 1, 'arc-u1')",
         (target_date,),
     )
     conn.commit()
@@ -204,7 +209,7 @@ def _sync_arc_create_args(tmp_path, monkeypatch, target_date):
         return {"number": 99, "node_id": "MI_abc"}
 
     monkeypatch.setattr(gh_sync, "_gh_api_json", fake_gh_api_json)
-    gh_sync.sync_arc(conn, arc_id=1, owner="o", repo="r")
+    gh_sync.sync_arc(conn, arc_uid="arc-u1", owner="o", repo="r")
     conn.close()
     return created["args"]
 
@@ -236,7 +241,7 @@ def test_render_arc_description_includes_notes_then_agenda(tmp_path):
     conn = sqlite3.connect(tmp_path / "state.db")
     conn.execute(
         "CREATE TABLE roadmap_arcs (id INTEGER PRIMARY KEY, version TEXT, title TEXT, "
-        "status TEXT, target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN)"
+        "status TEXT, target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN, arc_uid TEXT)"
     )
     conn.execute(
         "CREATE TABLE roadmap_phases ("
@@ -247,14 +252,14 @@ def test_render_arc_description_includes_notes_then_agenda(tmp_path):
     )
     conn.execute(
         "INSERT INTO roadmap_arcs VALUES (1, 'v0.26.7', 'Jantt', 'planned', NULL, "
-        "'Pitch paragraph.\\n\\n## Investigation\\nSkinny payloads first.', 1)"
+        "'Pitch paragraph.\\n\\n## Investigation\\nSkinny payloads first.', 1, 'arc-jantt')"
     )
     conn.execute(
         "INSERT INTO roadmap_phases (arc_version, phase_title, status) "
         "VALUES ('v0.26.7', 'Skinny view-scoped payloads (#2671)', 'planned')"
     )
     conn.commit()
-    text = gh_sync._render_arc_description(conn, 1)
+    text = gh_sync._render_arc_description(conn, "arc-jantt")
     conn.close()
     assert text.startswith("Pitch paragraph.")
     assert "## Investigation" in text
@@ -270,12 +275,17 @@ def test_sync_arc_creates_milestone_when_absent(tmp_path, monkeypatch):
     conn = sqlite3.connect(tmp_path / "state.db")
     conn.execute(
         "CREATE TABLE roadmap_arcs (id INTEGER PRIMARY KEY, version TEXT, title TEXT, "
-        "status TEXT, target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN)"
+        "status TEXT, target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN, arc_uid TEXT)"
     )
     conn.execute(
         "CREATE TABLE github_sync_map (entity_type TEXT, entity_id TEXT, github_number INTEGER, "
         "github_node_id TEXT, content_hash TEXT, last_synced_at TEXT, "
         "PRIMARY KEY (entity_type, entity_id))"
+    )
+    conn.execute(
+        "CREATE TABLE roadmap_uid_aliases ("
+        "old_uid TEXT PRIMARY KEY, new_uid TEXT NOT NULL, uid_kind TEXT NOT NULL, "
+        "reason TEXT NOT NULL)"
     )
     conn.execute(
         "CREATE TABLE IF NOT EXISTS roadmap_phases ("
@@ -286,7 +296,7 @@ def test_sync_arc_creates_milestone_when_absent(tmp_path, monkeypatch):
         "actual_usd REAL, estimate_basis TEXT, epic_id INTEGER)"
     )
     conn.execute(
-        "INSERT INTO roadmap_arcs VALUES (1, 'v1.0.0', 'First release', 'planned', NULL, NULL, 1)"
+        "INSERT INTO roadmap_arcs VALUES (1, 'v1.0.0', 'First release', 'planned', NULL, NULL, 1, 'arc-first')"
     )
     conn.commit()
 
@@ -300,10 +310,10 @@ def test_sync_arc_creates_milestone_when_absent(tmp_path, monkeypatch):
 
     monkeypatch.setattr(gh_sync, "_gh_api_json", fake_gh_api_json)
 
-    gh_sync.sync_arc(conn, arc_id=1, owner="o", repo="r")
+    gh_sync.sync_arc(conn, arc_uid="arc-first", owner="o", repo="r")
 
     mapped = conn.execute(
-        "SELECT github_number FROM github_sync_map WHERE entity_type='roadmap_arc' AND entity_id='1'"
+        "SELECT github_number FROM github_sync_map WHERE entity_type='roadmap_arc' AND entity_id='arc-first'"
     ).fetchone()
     assert mapped == (99,)
     create_calls = [c for c in calls if "--method" in c and "POST" in c]
@@ -323,12 +333,16 @@ def test_sync_arc_adopts_existing_milestone_by_title_instead_of_posting(
         """
         CREATE TABLE roadmap_arcs (
             id INTEGER PRIMARY KEY, version TEXT, title TEXT, status TEXT,
-            target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN
+            target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN, arc_uid TEXT
         );
         CREATE TABLE github_sync_map (
             entity_type TEXT, entity_id TEXT, github_number INTEGER,
             github_node_id TEXT, content_hash TEXT, last_synced_at TEXT,
             PRIMARY KEY (entity_type, entity_id)
+        );
+        CREATE TABLE roadmap_uid_aliases (
+            old_uid TEXT PRIMARY KEY, new_uid TEXT NOT NULL, uid_kind TEXT NOT NULL,
+            reason TEXT NOT NULL
         );
         CREATE TABLE roadmap_phases (
             id INTEGER PRIMARY KEY, arc_version TEXT, phase_title TEXT, status TEXT
@@ -337,7 +351,7 @@ def test_sync_arc_adopts_existing_milestone_by_title_instead_of_posting(
             actual_usd REAL, estimate_basis TEXT, epic_id INTEGER
         );
         INSERT INTO roadmap_arcs
-        VALUES (47, 'v0.26.0', 'Existing release', 'planned', NULL, NULL, 1);
+        VALUES (47, 'v0.26.0', 'Existing release', 'planned', NULL, NULL, 1, 'arc-47');
         """
     )
     conn.commit()
@@ -351,7 +365,7 @@ def test_sync_arc_adopts_existing_milestone_by_title_instead_of_posting(
 
     monkeypatch.setattr(gh_sync, "_gh_api_json", fake_gh_api_json)
 
-    gh_sync.sync_arc(conn, arc_id=47, owner="o", repo="r", role="qa")
+    gh_sync.sync_arc(conn, arc_uid="arc-47", owner="o", repo="r", role="qa")
 
     write_calls = [call for call in calls if "--method" in call and "GET" not in call]
     assert len(write_calls) == 1
@@ -359,7 +373,7 @@ def test_sync_arc_adopts_existing_milestone_by_title_instead_of_posting(
     assert not any("POST" in call for call in calls)
     mapped = conn.execute(
         "SELECT github_number, github_node_id FROM github_sync_map "
-        "WHERE entity_type='roadmap_arc' AND entity_id='47'"
+        "WHERE entity_type='roadmap_arc' AND entity_id='arc-47'"
     ).fetchone()
     assert mapped == (26, "MI_existing")
     conn.close()
@@ -375,12 +389,16 @@ def test_sync_arc_still_posts_when_no_existing_milestone_matches(tmp_path, monke
         """
         CREATE TABLE roadmap_arcs (
             id INTEGER PRIMARY KEY, version TEXT, title TEXT, status TEXT,
-            target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN
+            target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN, arc_uid TEXT
         );
         CREATE TABLE github_sync_map (
             entity_type TEXT, entity_id TEXT, github_number INTEGER,
             github_node_id TEXT, content_hash TEXT, last_synced_at TEXT,
             PRIMARY KEY (entity_type, entity_id)
+        );
+        CREATE TABLE roadmap_uid_aliases (
+            old_uid TEXT PRIMARY KEY, new_uid TEXT NOT NULL, uid_kind TEXT NOT NULL,
+            reason TEXT NOT NULL
         );
         CREATE TABLE roadmap_phases (
             id INTEGER PRIMARY KEY, arc_version TEXT, phase_title TEXT, status TEXT
@@ -389,7 +407,7 @@ def test_sync_arc_still_posts_when_no_existing_milestone_matches(tmp_path, monke
             actual_usd REAL, estimate_basis TEXT, epic_id INTEGER
         );
         INSERT INTO roadmap_arcs
-        VALUES (47, 'v0.26.0', 'New release', 'planned', NULL, NULL, 1);
+        VALUES (47, 'v0.26.0', 'New release', 'planned', NULL, NULL, 1, 'arc-47');
         """
     )
     conn.commit()
@@ -403,7 +421,7 @@ def test_sync_arc_still_posts_when_no_existing_milestone_matches(tmp_path, monke
 
     monkeypatch.setattr(gh_sync, "_gh_api_json", fake_gh_api_json)
 
-    gh_sync.sync_arc(conn, arc_id=47, owner="o", repo="r")
+    gh_sync.sync_arc(conn, arc_uid="arc-47", owner="o", repo="r")
 
     post_calls = [call for call in calls if "POST" in call]
     assert len(post_calls) == 1
@@ -411,7 +429,7 @@ def test_sync_arc_still_posts_when_no_existing_milestone_matches(tmp_path, monke
     assert not any("PATCH" in call for call in calls)
     mapped = conn.execute(
         "SELECT github_number FROM github_sync_map "
-        "WHERE entity_type='roadmap_arc' AND entity_id='47'"
+        "WHERE entity_type='roadmap_arc' AND entity_id='arc-47'"
     ).fetchone()
     assert mapped == (99,)
     conn.close()
@@ -425,12 +443,17 @@ def test_sync_arc_skips_patch_when_content_hash_unchanged(tmp_path, monkeypatch)
     conn = sqlite3.connect(tmp_path / "state.db")
     conn.execute(
         "CREATE TABLE roadmap_arcs (id INTEGER PRIMARY KEY, version TEXT, title TEXT, "
-        "status TEXT, target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN)"
+        "status TEXT, target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN, arc_uid TEXT)"
     )
     conn.execute(
         "CREATE TABLE github_sync_map (entity_type TEXT, entity_id TEXT, github_number INTEGER, "
         "github_node_id TEXT, content_hash TEXT, last_synced_at TEXT, "
         "PRIMARY KEY (entity_type, entity_id))"
+    )
+    conn.execute(
+        "CREATE TABLE roadmap_uid_aliases ("
+        "old_uid TEXT PRIMARY KEY, new_uid TEXT NOT NULL, uid_kind TEXT NOT NULL, "
+        "reason TEXT NOT NULL)"
     )
     conn.execute(
         "CREATE TABLE IF NOT EXISTS roadmap_phases ("
@@ -441,12 +464,12 @@ def test_sync_arc_skips_patch_when_content_hash_unchanged(tmp_path, monkeypatch)
         "actual_usd REAL, estimate_basis TEXT, epic_id INTEGER)"
     )
     conn.execute(
-        "INSERT INTO roadmap_arcs VALUES (1, 'v1.0.0', 'First release', 'planned', NULL, NULL, 1)"
+        "INSERT INTO roadmap_arcs VALUES (1, 'v1.0.0', 'First release', 'planned', NULL, NULL, 1, 'arc-u1')"
     )
-    fields = gh_sync._arc_sync_fields(conn, arc_id=1)
+    fields = gh_sync._arc_sync_fields(conn, arc_uid="arc-u1")
     existing_hash = gh_sync._content_hash(fields)
     conn.execute(
-        "INSERT INTO github_sync_map VALUES ('roadmap_arc', '1', 99, 'MI_abc', ?, datetime('now'))",
+        "INSERT INTO github_sync_map VALUES ('roadmap_arc', 'arc-u1', 99, 'MI_abc', ?, datetime('now'))",
         (existing_hash,),
     )
     conn.commit()
@@ -459,7 +482,7 @@ def test_sync_arc_skips_patch_when_content_hash_unchanged(tmp_path, monkeypatch)
 
     monkeypatch.setattr(gh_sync, "_gh_api_json", fake_gh_api_json)
 
-    gh_sync.sync_arc(conn, arc_id=1, owner="o", repo="r")
+    gh_sync.sync_arc(conn, arc_uid="arc-u1", owner="o", repo="r")
 
     assert calls == []  # no API calls at all -- nothing changed
     conn.close()
@@ -471,12 +494,17 @@ def _mapped_arc_connection(tmp_path):
     conn = sqlite3.connect(tmp_path / "state.db")
     conn.execute(
         "CREATE TABLE roadmap_arcs (id INTEGER PRIMARY KEY, version TEXT, title TEXT, "
-        "status TEXT, target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN)"
+        "status TEXT, target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN, arc_uid TEXT)"
     )
     conn.execute(
         "CREATE TABLE github_sync_map (entity_type TEXT, entity_id TEXT, github_number INTEGER, "
         "github_node_id TEXT, content_hash TEXT, last_synced_at TEXT, "
         "PRIMARY KEY (entity_type, entity_id))"
+    )
+    conn.execute(
+        "CREATE TABLE roadmap_uid_aliases ("
+        "old_uid TEXT PRIMARY KEY, new_uid TEXT NOT NULL, uid_kind TEXT NOT NULL, "
+        "reason TEXT NOT NULL)"
     )
     conn.execute(
         "CREATE TABLE roadmap_phases ("
@@ -487,11 +515,11 @@ def _mapped_arc_connection(tmp_path):
     )
     conn.execute(
         "INSERT INTO roadmap_arcs VALUES "
-        "(1, 'v1.0.0', 'First release', 'planned', NULL, 'Updated notes', 1)"
+        "(1, 'v1.0.0', 'First release', 'planned', NULL, 'Updated notes', 1, 'arc-u1')"
     )
     conn.execute(
         "INSERT INTO github_sync_map VALUES "
-        "('roadmap_arc', '1', 99, 'MI_abc', 'stale-hash', datetime('now'))"
+        "('roadmap_arc', 'arc-u1', 99, 'MI_abc', 'stale-hash', datetime('now'))"
     )
     conn.commit()
     return conn
@@ -512,12 +540,12 @@ def test_sync_arc_warns_and_skips_patch_when_mapped_title_has_drifted(
 
     monkeypatch.setattr(gh_sync, "_gh_api_json", fake_gh_api_json)
 
-    gh_sync.sync_arc(conn, arc_id=1, owner="o", repo="r")
+    gh_sync.sync_arc(conn, arc_uid="arc-u1", owner="o", repo="r")
 
     assert len(calls) == 1
     assert not any("PATCH" in call for call in calls)
     warning = capsys.readouterr().err
-    assert "arc 1" in warning
+    assert "arc-u1" in warning
     assert "v1.0.0" in warning
     assert "v0.9.0" in warning
     conn.close()
@@ -537,7 +565,7 @@ def test_sync_arc_patches_when_mapped_live_title_matches(tmp_path, monkeypatch):
 
     monkeypatch.setattr(gh_sync, "_gh_api_json", fake_gh_api_json)
 
-    gh_sync.sync_arc(conn, arc_id=1, owner="o", repo="r")
+    gh_sync.sync_arc(conn, arc_uid="arc-u1", owner="o", repo="r")
 
     assert len(calls) == 2
     assert calls[0][1:3] == ["--method", "GET"]
@@ -553,12 +581,17 @@ def test_sync_arc_noop_when_not_milestone_eligible(tmp_path, monkeypatch):
     conn = sqlite3.connect(tmp_path / "state.db")
     conn.execute(
         "CREATE TABLE roadmap_arcs (id INTEGER PRIMARY KEY, version TEXT, title TEXT, "
-        "status TEXT, target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN)"
+        "status TEXT, target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN, arc_uid TEXT)"
     )
     conn.execute(
         "CREATE TABLE github_sync_map (entity_type TEXT, entity_id TEXT, github_number INTEGER, "
         "github_node_id TEXT, content_hash TEXT, last_synced_at TEXT, "
         "PRIMARY KEY (entity_type, entity_id))"
+    )
+    conn.execute(
+        "CREATE TABLE roadmap_uid_aliases ("
+        "old_uid TEXT PRIMARY KEY, new_uid TEXT NOT NULL, uid_kind TEXT NOT NULL, "
+        "reason TEXT NOT NULL)"
     )
     conn.execute(
         "CREATE TABLE IF NOT EXISTS roadmap_phases ("
@@ -569,14 +602,14 @@ def test_sync_arc_noop_when_not_milestone_eligible(tmp_path, monkeypatch):
         "actual_usd REAL, estimate_basis TEXT, epic_id INTEGER)"
     )
     conn.execute(
-        "INSERT INTO roadmap_arcs VALUES (2, 'Future Expansions', NULL, 'planned', NULL, NULL, 0)"
+        "INSERT INTO roadmap_arcs VALUES (2, 'Future Expansions', NULL, 'planned', NULL, NULL, 0, 'arc-future')"
     )
     conn.commit()
 
     calls = []
     monkeypatch.setattr(gh_sync, "_gh_api_json", lambda args, **kw: calls.append(args))
 
-    gh_sync.sync_arc(conn, arc_id=2, owner="o", repo="r")
+    gh_sync.sync_arc(conn, arc_uid="arc-future", owner="o", repo="r")
 
     assert calls == []
     conn.close()
