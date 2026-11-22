@@ -550,20 +550,17 @@ def _hc_roadmap_uid_consistency() -> HealthCheck:
     surface this as a NULL uid, which breaks github_sync_map lookups."""
     try:
         conn = _pkg("_get_db")()
-        try:
-            diverged_arcs = conn.execute(
-                "SELECT arc_version FROM goals "
-                "WHERE placement_status = 'placed' AND arc_version IS NOT NULL "
-                "GROUP BY arc_version HAVING COUNT(DISTINCT arc_uid) > 1"
-            ).fetchall()
-            diverged_phases = conn.execute(
-                "SELECT arc_version, phase_title FROM goals "
-                "WHERE placement_status = 'placed' AND arc_version IS NOT NULL "
-                "AND phase_title IS NOT NULL "
-                "GROUP BY arc_version, phase_title HAVING COUNT(DISTINCT phase_uid) > 1"
-            ).fetchall()
-        finally:
-            conn.close()
+        diverged_arcs = conn.execute(
+            "SELECT arc_version FROM goals "
+            "WHERE placement_status = 'placed' AND arc_version IS NOT NULL "
+            "GROUP BY arc_version HAVING COUNT(DISTINCT arc_uid) > 1"
+        ).fetchall()
+        diverged_phases = conn.execute(
+            "SELECT arc_version, phase_title FROM goals "
+            "WHERE placement_status = 'placed' AND arc_version IS NOT NULL "
+            "AND phase_title IS NOT NULL "
+            "GROUP BY arc_version, phase_title HAVING COUNT(DISTINCT phase_uid) > 1"
+        ).fetchall()
     except Exception as exc:
         return HealthCheck(
             "roadmap_uid_consistency",

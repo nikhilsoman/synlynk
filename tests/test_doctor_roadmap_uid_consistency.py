@@ -48,3 +48,24 @@ def test_doctor_passes_when_every_group_has_exactly_one_uid(tmp_path, monkeypatc
 
     result = doctor._hc_roadmap_uid_consistency()
     assert result.status == "ok"
+
+
+def test_doctor_uid_consistency_does_not_close_shared_connection(tmp_path, monkeypatch):
+    """_hc_roadmap_uid_consistency must not close the connection from _get_db() --
+    doctor's own health-check loop and TC-probe steps share one connection
+    across the whole cmd_doctor() run (see tests/test_tc9_gh_write_probe.py).
+    """
+    import synlynk
+    import synlynk.doctor as doctor
+
+    db_path = tmp_path / "state.db"
+    monkeypatch.setattr(synlynk, "DB_PATH", str(db_path))
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+
+    conn = synlynk._get_db()
+    monkeypatch.setattr(synlynk, "_get_db", lambda: conn)
+
+    doctor._hc_roadmap_uid_consistency()
+
+    # The shared connection must still be usable by a later consumer.
+    conn.execute("SELECT 1")
