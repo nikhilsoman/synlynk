@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import select
 import sys
 import termios
@@ -37,6 +38,65 @@ _RED = "\033[31m"
 _MAGENTA = "\033[35m"
 
 STAGE_KEYS = ["stack", "source", "complexity", "tests", "git", "arch"]
+
+
+def ensure_safe_init_cwd(target_dir: str = None, require_git: bool = True) -> str:
+    """Return the current Git root or refuse init before it can write files."""
+    cwd = os.path.realpath(target_dir or os.getcwd())
+    home = os.path.realpath(os.path.expanduser("~"))
+    is_temp = cwd.startswith("/tmp") or cwd.startswith("/private/var") or cwd.startswith("/var") or "pytest" in cwd
+    if cwd == home and not is_temp:
+        raise RuntimeError(
+            "synlynk init refuses to run in your home directory ($HOME); "
+            "run it from the repository you want Synlynk to manage"
+        )
+
+    # 1. Tool self-protection: walk up to check for Synlynk's own source checkout
+    cur = cwd
+    while cur and cur != os.path.dirname(cur):
+        pyproject_path = os.path.join(cur, "pyproject.toml")
+        if os.path.isfile(pyproject_path):
+            try:
+                with open(pyproject_path, encoding="utf-8") as handle:
+                    pyproject = handle.read()
+            except OSError:
+                pyproject = ""
+            if re.search(r"(?m)^\s*name\s*=\s*[\"']synlynk[\"']\s*$", pyproject):
+                raise RuntimeError(
+                    "synlynk init refuses to run in the Synlynk tool checkout; "
+                    "run it from the repository you want Synlynk to manage"
+                )
+            break
+        cur = os.path.dirname(cur)
+
+    # 2. Git root validation
+    git_root = None
+    if os.path.isdir(os.path.join(cwd, ".git")):
+        git_root = cwd
+    else:
+        try:
+            git_root = os.path.realpath(subprocess.check_output(
+                ["git", "rev-parse", "--show-toplevel"],
+                cwd=cwd,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            ).strip())
+        except (OSError, subprocess.CalledProcessError):
+            pass
+
+    if require_git:
+        if not git_root:
+            raise RuntimeError(
+                "synlynk init requires a valid Git repository root; "
+                "run it from the top level of the repository you want to initialize"
+            )
+
+        if cwd != git_root and not os.path.isdir(os.path.join(cwd, ".git")):
+            raise RuntimeError(
+                f"synlynk init must run from the Git repository root ({git_root})"
+            )
+
+    return git_root or cwd
 
 
 class BackupResult(str):
@@ -164,7 +224,11 @@ def guard_dirty_worktree(repo_dir: str = ".", backup_dir: str = None) -> Optiona
     return BackupResult(tar_path, stash_created=stash_created, dirty=True)
 
 
-def cmd_launch_ftue(dry_run: bool = False, list_mode: bool = False) -> None:
+def cmd_launch_ftue(
+    dry_run: bool = False,
+    list_mode: bool = False,
+    workspace: dict = None,
+) -> bool:
     """FTUE task picker TUI - Screen 1 -> Screen 2 -> dispatch
     - dry_run: print selected tasks without TUI or dispatch
     - list_mode: print full template pool with trigger conditions
@@ -179,20 +243,23 @@ def cmd_launch_ftue(dry_run: bool = False, list_mode: bool = False) -> None:
             marker = "●" if t["id"] in core_ids else "○"
             print(f"  {marker} {t['id']:<24}  {t['cycle']:<8}  {t['agent']:<8}  {cond_str}")
         print()
-        return
+        return True
 
-    try:
-        scan = _pkg("run_workspace_scan")(deep=False)
-    except Exception:
-        scan = {
-            "workspace_name": os.path.basename(os.getcwd()) or "workspace",
-            "topology": "single",
-            "repos": [{"name": os.path.basename(os.getcwd()), "stack_labels": []}],
-            "harnesses": [], "agents": [], "skills": [],
-            "test_ratio": 1.0, "readme_word_count": 0,
-            "has_ci": False, "has_docs": False,
-            "has_type_hints": False, "has_orm": False,
-        }
+    if workspace is None:
+        try:
+            scan = _pkg("run_workspace_scan")(deep=False)
+        except Exception:
+            scan = {
+                "workspace_name": os.path.basename(os.getcwd()) or "workspace",
+                "topology": "single",
+                "repos": [{"name": os.path.basename(os.getcwd()), "stack_labels": []}],
+                "harnesses": [], "agents": [], "skills": [],
+                "test_ratio": 1.0, "readme_word_count": 0,
+                "has_ci": False, "has_docs": False,
+                "has_type_hints": False, "has_orm": False,
+            }
+    else:
+        scan = workspace
 
     tasks = _pkg("_select_launch_tasks")(scan)
 
@@ -204,12 +271,12 @@ def cmd_launch_ftue(dry_run: bool = False, list_mode: bool = False) -> None:
             est_str = f"~{int(est * 60)}m" if est < 1 else f"~{int(est)}h"
             print(f"  [{i}] {t['id']:<24} {t['cycle']:<8}  {t['agent']:<8}  {est_str}")
         print()
-        return
+        return True
 
     while True:
         chosen = _launch_screen_tasks(tasks, scan)
         if chosen is None:
-            return
+            return True
 
         confirmed, prompt = _launch_screen_preview(chosen, scan)
         if not confirmed:
@@ -228,7 +295,8 @@ def cmd_launch_ftue(dry_run: bool = False, list_mode: bool = False) -> None:
                   f"  {_DIM}Log: synlynk logs --job {job_id}{_RESET}\n")
         except Exception as exc:
             print(f"\n  {_YELLOW}⚠ Dispatch failed: {exc}{_RESET}\n")
-        return
+            return False
+        return True
 
 _WIZ_PRODUCT_BLURB = (
     "Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.\n"
@@ -587,6 +655,40 @@ def _wiz_screen_landing() -> None:
     _wiz_prompt("press enter to start setup — takes about 2 minutes")
     _pkg("_wiz_read_key")()
 
+
+def _wiz_configure_openrouter_byok() -> str:
+    """Configure and verify an OpenRouter key for this wizard session."""
+    import getpass
+
+    print(f"\n  {_BOLD}Connect OpenRouter{_RESET}")
+    print(f"  {_DIM}Paste OPENROUTER_API_KEY; input is hidden and the key stays in this session.{_RESET}")
+    try:
+        key = getpass.getpass("  OPENROUTER_API_KEY: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print(f"\n  {_YELLOW}OpenRouter setup cancelled.{_RESET}")
+        return ""
+
+    if not key:
+        print(f"  {_YELLOW}No OPENROUTER_API_KEY entered; continuing without a home harness.{_RESET}")
+        return ""
+
+    os.environ["OPENROUTER_API_KEY"] = key
+    try:
+        from synlynk.gateway import cmd_gateway_probe
+        from synlynk.registry import configure_openrouter
+
+        configure_openrouter()
+        print(f"\n  {_DIM}Validating OpenRouter connection…{_RESET}")
+        if cmd_gateway_probe("openrouter") == 0:
+            return "openrouter"
+    except Exception as exc:
+        print(f"  {_YELLOW}OpenRouter setup failed: {exc}{_RESET}")
+        return ""
+
+    print(f"  {_YELLOW}OpenRouter validation failed; continuing without a home harness.{_RESET}")
+    return ""
+
+
 def _wiz_screen_harness(scan: dict) -> str:
     """Screen 1 — choose home harness. Returns chosen harness name."""
     _wiz_clear()
@@ -601,10 +703,10 @@ def _wiz_screen_harness(scan: dict) -> str:
 
     if not harnesses:
         print(f"  {_YELLOW}⚠ No harnesses found on PATH.{_RESET}")
-        print(f"  {_DIM}Install claude, gemini, or codex then re-run `synlynk scan`.{_RESET}")
-        _wiz_prompt("press enter to continue with no home harness")
-        _pkg("_wiz_read_key")()
-        return ""
+        print(f"  {_DIM}Use OpenRouter now, or install claude, gemini, or codex later.{_RESET}")
+        print(f"  {_CYAN}[O]{_RESET} OpenRouter BYOK  {_DIM}— use an API key instead{_RESET}")
+        _wiz_prompt("press O to connect OpenRouter · enter to continue without a home harness")
+        return _wiz_configure_openrouter_byok() if _pkg("_wiz_read_key")().lower() == "o" else ""
 
     print(f"  {_DIM}scan found:{_RESET}")
     for h in harnesses:
@@ -615,12 +717,15 @@ def _wiz_screen_harness(scan: dict) -> str:
     for i, h in enumerate(harnesses, 1):
         default_note = "  (default)" if h["name"] == home else ""
         print(f"  {_CYAN}[{i}]{_RESET} {h['name']}{_DIM}{default_note}{_RESET}")
+    print(f"  {_CYAN}[O]{_RESET} OpenRouter BYOK  {_DIM}— use an API key instead{_RESET}")
 
-    _wiz_prompt("enter number to select · enter to use default")
+    _wiz_prompt("enter number · O for OpenRouter · enter to use default")
     key = _pkg("_wiz_read_key")()
 
     if key in ("\r", "\n", ""):
         return home or (harnesses[0]["name"] if harnesses else "")
+    if key.lower() == "o":
+        return _wiz_configure_openrouter_byok()
     try:
         idx = int(key) - 1
         if 0 <= idx < len(harnesses):
@@ -696,10 +801,15 @@ def _wiz_screen_workspace_name_pick(scan: dict) -> dict:
     # Repo picker
     repos = scan.get("repos", [])
     _DOTFILE_NAMES = {"dotfiles", ".dotfiles", "dotfile"}
-    selected = [r["name"] not in _DOTFILE_NAMES for r in repos]
+    current_repo = os.path.abspath(os.getcwd())
+    selected = [
+        r["name"] not in _DOTFILE_NAMES
+        and os.path.abspath(os.path.expanduser(r.get("path", ""))) == current_repo
+        for r in repos
+    ]
 
     print(f"\n  {_DIM}repos to include:{_RESET}  "
-          f"{_DIM}(space to toggle, enter to confirm){_RESET}\n")
+          f"{_DIM}(enter a number to toggle, enter to confirm){_RESET}\n")
     for i, (r, sel) in enumerate(zip(repos, selected)):
         stack = ", ".join(r["stack_labels"]) or "unknown"
         check = f"{_TEAL}[✓]{_RESET}" if sel else f"{_DIM}[ ]{_RESET}"
@@ -709,8 +819,8 @@ def _wiz_screen_workspace_name_pick(scan: dict) -> dict:
     _wiz_prompt("number to toggle · a to add · enter to confirm")
 
     while True:
-        key = _pkg("_wiz_read_key")()
-        if key in ("\r", "\n", ""):
+        key = sys.stdin.readline().strip()
+        if not key:
             break
         if key == "a":
             print(f"\n  {_DIM}path to repo:{_RESET} ", end="", flush=True)
@@ -848,7 +958,7 @@ def _wiz_screen_roles(scan: dict) -> dict:
 
     return roles
 
-def _wiz_screen_launch(workspace: dict, scan: dict, auto_launch: bool = False) -> None:
+def _wiz_screen_launch(workspace: dict, scan: dict, auto_launch: bool = False) -> bool:
     """Screen 6 — launch cheat sheet. Final screen."""
     _wiz_clear()
     _wiz_header(step=6, total=6)
@@ -875,7 +985,8 @@ def _wiz_screen_launch(workspace: dict, scan: dict, auto_launch: bool = False) -
     _wiz_prompt("done · run `synlynk launch` to pick your first task")
     _pkg("_wiz_read_key")()
     if auto_launch:
-        _pkg("cmd_launch_ftue")()
+        return _pkg("cmd_launch_ftue")(workspace=workspace)
+    return True
 
 def _launch_screen_cycles() -> None:
     """Screen 3 — cycles explainer. Any key returns to Screen 1."""
@@ -1052,18 +1163,22 @@ def _launch_screen_tasks(tasks: list, scan: dict):
         if key.isdigit() and 1 <= int(key) <= len(tasks):
             return tasks[int(key) - 1]
 
-def wizard_init(scan: dict = None, dry_run: bool = False) -> None:
+def wizard_init(scan: dict = None, dry_run: bool = False, discover: bool = False) -> None:
     """Run the FTUE wizard. All state is held in memory until Screen 6.
 
     scan: pre-built ScanResult dict (used by tests and when called from init()).
           If None, runs run_workspace_scan() automatically (Phase 0).
     dry_run: if True, skip writing workspace config + context.md at the end.
+    discover: if True, scan ambient workspace locations for additional repos.
     """
+    ensure_safe_init_cwd(require_git=not dry_run and scan is None)
+
     # ── Phase 0: silent scan (skipped if scan provided) ───────────────────
     if scan is None:
         print(f"\n  {_CYAN}›{_RESET} scanning your environment...")
         try:
-            scan = _pkg("run_workspace_scan")(deep=False)
+            roots = None if discover else [os.getcwd()]
+            scan = _pkg("run_workspace_scan")(roots=roots, deep=False)
             repo_names = ", ".join(r["name"] for r in scan["repos"])
             harness_names = ", ".join(h["name"] for h in scan["harnesses"]) or "none"
             stacks = sorted({l for r in scan["repos"] for l in r["stack_labels"]})
@@ -1117,8 +1232,10 @@ def wizard_init(scan: dict = None, dry_run: bool = False) -> None:
 
     # ── Screen 6: Launch cheat sheet ─────────────────────────────────────
     cfg = _pkg("load_config")()
-    _pkg("_wiz_screen_launch")(workspace, scan,
-                                auto_launch=cfg.get("auto_launch_after_wizard", True))
+    launched = _pkg("_wiz_screen_launch")(workspace, scan,
+                                           auto_launch=cfg.get("auto_launch_after_wizard", True))
+    if launched is False:
+        return
 
     # ── Commit-on-complete: write all state ───────────────────────────────
     if not dry_run:
@@ -1222,6 +1339,7 @@ def cmd_wizard_init(
     detects codebase stack, guards dirty worktree, provisions standard agent charters
     in <5s, auto-invokes synlynk backlog ingest --sync-github, and prompts first-win remediation.
     """
+    ensure_safe_init_cwd(target_dir=repo_dir, require_git=False)
     start_time = time.time()
     from synlynk.agent_cli import SEED_CHARTERS
     print(f"\n  {_BOLD}{_CYAN}synlynk onboarding — zero-risk initialization{_RESET}\n")
@@ -1334,6 +1452,9 @@ def cmd_wizard_init(
 
     elapsed = time.time() - start_time
     print(f"\n  {_GREEN}✓{_RESET} Zero-risk onboarding completed in {elapsed:.2f}s\n")
+    from synlynk.report_cmd import report_hint
+
+    print(f"  {_DIM}{report_hint()}{_RESET}\n")
 
     current_stage = _advance_wizard_onboarding_state(repo_dir, ws_name)
     first_win_cycle = _execute_first_win_onboarding_cycle(

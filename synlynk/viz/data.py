@@ -12,6 +12,7 @@ import tempfile
 import threading
 import time
 from typing import Optional
+from urllib.parse import urlsplit
 from synlynk.observatory import build_job_observatory_snapshot
 from synlynk.viz_views import build_workspace_views_snapshot
 from synlynk.scan import _query_repo_file_tree
@@ -19,6 +20,26 @@ def _pkg():
     """Package namespace tests and the Vizor daemon rebind."""
     import synlynk.viz as viz
     return viz
+
+
+def report_issue_payload(route: str, meta: dict) -> dict:
+    """Build the public-safe Vizor issue payload from allowlisted fields."""
+    from synlynk.report_bundle import fingerprint
+
+    route_path = urlsplit(str(route or "")).path or "/"
+    version = str((meta or {}).get("version") or "unavailable")
+    if not re.fullmatch(r"[A-Za-z0-9._+-]{1,64}", version):
+        version = "unavailable"
+
+    issue_fingerprint = str((meta or {}).get("fingerprint") or "")
+    if not re.fullmatch(r"[0-9a-f]{12}", issue_fingerprint):
+        issue_fingerprint = fingerprint([], f"vizor:{route_path}", 0, "")
+
+    return {
+        "route": route_path,
+        "version": version,
+        "fingerprint": issue_fingerprint,
+    }
 
 
 def load_workspace_sentinel_alerts(sentinel_path: str, *, active_only: bool = False) -> list:
@@ -385,6 +406,50 @@ def _repo_github_url(repo_path: str) -> Optional[str]:
     slug = slug[:-4] if slug.endswith(".git") else slug
     return f"https://github.com/{slug}" if slug else None
 
+
+def _load_pending_approvable_prs() -> list[dict]:
+    """Return open, non-draft PRs that GitHub currently considers clean."""
+    try:
+        result = subprocess.run(
+            [
+                "gh", "pr", "list", "--state", "open",
+                "--json", "number,isDraft,mergeStateStatus",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if result.returncode != 0:
+        return []
+    try:
+        pull_requests = json.loads(result.stdout or "[]")
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(pull_requests, list):
+        return []
+    return [
+        pull_request
+        for pull_request in pull_requests
+        if isinstance(pull_request, dict)
+        and not pull_request.get("isDraft")
+        and pull_request.get("mergeStateStatus") == "CLEAN"
+    ]
+
+
+def _merge_routes_through_reviewer_dispatch() -> bool:
+    """Whether policy delegates every merge to a review role."""
+    try:
+        from synlynk.policy import load_policy
+
+        can_merge = load_policy(repo_path=os.getcwd()).get("merge_authority", {}).get("can_merge", [])
+    except Exception:
+        return False
+    if not isinstance(can_merge, list) or not can_merge:
+        return False
+    return set(can_merge).issubset({"qa", "reviewer", "architect"})
+
 def generate_viz_data(db_path: Optional[str] = None) -> dict:
     def _ts() -> str:
         return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -499,6 +564,8 @@ def generate_viz_data(db_path: Optional[str] = None) -> dict:
             "notes": _load_json_optional(_pkg().VIZ_NOTES_PATH, default={}),
             "jobs": observatory.get("jobs", []),
             "actions": _load_action_history(),
+            "pending_approvable_prs": _load_pending_approvable_prs(),
+            "reviewer_dispatch": _merge_routes_through_reviewer_dispatch(),
             "ecosystem": {},
             "observatory": observatory,
         }

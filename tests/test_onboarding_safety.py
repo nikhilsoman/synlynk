@@ -89,10 +89,10 @@ def test_guard_dirty_worktree_dirty_tree(git_repo):
     assert "synlynk-init-safety-backup-" in stash_proc.stdout
 
 
-def test_cmd_wizard_init_speed_and_charters(tmp_path, monkeypatch):
+def test_cmd_wizard_init_speed_and_charters(git_repo, monkeypatch):
     """cmd_wizard_init probes harnesses, detects stack, provisions 8 charters in <5s, and ingests backlog."""
     # Seed simple python file to detect Python stack
-    (tmp_path / "app.py").write_text("def main(): pass\n")
+    (git_repo / "app.py").write_text("def main(): pass\n")
 
     harnesses_mock = [{"name": "claude", "cli": "claude", "version": "1.0", "path": "/bin/claude"}]
     backlog_mock = {"ingested": 5, "fetched": 5, "duplicates": 0}
@@ -102,7 +102,7 @@ def test_cmd_wizard_init_speed_and_charters(tmp_path, monkeypatch):
 
     start = time.time()
     res = cmd_wizard_init(
-        repo_dir=str(tmp_path),
+        repo_dir=str(git_repo),
         dry_run=False,
         sync_github=True,
         prompt_remediation=False,
@@ -115,7 +115,7 @@ def test_cmd_wizard_init_speed_and_charters(tmp_path, monkeypatch):
     assert set(res["charters_provisioned"]) == set(SEED_CHARTERS.keys())
 
     # Verify physical charter files in .synlynk/agents/
-    agents_dir = tmp_path / ".synlynk" / "agents"
+    agents_dir = git_repo / ".synlynk" / "agents"
     assert agents_dir.exists()
     for role in SEED_CHARTERS.keys():
         charter_file = agents_dir / f"{role}.md"

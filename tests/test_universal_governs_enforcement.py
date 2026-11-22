@@ -52,6 +52,9 @@ def test_preflight_blocks_when_unlinked_in_enforce_mode(monkeypatch):
     _quiet_unrelated_preflight(monkeypatch)
     import synlynk.policy_gates as pg
     monkeypatch.setattr(pg, "gate_mode", lambda gate, key, repo_root=".": "enforce")
+    monkeypatch.setattr(
+        "synlynk.editions.require_linked_goal_mode", lambda: True
+    )
 
     db = _make_test_db()
     result = _preflight_dispatch(

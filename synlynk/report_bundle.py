@@ -1,0 +1,346 @@
+"""Canonical bug-report bundle: schema, normalization, fingerprint, renderer.
+
+FROZEN CONTRACT: the issue form, CLI renderer, CI ``intake`` check and Vizor
+route all derive from BUNDLE_SCHEMA_VERSION / ALLOWED_FIELDS. Change them only
+with a version bump.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import platform
+import re
+import secrets
+import shutil
+import sqlite3
+import subprocess
+import sys
+import urllib.parse
+from pathlib import Path
+
+BUNDLE_SCHEMA_VERSION = 1
+ALLOWED_FIELDS = (
+    "schema",
+    "synlynk_version",
+    "python_version",
+    "os",
+    "arch",
+    "install_method",
+    "harnesses",
+    "env_set",
+    "doctor",
+    "config_schema",
+    "policy_schema",
+    "db_shape",
+    "worktree",
+    "remote",
+    "identity",
+    "fingerprint",
+)
+
+_DEFAULT_SALT_PATH = Path.home() / ".synlynk" / "report_salt"
+
+
+def normalize_path(path: str) -> str:
+    home = os.environ.get("HOME") or str(Path.home())
+    return "~" + path[len(home) :] if home and path.startswith(home) else path
+
+
+def _salt(salt_path: Path) -> bytes:
+    if salt_path.exists():
+        salt = salt_path.read_bytes()
+        if len(salt) != 16:
+            raise ValueError("invalid report salt")
+        return salt
+    salt_path.parent.mkdir(parents=True, exist_ok=True)
+    salt = secrets.token_bytes(16)
+    temporary = salt_path.with_name(f".{salt_path.name}.{secrets.token_hex(8)}.tmp")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(salt)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temporary, salt_path)
+            return salt
+        except FileExistsError:
+            winning_salt = salt_path.read_bytes()
+            if len(winning_salt) != 16:
+                raise ValueError("invalid report salt")
+            return winning_salt
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def salted_hash(value: str, salt_path: Path = _DEFAULT_SALT_PATH) -> str:
+    return hashlib.sha256(_salt(Path(salt_path)) + value.encode()).hexdigest()[:10]
+
+
+def normalize_remote(url: str) -> str:
+    value = url.strip()
+    if not value or re.match(r"^[A-Za-z]:[\\/]", value):
+        return "none"
+    scp_match = re.fullmatch(r"(?:[^@/:]+@)?([^/:]+):(.+)", value)
+    if scp_match and "://" not in value:
+        host, path = scp_match.groups()
+        if path.startswith("/"):
+            return "none"
+    else:
+        try:
+            parsed = urllib.parse.urlsplit(value)
+            parsed_host = parsed.hostname
+        except ValueError:
+            return "none"
+        if parsed.scheme not in {"http", "https", "ssh", "git"} or not parsed_host:
+            return "none"
+        host, path = parsed_host, parsed.path
+    segments = [segment for segment in path.strip("/").split("/") if segment]
+    if segments:
+        segments[-1] = re.sub(r"\.git$", "", segments[-1])
+    safe_segment = re.compile(r"[A-Za-z0-9._-]+")
+    if (
+        not re.fullmatch(r"[A-Za-z0-9.-]+", host)
+        or len(segments) != 2
+        or any(not safe_segment.fullmatch(segment) for segment in segments)
+    ):
+        return "none"
+    return "/".join([host.lower(), *segments])
+
+
+_VARIABLE = [
+    (re.compile(r"(/[\w.~-]+)+"), "<path>"),
+    (re.compile(r"\b[0-9a-f]{7,}\b"), "<hex>"),
+    (re.compile(r"\d+"), "<n>"),
+]
+
+
+def normalize_error_line(line: str) -> str:
+    for pattern, replacement in _VARIABLE:
+        line = pattern.sub(replacement, line)
+    return line.strip()
+
+
+def fingerprint(
+    failing_check_ids: list[str], command: str, exit_code: int, first_error: str
+) -> str:
+    material = "|".join(
+        [
+            ",".join(sorted(failing_check_ids)),
+            command,
+            str(exit_code),
+            normalize_error_line(first_error),
+        ]
+    )
+    return hashlib.sha256(material.encode()).hexdigest()[:12]
+
+
+def _env_names() -> list[str]:
+    from synlynk._constants import HARNESS_CAPABILITY_BASELINES
+
+    names: set[str] = set()
+    for config in HARNESS_CAPABILITY_BASELINES.values():
+        names.update(config.get("env_passthrough", []))
+    return sorted(names)
+
+
+def _collect_harnesses() -> list[dict[str, object]]:
+    from synlynk._constants import HARNESS_CAPABILITY_BASELINES
+
+    return [
+        {
+            "name": name,
+            "binary_found": shutil.which(config.get("cli", name)) is not None,
+            "version": "unavailable",
+        }
+        for name, config in sorted(HARNESS_CAPABILITY_BASELINES.items())
+    ]
+
+
+def _collect_doctor() -> list[dict[str, str]]:
+    from synlynk.doctor import HEALTH_CHECKS
+
+    rows = []
+    read_only_checks = {
+        "_hc_python_version",
+        "_hc_cli_entrypoint_health",
+        "_hc_project_init",
+        "_hc_identity_slug",
+        "_hc_config_schema",
+        "_hc_policy_schema",
+        "_hc_docs_dir",
+        "_hc_instruction_files",
+    }
+    for check in HEALTH_CHECKS:
+        check_name = getattr(check, "__name__", "check")
+        if check_name not in read_only_checks:
+            rows.append({"id": check_name.removeprefix("_hc_"), "status": "unavailable"})
+            continue
+        try:
+            result = check()
+            rows.append({"id": result.name, "status": result.status})
+        except Exception:
+            rows.append({"id": check_name, "status": "unavailable"})
+    return rows
+
+
+def _schema_version(path: Path) -> int | str:
+    data = json.loads(path.read_text())
+    version = data.get("schema_version") if isinstance(data, dict) else None
+    return version if isinstance(version, int) else "unavailable"
+
+
+def _collect_config_schema(root: Path = Path(".")) -> dict[str, int | str] | str:
+    """Collect schema versions from an allowlist of configuration files."""
+    config_dir = Path(root) / ".synlynk"
+    versions = {}
+    for name in ("billing", "config", "workspace"):
+        path = config_dir / f"{name}.json"
+        if path.is_file():
+            versions[name] = _schema_version(path)
+    return versions or "unavailable"
+
+
+def _collect_policy_schema(root: Path = Path(".")) -> int | str:
+    """Collect only the policy document's integer schema version."""
+    path = Path(root) / ".synlynk" / "policy.json"
+    return _schema_version(path) if path.is_file() else "unavailable"
+
+
+def _quote_identifier(identifier: str) -> str:
+    return '"' + identifier.replace('"', '""') + '"'
+
+
+def _state_db_path_read_only() -> Path:
+    override = os.environ.get("SYNLYNK_STATE_DB_PATH")
+    if override:
+        return Path(override)
+    from synlynk import _project_root
+    from synlynk.product_store import identity_slug_from_config, state_db_path
+    from synlynk.state_registry import canonical_path
+
+    slug = identity_slug_from_config(Path(_project_root()))
+    fallback = Path(state_db_path(slug))
+    return Path(canonical_path(slug, fallback))
+
+
+def _collect_db_shape(db_path: Path | str | None = None) -> dict[str, int]:
+    """Return aggregate state-DB schema and row counts, never row content."""
+    if db_path is None:
+        db_path = _state_db_path_read_only()
+    path = Path(db_path).expanduser().resolve()
+    with sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True, timeout=5.0) as conn:
+        user_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
+        table_names = [
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            )
+        ]
+        row_count = sum(
+            int(conn.execute(f"SELECT COUNT(*) FROM {_quote_identifier(name)}").fetchone()[0])
+            for name in table_names
+        )
+    return {
+        "user_version": user_version,
+        "table_count": len(table_names),
+        "row_count": row_count,
+    }
+
+
+def _git(*args: str) -> str:
+    try:
+        return subprocess.run(
+            ["git", *args], capture_output=True, text=True, timeout=5, check=False
+        ).stdout.strip()
+    except Exception:
+        return ""
+
+
+def _safe(function, default="unavailable"):
+    try:
+        return function()
+    except Exception:
+        return default
+
+
+def collect_bundle(
+    salt_path: Path = _DEFAULT_SALT_PATH,
+    command: str = "",
+    exit_code: int = 0,
+    first_error: str = "",
+) -> dict[str, object]:
+    from synlynk._constants import VERSION
+
+    doctor = _safe(_collect_doctor)
+    failing = [
+        row["id"]
+        for row in doctor
+        if isinstance(doctor, list) and row["status"] == "fail"
+    ]
+    branch = _git("rev-parse", "--abbrev-ref", "HEAD")
+    bundle = {
+        "schema": BUNDLE_SCHEMA_VERSION,
+        "synlynk_version": VERSION,
+        "python_version": platform.python_version(),
+        "os": platform.system(),
+        "arch": platform.machine(),
+        "install_method": "pipx"
+        if "pipx" in sys.prefix
+        else ("venv" if sys.prefix != sys.base_prefix else "other"),
+        "harnesses": _safe(_collect_harnesses),
+        "env_set": {name: name in os.environ for name in _env_names()},
+        "doctor": doctor,
+        "config_schema": _safe(_collect_config_schema),
+        "policy_schema": _safe(_collect_policy_schema),
+        "db_shape": _safe(_collect_db_shape),
+        "worktree": {
+            "dirty": bool(_git("status", "--porcelain")),
+            "branch_kind": "main"
+            if branch in ("main", "master")
+            else ("detached" if branch == "HEAD" else "feature"),
+        },
+        "remote": normalize_remote(_git("config", "--get", "remote.origin.url"))
+        or "none",
+        "identity": _safe(
+            lambda: salted_hash(
+                f"{os.environ.get('USER', '')}@{platform.node()}", salt_path
+            )
+        ),
+    }
+    bundle["fingerprint"] = fingerprint(failing, command, exit_code, first_error)
+    return bundle
+
+
+PUBLIC_NOTICE = (
+    "This report will be PUBLIC and indexed. Editing or deleting it later does "
+    "not remove cached copies."
+)
+
+
+def render_body(
+    bundle: dict[str, object],
+    description: str,
+    withheld: list[str] | None = None,
+) -> str:
+    lines = [
+        "## What happened",
+        description or "(no description)",
+        "",
+        "## Bundle (generated)",
+    ]
+    for key in ALLOWED_FIELDS:
+        if key in bundle and key != "fingerprint":
+            lines.append(f"- {key}: {bundle[key]}")
+    lines += ["", f"fingerprint: {bundle['fingerprint']}", ""]
+    lines.append(
+        "Withheld: "
+        + (", ".join(withheld) if withheld else "none")
+        + ". No secret values, file contents or database rows were collected."
+    )
+    return "\n".join(lines)

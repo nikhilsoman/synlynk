@@ -2,8 +2,11 @@
 import html
 import json
 import os
+from urllib.parse import quote, urlencode
+from synlynk._constants import VERSION
 from synlynk.viz.banner import _compute_underused_feature_banner
 from synlynk.viz.chrome import _live_js
+from synlynk.viz.data import report_issue_payload
 def generate_index_html(data: dict, port: int) -> str:
     """Generate the master Vizor shell with two-tier accordion and location breadcrumbs."""
     workspace = data.get("workspace") or {}
@@ -54,6 +57,7 @@ def generate_index_html(data: dict, port: int) -> str:
       --border:    #d1d5db;  --border2: #e8ebee;
       --text:      #1f2328;  --text2: #57606a; --text3: #8b949e;
       --accent:    #0d9e87;  --accent-bg: #e6f7f4; --accent-dim: #c0ede6;
+      --notice-bg: #fff4d6; --notice-border: #d97706; --notice-text: #713f12;
       --shadow:    0 2px 12px rgba(0,0,0,.10);
 
       --s-dream-bg:#ede9fe; --s-dream-bd:#c4b5fd; --s-dream-tx:#6d28d9;
@@ -74,6 +78,7 @@ def generate_index_html(data: dict, port: int) -> str:
       --border:#1e2430; --border2:#13171f;
       --text:#c9d1d9; --text2:#8b949e; --text3:#4a5568;
       --accent:#3de0c0; --accent-bg:#0d2137; --accent-dim:#0a3050;
+      --notice-bg:#3a2808; --notice-border:#fbbf24; --notice-text:#fde68a;
       --shadow: 0 2px 20px rgba(0,0,0,.5);
 
       --s-dream-bg:#2d1f5e;--s-dream-bd:#4a3f80;--s-dream-tx:#a78bfa;
@@ -94,6 +99,7 @@ def generate_index_html(data: dict, port: int) -> str:
     html, body { height:100%; }
     body {
       display:flex;
+      flex-direction:column;
       height:100vh;
       margin:0;
       overflow:hidden;
@@ -108,9 +114,35 @@ def generate_index_html(data: dict, port: int) -> str:
 
     .shell {
       display:flex;
-      height:100vh;
+      height:auto;
       width:100%;
+      flex:1;
       overflow:hidden;
+    }
+    .vizor-underused-banner {
+      animation:vizor-banner-slide-in .3s ease-out;
+      width:100%;
+      flex-shrink:0;
+      background:var(--notice-bg);
+      border-bottom:1px solid var(--notice-border);
+      color:var(--notice-text);
+      padding:12px 20px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
+    .vizor-underused-banner button {
+      background:transparent;
+      border:1px solid currentColor;
+      border-radius:4px;
+      color:inherit;
+      font-weight:bold;
+      cursor:pointer;
+      padding:3px 8px;
+    }
+    @keyframes vizor-banner-slide-in {
+      from { transform:translateY(-100%); }
+      to { transform:translateY(0); }
     }
     .sidenav {
       width:260px;
@@ -266,6 +298,19 @@ def generate_index_html(data: dict, port: int) -> str:
       padding:10px 14px;
       background:var(--bg2);
     }
+    .report-issue-link {
+      display:block;
+      margin-bottom:8px;
+      padding:5px 8px;
+      border:1px solid var(--border);
+      border-radius:5px;
+      color:var(--text2);
+      font-size:11px;
+      font-weight:600;
+      text-align:center;
+      text-decoration:none;
+    }
+    .report-issue-link:hover { border-color:var(--accent); color:var(--accent); }
     .theme-sw { display:flex; gap:4px; margin-bottom:8px; }
     .theme-btn {
       flex:1;
@@ -391,20 +436,47 @@ def generate_index_html(data: dict, port: int) -> str:
     .status-updated { margin-left:auto; }
     """
 
-    meta_json = json.dumps({"port": port, "updated_at": updated_at})
+    meta = {"port": port, "updated_at": updated_at, "version": VERSION}
+    meta_json = json.dumps(meta)
+    report_route = f"/w/{quote(workspace_name, safe='')}/overview.html"
+    report_payload = report_issue_payload(report_route, meta)
+    report_query = urlencode({
+        "template": "bug_report.yml",
+        "bundle": json.dumps(report_payload, sort_keys=True, separators=(",", ":")),
+    })
+    report_issue_url = f"https://github.com/nikhilsoman/synlynk/issues/new?{report_query}"
     avatar_label = (workspace_name[:1] or "S").upper()
 
     banner_message = _compute_underused_feature_banner(data)
     banner_html = ""
+    banner_script = ""
     if banner_message:
         banner_html = f'''
-    <div id="vizor-first-visit-banner" style="animation: slideIn 0.3s ease-out; background: var(--accent-banner, #f59e0b); color: #1a1a1a; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center;">
+    <div id="vizor-first-visit-banner" class="vizor-underused-banner" role="status">
         <span>{banner_message}</span>
-        <button onclick="document.getElementById('vizor-first-visit-banner').remove()" style="background: none; border: none; font-weight: bold; cursor: pointer;">Close</button>
+        <button type="button" data-dismiss-underused-banner aria-label="Dismiss underused feature reminder">Close</button>
     </div>
-    <style>
-      @keyframes slideIn {{ from {{ transform: translateY(-100%); }} to {{ transform: translateY(0); }} }}
-    </style>
+'''
+        banner_script = f'''
+    <script>
+      (() => {{
+        const VIZOR_UNDERUSED_BANNER_SNOOZE_KEY = "vizor-underused-banner-snooze-until";
+        const banner = document.getElementById("vizor-first-visit-banner");
+        const dismiss = () => {{
+          try {{
+            localStorage.setItem(VIZOR_UNDERUSED_BANNER_SNOOZE_KEY, String(Date.now() + 14 * 24 * 60 * 60 * 1000));
+          }} catch (_) {{}}
+          banner.remove();
+        }};
+        try {{
+          if (Number(localStorage.getItem(VIZOR_UNDERUSED_BANNER_SNOOZE_KEY)) > Date.now()) {{
+            banner.remove();
+            return;
+          }}
+        }} catch (_) {{}}
+        banner.querySelector("[data-dismiss-underused-banner]").addEventListener("click", dismiss);
+      }})();
+    </script>
 '''
 
     return f"""<!DOCTYPE html>
@@ -537,6 +609,7 @@ def generate_index_html(data: dict, port: int) -> str:
     </div>
 
     <div class="nav-footer">
+      <a class="report-issue-link" data-action="report-issue" href="{html.escape(report_issue_url, quote=True)}" target="_blank" rel="noopener noreferrer" title="Open a public issue with route, version, and fingerprint only">Report issue ↗</a>
       <div class="theme-sw">
         <button class="theme-btn" type="button" data-theme-mode="light">☀ Light</button>
         <button class="theme-btn" type="button" data-theme-mode="dark">☾ Dark</button>
@@ -708,6 +781,7 @@ def generate_index_html(data: dict, port: int) -> str:
 }})();
 </script>
 {_live_js(port)}
+{banner_script}
 </body>
 </html>"""
 

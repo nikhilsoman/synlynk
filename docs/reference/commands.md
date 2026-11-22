@@ -38,6 +38,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `harness probe` (secondary) — open
 - `config set` (secondary) — open
 - `config nudges` (secondary) — open
+- `report` (primary) — sustain
 - `whoami` (secondary) — open
 
 ## Tier 1 — Goal
@@ -104,6 +105,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `governs reconcile-unplaced` (secondary) — sustain
 - `fleet list` (secondary) — open
 - `fleet apply` (secondary) — open
+- `onboard repair` (secondary) — sustain
 
 ## Tier 2 — Execute
 

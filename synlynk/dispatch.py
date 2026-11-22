@@ -2212,6 +2212,7 @@ _GOVERNS_LINKAGE_WARNING = (
     "GOVERNS linkage missing — dispatch proceeding, but this will hard-fail once #1990 ships"
 )
 _UNSUPPLIED = object()
+_FTUE_FIRST_WIN_STORY_ID = "story-ftue-firstwin"
 
 
 def _governs_linkage_resolvable(
@@ -2627,6 +2628,9 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
         if more_count > 0:
             rendered_files += f"          +{more_count} more\n"
         files_line += rendered_files
+    from synlynk.report_cmd import report_hint
+
+    report_line = f"{report_hint(job_id)}\n"
     load_config_fn = _pkg("load_config")
     config = load_config_fn() if load_config_fn else {}
     if is_fenced_command("jobs", config):
@@ -2653,6 +2657,7 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
             f"{files_line}"
             f"{task_line}"
             f"{task_sha_line}"
+            f"{report_line}"
             f"---------------------------------\n"
         )
     return (
@@ -2668,6 +2673,7 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
         f"{files_line}"
         f"{task_line}"
         f"{task_sha_line}"
+        f"{report_line}"
         f"---------------------------------\n"
     )
 
@@ -4359,6 +4365,12 @@ def _preflight_dispatch(
     from synlynk.policy_gates import gate_mode
 
     governs_mode = gate_mode("governs_authority", "require_linked_goal_mode")
+
+    # The FTUE launch supplies a synthetic story marker for the first win, which
+    # is deliberately not persisted or validated as a governed story.
+    if caller_story_id == _FTUE_FIRST_WIN_STORY_ID:
+        return {"passed": True, "sentinel": None, "reason": None}
+
     if _task_hint and not linkage_resolvable:
         if governs_mode == "enforce":
             _reason = (

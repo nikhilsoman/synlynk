@@ -1,7 +1,9 @@
 import argparse
+import contextlib
 import json
 import os
 import sys
+import time
 from pathlib import Path
 import re
 
@@ -324,7 +326,7 @@ _TOP_LEVEL_COMMANDS = (
     "help", "init", "quickstart", "upgrade", "fleet", "uninstall", "join", "start", "home", "testbed", "tool",
     "pack", "connector", "impact", "mesh", "spike", "team", "decide", "heal",
     "audit-docs", "goal", "governs", "intent", "local", "models", "media", "scan", "workspace",
-    "migrate", "rollback", "probe", "doctor", "worktree", "tui", "notify", "exit",
+    "migrate", "rollback", "probe", "doctor", "report", "worktree", "tui", "notify", "exit",
     "repair", "sync", "configure", "identity", "type", "whoami", "events", "session",
     "harness", "agent", "exec", "gh", "watch", "swarm", "daemon", "checkpoint", "status",
     "backup", "state", "ops", "selftest", "config", "sentinel", "dispatch", "jobs", "relay",
@@ -333,7 +335,7 @@ _TOP_LEVEL_COMMANDS = (
     "instructions", "marketing", "roles", "release", "viz", "provenance",
     "backfill-capability-ratings",
     "board", "concierge", "addon", "autonomy", "context",
-    "gateway", "spec",
+    "gateway", "spec", "onboard",
 )
 
 
@@ -432,6 +434,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
                                   "Use '.' for repos that keep docs at the repo root.")
     init_parser.add_argument("--wizard", action="store_true",
                              help="Run the FTUE guided setup wizard")
+    init_parser.add_argument("--discover", action="store_true",
+                             help="With --wizard, discover repositories beyond the current directory")
     init_parser.add_argument("--quickstart", action="store_true",
                              help="Run the 5-stage automated FTUE onboarding journey")
     init_parser.add_argument("--brownfield", action="store_true",
@@ -441,6 +445,15 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
                              help="Allow init/brownfield to replace generated 4-docs on a migrated ledger (off by default)")
     init_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
                              help="Preview what init would write without writing anything")
+
+    onboard_parser = subparsers.add_parser("onboard", help="Inspect and repair onboarding artifacts")
+    onboard_sub = onboard_parser.add_subparsers(dest="onboard_action")
+    onboard_repair_parser = onboard_sub.add_parser(
+        "repair", help="Repair known #5413 onboarding artifacts (dry-run by default)"
+    )
+    onboard_mode = onboard_repair_parser.add_mutually_exclusive_group()
+    onboard_mode.add_argument("--dry-run", action="store_true", help="Preview repairs (default)")
+    onboard_mode.add_argument("--apply", action="store_true", help="Apply only conservative repairs")
 
     new_parser = subparsers.add_parser("new", help="Start Greenfield Guided Onboarding for a blank-canvas project")
     new_parser.add_argument("intent", nargs="?", default="", help="Project intent or description")
@@ -841,6 +854,21 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
                                help="Provision recommended ecosystem tools if missing")
     doctor_parser.add_argument("--version", action="store_true",
                                help="Report read-only version-authority status")
+
+    report_parser = subparsers.add_parser(
+        "report", help="File a redacted, previewed bug report"
+    )
+    report_parser.add_argument(
+        "--last",
+        action="store_true",
+        help="Build the report from the most recent failed command (Part 2)",
+    )
+    report_parser.add_argument(
+        "--clear-flight",
+        action="store_true",
+        dest="clear_flight",
+        help="Delete the local flight-recorder buffer (Part 2)",
+    )
 
     worktree_parser = subparsers.add_parser(
         "worktree", help="Audit and clean up stale git worktrees/branches"
@@ -2508,7 +2536,7 @@ def _run_fast_observability_command(cli_tokens, selected_command):
 
 
 
-def main(argv=None) -> None:
+def _dispatch_command(argv=None) -> None:
     import synlynk as _package
 
     cli_tokens = list(argv) if argv is not None else sys.argv[1:]
@@ -2518,19 +2546,29 @@ def main(argv=None) -> None:
         print(f"synlynk {VERSION}")
         return
 
-    # Non-intrusive background update check
-    try:
-        from synlynk.upgrade import check_for_updates_background, get_update_notice
+    selected_command = _command_from_argv(cli_tokens)
+    if selected_command == "init":
+        from synlynk.wizard import ensure_safe_init_cwd
 
-        check_for_updates_background()
-        notice = get_update_notice()
-        if notice and sys.stderr.isatty() and not any(t in cli_tokens for t in ["--json", "pack", "--raw"]):
-            print(f"\n  {notice}\n", file=sys.stderr)
-    except Exception:
-        pass
+        try:
+            ensure_safe_init_cwd()
+        except RuntimeError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            raise SystemExit(2) from exc
+
+    # Reporting is read-only until the user explicitly files or saves a draft.
+    if not cli_tokens or cli_tokens[0] != "report":
+        try:
+            from synlynk.upgrade import check_for_updates_background, get_update_notice
+
+            check_for_updates_background()
+            notice = get_update_notice()
+            if notice and sys.stderr.isatty() and not any(t in cli_tokens for t in ["--json", "pack", "--raw"]):
+                print(f"\n  {notice}\n", file=sys.stderr)
+        except Exception:
+            pass
 
     fast_entrypoint = _package._FAST_CLI
-    selected_command = _command_from_argv(cli_tokens)
     if cli_tokens and cli_tokens[0] == "help":
         parser = build_parser(selected_command="help" if fast_entrypoint else None)
         args = parser.parse_args(cli_tokens)
@@ -2646,7 +2684,7 @@ def main(argv=None) -> None:
             _cmd_name = tok
             break
     _repo_initialized = os.path.exists(".synlynk/config.json") or os.path.exists(".synlynk/workspace.json")
-    if _repo_initialized or _cmd_name != "init":
+    if _cmd_name != "report" and (_repo_initialized or _cmd_name != "init"):
         _reconcile_jobs()
         try:
             from synlynk.capability_watch import spawn_staleness_check_thread
@@ -2693,7 +2731,10 @@ def main(argv=None) -> None:
                 print(f"\n✦ FTUE Onboarding complete. First win prepared on {res['first_win_task'].get('branch')}.")
             return
         elif getattr(args, "wizard", False):
-            wizard_init(dry_run=getattr(args, "dry_run", False))
+            wizard_init(
+                dry_run=getattr(args, "dry_run", False),
+                discover=getattr(args, "discover", False),
+            )
         else:
             agents = [a.strip() for a in args.agents.split(",") if a.strip()]
             if getattr(args, "docs_dir", None):
@@ -2705,6 +2746,11 @@ def main(argv=None) -> None:
                  non_interactive=getattr(args, "non_interactive", False),
                  dry_run=getattr(args, "dry_run", False),
                  replace_generated_docs=getattr(args, "replace_generated_docs", False))
+    elif args.command == "onboard":
+        if getattr(args, "onboard_action", None) == "repair":
+            from synlynk.onboard_repair import cmd_onboard_repair
+            sys.exit(cmd_onboard_repair(dry_run=not getattr(args, "apply", False)))
+        help_parsers.get("onboard", parser).print_help()
     elif args.command == "new":
         from synlynk.greenfield.orchestrator import GreenfieldOrchestrator
         raw_intent = getattr(args, "intent", "") or ""
@@ -2747,6 +2793,18 @@ def main(argv=None) -> None:
             sys.exit(0)
         gh_args = getattr(args, "gh_args", []) or []
         if gh_args and gh_args[0] == "sync-roadmap":
+            allowed_flags = {"--dry-run", "--backfill"}
+            unsupported = [token for token in gh_args[1:] if token not in allowed_flags]
+            if unsupported:
+                print(
+                    "usage: synlynk gh sync-roadmap [--dry-run] [--backfill]",
+                    file=sys.stderr,
+                )
+                print(
+                    f"error: unrecognized argument: {unsupported[0]}",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
             from synlynk.gh_sync_cli import cmd_sync_roadmap
             from synlynk.github_repo import resolve_owner_repo
             owner, repo = resolve_owner_repo()
@@ -4064,6 +4122,10 @@ def main(argv=None) -> None:
         )
     elif args.command == "doctor":
         sys.exit(cmd_doctor(args))
+    elif args.command == "report":
+        from synlynk.report_cmd import cmd_report
+
+        sys.exit(cmd_report(args))
     elif args.command == "worktree":
         from synlynk.worktree import cmd_worktree_audit, cmd_worktree_clean
         action = getattr(args, "worktree_action", None)
@@ -4342,6 +4404,94 @@ def main(argv=None) -> None:
         sys.exit(cmd_spec_lint(args))
     else:
         parser.print_help()
+
+
+class _StderrTee:
+    """Forward stderr while retaining only a bounded first non-empty line."""
+
+    _MAX_CAPTURED_LINE = 2048
+
+    def __init__(self, target):
+        self.target = target
+        self.first_line = ""
+
+    def write(self, text):
+        result = self.target.write(text)
+        if not self.first_line:
+            for character in text:
+                if character in "\r\n":
+                    if self.first_line:
+                        break
+                    continue
+                if len(self.first_line) < self._MAX_CAPTURED_LINE:
+                    self.first_line += character
+                if len(self.first_line) == self._MAX_CAPTURED_LINE:
+                    break
+        return result
+
+    def flush(self):
+        return self.target.flush()
+
+    def __getattr__(self, name):
+        return getattr(self.target, name)
+
+
+def _system_exit_code(exc: SystemExit) -> int:
+    if exc.code is None:
+        return 0
+    if isinstance(exc.code, int):
+        return exc.code
+    return 1
+
+
+def run_with_recorder(argv=None) -> int:
+    """Run the CLI and best-effort record its outcome without changing it."""
+    cli_tokens = list(argv) if argv is not None else sys.argv[1:]
+    selected_command = _command_from_argv(cli_tokens)
+    if selected_command == "report":
+        result = _dispatch_command(cli_tokens)
+        return result if isinstance(result, int) else 0
+
+    started = time.monotonic()
+    stderr_capture = _StderrTee(sys.stderr)
+    exit_code = 0
+    error = ""
+    try:
+        with contextlib.redirect_stderr(stderr_capture):
+            result = _dispatch_command(cli_tokens)
+        exit_code = result if isinstance(result, int) else 0
+        return exit_code
+    except SystemExit as exc:
+        exit_code = _system_exit_code(exc)
+        raise
+    except BaseException as exc:
+        exit_code = 1
+        error = str(exc)
+        raise
+    finally:
+        if stderr_capture.first_line:
+            error = stderr_capture.first_line
+        try:
+            from synlynk import flight_recorder
+
+            flight_recorder.record(
+                os.getcwd(),
+                command=selected_command or "",
+                flags=cli_tokens,
+                exit_code=exit_code,
+                duration=time.monotonic() - started,
+                error=error,
+            )
+        except Exception:
+            pass
+        if exit_code != 0:
+            from synlynk.report_cmd import report_hint
+
+            print(report_hint(), file=sys.stderr)
+
+
+def main(argv=None) -> int:
+    return run_with_recorder(argv)
 
 if __name__ == "__main__":
     main()
