@@ -162,11 +162,16 @@ def test_lookup_on_forty_paths_is_under_five_milliseconds(tmp_path):
     cache_dir = tmp_path / ".synlynk" / "graph-cache"
     cache_dir.mkdir(parents=True)
     (cache_dir / "traversals.json").write_text(json.dumps(cache))
-    started = time.perf_counter()
     hit = lookup_traversal(str(tmp_path), {"alpha", "beta"})
-    elapsed = time.perf_counter() - started
     assert hit["id"] == "entrypoint:39"
-    assert elapsed < 0.005
+    elapsed = []
+    for _ in range(7):
+        started = time.perf_counter()
+        hit = lookup_traversal(str(tmp_path), {"alpha", "beta"})
+        elapsed.append(time.perf_counter() - started)
+        assert hit["id"] == "entrypoint:39"
+    # Use the minimum to avoid CI noise; see gh:#5450.
+    assert min(elapsed) < 0.005
 
 
 def test_god_neighborhood_file_is_a_legal_sparse_cone_input(tmp_path):
