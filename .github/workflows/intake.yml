@@ -1,0 +1,19 @@
+name: Bug report intake
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  intake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Request a diagnostic bundle when missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/intake_check.py "$GITHUB_EVENT_PATH"

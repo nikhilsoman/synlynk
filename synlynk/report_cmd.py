@@ -16,6 +16,12 @@ URL_BODY_CAP = 6000
 _input = input
 
 
+def report_hint(job_id: str | None = None) -> str:
+    """Return the shared, privacy-safe bug-report prompt."""
+    job_suffix = f" (job {job_id})" if job_id else ""
+    return f"Something wrong? Run `synlynk report --last`{job_suffix}."
+
+
 def _gh_issue_create(title: str, body: str) -> str:
     result = subprocess.run(
         [
@@ -123,17 +129,35 @@ def confirm_and_file(
 
 
 def cmd_report(args=None) -> int:
-    if args is not None and (
-        getattr(args, "last", False) or getattr(args, "clear_flight", False)
-    ):
-        print("--last and --clear-flight are reserved for Part 2.", file=sys.stderr)
-        return 2
+    from synlynk import flight_recorder
+
+    if args is not None and getattr(args, "clear_flight", False):
+        flight_recorder.clear(os.getcwd())
+        print("Flight recorder buffer cleared.")
+        return 0
+
     description = ""
+    fingerprint_inputs = None
+    if args is not None and getattr(args, "last", False):
+        record = flight_recorder.last_failed(os.getcwd())
+        if record is None:
+            print("No failed command recorded in this project.")
+            return 1
+        command = str(record.get("command", ""))
+        exit_code = int(record.get("exit_code", 1))
+        first_error = str(record.get("error", ""))
+        description = f"`synlynk {command}` exited {exit_code}: {first_error}"
+        fingerprint_inputs = {
+            "command": command,
+            "exit_code": exit_code,
+            "first_error": first_error,
+        }
+
     withheld = []
     visible_terminal = sys.stdin.isatty() and sys.stdout.isatty()
-    if visible_terminal:
+    if visible_terminal and fingerprint_inputs is None:
         description = _input("What went wrong? (one line, optional): ").strip()
-    bundle = collect_bundle()
+    bundle = collect_bundle(**fingerprint_inputs) if fingerprint_inputs else collect_bundle()
     remote = bundle.pop("remote", None)
     if remote not in (None, "none"):
         withheld.append("remote")

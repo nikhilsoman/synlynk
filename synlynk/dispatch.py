@@ -2628,6 +2628,9 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
         if more_count > 0:
             rendered_files += f"          +{more_count} more\n"
         files_line += rendered_files
+    from synlynk.report_cmd import report_hint
+
+    report_line = f"{report_hint(job_id)}\n"
     load_config_fn = _pkg("load_config")
     config = load_config_fn() if load_config_fn else {}
     if is_fenced_command("jobs", config):
@@ -2654,6 +2657,7 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
             f"{files_line}"
             f"{task_line}"
             f"{task_sha_line}"
+            f"{report_line}"
             f"---------------------------------\n"
         )
     return (
@@ -2669,6 +2673,7 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
         f"{files_line}"
         f"{task_line}"
         f"{task_sha_line}"
+        f"{report_line}"
         f"---------------------------------\n"
     )
 
