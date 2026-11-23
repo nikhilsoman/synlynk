@@ -48,3 +48,18 @@ def test_migrate_v2_to_v3_preserves_sfia_and_governance_fields():
     assert v3["migration_provenance"]["source_schema"] == "v2.0"
     # coordination_pattern's old string value is preserved, not discarded, under extensions.
     assert v3["extensions"]["legacy_v2"]["coordination_pattern"] == "orchestrator"
+
+
+def test_migrate_v1_to_v3_round_trips_every_default_role_charter():
+    from synlynk.charter_core.schema import validate_structure
+    from synlynk.charter_migrate import migrate_v1_to_v3
+    from synlynk.charters import DEFAULT_ROLE_CHARTERS
+
+    known_roles = list(DEFAULT_ROLE_CHARTERS.keys())
+    for role, v1_data in DEFAULT_ROLE_CHARTERS.items():
+        v3 = migrate_v1_to_v3(role, v1_data)
+        errors = validate_structure(v3, known_roles=known_roles)
+        assert errors == [], f"role {role} failed structural validation: {errors}"
+        # No v1 mandate/authority/escalation/sop content was silently dropped.
+        assert v3["core"]["mandate"] == v1_data.get("mandate", "")
+        assert v3["core"]["authorities"] == list(v1_data.get("autonomous_authorities", []))
