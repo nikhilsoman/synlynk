@@ -4082,16 +4082,15 @@ def _try_sync_story(story_id: str) -> None:
     try:
         owner, repo = resolve_owner_repo()
         conn = _get_db()
-        phase = conn.execute(
-            "SELECT arc_version FROM roadmap_phases WHERE story_id=?", (story_id,)
-        ).fetchone()
+        from synlynk.gh_sync import story_arc_version
+        arc_ver = story_arc_version(conn, story_id)
         milestone_number = None
-        if phase:
+        if arc_ver:
             mapped = conn.execute(
                 "SELECT gm.github_number FROM github_sync_map gm "
                 "JOIN roadmap_arcs ra ON ra.arc_uid = gm.entity_id "
                 "WHERE gm.entity_type='roadmap_arc' AND ra.version=?",
-                (phase[0],),
+                (arc_ver,),
             ).fetchone()
             milestone_number = mapped[0] if mapped else None
         sync_story(
