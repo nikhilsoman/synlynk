@@ -46,3 +46,39 @@ def migrate_v1_to_v3(role: str, v1_data: dict) -> dict:
             "source_fields_dropped": [],
         },
     }
+
+
+def migrate_v2_to_v3(role: str, v2_data: dict) -> dict:
+    return {
+        "schema_version": "3.0.0",
+        "core": {
+            "charter_id": role,
+            "mandate": v2_data.get("mandate", ""),
+            "authorities": list(v2_data.get("autonomous_authorities", [])),
+            "escalation": list(v2_data.get("escalation_triggers", [])),
+            "sop": list(v2_data.get("wake_cycle_sop", [])),
+        },
+        "sfia_mapping": v2_data.get("sfia_mapping"),
+        "boundaries": list(v2_data.get("boundaries", [])),
+        "governance": {
+            "tools": list(v2_data.get("tools", [])),
+            "credentials": list(v2_data.get("credentials", [])),
+            "evidence_contracts": list(v2_data.get("evidence_contracts", [])),
+        },
+        "identity": {"app_ref": f"github-app:{role}"},
+        "coordination": {"handoffs": []},
+        "constitution_binding": {
+            "tier_acknowledgements": [],
+            "law_refs": [],
+            "evidence_ref": "",
+        },
+        "requirements": {"task_types": []},
+        "extensions": {
+            "legacy_v2": {"coordination_pattern": v2_data.get("coordination_pattern")},
+        },
+        "migration_provenance": {
+            "source_schema": "v2.0",
+            "migrated_at": _now_iso(),
+            "source_fields_dropped": [],
+        },
+    }
