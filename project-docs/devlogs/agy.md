@@ -1,5 +1,24 @@
 # Agy Devlog
 
+## 2026-11-24 — Hetzner Cloud Swarm Runner Driver & Vertical Host Orchestration (Sequence C / v0.39.1)
+
+### Shipped & Verified Across Fleet
+- **Hetzner Cloud Swarm Runner Driver (`synlynk/runners/hetzner.py`):**
+  - Standard-library HTTP implementation over Hetzner Cloud REST API (`https://api.hetzner.cloud/v1`).
+  - Dynamic server sizing matrix: `cpx21` (1-3 tasks), `cpx31` (4-8 tasks), `cpx51` (9-16 tasks), and `cax41` (Arm).
+  - Triple-layer scale-to-zero watchdog: Layer 1 OS cloud-init timer (`shutdown -h +{ttl}`), Layer 2 process exit trap (`poweroff`), Layer 3 client/relay `threading.Timer` supervisor.
+  - Driver registered in `synlynk/runners/manager.py`.
+- **Swarm Leasing & Dual-Mode CLI (`synlynk/swarm.py` & `synlynk/cli.py`):**
+  - Implemented `synlynk swarm lease --epic <id> [--driver hetzner] [--size auto|small|medium|large] [--relay] [--watch]`.
+  - Supports both Mode 1 (Direct BYOT via `HCLOUD_TOKEN`) and Mode 2 (Hosted Centralized Relay Dispatch).
+- **GitHub Actions Orchestration Template:**
+  - Added `.github/workflows/swarm-lease.yml` enabling workspace agents and collaborators to trigger remote Hetzner swarms via `gh workflow run`.
+- **Testing & Verification:**
+  - 16 unit tests passing across `tests/test_runners_hetzner.py` and `tests/test_swarm_engine.py`.
+  - Updated `v0.39.1` phase to `[x]` in `state.db` and rendered `project-docs/roadmap.md`.
+[@agy, @nikhilsoman]
+
+
 ## 2026-11-23 — Standalone Developer Tooling Suite (Sequence B) & Law 3 Injected Promotion
 
 ### Shipped & Verified Across Fleet
