@@ -655,3 +655,35 @@ chase the `pr_number`-NULL pattern as a broader dispatch pipeline bug.
   session) — Agy's quota exhaustion is not resolved, just rotates; always re-verify before trusting it
   on anything time-sensitive.
 [@claude]
+
+## 2026-11-23 — gh:#5443 item 3 housekeeping round 2: PR #5460 (docs-only) shipped, nested worktrees swept
+
+- Cut `chore/claude/stable-roadmap-devlog-housekeeping` fresh off `origin/main` (not the now-superseded
+  `chore/claude/stable-roadmap-arc-phase-identity-spec` branch, since PR #5459 had already squash-merged
+  — continuing commits on the old branch would have targeted dead history) to carry the devlog entry
+  above plus a cost-archive backfill row. Per CLAUDE.md's "docs PRs must be separate from code PRs," this
+  had to be its own PR rather than bundled into #5459.
+- Host-identity `git push` was correctly refused by the `synlynk gh` shim ("host identity is not used") —
+  this is the intended policy (personal GitHub token is off-limits to every agent/harness), not a bug to
+  route around. Dispatched the push+PR-create step to Codex per the project's #426 GitHub-write routing
+  priority (`job-5cbf82a2`). It reported the ambiguous status `succeeded_gh_write_failed`
+  (`unknown_contract`) — rather than trusting the label, verified directly via `git ls-remote` and
+  `gh pr list --search head:...`, which confirmed the branch was pushed and PR #5460 was genuinely open.
+  Another instance of this project's long-running job-status false-negative pattern
+  (`[[job-status-false-negative-rca-1377]]`).
+- Dispatched the Hardened PR Review Policy's non-authoring review+merge to Codex (`job-178ead99`, role
+  `qa`) — valid despite Codex having pushed the branch, since it never authored the devlog/memory content
+  itself (I wrote that). Reported `done`/`contract_effect_verified`; independently confirmed via
+  `gh pr view --json state,mergedAt,mergeCommit,reviews` that PR #5460 is genuinely `MERGED` (`a0c4d2e7`)
+  with a real `APPROVED` review from the `synlynk-synlynk-qa` identity, not just a status label.
+- Swept both nested dispatch worktrees/branches (`job-5cbf82a2`, `job-178ead99`) same-turn — both clean,
+  work already folded into the merged PR. The parent worktree itself
+  (`.claude/worktrees/chore-claude-stable-roadmap-arc-phase-identity-spec`, now on branch
+  `chore/claude/stable-roadmap-devlog-housekeeping`) is harness-owned (this session's own isolation), not
+  something created via `git worktree add` from here — left in place per protocol; still needs a
+  main-checkout-rooted session to retire, same carried-over blocker as the prior entry.
+- Posted a closing status comment on parent tracking issue gh:#5443 covering both PRs (#5459, #5460) and
+  the verification-not-trust pattern on the ambiguous job status.
+- Logged native-session cost (`synlynk cost log --pr 5460 ...`) for the dispatch-orchestration +
+  independent-verification work in this round.
+[@claude]
