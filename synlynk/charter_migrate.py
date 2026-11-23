@@ -9,7 +9,11 @@ No v1/v2 content is dropped; round-trip tests in this file's test module assert 
 """
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
+
+from synlynk.charter_core.yaml_subset import dump_yaml
+from synlynk.charters import DEFAULT_ROLE_CHARTERS
 
 
 def _now_iso() -> str:
@@ -82,3 +86,22 @@ def migrate_v2_to_v3(role: str, v2_data: dict) -> dict:
             "source_fields_dropped": [],
         },
     }
+
+
+def cmd_charter_migrate(role: str, apply: bool = False, charters_dir: str = None) -> dict:
+    """Migrate one role's v1 charter to v3. Returns a result dict; writes a file only if apply=True."""
+    if role not in DEFAULT_ROLE_CHARTERS:
+        raise ValueError(f"unknown role for migration: {role!r}")
+
+    v1_data = DEFAULT_ROLE_CHARTERS[role]
+    migrated = migrate_v1_to_v3(role, v1_data)
+
+    if apply:
+        if not charters_dir:
+            raise ValueError("charters_dir is required when apply=True")
+        os.makedirs(charters_dir, exist_ok=True)
+        out_path = os.path.join(charters_dir, f"{role}.v3.yaml")
+        with open(out_path, "w") as f:
+            f.write(dump_yaml(migrated))
+
+    return {"role": role, "applied": apply, "migrated": migrated}
