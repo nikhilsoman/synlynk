@@ -37,6 +37,9 @@ class RunnerManager:
         if "fly" in enabled or "fly" in runner_config:
             from synlynk.runners.fly import FlyRunnerDriver
             self.drivers["fly"] = FlyRunnerDriver(runner_config.get("fly", {}))
+        if "hetzner" in enabled or "hetzner" in runner_config:
+            from synlynk.runners.hetzner import HetznerRunnerDriver
+            self.drivers["hetzner"] = HetznerRunnerDriver(runner_config.get("hetzner", {}))
 
     def driver(self, name=None) -> SwarmRunnerDriver:
         name = name or self.config.get("swarm_runners", {}).get("default", "local")
