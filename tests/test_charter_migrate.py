@@ -63,3 +63,33 @@ def test_migrate_v1_to_v3_round_trips_every_default_role_charter():
         # No v1 mandate/authority/escalation/sop content was silently dropped.
         assert v3["core"]["mandate"] == v1_data.get("mandate", "")
         assert v3["core"]["authorities"] == list(v1_data.get("autonomous_authorities", []))
+
+
+def test_cmd_charter_migrate_dry_run_writes_nothing(tmp_path):
+    from synlynk.charter_migrate import cmd_charter_migrate
+
+    charters_dir = tmp_path / ".synlynk" / "charters"
+    charters_dir.mkdir(parents=True)
+
+    result = cmd_charter_migrate(role="pm", apply=False, charters_dir=str(charters_dir))
+
+    assert result["role"] == "pm"
+    assert result["applied"] is False
+    assert "core" in result["migrated"]
+    assert not (charters_dir / "pm.v3.yaml").exists()
+
+
+def test_cmd_charter_migrate_apply_writes_v3_yaml_file(tmp_path):
+    from synlynk.charter_migrate import cmd_charter_migrate
+    from synlynk.charter_core.yaml_subset import parse_yaml
+
+    charters_dir = tmp_path / ".synlynk" / "charters"
+    charters_dir.mkdir(parents=True)
+
+    result = cmd_charter_migrate(role="pm", apply=True, charters_dir=str(charters_dir))
+
+    assert result["applied"] is True
+    out_file = charters_dir / "pm.v3.yaml"
+    assert out_file.exists()
+    written = parse_yaml(out_file.read_text())
+    assert written["core"]["charter_id"] == "pm"
