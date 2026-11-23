@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tokenprice"
+version = "0.1.0"
+description = "Universal, zero-dependency model pricing catalog and token valuation engine"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+authors = [
+    { name = "Synlynk Team", email = "noreply@antigravity.dev" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = []
+
+[project.scripts]
+tokenprice = "tokenprice.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tokenprice"]

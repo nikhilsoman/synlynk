@@ -1,5 +1,45 @@
 # Agy Devlog
 
+## 2026-11-23 — Standalone Developer Tooling Suite (Sequence B) & Law 3 Injected Promotion
+
+### Shipped & Verified Across Fleet
+- **Built & Verified 5 Standalone Packages in `packages/`:**
+  1. `packages/tokenprice`: Zero-dependency model pricing and valuation engine with `__slots__` memory efficiency, 4-tier configuration resolver, and `tokenprice` CLI.
+  2. `packages/tokentrail`: Universal session transcript and gateway extractor with streaming chunk deduplication resolving the 2x overcounting bug, adapters for Claude Code, Agy, Codex, OpenRouter, LiteLLM, and `tokentrail` CLI.
+  3. `packages/worktree-lease`: Atomic git worktree concurrency manager using `fcntl.flock`, detached HEAD support, dead-PID pruning, and `wtlease` CLI.
+  4. `packages/harness-spec`: Universal agent CLI passive probe engine (`--version`), normalized `HarnessContract`, sandbox profile definitions, and `harness-spec` CLI.
+  5. `packages/token-breaker`: In-flight token and spend circuit breaker with streaming generator middleware, consecutive error stall demotion, and `tbreak` CLI.
+  - Zero-import modularity invariant: AST linter tests in each package verify 0 imports of `synlynk`.
+  - 18 standalone unit tests passing 100%.
+- **Synlynk Core Integration Facade (`synlynk/ecosystem/`):**
+  - Built unified bridge facade cleanly exposing the 5 standalone packages to Synlynk core.
+  - Added test suite `tests/test_ecosystem_bridge.py` (8 passed).
+- **Constitutional Law 3 Tier 3 INJECTED Promotion:**
+  - Updated `synlynk/constitution.py` promoting `law-3` ("Metered Self-Preservation & Cost Traceability") to `DeliveryTier.INJECTED`.
+  - Updated `synlynk/bearings.py` to inject Law 3 into session bearings blocks.
+  - Added `check_cost_provenance_gate()` in `synlynk/pr_check.py`.
+[@agy, @nikhilsoman]
+
+
+## 2026-11-23 — Roadmap Recast: Dual-Track Acceleration & Target Products (dec-a741f92e)
+
+### Shipped & Recorded Across Fleet
+- **Convened Synlynk Decide Panel (dec-a741f92e):**
+  - Convened executive panel (`claude`, `agy`, `codex`, `grok`) evaluating Roadmap Pacing vs. Acceleration in light of the 2026-11-21 External Review.
+  - Ratified unanimous consensus rejecting artificial pacing in favor of **Dual-Track Acceleration**:
+    - **Track 1:** Immediate 48-hour surgical TDD sprint patching the 4 critical data integrity liabilities (DB migration table drops, milestone ID joins, child job timeout deadlock, and scheduler replay duplication).
+    - **Track 2:** Active unblocking of Hetzner Cloud Swarm Runners (`v0.39.1`) and Fly Dev Boost (`v0.40.1`) to drive high-velocity autonomous engineering across target products (`rxcc`, `vdowrx`, `hitchcock`).
+  - Recorded canonical decision in `project-docs/decisions/2026-11-23-pacing-vs-accelerating-roadmap-infra-vel.json` and `.md`.
+- **Recast Canonical Roadmap in `state.db` & `roadmap.md`:**
+  - Recast `v0.39.0` with the 4 critical data integrity blocker phases alongside Hardened FTUE & Vizor HUD.
+  - Re-anchored `v0.39.1` as active P0 for Hetzner Cloud Swarm Runner Driver & Vertical Host Orchestration.
+  - Added `v0.40.0` as Core + Personal GA & Task Receipt Handover Ledger.
+  - Added `v0.40.1` as Fly Dev Boost Ephemeral Execution.
+  - Added `v0.41.0` as High-Velocity Multi-Repo Autonomous Engine for Target Products (`rxcc`, `vdowrx`, `hitchcock`).
+  - Synchronized and rendered `project-docs/roadmap.md` via `synlynk roadmap add`.
+[@agy, @nikhilsoman]
+
+
 ## 2026-11-19 — Goal-Aware Packaging, Plan Mining Hardening & Harness Parity Phase 3 Landing
 
 ### Shipped & Verified Across Fleet
@@ -1710,4 +1750,27 @@
   - Implemented `tests/test_vizor_e2e_audit.py` exercising all 16 primary Vizor HTML generators (`generate_index_html`, `generate_overview_html`, `generate_gantt_html`, canvases, onboarding, board, etc.).
 - **Task 6: End-to-End VM Acceptance Test:**
   - Implemented `tests/test_ftue_vm_acceptance.py` validating `synlynk.testbed.driver.OrbDriver` provisioning, file push, install ladder, and clean teardown.
+[@agy, @nikhilsoman]
+
+### 2026-11-21: v0.39.0 Hardened FTUE & Vizor HUD — Execution, CI Matrix & Squash-Merge (gh:#5417, gh:#5413, gh:#5302)
+- **Hardened FTUE Implementation & CI Stabilization:**
+  - Resolved `gate_mode()` enforce default regression in `synlynk/policy_gates.py` for `story-ftue-05` (PR #5436).
+  - Regenerated CLI reference documentation (`docs/reference/commands.md`) for `onboard repair` in `story-ftue-06` (PR #5437).
+  - Rebased and merged upstream rollback stash fix (gh:#5424 / #5431) into PR #5437 to eliminate transient stash conflict during `test_init_force_reruns_without_error`.
+  - Achieved 100% 7/7 passing checks in GitHub Actions CI matrix across all 6 constituent PRs.
+- **Formal Review & Governance Contracts:**
+  - Ran `synlynk policy check-merge --role qa` (cleared to merge: role 'qa' authorized).
+  - Executed `synlynk pr check` across all 6 PRs (attested model versions, green QA gate, clean GOVERNS linkage).
+  - Recorded formal independent reviews with explicit approval checklists per PR Review Discipline.
+- **Sequential Squash-Merge to `main`:**
+  - PR #5426 (`story-ftue-01`): OpenRouter BYOK fallback in wizard Screen 1.
+  - PR #5428 (`story-ftue-02`): Repo picker multi-digit index line input & current-repo scoped scan.
+  - PR #5430 (`story-ftue-03`): CWD self-protection guards and Git root validation.
+  - PR #5432 (`story-ftue-04`): Commit-on-complete atomic workspace init & launch parameter preservation.
+  - PR #5436 (`story-ftue-05`): Editions gate: Personal edition GOVERNS enforce bypass & synthetic first-win story.
+  - PR #5437 (`story-ftue-06`): Universal proxy passthrough, probe reporting & self-repair command (`synlynk onboard repair`).
+- **Rollup & State Tracking:**
+  - Updated master tracking proposal [#5417](https://github.com/nikhilsoman/synlynk/issues/5417) with comprehensive conversational status rollup.
+  - Synced canonical `state.db` stories to `done` and re-rendered `project-docs/todo.md`.
+  - Logged orchestration and verification telemetry in SQLite ledger and regenerated `project-docs/costs.md`.
 [@agy, @nikhilsoman]

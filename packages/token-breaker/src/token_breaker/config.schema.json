@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TokenBreakerConfig",
+  "type": "object",
+  "properties": {
+    "default_max_cost_usd": {
+      "type": "number",
+      "default": 5.0
+    },
+    "default_max_tokens": {
+      "type": "integer",
+      "default": 1000000
+    },
+    "max_consecutive_errors": {
+      "type": "integer",
+      "default": 5
+    },
+    "enforcement_mode": {
+      "type": "string",
+      "enum": ["strict", "audit_only"],
+      "default": "strict"
+    }
+  },
+  "additionalProperties": true
+}
