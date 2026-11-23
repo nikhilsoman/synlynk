@@ -107,12 +107,6 @@ def split_arc(
         f"({','.join('?' for _ in goal_ids_to_move)})",
         (new_uid, *goal_ids_to_move),
     )
-    conn.execute(
-        "INSERT INTO roadmap_uid_aliases "
-        "(old_uid, new_uid, uid_kind, reason) "
-        "VALUES (?, ?, 'arc', ?) ON CONFLICT(old_uid) DO NOTHING",
-        (new_uid, new_uid, f"split from {from_uid}: {reason}"),
-    )
     return new_uid
 
 
