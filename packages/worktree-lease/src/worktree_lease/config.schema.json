@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WorktreeLeaseConfig",
+  "type": "object",
+  "properties": {
+    "base_dir": {
+      "type": "string",
+      "default": ".worktrees"
+    },
+    "default_ttl_seconds": {
+      "type": "integer",
+      "default": 3600
+    },
+    "auto_prune_stale": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "additionalProperties": true
+}

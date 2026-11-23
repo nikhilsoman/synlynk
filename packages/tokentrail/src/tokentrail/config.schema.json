@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TokenTrailConfig",
+  "type": "object",
+  "properties": {
+    "harnesses": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "watch_paths": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "collapse_streaming_chunks": {
+      "type": "boolean",
+      "default": true
+    },
+    "default_currency": {
+      "type": "string",
+      "default": "USD"
+    }
+  },
+  "additionalProperties": true
+}

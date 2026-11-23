@@ -24,6 +24,7 @@ def generate_bearings_block() -> str:
     law0 = CONSTITUTION_LAWS["law-0"]
     law1 = CONSTITUTION_LAWS["law-1"]
     law2 = CONSTITUTION_LAWS["law-2"]
+    law3 = CONSTITUTION_LAWS["law-3"]
 
     lines = [
         BEARINGS_START_MARKER,
@@ -34,6 +35,8 @@ def generate_bearings_block() -> str:
         f"- **Law 1 ({law1.name}):** Every dispatch requires role attribution (`--as-agent <role>`). Use GitHub App identity (`synlynk gh --role <role> -- ...`), never personal GitHub credentials.",
         f"<!-- constitution: {law2.id} -->",
         f"- **Law 2 ({law2.name}):** Evidence over assertions. Run direct verification commands (`synlynk pr check`, `pytest`, `gh pr view --json`) and inspect exit codes before claiming completion or passing status.",
+        f"<!-- constitution: {law3.id} -->",
+        f"- **Law 3 ({law3.name}):** Autonomous execution is cost-bounded and cost-traceable. Dispatches enforce token circuit-breakers, proven transcript provenance, and failure demotion.",
         "- **Operational Discipline:**",
         "  - Session wake/sweep: Keep background daemons alive with `tpm wake` / `tpm sweep`.",
         "  - Review findings: PR findings require a dispatched reviewer agent, never an ad hoc manual menu.",
