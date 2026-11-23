@@ -6334,7 +6334,9 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                     deps
                 ).fetchall()
                 dep_statuses = {r[0]: r[1] for r in dep_rows}
-                if any(dep_statuses.get(d) == "failed" for d in deps):
+                # Terminal failure cascade: if any dependency failed, timed out, cancelled, or aborted, abort the dependent job
+                terminal_fail_states = {"failed", "timeout", "timed_out", "cancelled", "error", "aborted"}
+                if any(dep_statuses.get(d) in terminal_fail_states for d in deps):
                     _settle_daemon_job_terminal(
                         conn, job_id, "failed", 1, now, only_running=False,
                         process_state=_terminal_process_state(conn, job_id),
