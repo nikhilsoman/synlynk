@@ -27,3 +27,18 @@ def test_charter_core_has_zero_synlynk_imports():
                 elif node.module == "synlynk":
                     offending.append((py_file.name, node.module))
     assert offending == [], f"synlynk imports found in charter_core: {offending}"
+
+
+def test_parse_yaml_flat_mapping():
+    from synlynk.charter_core.yaml_subset import parse_yaml
+
+    text = """\
+role: pm
+mandate: Own portfolio goal alignment.
+durability: durable
+"""
+    assert parse_yaml(text) == {
+        "role": "pm",
+        "mandate": "Own portfolio goal alignment.",
+        "durability": "durable",
+    }
