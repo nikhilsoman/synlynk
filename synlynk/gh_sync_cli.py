@@ -17,7 +17,7 @@ def cmd_sync_roadmap(
         eligible_ids = [
             row[0]
             for row in conn.execute(
-                "SELECT id FROM roadmap_arcs "
+                "SELECT arc_uid FROM roadmap_arcs "
                 "WHERE is_milestone_eligible = 1 ORDER BY id ASC"
             ).fetchall()
         ]
@@ -37,9 +37,9 @@ def cmd_sync_roadmap(
                 )
             return
 
-        for arc_id in eligible_ids:
+        for arc_uid in eligible_ids:
             gh_sync.sync_arc(
-                conn, arc_id=arc_id, owner=owner, repo=repo, role=role
+                conn, arc_uid=arc_uid, owner=owner, repo=repo, role=role
             )
 
         if backfill:

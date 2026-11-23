@@ -4061,10 +4061,10 @@ def _try_sync_arc_by_version(version: str) -> None:
         owner, repo = resolve_owner_repo()
         conn = _get_db()
         row = conn.execute(
-            "SELECT id FROM roadmap_arcs WHERE version=?", (version,)
+            "SELECT arc_uid FROM roadmap_arcs WHERE version=?", (version,)
         ).fetchone()
         if row:
-            sync_arc(conn, arc_id=row[0], owner=owner, repo=repo)
+            sync_arc(conn, arc_uid=row[0], owner=owner, repo=repo)
     except Exception:
         pass
     finally:
@@ -4089,7 +4089,7 @@ def _try_sync_story(story_id: str) -> None:
         if phase:
             mapped = conn.execute(
                 "SELECT gm.github_number FROM github_sync_map gm "
-                "JOIN roadmap_arcs ra ON ra.id = CAST(gm.entity_id AS INTEGER) "
+                "JOIN roadmap_arcs ra ON ra.arc_uid = gm.entity_id "
                 "WHERE gm.entity_type='roadmap_arc' AND ra.version=?",
                 (phase[0],),
             ).fetchone()

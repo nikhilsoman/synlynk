@@ -6,7 +6,8 @@ def test_run_backfill_syncs_every_arc_story_and_decision(tmp_path, monkeypatch):
     conn = sqlite3.connect(tmp_path / "state.db")
     conn.execute(
         "CREATE TABLE roadmap_arcs (id INTEGER PRIMARY KEY, version TEXT, title TEXT, "
-        "status TEXT, target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN)"
+        "status TEXT, target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN, "
+        "arc_uid TEXT)"
     )
     conn.execute(
         "CREATE TABLE roadmap_phases (id INTEGER PRIMARY KEY, arc_version TEXT, "
@@ -26,11 +27,11 @@ def test_run_backfill_syncs_every_arc_story_and_decision(tmp_path, monkeypatch):
     )
     conn.execute(
         "INSERT INTO roadmap_arcs VALUES "
-        "(1, 'v1.0.0', 'First', 'shipped', NULL, NULL, 1)"
+        "(1, 'v1.0.0', 'First', 'shipped', NULL, NULL, 1, 'arc-first')"
     )
     conn.execute(
         "INSERT INTO roadmap_arcs VALUES "
-        "(2, 'Future Expansions', NULL, 'planned', NULL, NULL, 0)"
+        "(2, 'Future Expansions', NULL, 'planned', NULL, NULL, 0, 'arc-future')"
     )
     conn.execute("INSERT INTO stories VALUES ('story-a', 'A', 'done', NULL)")
     conn.execute("INSERT INTO stories VALUES ('story-b', 'B', 'open', '42')")
@@ -43,7 +44,7 @@ def test_run_backfill_syncs_every_arc_story_and_decision(tmp_path, monkeypatch):
     monkeypatch.setattr(
         gh_sync_backfill.gh_sync,
         "sync_arc",
-        lambda conn, arc_id, **kw: arc_calls.append(arc_id),
+        lambda conn, arc_uid, **kw: arc_calls.append(arc_uid),
     )
     monkeypatch.setattr(
         gh_sync_backfill.gh_sync,
@@ -58,7 +59,7 @@ def test_run_backfill_syncs_every_arc_story_and_decision(tmp_path, monkeypatch):
 
     gh_sync_backfill.run_backfill(conn, owner="o", repo="r")
 
-    assert arc_calls == [1]
+    assert arc_calls == ["arc-first"]
     assert sorted(story_calls) == ["story-a", "story-b"]
     assert decision_calls == ["dec-1"]
     conn.close()

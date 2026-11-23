@@ -664,7 +664,7 @@ GROUP BY agent, model_version, discipline, engg_domain, org_domain, role, stage,
 """
 
 _ROADMAP_ARCS_VIEW = """
-CREATE VIEW IF NOT EXISTS roadmap_arcs AS
+CREATE VIEW roadmap_arcs AS
 SELECT
   ROW_NUMBER() OVER (ORDER BY arc_version) AS id,
   arc_version AS version,
@@ -689,6 +689,7 @@ SELECT
     MIN(goal_id)
   ) AS goal_id,
   1 AS is_milestone_eligible,
+  CASE WHEN COUNT(DISTINCT arc_uid) = 1 THEN MIN(arc_uid) ELSE NULL END AS arc_uid,
   (SELECT GROUP_CONCAT(d.decision_text, ' / ')
      FROM decisions d WHERE d.goal_id IN (
        SELECT CAST(id AS TEXT) FROM goals g2 WHERE g2.arc_version = goals.arc_version
@@ -697,11 +698,11 @@ SELECT
      )) AS notes
 FROM goals
 WHERE placement_status = 'placed' AND arc_version IS NOT NULL
-GROUP BY arc_version;
+GROUP BY arc_version
 """
 
 _ROADMAP_PHASES_VIEW = """
-CREATE VIEW IF NOT EXISTS roadmap_phases AS
+CREATE VIEW roadmap_phases AS
 SELECT
   ROW_NUMBER() OVER (ORDER BY arc_version, phase_title) AS id,
   arc_version,
@@ -720,6 +721,7 @@ SELECT
   END AS computed_status,
   COALESCE(MIN(roadmap_priority), 'P0') AS priority,
   MIN(story_id) AS story_id,
+  CASE WHEN COUNT(DISTINCT phase_uid) = 1 THEN MIN(phase_uid) ELSE NULL END AS phase_uid,
   COALESCE(
     MIN(notes),
     (SELECT GROUP_CONCAT(d.decision_text, ' / ')
@@ -733,7 +735,7 @@ SELECT
   ) AS notes
 FROM goals
 WHERE placement_status = 'placed' AND arc_version IS NOT NULL AND phase_title IS NOT NULL
-GROUP BY arc_version, phase_title;
+GROUP BY arc_version, phase_title
 """
 
 _ROADMAP_TRIGGERS = """
@@ -811,22 +813,133 @@ BEGIN
 END;
 """
 
+_GOALS_UID_TRIGGERS = """
+CREATE TRIGGER IF NOT EXISTS trg_goals_assign_arc_uid_insert
+AFTER INSERT ON goals
+WHEN NEW.placement_status = 'placed' AND NEW.arc_version IS NOT NULL AND NEW.arc_uid IS NULL
+BEGIN
+  UPDATE goals SET arc_uid = COALESCE(
+    (SELECT arc_uid FROM goals
+     WHERE arc_version = NEW.arc_version AND arc_uid IS NOT NULL
+     ORDER BY rowid LIMIT 1),
+    'arc-' || lower(hex(randomblob(6)))
+  ) WHERE rowid = NEW.rowid;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_goals_assign_arc_uid_update
+AFTER UPDATE ON goals
+WHEN NEW.placement_status = 'placed' AND NEW.arc_version IS NOT NULL AND NEW.arc_uid IS NULL
+BEGIN
+  UPDATE goals SET arc_uid = COALESCE(
+    (SELECT arc_uid FROM goals
+     WHERE arc_version = NEW.arc_version AND arc_uid IS NOT NULL AND rowid != NEW.rowid
+     ORDER BY rowid LIMIT 1),
+    'arc-' || lower(hex(randomblob(6)))
+  ) WHERE rowid = NEW.rowid;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_goals_assign_phase_uid_insert
+AFTER INSERT ON goals
+WHEN NEW.placement_status = 'placed' AND NEW.arc_version IS NOT NULL
+     AND NEW.phase_title IS NOT NULL AND NEW.phase_uid IS NULL
+BEGIN
+  UPDATE goals SET phase_uid = COALESCE(
+    (SELECT phase_uid FROM goals
+     WHERE arc_version = NEW.arc_version AND phase_title = NEW.phase_title AND phase_uid IS NOT NULL
+     ORDER BY rowid LIMIT 1),
+    'phase-' || lower(hex(randomblob(6)))
+  ) WHERE rowid = NEW.rowid;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_goals_assign_phase_uid_update
+AFTER UPDATE ON goals
+WHEN NEW.placement_status = 'placed' AND NEW.arc_version IS NOT NULL
+     AND NEW.phase_title IS NOT NULL AND NEW.phase_uid IS NULL
+BEGIN
+  UPDATE goals SET phase_uid = COALESCE(
+    (SELECT phase_uid FROM goals
+     WHERE arc_version = NEW.arc_version AND phase_title = NEW.phase_title AND phase_uid IS NOT NULL AND rowid != NEW.rowid
+     ORDER BY rowid LIMIT 1),
+    'phase-' || lower(hex(randomblob(6)))
+  ) WHERE rowid = NEW.rowid;
+END;
+"""
+
+_ROADMAP_TRIGGER_NAMES = (
+    "trg_roadmap_arcs_insert",
+    "trg_roadmap_arcs_update",
+    "trg_roadmap_arcs_delete",
+    "trg_roadmap_phases_insert",
+    "trg_roadmap_phases_update",
+    "trg_roadmap_phases_delete",
+    "trg_goals_assign_arc_uid_insert",
+    "trg_goals_assign_arc_uid_update",
+    "trg_goals_assign_phase_uid_insert",
+    "trg_goals_assign_phase_uid_update",
+)
+
+
+def _view_matches(conn, name: str, expected_sql: str) -> bool:
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'view' AND name = ?",
+        (name,),
+    ).fetchone()
+    return bool(row) and row[0] == expected_sql.strip()
+
+
+def _triggers_installed(conn, trigger_names) -> bool:
+    for name in trigger_names:
+        row = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'trigger' AND name = ?",
+            (name,),
+        ).fetchone()
+        if not row:
+            return False
+    return True
+
+
+def _has_roadmap_foreign_keys(conn) -> bool:
+    for table in ("goals", "cost_entries"):
+        for row in conn.execute(f"PRAGMA foreign_key_list({table})"):
+            if row[2] in {"roadmap_arcs", "roadmap_phases"}:
+                return True
+    return False
+
+
+def _execute_script_statements(conn, script: str) -> None:
+    """Execute a trigger script without sqlite3.executescript's implicit commit."""
+    import sqlite3
+
+    statement = ""
+    for line in script.splitlines(keepends=True):
+        statement += line
+        if sqlite3.complete_statement(statement):
+            conn.execute(statement)
+            statement = ""
+
+    if statement.strip():
+        raise sqlite3.OperationalError("incomplete SQL statement in trigger script")
+
 
 def ensure_derived_roadmap_views(conn) -> None:
     """Ensure goals table has placement columns and instantiate derived roadmap views."""
     import sqlite3
 
-    try:
-        from synlynk.db import _migrate_remove_roadmap_foreign_keys
-        _migrate_remove_roadmap_foreign_keys(conn)
-    except Exception as exc:
-        import logging
-        logging.getLogger(__name__).warning("Failed to remove roadmap foreign keys: %s", exc)
+    if _has_roadmap_foreign_keys(conn):
+        try:
+            from synlynk.db import _migrate_remove_roadmap_foreign_keys
+            _migrate_remove_roadmap_foreign_keys(conn)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("Failed to remove roadmap foreign keys: %s", exc)
 
     cols = {row[1] for row in conn.execute("PRAGMA table_info(goals)")}
     for col, defn in (
         ("arc_version", "TEXT"),
         ("phase_title", "TEXT"),
+        ("placement_status", "TEXT"),
+        ("arc_uid", "TEXT"),
+        ("phase_uid", "TEXT"),
         ("roadmap_priority", "TEXT"),
         ("story_id", "TEXT"),
         ("notes", "TEXT"),
@@ -866,16 +979,30 @@ def ensure_derived_roadmap_views(conn) -> None:
                 except Exception:
                     pass
 
-        arcs_type = conn.execute("SELECT type FROM sqlite_master WHERE name = 'roadmap_arcs'").fetchone()
-        if not arcs_type or arcs_type[0] != "view":
-            conn.execute("DROP TABLE IF EXISTS roadmap_arcs")
-            conn.execute(_ROADMAP_ARCS_VIEW)
-        phases_type = conn.execute("SELECT type FROM sqlite_master WHERE name = 'roadmap_phases'").fetchone()
-        if not phases_type or phases_type[0] != "view":
-            conn.execute("DROP TABLE IF EXISTS roadmap_phases")
-            conn.execute(_ROADMAP_PHASES_VIEW)
-        conn.executescript(_ROADMAP_TRIGGERS)
         conn.commit()
+        arcs_current = _view_matches(conn, "roadmap_arcs", _ROADMAP_ARCS_VIEW)
+        phases_current = _view_matches(conn, "roadmap_phases", _ROADMAP_PHASES_VIEW)
+        triggers_current = _triggers_installed(conn, _ROADMAP_TRIGGER_NAMES)
+
+        if not (arcs_current and phases_current and triggers_current):
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                arcs_current = _view_matches(conn, "roadmap_arcs", _ROADMAP_ARCS_VIEW)
+                phases_current = _view_matches(conn, "roadmap_phases", _ROADMAP_PHASES_VIEW)
+                triggers_current = _triggers_installed(conn, _ROADMAP_TRIGGER_NAMES)
+                if not (arcs_current and phases_current and triggers_current):
+                    conn.execute("DROP VIEW IF EXISTS roadmap_arcs")
+                    conn.execute("DROP TABLE IF EXISTS roadmap_arcs")
+                    conn.execute(_ROADMAP_ARCS_VIEW)
+                    conn.execute("DROP VIEW IF EXISTS roadmap_phases")
+                    conn.execute("DROP TABLE IF EXISTS roadmap_phases")
+                    conn.execute(_ROADMAP_PHASES_VIEW)
+                    _execute_script_statements(conn, _ROADMAP_TRIGGERS)
+                    _execute_script_statements(conn, _GOALS_UID_TRIGGERS)
+                conn.commit()
+            except sqlite3.OperationalError:
+                conn.rollback()
+                raise
     except sqlite3.OperationalError as exc:
         import logging
         logging.getLogger(__name__).warning("Error ensuring derived roadmap views: %s", exc)
