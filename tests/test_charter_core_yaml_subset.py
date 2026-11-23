@@ -42,3 +42,42 @@ durability: durable
         "mandate": "Own portfolio goal alignment.",
         "durability": "durable",
     }
+
+
+def test_parse_yaml_nested_mapping_and_list_of_mappings():
+    from synlynk.charter_core.yaml_subset import parse_yaml
+
+    text = """\
+coordination:
+  handoffs:
+    - to_role: dev
+      operation: delegate
+      transport: dispatch_job
+    - to_role: qa
+      operation: request
+      transport: gh_pr_comment
+      ack: true
+"""
+    parsed = parse_yaml(text)
+    assert parsed == {
+        "coordination": {
+            "handoffs": [
+                {"to_role": "dev", "operation": "delegate", "transport": "dispatch_job"},
+                {"to_role": "qa", "operation": "request", "transport": "gh_pr_comment", "ack": True},
+            ]
+        }
+    }
+
+
+def test_dump_yaml_round_trips_nested_structure():
+    from synlynk.charter_core.yaml_subset import parse_yaml, dump_yaml
+
+    original = {
+        "coordination": {
+            "handoffs": [
+                {"to_role": "dev", "operation": "delegate", "transport": "dispatch_job"},
+            ]
+        }
+    }
+    dumped = dump_yaml(original)
+    assert parse_yaml(dumped) == original
