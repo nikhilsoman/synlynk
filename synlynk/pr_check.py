@@ -293,7 +293,12 @@ def check_cost_provenance_gate(repo_root: str = ".") -> Dict[str, Any]:
     """
     costs_file = os.path.join(repo_root, "project-docs", "costs.md")
     if not os.path.isfile(costs_file):
-        return {"passed": True, "message": "No costs.md present"}
+        return {
+            "passed": True,
+            "law": "law-3",
+            "tier": "injected",
+            "message": "No costs.md present",
+        }
 
     return {
         "passed": True,
