@@ -624,3 +624,34 @@ chase the `pr_number`-NULL pattern as a broader dispatch pipeline bug.
 - Proposed (pending Nikhil's pick): A) YAML issue form; B) `synlynk report` redacted diagnostic bundle w/ preview; C) flight-recorder ring buffer + failure footers + bearings/task-boundary hint + Vizor "Report issue" button + triage ingestion. Recommended layered A+B+C in 3 slices.
 - Open question: intake destination (public GH issue vs private-first). Spec not yet written.
 [@claude]
+
+## 2026-11-23 — gh:#5443 (LIVE-34) item 3 shipped: PR #5459 merged, two harness failures worked around
+
+- Fixed the `github_sync_map` entity_id drift bug for roadmap arcs/phases (`synlynk/roadmap_identity.py` —
+  `resolve_arc_uid`/`resolve_phase_uid`/`merge_arcs`/`split_arc`/`move_phase`, bound-uid guards, alias-cycle
+  detection). 21 commits across this session, co-authored by Claude (spec/plan + 2 final fixes), Codex
+  (majority implementation + push/PR-create), and Grok (resolver/merge_arcs/split_arc + migration 38).
+  PR #5459 merged (`c7a730d8`).
+- **Cross-harness+model review required both Codex and Claude to be ruled out** (both had authored
+  commits), leaving Agy as the only clean reviewer. Grok's dispatch (job-8e24ea85) failed fast with
+  `402 Payment Required: Grok Build usage balance exhausted` — known recurring failure mode, see
+  `[[feedback_grok_auth_agy_fallback]]`. Agy's dispatch was initially blocked on a stale CLI-version
+  manifest (`synlynk harness probe --harness agy --discover` fixed it), then ran a full, correct review
+  (full diff, test suite 504 passed/28 pre-existing-unrelated failed, `synlynk pr check`/`policy
+  check-merge --role qa` both green, posted the real `gh pr review --approve`, caught the PR was
+  `BEHIND` and ran `gh pr update-branch`) before dying mid-CI-wait with `RESOURCE_EXHAUSTED (429) /
+  "AI credits balance too low"` (job-e1115e94). Rather than redispatching the whole review to a third
+  harness, independently verified via `gh pr view` that the approval + branch update had persisted and
+  CI had since gone green, then dispatched a minimal merge-only follow-up to Agy (job-9df19548,
+  succeeded in ~5m19s) — this re-used the harness that had already done the (still-valid) work instead
+  of discarding it.
+- Posted progress + resolution comments on parent tracking issue #5443 per the Multi-Task & Multi-Goal
+  Series Tracking Protocol.
+- **Could not run Worktree Hygiene Protocol cleanup from this session** — this worktree is sandboxed
+  to its own directory; `cd` to the main repo root (required for `git worktree remove`) is refused
+  outright. Flagged to Nikhil rather than working around it; this worktree and its ~45 nested
+  `worktrees/job-*` dirs need a session rooted at the main checkout to sweep.
+- Appended a fresh recurrence entry to `[[feedback_grok_auth_agy_fallback]]` (job-e1115e94, this
+  session) — Agy's quota exhaustion is not resolved, just rotates; always re-verify before trusting it
+  on anything time-sensitive.
+[@claude]
