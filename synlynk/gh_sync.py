@@ -137,6 +137,8 @@ def sync_arc(conn, arc_uid: str, owner: str, repo: str, role: str = "pm") -> Non
         "SELECT version, status, is_milestone_eligible FROM roadmap_arcs WHERE arc_uid=?",
         (resolved_uid,),
     ).fetchone()
+    if row is None:
+        return  # arc_uid unresolvable (e.g. diverged arc_version group) -- skip, doctor already warns
     version, status, eligible = row
     if not eligible:
         return
