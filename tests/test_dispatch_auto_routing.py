@@ -143,3 +143,68 @@ def test_auto_consults_live_router_instead_of_static_fallback(tmp_path):
     # codex has the better (lower) score, must win over the hardcoded "agy" default.
     assert result == "codex"
 
+
+def test_review_routing_excludes_implementer_harness_from_eligible_pool(monkeypatch):
+    import sqlite3
+
+    from synlynk.dispatch import _filter_review_collision_harnesses
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE daemon_jobs ("
+        "job_id TEXT PRIMARY KEY, harness TEXT, agent TEXT, purpose TEXT, "
+        "resolved_model TEXT, requested_model TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE cost_entries ("
+        "id INTEGER PRIMARY KEY, job_id TEXT, harness TEXT, agent TEXT, model TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs "
+        "(job_id, harness, agent, purpose, resolved_model, requested_model) "
+        "VALUES ('job-impl', 'codex', 'codex', 'implementation', "
+        "'gpt-5.3-codex', NULL)"
+    )
+    conn.commit()
+
+    monkeypatch.setattr(
+        "synlynk.db._implementation_job_from_branch",
+        lambda _conn, _pr_number: "job-impl",
+    )
+
+    assert _filter_review_collision_harnesses(
+        ["codex", "claude", "agy"],
+        task_type="review",
+        task="review PR #2272",
+        db_conn=conn,
+    ) == ["claude", "agy"]
+
+
+def test_auto_filters_harnesses_without_required_github_write_before_routing(monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    routed_pools = []
+
+    def capture_select(_router, eligible_harnesses, task_type, db_conn):
+        routed_pools.append(list(eligible_harnesses))
+        return eligible_harnesses[0]
+
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_eligible_harnesses_for_task_type",
+        lambda _task_type: ["muse", "codex", "grok"],
+    )
+    monkeypatch.setattr(dispatch_mod, "_preflight_local_silent", lambda: False)
+    monkeypatch.setattr("synlynk.routing.LiveQueryRouter.select", capture_select)
+
+    result = dispatch_mod._resolve_dispatch_agent(
+        "auto",
+        "gh_write",
+        MagicMock(),
+        task="create a pull request",
+        requires_gh_write=True,
+    )
+
+    assert result == "codex"
+    assert routed_pools == [["codex", "grok"]]
+
