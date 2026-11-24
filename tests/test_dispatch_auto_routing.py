@@ -5,6 +5,8 @@ import os
 import unittest
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 
 def test_read_local_fallback_reads_workspace_json(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -142,4 +144,48 @@ def test_auto_consults_live_router_instead_of_static_fallback(tmp_path):
         result = _resolve_dispatch_agent("auto", "implement", conn, config_path=str(config_path))
     # codex has the better (lower) score, must win over the hardcoded "agy" default.
     assert result == "codex"
+
+
+def test_enforce_mode_blocks_sub_floor_exploration_for_high_blast_radius_task(tmp_path, monkeypatch):
+    from synlynk.dispatch import _resolve_dispatch_agent
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "policy.json").write_text(
+        json.dumps({"overrides": {"sub_floor_exploration_mode": "enforce"}})
+    )
+    conn = _make_db_with_floor("codex", "infra", 1.0, 1)
+    with patch("synlynk.dispatch._preflight_local_silent", return_value=False), \
+         patch("synlynk.dispatch._eligible_harnesses_for_task_type", return_value=["codex", "grok"]):
+        with pytest.raises(RuntimeError, match="sub-floor exploration requires human approval"):
+            _resolve_dispatch_agent("auto", "infra", conn)
+
+
+def test_observe_mode_allows_sub_floor_exploration_for_high_blast_radius_task(tmp_path, monkeypatch):
+    from synlynk.dispatch import _resolve_dispatch_agent
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "policy.json").write_text(
+        json.dumps({"overrides": {"sub_floor_exploration_mode": "observe"}})
+    )
+    conn = _make_db_with_floor("codex", "infra", 1.0, 1)
+    with patch("synlynk.dispatch._preflight_local_silent", return_value=False), \
+         patch("synlynk.dispatch._eligible_harnesses_for_task_type", return_value=["codex", "grok"]):
+        assert _resolve_dispatch_agent("auto", "infra", conn) == "codex"
+
+
+def test_enforce_mode_blocks_sub_floor_exploration_for_github_write(tmp_path, monkeypatch):
+    from synlynk.dispatch import _resolve_dispatch_agent
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "policy.json").write_text(
+        json.dumps({"overrides": {"sub_floor_exploration_mode": "enforce"}})
+    )
+    conn = _make_db_with_floor("codex", "implement", 1.0, 1)
+    with patch("synlynk.dispatch._preflight_local_silent", return_value=False), \
+         patch("synlynk.dispatch._eligible_harnesses_for_task_type", return_value=["codex", "grok"]):
+        with pytest.raises(RuntimeError, match="sub-floor exploration requires human approval"):
+            _resolve_dispatch_agent("auto", "implement", conn, requires_gh_write=True)
 

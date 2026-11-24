@@ -10,6 +10,7 @@ See docs/superpowers/specs/2026-11-18-harness-routing-manifest-mechanics-design.
 Section 2.
 """
 import sqlite3
+import json
 from statistics import median
 from typing import Optional
 
@@ -22,28 +23,69 @@ SCORE_COST_DIVISOR = {
     "cli-plumbing": 50.0,
 }
 _DEFAULT_SCORE_COST_DIVISOR = 50.0
+SUB_FLOOR_GUARDED_TASK_TYPES = frozenset({"deploy", "infra", "architecture-review"})
+
+
+def sub_floor_exploration_mode(policy_path: str = ".synlynk/policy.json") -> str:
+    """Return the blast-radius guard mode, defaulting closed to ``observe``.
+
+    The mode follows the existing policy gate convention: invalid, missing, or
+    malformed policy values are non-blocking until an operator explicitly
+    opts into enforcement.
+    """
+    try:
+        with open(policy_path, encoding="utf-8") as handle:
+            policy = json.load(handle)
+        mode = (policy.get("overrides") or {}).get("sub_floor_exploration_mode")
+        return mode if mode in ("observe", "enforce") else "observe"
+    except (OSError, TypeError, ValueError):
+        return "observe"
 
 
 class LiveQueryRouter:
     """Selects one harness from an eligible set for a task type."""
 
+    def __init__(self):
+        self.last_selection = {
+            "harness": None,
+            "task_type": None,
+            "sub_floor": False,
+        }
+
     def select(self, eligible_harnesses: list[str], task_type: str, db_conn: sqlite3.Connection) -> str:
         if not eligible_harnesses:
             raise ValueError("eligible_harnesses must be non-empty")
         if len(eligible_harnesses) == 1:
+            self.last_selection = {
+                "harness": eligible_harnesses[0],
+                "task_type": task_type,
+                "sub_floor": False,
+            }
             return eligible_harnesses[0]
 
         samples = {h: self._sample_count(db_conn, h, task_type) for h in eligible_harnesses}
         below_floor = [h for h in eligible_harnesses if samples[h] < SAMPLE_SIZE_FLOOR]
         if below_floor:
-            return self._round_robin(db_conn, task_type, below_floor)
+            picked = self._round_robin(db_conn, task_type, below_floor)
+            self.last_selection = {
+                "harness": picked,
+                "task_type": task_type,
+                "sub_floor": True,
+            }
+            return picked
 
         scored = [
             (self._score(db_conn, h, task_type), -samples[h], h)
             for h in eligible_harnesses
         ]
         scored.sort()  # lowest score first, then higher sample_count (more negative), then alphabetical
-        return scored[0][2]
+        picked = scored[0][2]
+        self.last_selection = {
+            "harness": picked,
+            "task_type": task_type,
+            "sub_floor": False,
+        }
+        return picked
 
     def _sample_count(self, conn: sqlite3.Connection, harness: str, task_type: str) -> int:
         row = conn.execute(

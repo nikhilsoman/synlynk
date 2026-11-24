@@ -359,8 +359,20 @@ def _resolve_dispatch_agent(
 
     eligible = _eligible_harnesses_for_task_type(task_type)
     if len(eligible) > 1:
-        from synlynk.routing import LiveQueryRouter
-        fallback = LiveQueryRouter().select(eligible, task_type, db)
+        from synlynk.routing import LiveQueryRouter, SUB_FLOOR_GUARDED_TASK_TYPES
+        router = LiveQueryRouter()
+        fallback = router.select(eligible, task_type, db)
+        if (
+            router.last_selection.get("sub_floor")
+            and (requires_gh_write or task_type in SUB_FLOOR_GUARDED_TASK_TYPES)
+        ):
+            from synlynk.routing import sub_floor_exploration_mode
+
+            if sub_floor_exploration_mode() == "enforce":
+                raise RuntimeError(
+                    "sub-floor exploration requires human approval before dispatch "
+                    f"of {task_type!r} via {fallback!r}"
+                )
     elif eligible:
         fallback = eligible[0]
     else:

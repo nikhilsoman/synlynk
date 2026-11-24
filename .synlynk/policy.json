@@ -188,6 +188,7 @@
       "cross_harness_review_required_mode": "observe",
       "cross_harness_review_note": "Reviewer must differ from implementer in harness AND model, not just role identity. Enforced by synlynk pr check from cost_entries/job metadata (gh:#1991)."
     },
+    "sub_floor_exploration_mode": "observe",
     "conductor_authority": [
       "claude",
       "agy",

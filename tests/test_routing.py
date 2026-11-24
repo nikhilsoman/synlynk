@@ -2,7 +2,11 @@ import sqlite3
 
 import pytest
 
-from synlynk.routing import SAMPLE_SIZE_FLOOR, LiveQueryRouter
+from synlynk.routing import (
+    SAMPLE_SIZE_FLOOR,
+    LiveQueryRouter,
+    sub_floor_exploration_mode,
+)
 
 
 def _make_db():
@@ -99,3 +103,17 @@ def test_empty_eligible_list_raises():
     router = LiveQueryRouter()
     with pytest.raises(ValueError):
         router.select([], "implement", conn)
+
+
+def test_sub_floor_exploration_mode_defaults_to_observe_and_reads_policy_override(tmp_path):
+    policy_path = tmp_path / "policy.json"
+    assert sub_floor_exploration_mode(str(policy_path)) == "observe"
+
+    policy_path.write_text('{"overrides": {"sub_floor_exploration_mode": "enforce"}}')
+    assert sub_floor_exploration_mode(str(policy_path)) == "enforce"
+
+
+def test_sub_floor_exploration_mode_rejects_invalid_policy_values(tmp_path):
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text('{"overrides": {"sub_floor_exploration_mode": "invalid"}}')
+    assert sub_floor_exploration_mode(str(policy_path)) == "observe"
