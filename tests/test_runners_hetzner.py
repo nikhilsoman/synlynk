@@ -131,6 +131,52 @@ def test_destroy_cancels_watchdog_and_issues_delete():
     assert deleted_urls == ["https://api.hetzner.cloud/v1/servers/111"]
 
 
+def test_destroy_treats_missing_server_as_already_destroyed():
+    def mock_opener(req, timeout=30):
+        raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, BytesIO(b"{}"))
+
+    driver = HetznerRunnerDriver(config={"token": "fake-token"}, opener=mock_opener)
+    timer = MagicMock()
+    driver._watchdogs["111"] = timer
+
+    assert driver.destroy("111") is True
+    timer.cancel.assert_called_once_with()
+    assert "111" not in driver._watchdogs
+
+
+def test_collect_results_returns_structured_runtime_and_cost_receipt():
+    def mock_opener(req, timeout=30):
+        return MockHTTPResponse({
+            "server": {
+                "id": 998877,
+                "name": "synlynk-lease-abc123",
+                "status": "running",
+                "created": "2026-11-23T08:00:00+00:00",
+                "labels": {"epic_id": "epic-123", "lease_id": "lease-abc123"},
+                "server_type": {"name": "cpx51", "cores": 16, "memory": 32},
+            }
+        })
+
+    driver = HetznerRunnerDriver(
+        config={"token": "fake-token", "location": "nbg1", "rate_eur_per_hour": 0.045},
+        opener=mock_opener,
+    )
+
+    results = driver.collect_results("998877")
+
+    assert results["event"] == "milestone_lease_completed"
+    assert results["lease_id"] == "lease-abc123"
+    assert results["epic_id"] == "epic-123"
+    assert results["provider"] == "hetzner"
+    assert results["server_id"] == 998877
+    assert results["server_type"] == "cpx51"
+    assert results["vcpus"] == 16
+    assert results["ram_gb"] == 32
+    assert results["location"] == "nbg1"
+    assert results["active_seconds"] > 0
+    assert results["raw_compute_cost_eur"] > 0
+
+
 def test_api_error_handling():
     def mock_error_opener(req, timeout=30):
         fp = BytesIO(b'{"error":{"message":"Rate limit exceeded","code":"rate_limit_exceeded"}}')

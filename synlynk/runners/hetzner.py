@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+from datetime import datetime, timezone
 import urllib.request
 import urllib.error
 import uuid
@@ -34,6 +35,12 @@ class HetznerRunnerDriver(SwarmRunnerDriver):
         "large": "cpx51",
         "arm_large": "cax41",
     }
+    HOURLY_RATES_EUR = {
+        "cpx21": 0.010,
+        "cpx31": 0.019,
+        "cpx51": 0.045,
+        "cax41": 0.038,
+    }
 
     def __init__(self, config: Optional[dict] = None, opener: Any = None):
         self.config = config or {}
@@ -45,6 +52,7 @@ class HetznerRunnerDriver(SwarmRunnerDriver):
         self.timeout_seconds = int(self.config.get("timeout_seconds", 3600))
         self.opener = opener or urllib.request.urlopen
         self._watchdogs: Dict[str, threading.Timer] = {}
+        self._provisioned_at: Dict[str, datetime] = {}
 
     def _request(self, method: str, path: str, payload: Optional[dict] = None) -> dict:
         """Execute authenticated JSON request against Hetzner Cloud REST API."""
@@ -118,6 +126,7 @@ class HetznerRunnerDriver(SwarmRunnerDriver):
         timer.daemon = True
         timer.start()
         self._watchdogs[server_id] = timer
+        self._provisioned_at[server_id] = datetime.now(timezone.utc)
 
         return server_id
 
@@ -125,15 +134,61 @@ class HetznerRunnerDriver(SwarmRunnerDriver):
         """Poll server status and emit telemetry records to callback."""
         try:
             status = self.collect_results(runner_id)
-            server = status.get("server", {})
-            state = server.get("status", "unknown")
+            state = status.get("status", "unknown")
             callback({"runner_id": runner_id, "stream": "status", "message": f"Server status: {state}"})
         except Exception as e:
             callback({"runner_id": runner_id, "stream": "error", "message": str(e)})
 
     def collect_results(self, runner_id: str) -> dict:
-        """Query server status and metrics from Hetzner Cloud."""
-        return self._request("GET", f"/servers/{runner_id}")
+        """Return a normalized lease receipt with runtime and compute telemetry."""
+        response = self._request("GET", f"/servers/{runner_id}")
+        server = response.get("server", response)
+        server_type = server.get("server_type", {})
+        if isinstance(server_type, dict):
+            server_type_name = server_type.get("name", "unknown")
+            vcpus = server_type.get("cores", server_type.get("vcpus"))
+            ram_gb = server_type.get("memory", server_type.get("memory_gb"))
+        else:
+            server_type_name = str(server_type)
+            vcpus = None
+            ram_gb = None
+
+        provisioned_at = self._parse_timestamp(server.get("created"))
+        if provisioned_at is None:
+            provisioned_at = self._provisioned_at.get(runner_id, datetime.now(timezone.utc))
+        now = datetime.now(timezone.utc)
+        active_seconds = max(0, int((now - provisioned_at).total_seconds()))
+        rate = float(self.config.get("rate_eur_per_hour", self.HOURLY_RATES_EUR.get(server_type_name, 0.0)))
+        labels = server.get("labels") or {}
+        return {
+            "event": "milestone_lease_completed",
+            "lease_id": labels.get("lease_id", server.get("name", runner_id)),
+            "workspace_id": labels.get("workspace_id"),
+            "epic_id": labels.get("epic_id"),
+            "provider": "hetzner",
+            "server_id": server.get("id", runner_id),
+            "server_type": server_type_name,
+            "vcpus": vcpus,
+            "ram_gb": ram_gb,
+            "location": self.location,
+            "provisioned_at": provisioned_at.isoformat(),
+            "destroyed_at": None,
+            "active_seconds": active_seconds,
+            "raw_compute_cost_eur": round(active_seconds * rate / 3600, 6),
+            "status": server.get("status", "unknown"),
+            "exit_code": server.get("exit_code"),
+            "tasks_completed": labels.get("tasks_completed", 0),
+        }
+
+    @staticmethod
+    def _parse_timestamp(value: Any) -> Optional[datetime]:
+        if not value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
     def destroy(self, runner_id: str) -> bool:
         """Unconditionally terminate server and zero underlying NVMe storage."""
@@ -143,5 +198,13 @@ class HetznerRunnerDriver(SwarmRunnerDriver):
         try:
             self._request("DELETE", f"/servers/{runner_id}")
             return True
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return True
+            return False
+        except RuntimeError as exc:
+            if "(404)" in str(exc):
+                return True
+            return False
         except Exception:
             return False
