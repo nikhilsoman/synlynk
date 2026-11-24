@@ -278,6 +278,48 @@ def _eligible_harnesses_for_task_type(task_type: str, config_path: str = ".synly
         return []
 
 
+def _filter_review_collision_harnesses(
+    eligible_harnesses: Sequence[str],
+    *,
+    task_type: Optional[str],
+    task: str,
+    db_conn,
+    role: Optional[str] = None,
+) -> list[str]:
+    """Remove the PR implementer from a review router candidate pool.
+
+    Cross-harness review is a pre-routing constraint: the implementer's
+    harness must never reach ``LiveQueryRouter`` as a review candidate. The
+    implementation identity is resolved from the same dispatch provenance
+    used by the merge gate, with a native-session cost row as a fallback.
+    Missing or ambiguous provenance is deliberately non-blocking here; the
+    existing merge gate remains authoritative when the review is submitted.
+    """
+    if task_type not in {"review", "pr_review"} and role != "pm":
+        return list(eligible_harnesses)
+
+    excluded = set()
+    try:
+        from synlynk.db import (
+            _implementation_identity_from_native_cost_entry,
+            _implementation_job_from_branch,
+            _job_execution_identity,
+        )
+
+        for pr_number in _explicit_pr_numbers(task):
+            job_id = _implementation_job_from_branch(db_conn, pr_number)
+            identity = _job_execution_identity(db_conn, job_id) if job_id else (None, None)
+            if not any(identity):
+                identity = _implementation_identity_from_native_cost_entry(db_conn, pr_number)
+            harness = identity[0]
+            if harness:
+                excluded.add(harness.strip().lower())
+    except (OSError, sqlite3.Error, TypeError, ValueError):
+        return list(eligible_harnesses)
+
+    return [harness for harness in eligible_harnesses if harness.strip().lower() not in excluded]
+
+
 def _filter_dispatch_harnesses(
     harnesses: list[str],
     *,
@@ -402,6 +444,13 @@ def _resolve_dispatch_agent(
         return requested_agent
 
     eligible = _eligible_harnesses_for_task_type(task_type)
+    eligible = _filter_review_collision_harnesses(
+        eligible,
+        task_type=task_type,
+        task=task,
+        db_conn=db,
+        role=role,
+    )
     policy_eligible = list(eligible)
     eligible = _filter_dispatch_harnesses(
         eligible,
