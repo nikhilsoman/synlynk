@@ -9,6 +9,7 @@ floor instead of defaulting to one hardcoded harness.
 See docs/superpowers/specs/2026-11-18-harness-routing-manifest-mechanics-design.md
 Section 2.
 """
+import logging
 import sqlite3
 from statistics import median
 from typing import Optional
@@ -22,6 +23,14 @@ SCORE_COST_DIVISOR = {
     "cli-plumbing": 50.0,
 }
 _DEFAULT_SCORE_COST_DIVISOR = 50.0
+MIN_VERDICTS_FOR_SUCCESS_RATIO = 3
+SCORE_WEIGHTS = {
+    "success_deficit": 2.0,
+    "rework": 1.0,
+    "cost_time": 1.0,
+}
+
+logger = logging.getLogger(__name__)
 
 
 class LiveQueryRouter:
@@ -39,7 +48,7 @@ class LiveQueryRouter:
             return self._round_robin(db_conn, task_type, below_floor)
 
         scored = [
-            (self._score(db_conn, h, task_type), -samples[h], h)
+            (self._score(db_conn, h, task_type, eligible_harnesses), -samples[h], h)
             for h in eligible_harnesses
         ]
         scored.sort()  # lowest score first, then higher sample_count (more negative), then alphabetical
@@ -52,25 +61,135 @@ class LiveQueryRouter:
         ).fetchone()
         return row[0] if row else 0
 
-    def _score(self, conn: sqlite3.Connection, harness: str, task_type: str) -> float:
-        cycles = [
-            row[0] for row in conn.execute(
-                "SELECT pr_review_cycles FROM capability_ratings "
-                "WHERE agent=? AND discipline=? AND pr_review_cycles IS NOT NULL",
+    def _score(
+        self,
+        conn: sqlite3.Connection,
+        harness: str,
+        task_type: str,
+        eligible_harnesses: Optional[list[str]] = None,
+    ) -> float:
+        """Return the normalized composite deficit score for one routing cell.
+
+        Lower is better. Missing sub-statistics use the median observed in the
+        other eligible harnesses, so sparse data is neutral rather than a
+        reward. ``eligible_harnesses`` is optional for callers inspecting one
+        harness in isolation; routing always supplies the full cell.
+        """
+        eligible = eligible_harnesses or [harness]
+        components = self._score_components(conn, task_type, eligible)
+        score = sum(
+            SCORE_WEIGHTS[name] * values[harness]
+            for name, values in components["normalized"].items()
+        )
+        logger.debug(
+            "routing score cell=%s harness=%s score=%s components=%s",
+            task_type, harness, score,
+            {name: values[harness] for name, values in components["normalized"].items()},
+        )
+        return score
+
+    def _score_components(
+        self,
+        conn: sqlite3.Connection,
+        task_type: str,
+        eligible_harnesses: list[str],
+    ) -> dict:
+        ratings = {}
+        for harness in eligible_harnesses:
+            ratings[harness] = conn.execute(
+                "SELECT pr_review_cycles, dispatch_rework, micro_rework, "
+                "duration_vs_estimate, correct FROM capability_ratings "
+                "WHERE agent=? AND discipline=?",
                 (harness, task_type),
             ).fetchall()
-        ]
-        costs = [
-            row[0] for row in conn.execute(
+
+        def impute(values_by_harness: dict[str, list[float]], label: str) -> dict[str, float]:
+            observed = {h: median(values) for h, values in values_by_harness.items() if values}
+            if not observed:
+                logger.debug("routing score degenerate cell=%s substat=%s", task_type, label)
+                return {h: 0.0 for h in eligible_harnesses}
+            result = {}
+            for h in eligible_harnesses:
+                if h in observed:
+                    result[h] = observed[h]
+                    continue
+                substitute = median(observed.values())
+                logger.debug(
+                    "routing score imputed cell=%s harness=%s substat=%s value=%s",
+                    task_type, h, label, substitute,
+                )
+                result[h] = substitute
+            return result
+
+        cycles = {
+            h: [row[0] for row in rows if row[0] is not None]
+            for h, rows in ratings.items()
+        }
+        rework = {
+            h: [float((row[1] or 0) != 0 or (row[2] or 0) != 0) for row in rows
+                if row[1] is not None or row[2] is not None]
+            for h, rows in ratings.items()
+        }
+        durations = {
+            h: [row[3] for row in rows if row[3] is not None]
+            for h, rows in ratings.items()
+        }
+        costs = {
+            h: [row[0] for row in conn.execute(
                 "SELECT total_cost_usd FROM cost_entries "
                 "WHERE agent=? AND type_id=? AND total_cost_usd IS NOT NULL",
-                (harness, task_type),
-            ).fetchall()
-        ]
+                (h, task_type),
+            ).fetchall()]
+            for h in eligible_harnesses
+        }
+
+        cycle_values = impute(cycles, "pr_review_cycles")
+        rework_values = impute(rework, "rework")
+        duration_values = impute(durations, "duration_vs_estimate")
+        cost_values = impute(costs, "total_cost_usd")
+
+        qualified_ratios = {}
+        for h, rows in ratings.items():
+            verdicts = [row[4] for row in rows if row[4] is not None]
+            if len(verdicts) >= MIN_VERDICTS_FOR_SUCCESS_RATIO:
+                qualified_ratios[h] = sum(v == 1 for v in verdicts) / len(verdicts)
+        if qualified_ratios:
+            success = {}
+            for h in eligible_harnesses:
+                if h in qualified_ratios:
+                    success[h] = qualified_ratios[h]
+                else:
+                    success[h] = median(qualified_ratios.values())
+                    logger.debug(
+                        "routing score imputed cell=%s harness=%s substat=success_ratio value=%s",
+                        task_type, h, success[h],
+                    )
+        else:
+            logger.debug("routing score degenerate cell=%s substat=success_ratio", task_type)
+            success = {h: 1.0 for h in eligible_harnesses}
+
         divisor = SCORE_COST_DIVISOR.get(task_type, _DEFAULT_SCORE_COST_DIVISOR)
-        median_cycles = median(cycles) if cycles else 0.0
-        median_cost = median(costs) if costs else 0.0
-        return median_cycles + (median_cost / divisor)
+        raw = {
+            "success_deficit": {h: 1.0 - success[h] for h in eligible_harnesses},
+            "rework": {h: cycle_values[h] + rework_values[h] for h in eligible_harnesses},
+            "cost_time": {
+                h: cost_values[h] / divisor + duration_values[h]
+                for h in eligible_harnesses
+            },
+        }
+        normalized = {
+            name: self._normalize(values)
+            for name, values in raw.items()
+        }
+        return {"raw": raw, "normalized": normalized, "success_ratio": success}
+
+    @staticmethod
+    def _normalize(values: dict[str, float]) -> dict[str, float]:
+        low = min(values.values())
+        high = max(values.values())
+        if high == low:
+            return {h: 0.0 for h in values}
+        return {h: (value - low) / (high - low) for h, value in values.items()}
 
     def _round_robin(self, conn: sqlite3.Connection, task_type: str, eligible_harnesses: list[str]) -> str:
         row = conn.execute(

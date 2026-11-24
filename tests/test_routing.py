@@ -9,7 +9,9 @@ def _make_db():
     conn = sqlite3.connect(":memory:")
     conn.execute("""
         CREATE TABLE capability_ratings (
-            story_id TEXT, agent TEXT, discipline TEXT, pr_review_cycles REAL
+            story_id TEXT, agent TEXT, discipline TEXT, pr_review_cycles REAL,
+            dispatch_rework INTEGER, micro_rework INTEGER,
+            duration_vs_estimate REAL, correct INTEGER
         )
     """)
     conn.execute("""
@@ -24,6 +26,79 @@ def _make_db():
         )
     """)
     return conn
+
+
+def test_composite_score_uses_normalized_components_and_neutral_imputation():
+    conn = _make_db()
+    for harness, correct_values, cycles, rework, duration, cost in (
+        ("codex", [1, 1, 1, 0, 0], 1.0, (0, 0), 1.0, 10.0),
+        ("grok", [1, 1, 1, 1, 1], 3.0, (1, 0), 3.0, 30.0),
+        ("agy", [None] * 5, None, (0, 0), 1.0, 20.0),
+    ):
+        for i, correct in enumerate(correct_values):
+            conn.execute(
+                "INSERT INTO capability_ratings "
+                "(story_id, agent, discipline, pr_review_cycles, dispatch_rework, "
+                "micro_rework, duration_vs_estimate, correct) VALUES (?, ?, 'implement', ?, ?, ?, ?, ?)",
+                (f"{harness}-{i}", harness, cycles, rework[0], rework[1], duration, correct),
+            )
+        conn.execute(
+            "INSERT INTO cost_entries (agent, type_id, total_cost_usd) VALUES (?, 'implement', ?)",
+            (harness, cost),
+        )
+    conn.commit()
+
+    score = LiveQueryRouter()._score(
+        conn, "agy", "implement", ["codex", "grok", "agy"]
+    )
+
+    # agy receives the median success ratio (.8) and median review cycles (2.0),
+    # rather than a rewarding zero for either missing signal.
+    assert score == pytest.approx(17 / 12)
+
+
+def test_composite_score_drops_degenerate_success_term():
+    conn = _make_db()
+    for harness in ("codex", "grok"):
+        for i in range(SAMPLE_SIZE_FLOOR):
+            conn.execute(
+                "INSERT INTO capability_ratings "
+                "(story_id, agent, discipline, correct) VALUES (?, ?, 'implement', NULL)",
+                (f"{harness}-{i}", harness),
+            )
+    conn.commit()
+
+    components = LiveQueryRouter()._score_components(
+        conn, "implement", ["codex", "grok"]
+    )
+
+    assert components["success_ratio"] == {"codex": 1.0, "grok": 1.0}
+    assert components["normalized"]["success_deficit"] == {"codex": 0.0, "grok": 0.0}
+
+
+def test_composite_score_is_scale_invariant_for_cost_and_duration():
+    def seeded(scale):
+        conn = _make_db()
+        for harness, cost, duration in (("codex", 10.0, 1.0), ("grok", 30.0, 3.0)):
+            for i in range(SAMPLE_SIZE_FLOOR):
+                conn.execute(
+                    "INSERT INTO capability_ratings "
+                    "(story_id, agent, discipline, correct, duration_vs_estimate) "
+                    "VALUES (?, ?, 'implement', 1, ?)",
+                    (f"{harness}-{i}", harness, duration * scale),
+                )
+            conn.execute(
+                "INSERT INTO cost_entries (agent, type_id, total_cost_usd) VALUES (?, 'implement', ?)",
+                (harness, cost * scale),
+            )
+        conn.commit()
+        return conn
+
+    router = LiveQueryRouter()
+    base = [router._score(seeded(1), h, "implement", ["codex", "grok"]) for h in ("codex", "grok")]
+    scaled = [router._score(seeded(1000), h, "implement", ["codex", "grok"]) for h in ("codex", "grok")]
+    assert base[0] < base[1]
+    assert scaled[0] < scaled[1]
 
 
 def test_round_robins_below_sample_floor():
