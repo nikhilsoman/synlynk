@@ -31,6 +31,19 @@ def test_remote_node_workflow_launches_and_self_terminates_ec2_host():
     assert "--instance-market-options" in text
     assert "--user-data" in text
     assert "terminate-instances" in text
+    assert "create-security-group" in text
+    assert "create-key-pair" in text
+    assert "delete-security-group" in text
+    assert "delete-key-pair" in text
+    assert "describe-security-groups" in text
+    assert "describe-key-pairs" in text
+    assert "ResourceType=security-group" in text
+    assert "ResourceType=key-pair" in text
+    assert "github.event_name == 'issues'" in text
+    assert "github.event.action == 'unlabeled'" in text
+    assert "Wait until TTL window ends" in text
+    assert "sleep $((TIMEOUT_MINUTES * 60))" in text
+    assert "run-remote-node" in text
     assert "trap" in text
     assert "AWS_ACCESS_KEY_ID" not in text
     assert doc["jobs"]["remote-node"]["runs-on"] == "ubuntu-latest"
@@ -40,6 +53,19 @@ def test_remote_node_inputs_are_explicit_and_bounded():
     _doc, trigger = _load_workflow()
     inputs = trigger["workflow_dispatch"]["inputs"]
 
-    assert inputs["command"]["required"] is True
+    assert inputs["operation"]["default"] == "launch"
+    assert inputs["operation"]["type"] == "choice"
+    assert set(inputs["operation"]["options"]) == {"launch", "destroy"}
     assert inputs["instance_type"]["default"] == "t3.micro"
-    assert inputs["timeout_minutes"]["default"] == 15
+    assert inputs["timeout_minutes"]["default"] <= 30
+
+
+def test_remote_node_destroy_paths_are_fail_closed():
+    text = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "always() &&" in text
+    assert "inputs.operation == 'destroy'" in text
+    assert "inputs.operation == 'launch'" in text
+    assert "github.event.action == 'unlabeled'" in text
+    assert "exit 1" in text
+    assert "describe-instances" in text

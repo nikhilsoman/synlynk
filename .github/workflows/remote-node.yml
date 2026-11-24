@@ -3,39 +3,61 @@ name: Remote node (EC2)
 on:
   workflow_dispatch:
     inputs:
+      operation:
+        description: Launch a node or destroy a tagged node
+        required: true
+        type: choice
+        options: [launch, destroy]
+        default: launch
+      target_id:
+        description: Run ID to destroy when operation is destroy
+        required: false
+        type: string
       command:
         description: Command to run on the ephemeral node
-        required: true
+        required: false
+        default: echo synlynk-remote-node-ready
         type: string
       ami_id:
         description: AMI ID available in the selected region
-        required: true
+        required: false
         type: string
       subnet_id:
         description: Private subnet for the ephemeral node
-        required: true
+        required: false
         type: string
-      security_group_id:
-        description: Security group permitted to reach the node
-        required: true
+      vpc_id:
+        description: VPC for the per-run security group
+        required: false
         type: string
       instance_type:
         description: EC2 instance type
-        required: true
+        required: false
         default: t3.micro
         type: string
       timeout_minutes:
         description: Maximum command runtime before self-termination
-        required: true
+        required: false
         default: 15
         type: number
+  issues:
+    types: [labeled, unlabeled]
 
 permissions:
   id-token: write
   contents: read
+  issues: read
+
+env:
+  TRIGGER_LABEL: run-remote-node
+  MANAGED_BY: github-actions
+  RESOURCE_PURPOSE: synlynk-remote-node
 
 jobs:
   remote-node:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' && github.event.label.name == 'run-remote-node')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -47,69 +69,160 @@ jobs:
 
       - name: Launch ephemeral EC2 node
         id: launch
+        if: >-
+          (github.event_name == 'workflow_dispatch' && inputs.operation == 'launch') ||
+          (github.event_name == 'issues' && github.event.action == 'labeled')
         env:
-          COMMAND: ${{ inputs.command }}
-          AMI_ID: ${{ inputs.ami_id }}
-          SUBNET_ID: ${{ inputs.subnet_id }}
-          SECURITY_GROUP_ID: ${{ inputs.security_group_id }}
-          INSTANCE_TYPE: ${{ inputs.instance_type }}
-          TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
+          COMMAND: ${{ inputs.command || vars.REMOTE_NODE_COMMAND || 'echo synlynk-remote-node-ready' }}
+          AMI_ID: ${{ inputs.ami_id || vars.AWS_AMI_ID }}
+          SUBNET_ID: ${{ inputs.subnet_id || vars.AWS_SUBNET_ID }}
+          VPC_ID: ${{ inputs.vpc_id || vars.AWS_VPC_ID }}
+          INSTANCE_TYPE: ${{ inputs.instance_type || 't3.micro' }}
+          TIMEOUT_MINUTES: ${{ inputs.timeout_minutes || 15 }}
           RUN_ID: ${{ github.run_id }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || '' }}
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
+          : "${AMI_ID:?Set workflow input ami_id or AWS_AMI_ID repository variable}"
+          : "${SUBNET_ID:?Set workflow input subnet_id or AWS_SUBNET_ID repository variable}"
+          : "${VPC_ID:?Set workflow input vpc_id or AWS_VPC_ID repository variable}"
 
-          # Encode the operator command before embedding it in cloud-init so
-          # shell metacharacters cannot change the launcher's control flow.
+          lifecycle_key="${ISSUE_NUMBER:-$RUN_ID}"
+          echo "lifecycle_key=$lifecycle_key" >> "$GITHUB_OUTPUT"
+          resource_name="synlynk-remote-node-${lifecycle_key}-${GITHUB_RUN_ATTEMPT}"
+          tag_spec="ResourceType=instance,Tags=[{Key=Name,Value=${resource_name}},{Key=ManagedBy,Value=${MANAGED_BY}},{Key=Purpose,Value=${RESOURCE_PURPOSE}},{Key=LifecycleKey,Value=${lifecycle_key}}]"
+          group_tag_spec="ResourceType=security-group,Tags=[{Key=Name,Value=${resource_name}},{Key=ManagedBy,Value=${MANAGED_BY}},{Key=Purpose,Value=${RESOURCE_PURPOSE}},{Key=LifecycleKey,Value=${lifecycle_key}}]"
+          key_tag_spec="ResourceType=key-pair,Tags=[{Key=Name,Value=${resource_name}},{Key=ManagedBy,Value=${MANAGED_BY}},{Key=Purpose,Value=${RESOURCE_PURPOSE}},{Key=LifecycleKey,Value=${lifecycle_key}}]"
+
+          security_group_id=$(aws ec2 create-security-group \
+            --group-name "$resource_name" \
+            --description "Ephemeral Synlynk remote node ${lifecycle_key}" \
+            --vpc-id "$VPC_ID" \
+            --tag-specifications "$group_tag_spec" \
+            --query GroupId --output text)
+          echo "security_group_id=$security_group_id" >> "$GITHUB_OUTPUT"
+
+          key_name="$resource_name"
+          key_file=$(mktemp)
+          chmod 600 "$key_file"
+          trap 'rm -f "$key_file"' EXIT
+          aws ec2 create-key-pair \
+            --key-name "$key_name" \
+            --tag-specifications "$key_tag_spec" \
+            --query KeyMaterial --output text > "$key_file"
+          echo "key_name=$key_name" >> "$GITHUB_OUTPUT"
+
           command_b64=$(printf '%s' "$COMMAND" | base64 | tr -d '\n')
           user_data=$(mktemp)
-          trap 'rm -f "$user_data"' EXIT
+          trap 'rm -f "$user_data" "$key_file"' EXIT
           cat > "$user_data" <<EOF
           #!/bin/bash
           set -Eeuo pipefail
           exec > >(logger -t synlynk-remote-node) 2>&1
-          finish() {
-            shutdown -h now || true
-          }
+          finish() { shutdown -h now || true; }
           trap finish EXIT
+          shutdown -h +${TIMEOUT_MINUTES} || true
           command_b64='$command_b64'
-          command="\$(printf '%s' "\$command_b64" | base64 -d)"
-          timeout --signal=TERM --kill-after=30s "\${TIMEOUT_MINUTES}m" bash -lc "\$command"
+          command="\$(printf '%s' \"\$command_b64\" | base64 -d)"
+          timeout --signal=TERM --kill-after=30s "${TIMEOUT_MINUTES}m" bash -lc "\$command"
           EOF
 
           instance_id=$(aws ec2 run-instances \
             --image-id "$AMI_ID" \
             --instance-type "$INSTANCE_TYPE" \
             --subnet-id "$SUBNET_ID" \
-            --security-group-ids "$SECURITY_GROUP_ID" \
+            --security-group-ids "$security_group_id" \
+            --key-name "$key_name" \
             --instance-initiated-shutdown-behavior terminate \
             --instance-market-options 'MarketType=spot,SpotOptions={InstanceInterruptionBehavior=terminate}' \
             --user-data "file://$user_data" \
-            --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=synlynk-remote-node-${RUN_ID}},{Key=ManagedBy,Value=github-actions}]" \
+            --tag-specifications "$tag_spec" \
             --query 'Instances[0].InstanceId' --output text)
           echo "instance_id=$instance_id" >> "$GITHUB_OUTPUT"
-          echo "Launched $instance_id"
+          echo "Launched $instance_id with a ${TIMEOUT_MINUTES}-minute TTL"
 
       - name: Wait for node startup
+        if: steps.launch.outcome == 'success'
         env:
           INSTANCE_ID: ${{ steps.launch.outputs.instance_id }}
         run: aws ec2 wait instance-running --instance-ids "$INSTANCE_ID"
 
       - name: Record node lifecycle
-        if: always()
+        if: steps.launch.outcome == 'success'
         env:
           INSTANCE_ID: ${{ steps.launch.outputs.instance_id }}
         run: |
-          if [ -n "${INSTANCE_ID:-}" ]; then
-            aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
-              --query 'Reservations[0].Instances[0].{id:InstanceId,state:State.Name,private_ip:PrivateIpAddress}' \
-              --output json
-          fi
+          aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
+            --query 'Reservations[0].Instances[0].{id:InstanceId,state:State.Name,private_ip:PrivateIpAddress}' \
+            --output json
 
-      - name: Terminate node if it did not self-terminate
-        if: always()
+      - name: Wait until TTL window ends
+        id: ttl
+        if: steps.launch.outcome == 'success'
         env:
-          INSTANCE_ID: ${{ steps.launch.outputs.instance_id }}
+          TIMEOUT_MINUTES: ${{ inputs.timeout_minutes || 15 }}
+        run: sleep $((TIMEOUT_MINUTES * 60))
+
+      - name: Resolve tagged resources for destroy
+        id: target
+        if: >-
+          always() &&
+          ((github.event_name == 'workflow_dispatch' && inputs.operation == 'destroy') ||
+          (github.event_name == 'issues' && github.event.action == 'unlabeled'))
+        env:
+          TARGET_ID: ${{ inputs.target_id || github.event.issue.number || '' }}
         run: |
-          if [ -n "${INSTANCE_ID:-}" ]; then
-            aws ec2 terminate-instances --instance-ids "$INSTANCE_ID" >/dev/null
+          set -Eeuo pipefail
+          : "${TARGET_ID:?target_id is required for a manual destroy}"
+          filter=(--filters "Name=tag:ManagedBy,Values=${MANAGED_BY}" "Name=tag:Purpose,Values=${RESOURCE_PURPOSE}" "Name=tag:LifecycleKey,Values=${TARGET_ID}")
+          instance_ids=$(aws ec2 describe-instances "${filter[@]}" --query 'Reservations[].Instances[?State.Name!=`terminated`].InstanceId' --output text)
+          security_group_ids=$(aws ec2 describe-security-groups "${filter[@]}" --query 'SecurityGroups[].GroupId' --output text)
+          key_pair_names=$(aws ec2 describe-key-pairs "${filter[@]}" --query 'KeyPairs[].KeyName' --output text)
+          {
+            echo 'instance_ids<<EOF'; echo "$instance_ids"; echo EOF
+            echo 'security_group_ids<<EOF'; echo "$security_group_ids"; echo EOF
+            echo 'key_pair_names<<EOF'; echo "$key_pair_names"; echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Destroy node and its per-run resources
+        if: >-
+          always() &&
+          ((github.event_name == 'workflow_dispatch' && inputs.operation == 'destroy') ||
+          (github.event_name == 'issues' && github.event.action == 'unlabeled') ||
+          failure() || steps.ttl.outcome == 'success')
+        env:
+          INSTANCE_IDS: ${{ steps.target.outputs.instance_ids || steps.launch.outputs.instance_id }}
+          SECURITY_GROUP_IDS: ${{ steps.target.outputs.security_group_ids || steps.launch.outputs.security_group_id }}
+          KEY_PAIR_NAMES: ${{ steps.target.outputs.key_pair_names || steps.launch.outputs.key_name }}
+        run: |
+          set -Eeuo pipefail
+          for instance_id in $INSTANCE_IDS; do
+            aws ec2 terminate-instances --instance-ids "$instance_id" >/dev/null || true
+            aws ec2 wait instance-terminated --instance-ids "$instance_id" || true
+          done
+          for group_id in $SECURITY_GROUP_IDS; do
+            aws ec2 delete-security-group --group-id "$group_id" || true
+          done
+          for key_name in $KEY_PAIR_NAMES; do
+            aws ec2 delete-key-pair --key-name "$key_name" || true
+          done
+
+      - name: Verify tagged resources are gone
+        if: >-
+          always() &&
+          ((github.event_name == 'workflow_dispatch' && inputs.operation == 'destroy') ||
+          (github.event_name == 'issues' && github.event.action == 'unlabeled') ||
+          failure() || steps.ttl.outcome == 'success')
+        env:
+          TARGET_ID: ${{ inputs.target_id || github.event.issue.number || steps.launch.outputs.lifecycle_key || '' }}
+        run: |
+          set -Eeuo pipefail
+          : "${TARGET_ID:?Unable to verify destroy target}"
+          filter=(--filters "Name=tag:ManagedBy,Values=${MANAGED_BY}" "Name=tag:Purpose,Values=${RESOURCE_PURPOSE}" "Name=tag:LifecycleKey,Values=${TARGET_ID}")
+          remaining_instances=$(aws ec2 describe-instances "${filter[@]}" --query 'Reservations[].Instances[?State.Name!=`terminated`].InstanceId' --output text)
+          remaining_groups=$(aws ec2 describe-security-groups "${filter[@]}" --query 'SecurityGroups[].GroupId' --output text)
+          remaining_keys=$(aws ec2 describe-key-pairs "${filter[@]}" --query 'KeyPairs[].KeyName' --output text)
+          if [ -n "$remaining_instances$remaining_groups$remaining_keys" ]; then
+            echo "Tagged resources remain after destroy: instances=$remaining_instances groups=$remaining_groups keys=$remaining_keys" >&2
+            exit 1
           fi
