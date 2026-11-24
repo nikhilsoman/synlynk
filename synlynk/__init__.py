@@ -3492,7 +3492,10 @@ def init(force: bool = False, agents: list = None,
 
     # ── Step 2: Agent discovery ─────────────────────────────────────────────
     _print_step(2, "Discovering agents")
-    discovered = discover_agents()
+    # Headless init must not spend one probe timeout per supported harness.
+    # Non-interactive setup can safely defer live availability checks until a
+    # dispatch needs one; this keeps `init --yes` bounded on fresh machines.
+    discovered = [] if auto_defaults else discover_agents()
     functional = [a for a in discovered if a["functional"]]
     non_functional = [a for a in discovered if not a["functional"]]
 
@@ -3686,7 +3689,11 @@ def init(force: bool = False, agents: list = None,
     # not probe fallback names when no harness is installed: some harness
     # probes perform network checks and init must retain its fast headless
     # path.  Explicit ``agents=`` remains authoritative.
-    if agents is not None:
+    if auto_defaults:
+        # Keep `init --yes` bounded: live probes are deferred until a harness
+        # is actually selected for work.
+        probe_targets = []
+    elif agents is not None:
         probe_targets = sorted(set(agents))
     else:
         # Keep the legacy no-argument init path bounded.  Explicitly selected
