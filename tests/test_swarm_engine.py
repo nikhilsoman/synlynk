@@ -102,3 +102,80 @@ def test_cmd_swarm_lease_execution(monkeypatch):
     assert result["status"] == "active"
 
 
+def test_swarm_lease_list_and_destroy_are_wired(monkeypatch, capsys):
+    from argparse import Namespace
+    from synlynk.swarm import cmd_swarm_lease
+
+    class MockManager:
+        def list(self, *, include_destroyed=False):
+            assert include_destroyed is False
+            return [{"runner_id": "lease-1", "driver": "hetzner", "job_spec": "{}"}]
+
+        def destroy(self, runner_id, driver=None):
+            assert runner_id == "lease-1"
+            return True
+
+        def driver(self, name):
+            raise AssertionError("completion result should be optional for a list-only fake")
+
+    monkeypatch.setattr("synlynk.swarm._manager", lambda: MockManager())
+    monkeypatch.setattr("synlynk.swarm._emit_lease_completed", lambda *args, **kwargs: None)
+
+    cmd_swarm_lease(Namespace(lease_action="list", all=False))
+    assert '"runner_id": "lease-1"' in capsys.readouterr().out
+
+    cmd_swarm_lease(Namespace(lease_action="destroy", runner_id="lease-1", all=False))
+    assert '"destroyed": ["lease-1"]' in capsys.readouterr().out
+
+
+def test_swarm_lease_destroy_emits_finops_completion_event(monkeypatch, capsys):
+    from argparse import Namespace
+    from synlynk.swarm import cmd_swarm_lease
+
+    events = []
+
+    class MockDriver:
+        def collect_results(self, runner_id):
+            return {
+                "server": {
+                    "id": 4829104,
+                    "server_type": {"name": "cpx51"},
+                    "datacenter": {"location": {"name": "nbg1"}},
+                },
+                "exit_code": 0,
+                "tasks_completed": 8,
+            }
+
+    class MockManager:
+        def list(self, *, include_destroyed=False):
+            return [{
+                "runner_id": "lease-1",
+                "driver": "hetzner",
+                "job_spec": '{"epic_id": "epic-1", "workspace_id": "ws-1"}',
+                "provisioned_at": "2026-11-24T10:00:00+00:00",
+            }]
+
+        def driver(self, name):
+            return MockDriver()
+
+        def destroy(self, runner_id, driver=None):
+            return True
+
+    monkeypatch.setattr("synlynk.swarm._manager", lambda: MockManager())
+    monkeypatch.setattr("synlynk.swarm.emit_event", lambda event_type, payload, emitted_by: events.append((event_type, payload)))
+    monkeypatch.setattr("synlynk.swarm._now", lambda: "2026-11-24T10:45:12+00:00")
+
+    cmd_swarm_lease(Namespace(lease_action="destroy", runner_id="lease-1", all=False))
+
+    event_type, payload = events[0]
+    assert event_type == "milestone_lease_completed"
+    assert payload["lease_id"] == "lease-1"
+    assert payload["workspace_id"] == "ws-1"
+    assert payload["epic_id"] == "epic-1"
+    assert payload["provider"] == "hetzner"
+    assert payload["server_type"] == "cpx51"
+    assert payload["location"] == "nbg1"
+    assert payload["active_seconds"] == 2712
+    assert payload["raw_compute_cost_eur"] == 0.0339
+
+

@@ -30,6 +30,7 @@ RELAY_EVENT_TYPES = (
     "sync_gap_detected",
     "doc_drafted",
     "doc_updated",
+    "milestone_lease_completed",
 )
 
 

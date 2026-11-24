@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import List
 
 from synlynk import _get_db, load_config
+from synlynk.events import emit_event
 from synlynk.runners.manager import RunnerManager
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def check_orthogonal_files(touched_lists: List[List[str]]) -> bool:
@@ -72,23 +78,39 @@ def cmd_swarm_destroy(args):
 
 def cmd_swarm_lease(args):
     """Lease a dedicated vertical swarm host for an epic (Direct BYOT or Hosted Relay)."""
+    manager = _manager()
+    lease_action = getattr(args, "lease_action", None)
+    if lease_action == "list":
+        leases = manager.list(include_destroyed=getattr(args, "all", False))
+        print(json.dumps(leases, indent=2))
+        return leases
+    if lease_action == "destroy":
+        return _destroy_leases(manager, getattr(args, "runner_id", None), getattr(args, "all", False))
+
     driver_name = getattr(args, "driver", "hetzner")
     epic_id = getattr(args, "epic", None)
     size = getattr(args, "size", "auto")
     relay_mode = getattr(args, "relay", False)
 
-    manager = _manager()
-    spec = {
-        "epic_id": epic_id,
-        "size": size,
-        "driver": driver_name,
-        "relay": relay_mode,
-        "command": ["synlynk", "swarm", "worker", "--epic", str(epic_id)],
-    }
-    runner_id = manager.provision(spec, driver_name)
-    _publish_progress(runner_id, {"status": "leased", "epic_id": epic_id, "driver": driver_name})
+    node_count = max(1, int(getattr(args, "nodes", 1)))
+    runner_ids = []
+    for node_index in range(node_count):
+        spec = {
+            "epic_id": epic_id,
+            "size": size,
+            "driver": driver_name,
+            "relay": relay_mode,
+            "node_index": node_index,
+            "drain_on_empty": bool(getattr(args, "drain_on_empty", False)),
+            "command": ["synlynk", "swarm", "worker", "--epic", str(epic_id)],
+        }
+        runner_id = manager.provision(spec, driver_name)
+        runner_ids.append(runner_id)
+        _publish_progress(runner_id, {"status": "leased", "epic_id": epic_id, "driver": driver_name})
+
     result = {
-        "lease_id": runner_id,
+        "lease_id": runner_ids[0],
+        "runner_ids": runner_ids,
         "epic_id": epic_id,
         "driver": driver_name,
         "relay": relay_mode,
@@ -97,6 +119,74 @@ def cmd_swarm_lease(args):
     print(json.dumps(result, indent=2))
     return result
 
-    targets = [r["runner_id"] for r in records] if args.all else ([args.runner_id] if args.runner_id else [])
-    destroyed = [runner_id for runner_id in targets if manager.destroy(runner_id)]
-    print(json.dumps({"destroyed": destroyed}))
+
+def _destroy_leases(manager, runner_id=None, destroy_all=False):
+    records = manager.list(include_destroyed=False)
+    if destroy_all:
+        targets = records
+    elif runner_id:
+        targets = [record for record in records if record.get("runner_id") == runner_id]
+    else:
+        targets = []
+
+    destroyed = []
+    for record in targets:
+        lease_id = record["runner_id"]
+        completion = _emit_lease_completed(manager, record)
+        if manager.destroy(lease_id, record.get("driver")):
+            destroyed.append(lease_id)
+            if completion is not None:
+                completion["destroyed_at"] = _now()
+    result = {"destroyed": destroyed}
+    print(json.dumps(result))
+    return result
+
+
+def _emit_lease_completed(manager, record):
+    """Emit the billing seam for a destroyed runner, best-effort on result details."""
+    spec = record.get("job_spec") or "{}"
+    try:
+        spec = json.loads(spec) if isinstance(spec, str) else dict(spec)
+    except (TypeError, ValueError):
+        spec = {}
+
+    try:
+        result = manager.driver(record.get("driver")).collect_results(record["runner_id"]) or {}
+    except Exception:
+        result = {}
+    server = result.get("server") or {}
+    server_type = (server.get("server_type") or {}).get("name") or spec.get("server_type") or spec.get("size")
+    location = ((server.get("datacenter") or {}).get("location") or {}).get("name") or spec.get("location")
+    provisioned = _parse_time(record.get("provisioned_at"))
+    active_seconds = max(0, int((_parse_time(_now()) - provisioned).total_seconds())) if provisioned else 0
+    hourly_rates = {"cpx21": 0.010, "cpx31": 0.019, "cpx51": 0.045, "cax41": 0.038}
+    payload = {
+        "lease_id": record["runner_id"],
+        "workspace_id": spec.get("workspace_id", "local"),
+        "epic_id": spec.get("epic_id"),
+        "provider": record.get("driver"),
+        "server_id": server.get("id", record["runner_id"]),
+        "server_type": server_type,
+        "location": location,
+        "provisioned_at": record.get("provisioned_at"),
+        "active_seconds": active_seconds,
+        "raw_compute_cost_eur": round(active_seconds / 3600 * hourly_rates.get(server_type, 0.0), 4),
+        "exit_code": result.get("exit_code"),
+        "tasks_completed": result.get("tasks_completed", spec.get("tasks_completed", 0)),
+    }
+    emit_event("milestone_lease_completed", payload, emitted_by="synlynk.swarm")
+    try:
+        from synlynk.events import ActorIdentifier, EventEnvelope
+        from synlynk.relay import RelayBroker
+
+        actor = ActorIdentifier("local", str(payload["workspace_id"]), "backend", "synlynk", payload["lease_id"])
+        RelayBroker().publish(EventEnvelope.create(actor, "milestone_lease_completed", payload))
+    except Exception:
+        pass
+    return payload
+
+
+def _parse_time(value):
+    if not value:
+        return None
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
