@@ -81,3 +81,11 @@ def test_dump_yaml_round_trips_nested_structure():
     }
     dumped = dump_yaml(original)
     assert parse_yaml(dumped) == original
+
+
+def test_round_trip_empty_list_and_dict_values():
+    from synlynk.charter_core.yaml_subset import dump_yaml, parse_yaml
+
+    data = {"coordination": {"handoffs": []}, "extensions": {}}
+    dumped = dump_yaml(data)
+    assert parse_yaml(dumped) == data
