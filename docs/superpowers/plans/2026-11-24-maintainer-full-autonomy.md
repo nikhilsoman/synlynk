@@ -17,7 +17,7 @@
 | **Create** `synlynk/maintainer_taxonomy.py` | Loads/merges `.synlynk/maintainer_taxonomy.json` + `.synlynk/domain_pack.json`; exposes `cluster_keywords()`, `remediation_topics()`, `doc_type_extensions()` |
 | **Create** `.synlynk/maintainer_taxonomy.json` | This repo's own pre-populated cluster keywords + remediation topics (today's hardcoded values, moved to config) |
 | **Create** `.synlynk/domain_pack.json` | The one worked "synlynk-default" domain pack (§7 of the spec) |
-| **Modify** `synlynk/maintainer.py` | `cluster_open_issues()` and `is_issue_remediated()` read from `maintainer_taxonomy.py` instead of hardcoded constants; adds `select_proposal_target()` (dual-graph proximal selection), `run_maintainer_wake_cycle()`, `_ensure_github_issue_for_story()`; registers the 3 actions with `maintainer_registry.py` at import time |
+| **Modify** `synlynk/maintainer.py` | `cluster_open_issues()` and `is_issue_remediated()` read from `maintainer_taxonomy.py` instead of hardcoded constants; adds `select_proposal_target()` (dual-graph proximal selection), `run_maintainer_wake_cycle()`, `_ensure_github_issue_for_story()`; registers the 3 actions with `maintainer_registry.py` at import time; adds `_persist_maintainer_proposals()`/`load_maintainer_proposals()` writing/reading `.synlynk/maintainer_proposals.json` so Tasks 13/14 have a real data source |
 | **Create** `synlynk/maintainer_registry.py` | `register_action()`, `registered_actions()`, `get_action_config()`, `clear_registry()` |
 | **Modify** `synlynk/docgraph.py` | `classify_doc_type()` gains an optional `extensions` param checked before the `general_doc` fallback |
 | **Modify** `synlynk/scheduler.py` | `_run_maintainer_triage_pass()` calls `run_maintainer_wake_cycle()` instead of discarding `triage_sentinel_alerts()`'s result |
@@ -28,15 +28,17 @@
 | **Create** `.github/workflows/maintainer-sweep.yml` | `workflow_dispatch` + nightly cron calling `synlynk maintainer wake` |
 | **Modify** `synlynk/viz/onboarding.py` | Adds `maintainer` to `roles_info` |
 | **Create** `synlynk/viz/role_ops_panel.py` | `generate_role_ops_panel_html(role_slug, data)` — generic operations panel |
+| **Modify** `synlynk/maintainer_registry.py` | Adds `build_maintainer_ops_data(role_slug, repo_root)` composing registered actions + `load_maintainer_proposals()` into the panel's `data` shape |
 | **Modify** `synlynk/viz/roles.py` | Inserts the Operations panel after the existing "Edit Charter" `<details>` block |
 | **Modify** `synlynk/viz/overview.py` | Inserts a condensed Maintainer widget section-card before the shortcuts grid |
-| **Modify** `synlynk/viz/roadmap_studio.py` | Renames `generate_roadmap_studio_html` → `generate_proposal_studio_html` (alias kept), adds `source` badge + "Needs attention now" lane |
+| **Modify** `synlynk/roadmap_studio.py` | Adds `normalize_proposal_for_studio()` adapter, applies it inside `studio_data()` to every `tickets[].stories[]`/`backlog[]` entry, and merges in a new `maintainer_proposals` key sourced from `load_maintainer_proposals()` (DECIDE panel defect #4 — this is the module `/api/roadmap_studio` actually serves) |
+| **Modify** `synlynk/viz/roadmap_studio.py` | Renames `generate_roadmap_studio_html` → `generate_proposal_studio_html` (alias kept), adds `source` badge + "Needs attention now" lane to `cardHtml`/`draw()` — reads the now-always-normalized fields `studio_data()` supplies, no defaulting of its own |
 
-Tests live alongside: `tests/test_maintainer_taxonomy.py`, `tests/test_maintainer_registry.py`, extensions to `tests/test_maintainer.py`, `tests/test_docgraph.py`, `tests/test_fencing_hint_contributors.py`, `tests/test_viz_roles.py`, `tests/test_viz_roadmap_studio.py`, a new `tests/test_viz_role_ops_panel.py`, and a new `tests/test_cli_maintainer_wake.py`.
+Tests live alongside: `tests/test_maintainer_taxonomy.py`, `tests/test_maintainer_registry.py`, extensions to `tests/test_maintainer.py`, `tests/test_docgraph.py`, `tests/test_fencing_hint_contributors.py`, `tests/test_viz_roles.py`, `tests/test_roadmap_studio.py`, `tests/test_viz_roadmap_studio.py`, a new `tests/test_viz_role_ops_panel.py`, and a new `tests/test_cli_maintainer_wake.py`.
 
 ---
 
-### Task 1: Taxonomy config loader (portability — spec §6)
+### Task 1: Taxonomy config loader (portability — spec §6, REVISED per DECIDE panel 2026-11-24 defect #5)
 
 **Files:**
 - Create: `synlynk/maintainer_taxonomy.py`
@@ -49,13 +51,14 @@ Tests live alongside: `tests/test_maintainer_taxonomy.py`, `tests/test_maintaine
 # tests/test_maintainer_taxonomy.py
 import json
 
-from synlynk.maintainer_taxonomy import cluster_keywords, remediation_topics
+from synlynk.maintainer_taxonomy import cluster_keywords, remediation_topics, load_taxonomy
 
 
 def test_cluster_keywords_reads_repo_config(tmp_path):
     taxonomy_path = tmp_path / ".synlynk" / "maintainer_taxonomy.json"
     taxonomy_path.parent.mkdir(parents=True)
     taxonomy_path.write_text(json.dumps({
+        "schema_version": 1,
         "cluster_keywords": {"backend": ["sqlite", "api"]},
         "remediation_topics": ["custom topic"],
     }))
@@ -74,6 +77,61 @@ def test_cluster_keywords_falls_back_to_builtin_defaults_when_missing(tmp_path):
 
     topics = remediation_topics(repo_root=str(tmp_path))
     assert "invariant 1" in topics
+
+
+def test_load_taxonomy_falls_back_on_malformed_json(tmp_path):
+    """DECIDE panel defect #5: malformed JSON must never raise -- fall back
+    to built-in defaults and surface a validation error for the UI banner."""
+    taxonomy_path = tmp_path / ".synlynk" / "maintainer_taxonomy.json"
+    taxonomy_path.parent.mkdir(parents=True)
+    taxonomy_path.write_text("{not valid json")
+
+    result = load_taxonomy(repo_root=str(tmp_path))
+    assert result["schema_valid"] is False
+    assert "malformed JSON" in result["validation_error"]
+    assert "backend" in result["cluster_keywords"]
+
+
+def test_load_taxonomy_falls_back_on_unsupported_schema_version(tmp_path):
+    taxonomy_path = tmp_path / ".synlynk" / "maintainer_taxonomy.json"
+    taxonomy_path.parent.mkdir(parents=True)
+    taxonomy_path.write_text(json.dumps({"schema_version": 99, "cluster_keywords": {"x": ["y"]}}))
+
+    result = load_taxonomy(repo_root=str(tmp_path))
+    assert result["schema_valid"] is False
+    assert "schema_version" in result["validation_error"]
+    assert "backend" in result["cluster_keywords"]
+    assert result["cluster_keywords"]["backend"] == ["sqlite", "database", "server", "api", "endpoint", "query"]
+
+
+def test_load_taxonomy_falls_back_on_non_dict_json(tmp_path):
+    taxonomy_path = tmp_path / ".synlynk" / "maintainer_taxonomy.json"
+    taxonomy_path.parent.mkdir(parents=True)
+    taxonomy_path.write_text(json.dumps(["not", "a", "dict"]))
+
+    result = load_taxonomy(repo_root=str(tmp_path))
+    assert result["schema_valid"] is False
+
+
+def test_load_taxonomy_accepts_valid_schema_version_1(tmp_path):
+    taxonomy_path = tmp_path / ".synlynk" / "maintainer_taxonomy.json"
+    taxonomy_path.parent.mkdir(parents=True)
+    taxonomy_path.write_text(json.dumps({
+        "schema_version": 1,
+        "cluster_keywords": {"backend": ["sqlite"]},
+    }))
+
+    result = load_taxonomy(repo_root=str(tmp_path))
+    assert result["schema_valid"] is True
+    assert result["validation_error"] is None
+    assert result["cluster_keywords"] == {"backend": ["sqlite"]}
+
+
+def test_load_taxonomy_missing_file_is_not_a_validation_error(tmp_path):
+    """Absence is the normal unconfigured case, not a malformed-config error."""
+    result = load_taxonomy(repo_root=str(tmp_path))
+    assert result["schema_valid"] is True
+    assert result["validation_error"] is None
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -95,7 +153,7 @@ without a code change.
 """
 import json
 import os
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 _BUILTIN_CLUSTER_KEYWORDS: Dict[str, List[str]] = {
     "backend": ["sqlite", "database", "server", "api", "endpoint", "query"],
@@ -112,44 +170,93 @@ _BUILTIN_REMEDIATION_TOPICS: Tuple[str, ...] = (
     "daemon supervision",
 )
 
+_BUILTIN_PROXIMAL_SELECTION: Dict[str, Any] = {
+    "code_graph_weights": {"distance_1": 0.6, "distance_2": 0.3},
+    "doc_graph_weights": {"shared_doc": 0.4, "shared_issue_or_pr": 0.3},
+    "keyword_weight": 0.2,
+    "join_threshold": 0.5,
+}
+
+_SUPPORTED_TAXONOMY_SCHEMA_VERSIONS = {1}
+
 
 def _taxonomy_path(repo_root: str) -> str:
     return os.path.join(repo_root, ".synlynk", "maintainer_taxonomy.json")
 
 
-def _load_taxonomy_file(repo_root: str) -> dict:
+def _load_taxonomy_file_raw(repo_root: str) -> Tuple[dict, Optional[str]]:
+    """Returns (data, validation_error). data is {} whenever validation_error
+    is set, so every caller falls back to built-in defaults uniformly
+    (DECIDE panel defect #5: never raise on malformed/unknown-version/missing
+    config -- validate-or-fallback only)."""
     path = _taxonomy_path(repo_root)
     if not os.path.exists(path):
-        return {}
+        return {}, None  # absence is the normal unconfigured case, not an error
+
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        return data if isinstance(data, dict) else {}
-    except (json.JSONDecodeError, OSError):
-        return {}
+    except (json.JSONDecodeError, OSError) as exc:
+        return {}, f"malformed JSON in {path}: {exc}"
+
+    if not isinstance(data, dict):
+        return {}, f"{path} must contain a JSON object, got {type(data).__name__}"
+
+    schema_version = data.get("schema_version")
+    if schema_version not in _SUPPORTED_TAXONOMY_SCHEMA_VERSIONS:
+        return {}, f"unsupported schema_version {schema_version!r} in {path} (supported: {sorted(_SUPPORTED_TAXONOMY_SCHEMA_VERSIONS)})"
+
+    return data, None
+
+
+def _load_taxonomy_file(repo_root: str) -> dict:
+    data, _ = _load_taxonomy_file_raw(repo_root)
+    return data
+
+
+def load_taxonomy(repo_root: str = ".") -> Dict[str, Any]:
+    """Full validated taxonomy config, merged with built-in defaults.
+
+    Returns a dict with cluster_keywords, remediation_topics,
+    proximal_selection, schema_valid, and validation_error -- the latter two
+    so Vizor's Role Operations Panel (Task 13) can surface a "using built-in
+    defaults -- config failed validation" banner (spec §6, DECIDE panel
+    defect #5) without the loader itself ever raising.
+    """
+    data, error = _load_taxonomy_file_raw(repo_root)
+
+    cluster = data.get("cluster_keywords")
+    cluster = cluster if isinstance(cluster, dict) and cluster else dict(_BUILTIN_CLUSTER_KEYWORDS)
+
+    topics = data.get("remediation_topics")
+    topics = tuple(topics) if isinstance(topics, list) and topics else _BUILTIN_REMEDIATION_TOPICS
+
+    proximal = data.get("proximal_selection")
+    proximal = proximal if isinstance(proximal, dict) and proximal else dict(_BUILTIN_PROXIMAL_SELECTION)
+
+    return {
+        "cluster_keywords": cluster,
+        "remediation_topics": topics,
+        "proximal_selection": proximal,
+        "schema_valid": error is None,
+        "validation_error": error,
+    }
 
 
 def cluster_keywords(repo_root: str = ".") -> Dict[str, List[str]]:
     """Cluster name -> keyword list, from .synlynk/maintainer_taxonomy.json or built-in defaults."""
-    data = _load_taxonomy_file(repo_root)
-    configured = data.get("cluster_keywords")
-    if isinstance(configured, dict) and configured:
-        return configured
-    return dict(_BUILTIN_CLUSTER_KEYWORDS)
+    return load_taxonomy(repo_root)["cluster_keywords"]
 
 
 def remediation_topics(repo_root: str = ".") -> Tuple[str, ...]:
     """Remediation-topic keywords, from .synlynk/maintainer_taxonomy.json or built-in defaults."""
-    data = _load_taxonomy_file(repo_root)
-    configured = data.get("remediation_topics")
-    if isinstance(configured, list) and configured:
-        return tuple(configured)
-    return _BUILTIN_REMEDIATION_TOPICS
+    return load_taxonomy(repo_root)["remediation_topics"]
 ```
 
 ```json
 // .synlynk/maintainer_taxonomy.json
 {
+  "schema_version": 1,
   "cluster_keywords": {
     "backend": ["sqlite", "database", "server", "api", "endpoint", "query"],
     "frontend": ["css", "html", "ui", "vizor", "widget", "render"],
@@ -158,14 +265,20 @@ def remediation_topics(repo_root: str = ".") -> Tuple[str, ...]:
     "sentinel": ["alert", "circuit breaker", "sentinel", "flatline"],
     "testing": ["pytest", "fixture", "test_", "flaky"]
   },
-  "remediation_topics": ["invariant 1", "circuit breaker", "daemon supervision"]
+  "remediation_topics": ["invariant 1", "circuit breaker", "daemon supervision"],
+  "proximal_selection": {
+    "code_graph_weights": {"distance_1": 0.6, "distance_2": 0.3},
+    "doc_graph_weights": {"shared_doc": 0.4, "shared_issue_or_pr": 0.3},
+    "keyword_weight": 0.2,
+    "join_threshold": 0.5
+  }
 }
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_maintainer_taxonomy.py -v`
-Expected: PASS (2 passed)
+Expected: PASS (7 passed)
 
 - [ ] **Step 5: Commit**
 
@@ -178,7 +291,7 @@ Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
 
 ---
 
-### Task 2: Domain Pack extension point (spec §7)
+### Task 2: Domain Pack extension point (spec §7, REVISED per DECIDE panel 2026-11-24 defect #5)
 
 **Files:**
 - Modify: `synlynk/maintainer_taxonomy.py` (add `load_domain_pack`, `doc_type_extensions`, merge logic in `cluster_keywords`/`remediation_topics`)
@@ -191,17 +304,19 @@ Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
 Append to `tests/test_maintainer_taxonomy.py`:
 
 ```python
-from synlynk.maintainer_taxonomy import load_domain_pack, doc_type_extensions
+from synlynk.maintainer_taxonomy import load_domain_pack, doc_type_extensions, load_taxonomy
 
 
 def test_load_domain_pack_merges_cluster_keywords_over_repo_defaults(tmp_path):
     synlynk_dir = tmp_path / ".synlynk"
     synlynk_dir.mkdir()
     (synlynk_dir / "maintainer_taxonomy.json").write_text(json.dumps({
+        "schema_version": 1,
         "cluster_keywords": {"backend": ["sqlite"]},
         "remediation_topics": ["topic a"],
     }))
     (synlynk_dir / "domain_pack.json").write_text(json.dumps({
+        "schema_version": 1,
         "pack_name": "test-pack",
         "cluster_keywords": {"backend": ["sqlite", "postgres"], "ops": ["pager"]},
         "remediation_topics": ["topic b"],
@@ -223,10 +338,25 @@ def test_load_domain_pack_returns_none_when_absent(tmp_path):
     assert load_domain_pack(repo_root=str(tmp_path)) is None
 
 
+def test_load_domain_pack_falls_back_on_unsupported_schema_version(tmp_path):
+    """DECIDE panel defect #5 applies to the domain pack too."""
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "domain_pack.json").write_text(json.dumps({"schema_version": 99, "pack_name": "bad"}))
+
+    pack = load_domain_pack(repo_root=str(tmp_path))
+    assert pack is None
+
+    result = load_taxonomy(repo_root=str(tmp_path))
+    assert result["schema_valid"] is False
+    assert "domain_pack" in result["validation_error"]
+
+
 def test_doc_type_extensions_reads_domain_pack(tmp_path):
     synlynk_dir = tmp_path / ".synlynk"
     synlynk_dir.mkdir()
     (synlynk_dir / "domain_pack.json").write_text(json.dumps({
+        "schema_version": 1,
         "pack_name": "test-pack",
         "doc_type_extensions": {"shot_list": ["shotlist", "shot-list"]},
     }))
@@ -264,24 +394,37 @@ Expected: FAIL — `ImportError: cannot import name 'load_domain_pack'` and `Typ
 Append to `synlynk/maintainer_taxonomy.py`:
 
 ```python
-from typing import Optional
-
-
 def _domain_pack_path(repo_root: str) -> str:
     return os.path.join(repo_root, ".synlynk", "domain_pack.json")
 
 
-def load_domain_pack(repo_root: str = ".") -> Optional[dict]:
-    """Load .synlynk/domain_pack.json, or None if it doesn't exist/parse."""
+def _load_domain_pack_raw(repo_root: str) -> Tuple[Optional[dict], Optional[str]]:
+    """Returns (pack_or_None, validation_error). Same never-raise contract as
+    _load_taxonomy_file_raw (DECIDE panel defect #5)."""
     path = _domain_pack_path(repo_root)
     if not os.path.exists(path):
-        return None
+        return None, None
+
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        return data if isinstance(data, dict) else None
-    except (json.JSONDecodeError, OSError):
-        return None
+    except (json.JSONDecodeError, OSError) as exc:
+        return None, f"malformed JSON in domain_pack.json ({path}): {exc}"
+
+    if not isinstance(data, dict):
+        return None, f"domain_pack.json must contain a JSON object, got {type(data).__name__}"
+
+    schema_version = data.get("schema_version")
+    if schema_version not in _SUPPORTED_TAXONOMY_SCHEMA_VERSIONS:
+        return None, f"unsupported schema_version {schema_version!r} in domain_pack.json (supported: {sorted(_SUPPORTED_TAXONOMY_SCHEMA_VERSIONS)})"
+
+    return data, None
+
+
+def load_domain_pack(repo_root: str = ".") -> Optional[dict]:
+    """Load .synlynk/domain_pack.json, or None if it doesn't exist/fails validation."""
+    pack, _ = _load_domain_pack_raw(repo_root)
+    return pack
 
 
 def doc_type_extensions(repo_root: str = ".") -> Dict[str, List[str]]:
@@ -293,40 +436,48 @@ def doc_type_extensions(repo_root: str = ".") -> Dict[str, List[str]]:
     return extensions if isinstance(extensions, dict) else {}
 ```
 
-Now update `cluster_keywords()` and `remediation_topics()` in the same file to layer the domain pack over the taxonomy file (pack values win per-key, matching spec §7: "pack values layer over repo defaults"):
+Now update `load_taxonomy()` (Task 1) to layer the domain pack over the taxonomy file (pack values win per-key, matching spec §7: "pack values layer over repo defaults") and to surface either loader's validation error:
 
 ```python
-def cluster_keywords(repo_root: str = ".") -> Dict[str, List[str]]:
-    """Cluster name -> keyword list: domain pack layered over .synlynk/maintainer_taxonomy.json, falling back to built-in defaults."""
-    data = _load_taxonomy_file(repo_root)
-    configured = data.get("cluster_keywords")
-    merged = dict(configured) if isinstance(configured, dict) and configured else dict(_BUILTIN_CLUSTER_KEYWORDS)
+def load_taxonomy(repo_root: str = ".") -> Dict[str, Any]:
+    """Full validated taxonomy config: domain pack layered over
+    .synlynk/maintainer_taxonomy.json, falling back to built-in defaults.
+    Never raises (DECIDE panel defect #5) -- schema_valid/validation_error
+    report either loader's outcome for the Role Operations Panel banner."""
+    data, taxonomy_error = _load_taxonomy_file_raw(repo_root)
+    pack, pack_error = _load_domain_pack_raw(repo_root)
 
-    pack = load_domain_pack(repo_root)
+    cluster = data.get("cluster_keywords")
+    cluster = dict(cluster) if isinstance(cluster, dict) and cluster else dict(_BUILTIN_CLUSTER_KEYWORDS)
     if pack:
         pack_keywords = pack.get("cluster_keywords")
         if isinstance(pack_keywords, dict):
-            merged.update(pack_keywords)
-    return merged
+            cluster.update(pack_keywords)
 
-
-def remediation_topics(repo_root: str = ".") -> Tuple[str, ...]:
-    """Remediation-topic keywords: domain pack layered over .synlynk/maintainer_taxonomy.json, falling back to built-in defaults."""
-    data = _load_taxonomy_file(repo_root)
-    configured = data.get("remediation_topics")
-    merged = list(configured) if isinstance(configured, list) and configured else list(_BUILTIN_REMEDIATION_TOPICS)
-
-    pack = load_domain_pack(repo_root)
+    topics = data.get("remediation_topics")
+    topics_list = list(topics) if isinstance(topics, list) and topics else list(_BUILTIN_REMEDIATION_TOPICS)
     if pack:
         pack_topics = pack.get("remediation_topics")
         if isinstance(pack_topics, list):
             for topic in pack_topics:
-                if topic not in merged:
-                    merged.append(topic)
-    return tuple(merged)
+                if topic not in topics_list:
+                    topics_list.append(topic)
+
+    proximal = data.get("proximal_selection")
+    proximal = proximal if isinstance(proximal, dict) and proximal else dict(_BUILTIN_PROXIMAL_SELECTION)
+
+    error = taxonomy_error or (f"domain_pack.json: {pack_error}" if pack_error else None)
+
+    return {
+        "cluster_keywords": cluster,
+        "remediation_topics": tuple(topics_list),
+        "proximal_selection": proximal,
+        "schema_valid": error is None,
+        "validation_error": error,
+    }
 ```
 
-Replace the two function definitions already written in Task 1 with these versions (same file, same names — this is an edit, not a duplicate addition).
+Replace the `load_taxonomy()` definition already written in Task 1 with this version (same file, same name — this is an edit, not a duplicate addition). `cluster_keywords()` and `remediation_topics()` from Task 1 are unchanged — they already delegate to `load_taxonomy()`, so they pick up the domain-pack layering automatically.
 
 - [ ] **Step 4: Implement the `classify_doc_type` extension param**
 
@@ -392,6 +543,7 @@ Expected: PASS (all tests green)
 ```json
 // .synlynk/domain_pack.json
 {
+  "schema_version": 1,
   "pack_name": "synlynk-default",
   "cluster_keywords": {
     "backend": ["sqlite", "database", "server", "api", "endpoint", "query"],
@@ -437,6 +589,7 @@ def test_cluster_open_issues_uses_repo_taxonomy_file(tmp_path, monkeypatch):
     synlynk_dir = tmp_path / ".synlynk"
     synlynk_dir.mkdir()
     (synlynk_dir / "maintainer_taxonomy.json").write_text(json.dumps({
+        "schema_version": 1,
         "cluster_keywords": {"video": ["ffmpeg", "transcode"]},
         "remediation_topics": [],
     }))
@@ -452,6 +605,7 @@ def test_is_issue_remediated_uses_repo_remediation_topics(tmp_path, monkeypatch)
     synlynk_dir = tmp_path / ".synlynk"
     synlynk_dir.mkdir()
     (synlynk_dir / "maintainer_taxonomy.json").write_text(json.dumps({
+        "schema_version": 1,
         "cluster_keywords": {},
         "remediation_topics": ["frame drop"],
     }))
@@ -539,7 +693,9 @@ Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
 
 ---
 
-### Task 4: `MaintainerActionRegistry` (spec §5.2)
+### Task 4: `AutonomousActionRegistry` — role-aware, typed `FieldSpec` (spec §5.2, REVISED per DECIDE panel 2026-11-24 defect #1)
+
+**Why revised:** the original registry took a bare `name` with no `role_slug`/stable `action_id`, and an untyped `filter_schema` dict. The Role Operations Panel (Task 13) renders form controls directly from `filter_schema`, so an untyped dict can't drive a renderer — it needs a typed field-spec list. See spec §5.2.
 
 **Files:**
 - Create: `synlynk/maintainer_registry.py`
@@ -554,6 +710,7 @@ import json
 import pytest
 
 from synlynk.maintainer_registry import (
+    FieldSpec,
     register_action,
     registered_actions,
     get_action_config,
@@ -568,35 +725,71 @@ def _clear():
     clear_registry()
 
 
-def test_register_action_stores_defaults_and_filter_schema():
+def test_register_action_stores_defaults_and_typed_filter_schema():
     register_action(
+        role_slug="maintainer",
         name="sentinel_triage",
         default_config={"enabled": True, "mode": "dry_run"},
-        filter_schema={"exclude_codes": "list[str]"},
+        filter_schema=[
+            FieldSpec(name="exclude_codes", type="list[str]", default=[], label="Exclude alert codes"),
+        ],
         run_fn=lambda **kwargs: {"ok": True},
     )
     actions = registered_actions()
-    assert "sentinel_triage" in actions
-    assert actions["sentinel_triage"].default_config == {"enabled": True, "mode": "dry_run"}
-    assert actions["sentinel_triage"].filter_schema == {"exclude_codes": "list[str]"}
+    assert "maintainer:sentinel_triage" in actions
+    action = actions["maintainer:sentinel_triage"]
+    assert action.role_slug == "maintainer"
+    assert action.name == "sentinel_triage"
+    assert action.default_config == {"enabled": True, "mode": "dry_run"}
+    assert action.filter_schema == [
+        FieldSpec(name="exclude_codes", type="list[str]", default=[], label="Exclude alert codes"),
+    ]
+
+
+def test_register_action_rejects_unknown_field_type():
+    with pytest.raises(ValueError, match="unknown FieldSpec type"):
+        register_action(
+            role_slug="maintainer",
+            name="bad_action",
+            default_config={},
+            filter_schema=[FieldSpec(name="x", type="not_a_real_type", default=None, label="X")],
+            run_fn=lambda **kwargs: {"ok": True},
+        )
+
+
+def test_registered_actions_filters_by_role_slug():
+    register_action(
+        role_slug="maintainer", name="mesh_sweep",
+        default_config={"enabled": True, "mode": "dry_run"}, filter_schema=[],
+        run_fn=lambda **kwargs: {"ok": True},
+    )
+    register_action(
+        role_slug="tpm", name="release_sweep",
+        default_config={"enabled": True, "mode": "dry_run"}, filter_schema=[],
+        run_fn=lambda **kwargs: {"ok": True},
+    )
+    maintainer_only = registered_actions(role_slug="maintainer")
+    assert set(maintainer_only) == {"maintainer:mesh_sweep"}
+    everything = registered_actions()
+    assert set(everything) == {"maintainer:mesh_sweep", "tpm:release_sweep"}
 
 
 def test_get_action_config_returns_defaults_when_no_config_file(tmp_path):
     register_action(
-        name="mesh_sweep",
+        role_slug="maintainer", name="mesh_sweep",
         default_config={"enabled": True, "mode": "dry_run"},
-        filter_schema={},
+        filter_schema=[],
         run_fn=lambda **kwargs: {"ok": True},
     )
-    config = get_action_config("mesh_sweep", repo_root=str(tmp_path))
+    config = get_action_config("maintainer:mesh_sweep", repo_root=str(tmp_path))
     assert config == {"enabled": True, "mode": "dry_run"}
 
 
 def test_get_action_config_applies_repo_overrides(tmp_path):
     register_action(
-        name="backlog_burndown",
+        role_slug="maintainer", name="backlog_burndown",
         default_config={"enabled": True, "mode": "dry_run"},
-        filter_schema={"exclude_labels": "list[str]"},
+        filter_schema=[FieldSpec(name="exclude_labels", type="list[str]", default=[], label="Exclude labels")],
         run_fn=lambda **kwargs: {"ok": True},
     )
     synlynk_dir = tmp_path / ".synlynk"
@@ -607,7 +800,7 @@ def test_get_action_config_applies_repo_overrides(tmp_path):
         }
     }))
 
-    config = get_action_config("backlog_burndown", repo_root=str(tmp_path))
+    config = get_action_config("maintainer:backlog_burndown", repo_root=str(tmp_path))
     assert config == {
         "enabled": True,
         "mode": "promote",
@@ -615,9 +808,24 @@ def test_get_action_config_applies_repo_overrides(tmp_path):
     }
 
 
-def test_get_action_config_raises_for_unregistered_name(tmp_path):
+def test_get_action_config_rejects_unknown_override_keys(tmp_path):
+    register_action(
+        role_slug="maintainer", name="backlog_burndown",
+        default_config={"enabled": True, "mode": "dry_run"}, filter_schema=[],
+        run_fn=lambda **kwargs: {"ok": True},
+    )
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "config.json").write_text(json.dumps({
+        "maintainer_autonomy": {"backlog_burndown": {"not_a_real_key": 1}},
+    }))
+    with pytest.raises(ValueError, match="unknown config key"):
+        get_action_config("maintainer:backlog_burndown", repo_root=str(tmp_path))
+
+
+def test_get_action_config_raises_for_unregistered_action_id(tmp_path):
     with pytest.raises(KeyError):
-        get_action_config("nonexistent", repo_root=str(tmp_path))
+        get_action_config("maintainer:nonexistent", repo_root=str(tmp_path))
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -629,51 +837,86 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'synlynk.maintainer_re
 
 ```python
 # synlynk/maintainer_registry.py
-"""Generic action-registration object for any role's autonomous wake cycle.
+"""Generic, role-aware action-registration object for any role's autonomous
+wake cycle (spec §5.2, docs/superpowers/specs/2026-11-24-maintainer-full-autonomy-design.md).
 
-Not Maintainer-specific: any role adopting this pattern (spec §5.2,
-docs/superpowers/specs/2026-11-24-maintainer-full-autonomy-design.md)
-registers an action with a default config, a filter schema, and a run
-function. Registration produces a settings entry under
-.synlynk/config.json's `maintainer_autonomy` block (read via
-get_action_config), wake-cycle participation, and a toggle/filter card in
-the Role Operations Panel (synlynk/viz/role_ops_panel.py).
+Not Maintainer-specific despite the module name (kept for import-path
+continuity with the rest of this plan): any role registers an action under
+its own role_slug. The stable action_id is f"{role_slug}:{name}" - this is
+the only id the Role Operations Panel (synlynk/viz/role_ops_panel.py,
+Task 13) is allowed to key off, and the persistence key under
+.synlynk/config.json's "<role_slug>_autonomy" block.
 """
 import json
 import os
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, List, Optional
+
+_KNOWN_FIELD_TYPES = {"str", "bool", "list[str]", "int"}
+
+
+@dataclass(frozen=True)
+class FieldSpec:
+    name: str
+    type: str
+    default: Any
+    label: str
+
+    def __post_init__(self):
+        if self.type not in _KNOWN_FIELD_TYPES:
+            raise ValueError(
+                f"unknown FieldSpec type {self.type!r} for field {self.name!r}; "
+                f"must be one of {sorted(_KNOWN_FIELD_TYPES)}"
+            )
 
 
 @dataclass
 class RegisteredAction:
+    role_slug: str
     name: str
     default_config: Dict[str, Any] = field(default_factory=dict)
-    filter_schema: Dict[str, str] = field(default_factory=dict)
-    run_fn: Callable[..., Dict[str, Any]] = None
+    filter_schema: List[FieldSpec] = field(default_factory=list)
+    run_fn: Optional[Callable[..., Dict[str, Any]]] = None
+
+    @property
+    def action_id(self) -> str:
+        return f"{self.role_slug}:{self.name}"
 
 
 _REGISTRY: Dict[str, RegisteredAction] = {}
 
 
 def register_action(
+    role_slug: str,
     name: str,
     default_config: Dict[str, Any],
-    filter_schema: Dict[str, str],
+    filter_schema: List[FieldSpec],
     run_fn: Callable[..., Dict[str, Any]],
 ) -> None:
-    """Register (or re-register, idempotently) an autonomous action."""
-    _REGISTRY[name] = RegisteredAction(
+    """Register (or re-register, idempotently) an autonomous action.
+
+    Raises ValueError (via FieldSpec.__post_init__) at registration time if
+    filter_schema contains an unknown field type - not at render time.
+    """
+    action = RegisteredAction(
+        role_slug=role_slug,
         name=name,
         default_config=dict(default_config),
-        filter_schema=dict(filter_schema),
+        filter_schema=list(filter_schema),
         run_fn=run_fn,
     )
+    _REGISTRY[action.action_id] = action
 
 
-def registered_actions() -> Dict[str, RegisteredAction]:
-    """All currently registered actions, keyed by name."""
-    return dict(_REGISTRY)
+def registered_actions(role_slug: str = None) -> Dict[str, RegisteredAction]:
+    """All currently registered actions, keyed by action_id.
+
+    Pass role_slug to filter to one role's actions (what the Role Operations
+    Panel's per-role card needs); omit it for cross-role views.
+    """
+    if role_slug is None:
+        return dict(_REGISTRY)
+    return {k: v for k, v in _REGISTRY.items() if v.role_slug == role_slug}
 
 
 def clear_registry() -> None:
@@ -681,16 +924,17 @@ def clear_registry() -> None:
     _REGISTRY.clear()
 
 
-def _settings_section_key(name: str) -> str:
-    return "maintainer_autonomy"
-
-
-def get_action_config(name: str, repo_root: str = ".") -> Dict[str, Any]:
+def get_action_config(action_id: str, repo_root: str = ".") -> Dict[str, Any]:
     """Registered action's default_config, overridden by
-    .synlynk/config.json's maintainer_autonomy block for this action name."""
-    action = _REGISTRY.get(name)
+    .synlynk/config.json's "<role_slug>_autonomy" block for this action.
+
+    Raises ValueError if the config file supplies a key not present in the
+    action's own default_config (unknown-key rejection, DECIDE panel
+    defect #1) - a typo in config should fail loudly, not silently no-op.
+    """
+    action = _REGISTRY.get(action_id)
     if action is None:
-        raise KeyError(f"no registered action named {name!r}")
+        raise KeyError(f"no registered action with id {action_id!r}")
 
     config = dict(action.default_config)
     path = os.path.join(repo_root, ".synlynk", "config.json")
@@ -698,34 +942,39 @@ def get_action_config(name: str, repo_root: str = ".") -> Dict[str, Any]:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            section = data.get(_settings_section_key(name)) or {}
-            overrides = section.get(name) or {}
-            config.update(overrides)
+            section = data.get(f"{action.role_slug}_autonomy") or {}
+            overrides = section.get(action.name) or {}
         except (json.JSONDecodeError, OSError):
-            pass
+            overrides = {}
+        unknown = set(overrides) - set(config)
+        if unknown:
+            raise ValueError(f"unknown config key(s) {sorted(unknown)} for action {action_id!r}")
+        config.update(overrides)
     return config
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_maintainer_registry.py -v`
-Expected: PASS (4 passed)
+Expected: PASS (8 passed)
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add synlynk/maintainer_registry.py tests/test_maintainer_registry.py
-git commit -m "feat(maintainer): generic action registry for settings-driven wake-cycle actions
+git commit -m "feat(maintainer): role-aware action registry with typed FieldSpec
 
 Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 5: Dual-graph proximal selection (spec §5.6)
+### Task 5: Evidence-weighted proximal selection (spec §5.6, REVISED per DECIDE panel 2026-11-24 defect #3 — HELD until this task's own review passes; do not dispatch Task 13/14 before this one merges)
+
+**Why revised:** the original task matched the old spec's "first-match-wins, three-tier" description and only read `reverse_code_index`, silently dropping `reverse_doc_index` and any issues/PRs evidence. The panel (Codex) found this gap directly. The new model collects weighted `Evidence` across all tiers, sums per candidate proposal, and resolves deterministically against a configurable threshold — see spec §5.6 and the `proximal_selection` config block in spec §6.
 
 **Files:**
-- Modify: `synlynk/maintainer.py` (add `select_proposal_target`)
+- Modify: `synlynk/maintainer.py` (add `Evidence`, `_collect_evidence`, `select_proposal_target`)
 - Test: `tests/test_maintainer.py` (append)
 
 - [ ] **Step 1: Write the failing tests**
@@ -733,94 +982,99 @@ Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
 Append to `tests/test_maintainer.py`:
 
 ```python
-from synlynk.maintainer import select_proposal_target
+from synlynk.maintainer import Evidence, select_proposal_target
 
 
-def test_select_proposal_target_matches_via_code_graph_adjacency(monkeypatch):
+def test_select_proposal_target_sums_weighted_evidence_across_tiers(monkeypatch):
     open_proposals = [{"proposal_id": "p1", "touched_files": ["synlynk/maintainer.py"]}]
     candidate = {"touched_files": ["synlynk/maintainer_registry.py"]}
 
-    def fake_graph_distance(file_a, file_b, repo_root="."):
-        return 1  # adjacent
+    def fake_collect_evidence(candidate, proposal, repo_root="."):
+        return [
+            Evidence(tier="code_graph", weight=0.6, detail="distance-1 adjacency"),
+            Evidence(tier="doc_graph", weight=0.3, detail="shared doc docs/a.md"),
+        ]
 
-    monkeypatch.setattr("synlynk.maintainer._code_graph_distance", fake_graph_distance)
+    monkeypatch.setattr("synlynk.maintainer._collect_evidence", fake_collect_evidence)
 
-    target = select_proposal_target(candidate, open_proposals, repo_root=".")
+    target, tier_provenance = select_proposal_target(candidate, open_proposals, repo_root=".")
     assert target == "p1"
+    assert tier_provenance == ["code_graph", "doc_graph"]
 
 
-def test_select_proposal_target_falls_back_to_doc_graph(monkeypatch):
-    open_proposals = [{"proposal_id": "p1", "touched_files": ["unrelated/file.py"], "story_ids": ["s1"]}]
-    candidate = {"touched_files": ["another/unrelated.py"], "story_ids": ["s2"]}
+def test_select_proposal_target_respects_join_threshold(monkeypatch, tmp_path):
+    (tmp_path / ".synlynk").mkdir()
+    open_proposals = [{"proposal_id": "p1", "touched_files": ["unrelated.py"]}]
+    candidate = {"touched_files": ["another.py"]}
 
-    monkeypatch.setattr("synlynk.maintainer._code_graph_distance", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "synlynk.maintainer._collect_evidence",
+        lambda candidate, proposal, repo_root=".": [Evidence(tier="keyword", weight=0.1, detail="weak match")],
+    )
 
-    class FakeDocGraph:
-        reverse_code_index = {
-            "unrelated/file.py": ["docs/a.md"],
-            "another/unrelated.py": ["docs/a.md"],
-        }
-        reverse_doc_index: dict = {}
-
-    monkeypatch.setattr("synlynk.maintainer._load_docgraph", lambda repo_root: FakeDocGraph())
-
-    target = select_proposal_target(candidate, open_proposals, repo_root=".")
-    assert target == "p1"
-
-
-def test_select_proposal_target_falls_back_to_keyword_match(monkeypatch, tmp_path):
-    monkeypatch.setattr("synlynk.maintainer._code_graph_distance", lambda *a, **k: None)
-    monkeypatch.setattr("synlynk.maintainer._load_docgraph", lambda repo_root: None)
-
-    open_proposals = [{"proposal_id": "p1", "cluster": "backend"}]
-    candidate = {"cluster": "backend"}
-
-    target = select_proposal_target(candidate, open_proposals, repo_root=str(tmp_path))
-    assert target == "p1"
-
-
-def test_select_proposal_target_returns_none_when_no_tier_matches(monkeypatch, tmp_path):
-    monkeypatch.setattr("synlynk.maintainer._code_graph_distance", lambda *a, **k: None)
-    monkeypatch.setattr("synlynk.maintainer._load_docgraph", lambda repo_root: None)
-
-    open_proposals = [{"proposal_id": "p1", "cluster": "frontend"}]
-    candidate = {"cluster": "backend"}
-
-    target = select_proposal_target(candidate, open_proposals, repo_root=str(tmp_path))
+    target, tier_provenance = select_proposal_target(candidate, open_proposals, repo_root=str(tmp_path))
     assert target is None
+    assert tier_provenance == []
+
+
+def test_select_proposal_target_tie_break_prefers_older_proposal_then_lexical_id(monkeypatch, tmp_path):
+    (tmp_path / ".synlynk").mkdir()
+    open_proposals = [
+        {"proposal_id": "p2", "touched_files": [], "created_at": "2026-11-20T00:00:00Z"},
+        {"proposal_id": "p1", "touched_files": [], "created_at": "2026-11-20T00:00:00Z"},
+    ]
+    candidate = {"touched_files": []}
+
+    monkeypatch.setattr(
+        "synlynk.maintainer._collect_evidence",
+        lambda candidate, proposal, repo_root=".": [Evidence(tier="keyword", weight=0.9, detail="tied match")],
+    )
+
+    target, _ = select_proposal_target(candidate, open_proposals, repo_root=str(tmp_path))
+    assert target == "p1"  # same created_at -> lexical proposal_id tie-break
 
 
 def test_select_proposal_target_degrades_gracefully_on_non_code_dominant_workspace(monkeypatch, tmp_path):
-    """A workspace with mostly non-_SOURCE_SUFFIXES files (e.g. a content/doc-heavy
-    rxcc/vdowrx/Hitchcock-style workspace) must not raise -- it falls through
-    code-graph and doc-graph tiers cleanly to the keyword fallback."""
-    monkeypatch.setattr("synlynk.maintainer._code_graph_distance", lambda *a, **k: None)
-    monkeypatch.setattr("synlynk.maintainer._load_docgraph", lambda repo_root: None)
+    """A workspace with mostly non-source files (e.g. a content/doc-heavy
+    rxcc/vdowrx/Hitchcock-style workspace) must not raise -- _collect_evidence
+    itself is responsible for returning [] per tier it can't evaluate, and
+    select_proposal_target must handle an all-empty-evidence set without error."""
+    (tmp_path / ".synlynk").mkdir()
+    open_proposals = [{"proposal_id": "p1", "touched_files": ["content/episode-12.fcpxml"]}]
+    candidate = {"touched_files": ["content/episode-13.fcpxml"]}
 
-    open_proposals = [{"proposal_id": "p1", "cluster": "docs"}]
-    candidate = {"cluster": "docs", "touched_files": ["content/episode-12.fcpxml"]}
-
-    target = select_proposal_target(candidate, open_proposals, repo_root=str(tmp_path))
-    assert target == "p1"
+    # No monkeypatch of _collect_evidence here: exercise the real function
+    # against files with no code-graph or doc-graph nodes at all.
+    target, tier_provenance = select_proposal_target(candidate, open_proposals, repo_root=str(tmp_path))
+    assert target is None
+    assert tier_provenance == []
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_maintainer.py -v -k select_proposal_target`
-Expected: FAIL with `ImportError: cannot import name 'select_proposal_target'`
+Expected: FAIL with `ImportError: cannot import name 'Evidence'`
 
 - [ ] **Step 3: Implement**
 
 Append to `synlynk/maintainer.py`:
 
 ```python
-from typing import Optional
+from dataclasses import dataclass
+from typing import List, Optional, Tuple
+
+
+@dataclass(frozen=True)
+class Evidence:
+    tier: str  # "code_graph" | "doc_graph" | "keyword"
+    weight: float
+    detail: str
 
 
 def _code_graph_distance(file_a: str, file_b: str, repo_root: str = ".") -> Optional[int]:
     """Graph distance between two source files via the code graph, or None
-    if either file has no graph node (e.g. non-_SOURCE_SUFFIXES file, or the
-    graph hasn't been built for this HEAD)."""
+    if either file has no graph node (e.g. non-source file, or the graph
+    hasn't been built for this HEAD)."""
     try:
         from synlynk.graph_cache import read_traversal_cache
     except Exception:
@@ -836,6 +1090,8 @@ def _code_graph_distance(file_a: str, file_b: str, repo_root: str = ".") -> Opti
         return None
     if file_b in adjacency.get(file_a, []):
         return 1
+    if any(file_b in adjacency.get(mid, []) for mid in adjacency.get(file_a, [])):
+        return 2
     return None
 
 
@@ -858,62 +1114,103 @@ def _load_docgraph(repo_root: str = "."):
     return DocGraph(**{k: v for k, v in data.items() if k in DocGraph.__dataclass_fields__})
 
 
-_PROXIMITY_THRESHOLD = 2
+def _proximal_selection_config(repo_root: str = ".") -> dict:
+    """Weights/threshold from .synlynk/maintainer_taxonomy.json's
+    proximal_selection block (spec §6), falling back to built-in defaults."""
+    from synlynk.maintainer_taxonomy import load_taxonomy
+
+    taxonomy = load_taxonomy(repo_root=repo_root)
+    return taxonomy.get("proximal_selection") or {
+        "code_graph_weights": {"distance_1": 0.6, "distance_2": 0.3},
+        "doc_graph_weights": {"shared_doc": 0.4, "shared_issue_or_pr": 0.3},
+        "keyword_weight": 0.2,
+        "join_threshold": 0.5,
+    }
+
+
+def _collect_evidence(candidate: dict, proposal: dict, repo_root: str = ".") -> List[Evidence]:
+    """Every Evidence record linking candidate to this one proposal, across
+    all three tiers (spec §5.6). Each tier contributes independently --
+    weights are summed by the caller, not first-match-wins."""
+    config = _proximal_selection_config(repo_root)
+    evidence: List[Evidence] = []
+    candidate_files = candidate.get("touched_files") or []
+    proposal_files = proposal.get("touched_files") or []
+
+    code_weights = config["code_graph_weights"]
+    for cf in candidate_files:
+        for pf in proposal_files:
+            distance = _code_graph_distance(cf, pf, repo_root)
+            if distance == 1:
+                evidence.append(Evidence("code_graph", code_weights["distance_1"], f"distance-1: {cf} <-> {pf}"))
+            elif distance == 2:
+                evidence.append(Evidence("code_graph", code_weights["distance_2"], f"distance-2: {cf} <-> {pf}"))
+
+    docgraph = _load_docgraph(repo_root)
+    if docgraph is not None:
+        doc_weights = config["doc_graph_weights"]
+        candidate_docs, candidate_refs = set(), set()
+        for f in candidate_files:
+            candidate_docs.update(docgraph.reverse_code_index.get(f, []))
+            candidate_refs.update(docgraph.reverse_doc_index.get(f, []))
+        proposal_docs, proposal_refs = set(), set()
+        for f in proposal_files:
+            proposal_docs.update(docgraph.reverse_code_index.get(f, []))
+            proposal_refs.update(docgraph.reverse_doc_index.get(f, []))
+        shared_docs = candidate_docs & proposal_docs
+        if shared_docs:
+            evidence.append(Evidence("doc_graph", doc_weights["shared_doc"], f"shared docs: {sorted(shared_docs)}"))
+        shared_issues = (set(candidate.get("issues_and_prs") or []) | candidate_refs) & (
+            set(proposal.get("issues_and_prs") or []) | proposal_refs
+        )
+        if shared_issues:
+            evidence.append(Evidence("doc_graph", doc_weights["shared_issue_or_pr"], f"shared issues/PRs: {sorted(shared_issues)}"))
+
+    if candidate.get("cluster") and candidate.get("cluster") == proposal.get("cluster"):
+        evidence.append(Evidence("keyword", config["keyword_weight"], f"cluster match: {candidate['cluster']}"))
+
+    return evidence
 
 
 def select_proposal_target(
-    candidate: dict, open_proposals: list[dict], repo_root: str = "."
-) -> Optional[str]:
-    """Three-tier proximal selection: code-graph -> doc-graph -> keyword
-    fallback (spec §5.6). Returns the proposal_id to join, or None to start
-    a new proposal/accumulate toward the cluster-volume threshold.
+    candidate: dict, open_proposals: List[dict], repo_root: str = "."
+) -> Tuple[Optional[str], List[str]]:
+    """Weighted evidence-based proximal selection (spec §5.6). Returns
+    (proposal_id_or_None, tier_provenance) -- tier_provenance lists which
+    tiers contributed evidence to the winning proposal, recorded on the
+    proposal for the "why this grouping" UI detail. Deterministic
+    tie-break: highest score, then oldest created_at, then lexical
+    proposal_id.
     """
-    candidate_files = candidate.get("touched_files") or []
+    config = _proximal_selection_config(repo_root)
+    threshold = config["join_threshold"]
 
-    # Tier 1: code-graph proximity.
+    scored = []
     for proposal in open_proposals:
-        for proposal_file in proposal.get("touched_files") or []:
-            for candidate_file in candidate_files:
-                distance = _code_graph_distance(candidate_file, proposal_file, repo_root)
-                if distance is not None and distance <= _PROXIMITY_THRESHOLD:
-                    return proposal["proposal_id"]
+        proposal_evidence = _collect_evidence(candidate, proposal, repo_root)
+        score = sum(e.weight for e in proposal_evidence)
+        if score >= threshold:
+            scored.append((score, proposal.get("created_at", ""), proposal["proposal_id"], proposal_evidence))
 
-    # Tier 2: doc-graph proximity (shared referencing doc, or shared
-    # issues_and_prs/code_references with an existing proposal's stories).
-    docgraph = _load_docgraph(repo_root)
-    if docgraph is not None:
-        candidate_docs: set = set()
-        for f in candidate_files:
-            candidate_docs.update(docgraph.reverse_code_index.get(f, []))
-        if candidate_docs:
-            for proposal in open_proposals:
-                proposal_docs: set = set()
-                for f in proposal.get("touched_files") or []:
-                    proposal_docs.update(docgraph.reverse_code_index.get(f, []))
-                if candidate_docs & proposal_docs:
-                    return proposal["proposal_id"]
+    if not scored:
+        return None, []
 
-    # Tier 3: keyword clustering fallback (today's mechanism, reading its
-    # taxonomy from .synlynk/maintainer_taxonomy.json per spec §6).
-    candidate_cluster = candidate.get("cluster")
-    if candidate_cluster:
-        for proposal in open_proposals:
-            if proposal.get("cluster") == candidate_cluster:
-                return proposal["proposal_id"]
-
-    return None
+    scored.sort(key=lambda row: (-row[0], row[1], row[2]))
+    _, _, winning_id, winning_evidence = scored[0]
+    tier_provenance = sorted({e.tier for e in winning_evidence})
+    return winning_id, tier_provenance
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_maintainer.py -v -k select_proposal_target`
-Expected: PASS (5 passed)
+Expected: PASS (4 passed)
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add synlynk/maintainer.py tests/test_maintainer.py
-git commit -m "feat(maintainer): dual-graph proximal selection for proposal clustering
+git commit -m "feat(maintainer): evidence-weighted proximal selection with tier provenance
 
 Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
 ```
@@ -923,7 +1220,7 @@ Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
 ### Task 6: `run_maintainer_wake_cycle()` (spec §5.1, §5.3)
 
 **Files:**
-- Modify: `synlynk/maintainer.py` (add `_ensure_github_issue_for_story`, `run_maintainer_wake_cycle`, register the 3 actions at module import time)
+- Modify: `synlynk/maintainer.py` (add `_ensure_github_issue_for_story`, `run_maintainer_wake_cycle`, register the 3 actions at module import time; add `_persist_maintainer_proposals`/`load_maintainer_proposals` and bring `_run_backlog_burndown_action`/`_run_mesh_sweep_action` up to the same `proposals: [...]` shape `_run_sentinel_triage_action` already has — DECIDE panel defect #4 follow-up, 2026-11-24: Proposal Studio (Task 14) and the Role Operations Panel (Task 13) both need a real persistence point for a wake cycle's findings, which did not exist until now)
 - Test: `tests/test_maintainer.py` (append)
 
 - [ ] **Step 1: Write the failing tests**
@@ -938,7 +1235,7 @@ from synlynk.maintainer_registry import clear_registry, registered_actions
 def test_run_maintainer_wake_cycle_registers_all_three_actions():
     import synlynk.maintainer  # noqa: F401 -- re-import triggers registration if cleared
     actions = registered_actions()
-    assert set(actions.keys()) >= {"sentinel_triage", "backlog_burndown", "mesh_sweep"}
+    assert set(actions.keys()) >= {"maintainer:sentinel_triage", "maintainer:backlog_burndown", "maintainer:mesh_sweep"}
 
 
 def test_run_maintainer_wake_cycle_dry_run_stages_without_side_effects(tmp_path, monkeypatch):
@@ -1006,6 +1303,85 @@ def test_run_maintainer_wake_cycle_critical_finding_bypasses_cluster_minimum(tmp
     assert len(proposals) == 1
     assert proposals[0]["severity"] == "critical"
     assert proposals[0]["stories"][0]["github_issue"] == 999
+
+
+def test_run_maintainer_wake_cycle_persists_proposals_across_all_actions(tmp_path, monkeypatch):
+    """DECIDE panel defect #4 follow-up (2026-11-24): before this, no
+    action's proposals survived past the return value -- Tasks 13/14 had
+    no real data source. This proves the cycle writes every action's
+    proposals to .synlynk/maintainer_proposals.json, tagged with which
+    action produced them, and that load_maintainer_proposals reads them
+    back."""
+    from synlynk.maintainer import load_maintainer_proposals
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+
+    sentinel_group = {
+        "fingerprint": "ERROR:E501", "severity": "ERROR", "code": "E501",
+        "total_occurrences": 3, "sample_messages": ["line too long"],
+    }
+    monkeypatch.setattr("synlynk.maintainer.triage_sentinel_alerts", lambda **kwargs: [sentinel_group])
+    monkeypatch.setattr(
+        "synlynk.maintainer.run_backlog_burndown_sweep",
+        lambda **kwargs: {
+            "dry_run": True,
+            "sprint_staged": {
+                "domain": "backend", "count": 3,
+                "title": "Backlog Burndown Sprint: backend (3 issues)",
+                "issue_numbers": [1, 2, 3],
+            },
+        },
+    )
+    monkeypatch.setattr("synlynk.maintainer.cmd_maintainer_sweep", lambda **kwargs: 0)
+
+    run_maintainer_wake_cycle(repo_root=str(tmp_path))
+
+    persisted = load_maintainer_proposals(repo_root=str(tmp_path))
+    sources = {p["source"] for p in persisted}
+    assert sources == {"maintainer:sentinel_triage", "maintainer:backlog_burndown"}
+    actions = {p["action"] for p in persisted}
+    assert actions == {"sentinel_triage", "backlog_burndown"}
+
+
+def test_load_maintainer_proposals_returns_empty_list_when_file_missing(tmp_path):
+    from synlynk.maintainer import load_maintainer_proposals
+
+    assert load_maintainer_proposals(repo_root=str(tmp_path)) == []
+
+
+def test_ensure_github_issue_for_story_stages_without_host_fallback_when_no_qa_token(tmp_path):
+    """DECIDE panel defect #2: no qa role App token -> stage only, never
+    fall back to a host/personal token."""
+    from synlynk.maintainer import _ensure_github_issue_for_story
+
+    (tmp_path / ".synlynk").mkdir()
+    result = _ensure_github_issue_for_story({"title": "finding"}, repo_root=str(tmp_path))
+    assert result == 0
+
+
+def test_run_maintainer_wake_cycle_caps_promotions_per_cycle(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "config.json").write_text(json.dumps({
+        "maintainer_autonomy": {
+            "sentinel_triage": {"mode": "promote"},
+            "backlog_burndown": {"mode": "promote"},
+            "mesh_sweep": {"mode": "promote"},
+        }
+    }))
+    monkeypatch.setattr("synlynk.maintainer._MAX_PROMOTIONS_PER_CYCLE", 1)
+    monkeypatch.setattr("synlynk.maintainer.triage_sentinel_alerts", lambda **kwargs: [])
+    monkeypatch.setattr(
+        "synlynk.maintainer.run_backlog_burndown_sweep",
+        lambda **kwargs: {"closed": [], "sprint_staged": None, "clustered": {}},
+    )
+    monkeypatch.setattr("synlynk.maintainer.cmd_maintainer_sweep", lambda **kwargs: 0)
+
+    result = run_maintainer_wake_cycle(repo_root=str(tmp_path))
+    skipped = [v for v in result.values() if v.get("skipped")]
+    assert len(skipped) == 2  # only 1 of 3 actions actually promotes this cycle
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -1018,12 +1394,32 @@ Expected: FAIL with `ImportError: cannot import name 'run_maintainer_wake_cycle'
 Append to `synlynk/maintainer.py`:
 
 ```python
+def _qa_role_token_available(repo_root: str = ".") -> bool:
+    """True only if a qa-role GitHub App token is actually provisioned.
+    Never checks SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH or any host/personal
+    credential -- per CLAUDE.md, "Personal GitHub token is strictly
+    off-limits to every agent/harness," with no carve-out for Maintainer
+    (spec §5.3a, DECIDE panel defect #2)."""
+    import os
+
+    app_dir = os.path.join(repo_root, ".synlynk", "github_apps", "qa")
+    return os.path.isdir(app_dir) and bool(os.listdir(app_dir))
+
+
 def _ensure_github_issue_for_story(story: dict, repo_root: str = ".") -> int:
     """Open a GitHub issue for a story that has none yet, via the qa-role
-    write path, so Proposal Studio never shows an orphaned story (spec §5.3)."""
+    write path, so Proposal Studio never shows an orphaned story (spec §5.3).
+
+    If no qa role App token is provisioned, this stages the finding and
+    returns 0 (no github_issue) rather than falling back to any host/personal
+    token -- that fallback path does not exist here, by design (spec §5.3a).
+    """
     existing = story.get("github_issue")
     if existing:
         return int(existing)
+
+    if not _qa_role_token_available(repo_root):
+        return 0
 
     import subprocess
 
@@ -1069,34 +1465,115 @@ def _run_sentinel_triage_action(mode: str, repo_root: str = ".") -> dict:
 
 def _run_backlog_burndown_action(mode: str, repo_root: str = ".") -> dict:
     result = run_backlog_burndown_sweep(repo_root=repo_root, dry_run=(mode != "promote"))
-    return {"mode": mode, **result}
+    sprint = result.get("sprint_staged")
+    proposals = []
+    if sprint:
+        proposals.append({
+            "proposal_id": f"maintainer-backlog-{sprint['domain']}",
+            "source": "maintainer:backlog_burndown",
+            "title": sprint["title"],
+            "severity": "normal",
+            "cluster": sprint["domain"],
+            "stories": [],
+        })
+    return {"mode": mode, "proposals": proposals, **result}
 
 
 def _run_mesh_sweep_action(mode: str, repo_root: str = ".") -> dict:
     exit_code = cmd_maintainer_sweep(repo_root=repo_root, refresh_graph=(mode == "promote"))
-    return {"mode": mode, "exit_code": exit_code}
+    return {"mode": mode, "exit_code": exit_code, "proposals": []}
 
 
-from synlynk.maintainer_registry import register_action, get_action_config
+def _persist_maintainer_proposals(proposals: list[dict], repo_root: str = ".") -> None:
+    """Write this cycle's pending proposals to a side-file so page renders
+    (Role Ops Panel, Proposal Studio -- Tasks 13/14) can read them without
+    re-running the wake cycle. Overwrites on every call: this is a snapshot
+    of the *last* cycle's findings, not an accumulating log (DECIDE panel
+    defect #4 follow-up, 2026-11-24 -- Task 6's actions previously had no
+    shared persistence point at all, so Tasks 13/14 had nothing real to
+    read)."""
+    import json
+    import time
+
+    path = os.path.join(repo_root, ".synlynk", "maintainer_proposals.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump({"generated_at": time.time(), "proposals": proposals}, handle, indent=2)
+
+
+def load_maintainer_proposals(repo_root: str = ".") -> list[dict]:
+    """Read the last wake cycle's persisted proposals (see
+    _persist_maintainer_proposals). Returns [] if the file is missing or
+    unreadable -- callers never need a try/except of their own."""
+    import json
+
+    path = os.path.join(repo_root, ".synlynk", "maintainer_proposals.json")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        return list(data.get("proposals") or [])
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return []
+
+
+from synlynk.maintainer_registry import FieldSpec, register_action, get_action_config
 
 register_action(
+    role_slug="maintainer",
     name="sentinel_triage",
     default_config={"enabled": True, "mode": "dry_run"},
-    filter_schema={"exclude_codes": "list[str]"},
+    filter_schema=[FieldSpec(name="exclude_codes", type="list[str]", default=[], label="Exclude alert codes")],
     run_fn=_run_sentinel_triage_action,
 )
 register_action(
+    role_slug="maintainer",
     name="backlog_burndown",
     default_config={"enabled": True, "mode": "dry_run"},
-    filter_schema={"exclude_labels": "list[str]"},
+    filter_schema=[FieldSpec(name="exclude_labels", type="list[str]", default=[], label="Exclude labels")],
     run_fn=_run_backlog_burndown_action,
 )
 register_action(
+    role_slug="maintainer",
     name="mesh_sweep",
     default_config={"enabled": True, "mode": "dry_run"},
-    filter_schema={},
+    filter_schema=[],
     run_fn=_run_mesh_sweep_action,
 )
+
+
+# Promotion-boundary guards (spec §5.3a, DECIDE panel defect #2). dry_run
+# staging must make zero external calls; only "promote" mode may open/attach
+# a GitHub issue, and only within these guards.
+_MAX_PROMOTIONS_PER_CYCLE = 5
+
+
+def _read_promotion_audit_log(repo_root: str = ".") -> list[dict]:
+    import json
+    import os
+
+    path = os.path.join(repo_root, ".synlynk", "maintainer_promotion_audit.json")
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def _append_promotion_audit_log(repo_root: str, entry: dict) -> None:
+    import json
+    import os
+
+    path = os.path.join(repo_root, ".synlynk", "maintainer_promotion_audit.json")
+    log = _read_promotion_audit_log(repo_root)
+    log.append(entry)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(log[-500:], f, indent=2)
+
+
+def _promotions_already_done_this_cycle(repo_root: str, cycle_id: str) -> int:
+    return sum(1 for entry in _read_promotion_audit_log(repo_root) if entry.get("cycle_id") == cycle_id)
 
 
 def run_maintainer_wake_cycle(repo_root: str = ".") -> dict:
@@ -1104,24 +1581,52 @@ def run_maintainer_wake_cycle(repo_root: str = ".") -> dict:
     burndown, mesh sweep -- mirroring run_tpm_wake_cycle()'s shape (spec §5.1).
     Each registered action runs in dry_run (stage, no side effects) or
     promote (real side effects) mode per its settings-registry config.
+
+    Promotion boundary (spec §5.3a): "promote" mode is capped at
+    _MAX_PROMOTIONS_PER_CYCLE per cycle, deduped against the existing
+    .synlynk/maintainer_promotion_audit.json log, and every promotion this
+    cycle is appended to that log before returning. If no `qa` role App
+    token is configured, _ensure_github_issue_for_story stages the finding
+    (returns 0, no github_issue) and does NOT fall back to a host token --
+    see Task 6a below for that guard's own test.
     """
+    import time
+    import uuid
+
     from synlynk.maintainer_registry import registered_actions
 
+    cycle_id = f"cycle-{int(time.time())}-{uuid.uuid4().hex[:8]}"
+    already_promoted = _promotions_already_done_this_cycle(repo_root, cycle_id)
+
     results: dict = {}
-    for name, action in registered_actions().items():
-        config = get_action_config(name, repo_root=repo_root)
+    for action_id, action in registered_actions(role_slug="maintainer").items():
+        config = get_action_config(action_id, repo_root=repo_root)
         if not config.get("enabled", True):
-            results[name] = {"skipped": True}
+            results[action.name] = {"skipped": True}
             continue
         mode = config.get("mode", "dry_run")
-        results[name] = action.run_fn(mode=mode, repo_root=repo_root)
+        if mode == "promote" and already_promoted >= _MAX_PROMOTIONS_PER_CYCLE:
+            results[action.name] = {"skipped": True, "reason": "max_promotions_per_cycle reached"}
+            continue
+        outcome = action.run_fn(mode=mode, repo_root=repo_root)
+        if mode == "promote":
+            _append_promotion_audit_log(repo_root, {"cycle_id": cycle_id, "action_id": action_id})
+            already_promoted += 1
+        results[action.name] = outcome
+
+    all_proposals = []
+    for action_name, outcome in results.items():
+        for proposal in (outcome.get("proposals") or []):
+            all_proposals.append({**proposal, "action": action_name})
+    _persist_maintainer_proposals(all_proposals, repo_root=repo_root)
+
     return results
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `pytest tests/test_maintainer.py -v -k wake_cycle`
-Expected: PASS (4 passed)
+Run: `pytest tests/test_maintainer.py -v -k "wake_cycle or ensure_github_issue_for_story"`
+Expected: PASS (7 passed)
 
 - [ ] **Step 5: Run the full maintainer test module to check for regressions**
 
@@ -1463,7 +1968,7 @@ Now wire it into `_run_sentinel_triage_action` (edit the function added in Task 
                 "stories": [story],
             }
             proposals.append(proposal)
-            notify_config = get_action_config("sentinel_triage", repo_root=repo_root)
+            notify_config = get_action_config("maintainer:sentinel_triage", repo_root=repo_root)
             if severity_label == "critical" or notify_config.get("notify_slack"):
                 _notify_slack_on_promotion(proposal, repo_root=repo_root)
 ```
@@ -1474,21 +1979,24 @@ Also add `"notify_slack": False` to the three `register_action(...)` calls' `def
 
 ```python
 register_action(
+    role_slug="maintainer",
     name="sentinel_triage",
     default_config={"enabled": True, "mode": "dry_run", "notify_slack": False},
-    filter_schema={"exclude_codes": "list[str]"},
+    filter_schema=[FieldSpec(name="exclude_codes", type="list[str]", default=[], label="Exclude alert codes")],
     run_fn=_run_sentinel_triage_action,
 )
 register_action(
+    role_slug="maintainer",
     name="backlog_burndown",
     default_config={"enabled": True, "mode": "dry_run", "notify_slack": False},
-    filter_schema={"exclude_labels": "list[str]"},
+    filter_schema=[FieldSpec(name="exclude_labels", type="list[str]", default=[], label="Exclude labels")],
     run_fn=_run_backlog_burndown_action,
 )
 register_action(
+    role_slug="maintainer",
     name="mesh_sweep",
     default_config={"enabled": True, "mode": "dry_run", "notify_slack": False},
-    filter_schema={},
+    filter_schema=[],
     run_fn=_run_mesh_sweep_action,
 )
 ```
@@ -1722,13 +2230,129 @@ Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
 
 ---
 
-### Task 13: Role Operations Panel (spec §5.4)
+### Task 13: Role Operations Panel (spec §5.4, REVISED per DECIDE panel 2026-11-24 — HELD until Tasks 1-4 and Task 5 have merged)
+
+**Why revised:** the panel must render actual form controls from each registered action's `filter_schema` (Task 4's own text at Task 4 line "The Role Operations Panel (Task 13) renders form controls directly from `filter_schema`" commits to this — the original Task 13 draft rendered a flat status card with no field controls at all, which would have silently failed to deliver on that commitment). The panel must also surface two pieces of state that only exist because of this plan's other revisions: (a) a "using built-in defaults" banner when `load_taxonomy()`'s schema validation fails (Task 1/Task 2, DECIDE panel defect #5), and (b) a "why this grouping" provenance detail per pending proposal, sourced from `select_proposal_target()`'s `tier_provenance` (Task 5, DECIDE panel defect #3). Do not dispatch this task until the foundation wave (Tasks 1-4) and Task 5 have merged — the panel's own tests depend on `FieldSpec`, `load_taxonomy()`, and `tier_provenance` all existing with the shapes those tasks define.
 
 **Files:**
 - Create: `synlynk/viz/role_ops_panel.py`
+- Modify: `synlynk/maintainer_registry.py` (add `build_maintainer_ops_data()` — see Step 0b below)
 - Modify: `synlynk/viz/roles.py` (insert panel after Edit Charter `<details>`)
 - Modify: `synlynk/viz/overview.py` (insert condensed widget before the shortcuts grid)
-- Test: `tests/test_viz_role_ops_panel.py` (new), `tests/test_viz_roles.py` (append), `tests/test_viz_overview.py` (append — create if it doesn't exist)
+- Modify: `synlynk/maintainer.py` (Task 6's `_run_sentinel_triage_action` — store `tier_provenance` on each proposal so the panel has something to render; see Step 0 below)
+- Test: `tests/test_viz_role_ops_panel.py` (new), `tests/test_maintainer_registry.py` (append), `tests/test_viz_roles.py` (append), `tests/test_viz_overview.py` (append — create if it doesn't exist)
+
+**Known residual item (flagged, not fixed by this task):** `generate_roles_html(data, port)` and `generate_overview_html(data, port)` (both pre-existing, outside this plan's files) read `agent.get("ops_data")` / `data.get("maintainer_ops")` from whatever `data` dict their caller already assembled — this task's Step 0b below builds the *function* that produces that dict's contents (`build_maintainer_ops_data()`), but wiring the call into `synlynk/viz/data.py`'s real `workspace_agents`-building code (the module that actually constructs `data` before `generate_roles_html`/`generate_overview_html` are invoked) is a separate, not-yet-scoped change — `viz/data.py` is not in this task's Files list because an earlier investigation in this same planning session found its real `workspace_agents` entries use a different key shape (`role`/`durability`/`target_harnesses`, not this task's test fixtures' `slug`/`title`/`harness`) than anything drafted here assumes. Do not silently paper over this when dispatching Task 13 — file it as a follow-up ticket (or fold it into whichever task next touches `viz/data.py`) rather than guessing at the real shape here.
+
+- [ ] **Step 0: Wire `tier_provenance` through `_run_sentinel_triage_action` (Task 6) so proposals carry it**
+
+Task 6's `_run_sentinel_triage_action` (added in Task 6, `synlynk/maintainer.py`) builds each proposal without calling Task 5's `select_proposal_target()` — it has no existing open proposal to join against for sentinel alerts (each fingerprint is its own proposal), so there is nothing to select *against*, but the proposal still needs a `tier_provenance` field for the panel to render. Edit the function (written in Task 6) to attach a provenance list explicitly: since sentinel-triage proposals are never joined to an existing one via `select_proposal_target()`, their provenance is always `["sentinel"]` (the alert itself is the evidence, not a code/doc graph signal). Change the `proposals.append({...})` call inside `_run_sentinel_triage_action`'s loop to include the new key:
+
+```python
+            proposals.append({
+                "proposal_id": f"maintainer-sentinel-{group['fingerprint']}",
+                "source": "maintainer:sentinel_triage",
+                "title": f"Sentinel: {group['code']}",
+                "severity": severity_label,
+                "cluster": "sentinel",
+                "tier_provenance": ["sentinel"],
+                "stories": [story],
+            })
+```
+
+(This is the only change to `_run_sentinel_triage_action` in this task — every other line of the function, including the `mode == "promote"` branch and `_ensure_github_issue_for_story` call, is unchanged from Task 6.)
+
+- [ ] **Step 0b: Build the real `ops_data` source from Task 4's registry and Task 6's persisted proposals**
+
+Task 4's `RegisteredAction` (`synlynk/maintainer_registry.py`) tracks `role_slug`, `name`, `default_config`, `filter_schema`, `run_fn` — it has no `enabled`/`mode`/`last_run` fields, and nothing in Tasks 4 or 6 tracks a per-action "last run" timestamp. Rather than invent a new persistence mechanism for that (out of scope for this task — flag it, don't build it here), `build_maintainer_ops_data()` sources `enabled`/`mode` from the action's own `config` dict (both Task 6's three registered actions already take a `mode` parameter and this plan's own fixtures model `mode`/`enabled` as ordinary per-action settings) and leaves `last_run` as `None` until a future task adds tracking — the panel (Step 1 below) already handles a `None` `last_run` by omitting the timestamp line, so this is a safe, honest default rather than a fabricated value.
+
+Append to `tests/test_maintainer_registry.py`:
+
+```python
+def test_build_maintainer_ops_data_shapes_actions_from_registry_and_proposals(tmp_path, monkeypatch):
+    import json
+    from synlynk.maintainer_registry import (
+        FieldSpec, register_action, clear_registry, build_maintainer_ops_data,
+    )
+
+    monkeypatch.chdir(tmp_path)
+    clear_registry()
+    register_action(
+        role_slug="maintainer", name="sentinel_triage",
+        default_config={"mode": "dry_run", "enabled": True, "exclude_codes": []},
+        filter_schema=[FieldSpec(name="exclude_codes", type="list[str]", default=[], label="Exclude alert codes")],
+        run_fn=lambda **kwargs: {},
+    )
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "maintainer_proposals.json").write_text(json.dumps({
+        "generated_at": 0,
+        "proposals": [
+            {"proposal_id": "maintainer-sentinel-abc", "title": "Sentinel: E501",
+             "source": "maintainer:sentinel_triage", "action": "sentinel_triage",
+             "tier_provenance": ["sentinel"]},
+            {"proposal_id": "maintainer-backlog-backend", "title": "Backlog Burndown Sprint: backend",
+             "source": "maintainer:backlog_burndown", "action": "backlog_burndown"},
+        ],
+    }))
+
+    data = build_maintainer_ops_data("maintainer", repo_root=str(tmp_path))
+    assert len(data["actions"]) == 1
+    action = data["actions"][0]
+    assert action["name"] == "sentinel_triage"
+    assert action["enabled"] is True
+    assert action["mode"] == "dry_run"
+    assert action["last_run"] is None
+    assert action["config"] == {"mode": "dry_run", "enabled": True, "exclude_codes": []}
+    assert action["filter_schema"] == [{"name": "exclude_codes", "type": "list[str]", "default": [], "label": "Exclude alert codes"}]
+    assert [p["proposal_id"] for p in action["pending_proposals"]] == ["maintainer-sentinel-abc"]
+```
+
+Run `pytest tests/test_maintainer_registry.py -v -k build_maintainer_ops_data` to confirm it fails with `ImportError: cannot import name 'build_maintainer_ops_data'`, then add the function to `synlynk/maintainer_registry.py` (below `get_action_config`, which it calls):
+
+```python
+def build_maintainer_ops_data(role_slug: str, repo_root: str = ".") -> Dict[str, Any]:
+    """Assemble the Role Operations Panel's input dict for one role from
+    this registry's registered actions and Task 6's persisted proposals.
+
+    Caller still has to attach the result under data["maintainer_ops"] (for
+    generate_overview_html) or agent["ops_data"] (for generate_roles_html) --
+    see Task 13's "Known residual item" note above for where that wiring
+    still needs to happen in synlynk/viz/data.py.
+    """
+    from synlynk.maintainer import load_maintainer_proposals
+    from synlynk.maintainer_taxonomy import load_taxonomy
+
+    proposals_by_action: Dict[str, List[Dict[str, Any]]] = {}
+    for proposal in load_maintainer_proposals(repo_root=repo_root):
+        proposals_by_action.setdefault(proposal.get("action", ""), []).append(proposal)
+
+    actions = []
+    for action in registered_actions(role_slug=role_slug).values():
+        config = get_action_config(action.action_id, repo_root=repo_root)
+        actions.append({
+            "name": action.name,
+            "enabled": bool(config.get("enabled", True)),
+            "mode": config.get("mode", "dry_run"),
+            "last_run": None,
+            "config": config,
+            "filter_schema": [
+                {"name": f.name, "type": f.type, "default": f.default, "label": f.label}
+                for f in action.filter_schema
+            ],
+            "pending_proposals": proposals_by_action.get(action.name, []),
+        })
+
+    taxonomy = load_taxonomy(repo_root=repo_root)
+    return {
+        "actions": actions,
+        "taxonomy_status": {
+            "schema_valid": taxonomy["schema_valid"],
+            "validation_error": taxonomy["validation_error"],
+        },
+    }
+```
+
+Run `pytest tests/test_maintainer_registry.py -v -k build_maintainer_ops_data` again to confirm it passes, then `pytest tests/test_maintainer_registry.py -v` for the full module (count grows by 1 over whatever Task 4 left it at). Commit this addition together with Task 13's other changes at Step 13's existing commit step — do not commit it separately, since it has no caller until the rest of this task exists.
 
 - [ ] **Step 1: Write the failing test for the panel itself**
 
@@ -1740,10 +2364,17 @@ from synlynk.viz.role_ops_panel import generate_role_ops_panel_html
 def test_panel_renders_each_registered_action_with_toggle_state():
     data = {
         "actions": [
-            {"name": "sentinel_triage", "enabled": True, "mode": "dry_run", "last_run": "2026-11-23T10:00:00Z", "pending_proposals": 2},
-            {"name": "backlog_burndown", "enabled": False, "mode": "dry_run", "last_run": None, "pending_proposals": 0},
-            {"name": "mesh_sweep", "enabled": True, "mode": "promote", "last_run": "2026-11-24T06:00:00Z", "pending_proposals": 0, "low_signal": True},
-        ]
+            {"name": "sentinel_triage", "enabled": True, "mode": "dry_run", "last_run": "2026-11-23T10:00:00Z",
+             "pending_proposals": [{"proposal_id": "maintainer-sentinel-abc", "title": "Sentinel: E501", "tier_provenance": ["sentinel"]}],
+             "filter_schema": [{"name": "exclude_codes", "type": "list[str]", "default": [], "label": "Exclude alert codes"}],
+             "config": {"exclude_codes": []}},
+            {"name": "backlog_burndown", "enabled": False, "mode": "dry_run", "last_run": None, "pending_proposals": [],
+             "filter_schema": [{"name": "exclude_labels", "type": "list[str]", "default": [], "label": "Exclude labels"}],
+             "config": {"exclude_labels": []}},
+            {"name": "mesh_sweep", "enabled": True, "mode": "promote", "last_run": "2026-11-24T06:00:00Z", "pending_proposals": [],
+             "filter_schema": [], "config": {}, "low_signal": True},
+        ],
+        "taxonomy_status": {"schema_valid": True, "validation_error": None},
     }
     html = generate_role_ops_panel_html("maintainer", data)
     assert "sentinel_triage" in html
@@ -1751,13 +2382,50 @@ def test_panel_renders_each_registered_action_with_toggle_state():
     assert "mesh_sweep" in html
     assert "2026-11-23T10:00:00Z" in html
     assert "low-signal" in html.lower() or "low signal" in html.lower()
+    # FieldSpec-driven rendering: the field's label and a form control for it
+    assert "Exclude alert codes" in html
+    assert 'name="exclude_codes"' in html
+    # provenance detail on the pending proposal
+    assert "sentinel" in html
+    assert "Sentinel: E501" in html
+    # no defaults banner when taxonomy is valid
+    assert "using built-in defaults" not in html.lower()
 
 
 def test_panel_is_generic_across_role_slugs():
-    data = {"actions": [{"name": "custom_action", "enabled": True, "mode": "dry_run", "last_run": None, "pending_proposals": 0}]}
+    data = {
+        "actions": [{"name": "custom_action", "enabled": True, "mode": "dry_run", "last_run": None,
+                     "pending_proposals": [], "filter_schema": [], "config": {}}],
+        "taxonomy_status": {"schema_valid": True, "validation_error": None},
+    }
     html = generate_role_ops_panel_html("tpm", data)
     assert "custom_action" in html
     assert "tpm" in html.lower()
+
+
+def test_panel_renders_defaults_banner_when_taxonomy_invalid():
+    data = {
+        "actions": [{"name": "sentinel_triage", "enabled": True, "mode": "dry_run", "last_run": None,
+                     "pending_proposals": [], "filter_schema": [], "config": {}}],
+        "taxonomy_status": {"schema_valid": False, "validation_error": "unsupported schema_version 99 in maintainer_taxonomy.json"},
+    }
+    html = generate_role_ops_panel_html("maintainer", data)
+    assert "using built-in defaults" in html.lower()
+    assert "unsupported schema_version 99" in html
+
+
+def test_panel_renders_why_this_grouping_provenance_for_each_pending_proposal():
+    data = {
+        "actions": [{"name": "mesh_sweep", "enabled": True, "mode": "dry_run", "last_run": None,
+                     "pending_proposals": [
+                         {"proposal_id": "p1", "title": "Contract drift: billing-service", "tier_provenance": ["code_graph", "doc_graph"]},
+                     ],
+                     "filter_schema": [], "config": {}}],
+        "taxonomy_status": {"schema_valid": True, "validation_error": None},
+    }
+    html = generate_role_ops_panel_html("maintainer", data)
+    assert "code_graph" in html and "doc_graph" in html
+    assert "why this grouping" in html.lower()
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1776,8 +2444,56 @@ Keyed by role_slug + the MaintainerActionRegistry's registered actions for
 that role, so any future role adopting the same wake-cycle pattern gets this
 UI for free, on both Agent Studio (full panel) and the Overview page
 (condensed widget via render_condensed_widget_html below).
+
+Renders form controls directly from each action's `filter_schema` (list of
+FieldSpec-shaped dicts from synlynk/maintainer_registry.py), per Task 4's own
+commitment that this panel is the `filter_schema` consumer. Also surfaces two
+pieces of validate-or-fallback state introduced by this plan's own revisions:
+a "using built-in defaults" banner (DECIDE panel defect #5, from
+load_taxonomy()'s schema_valid/validation_error) and a "why this grouping"
+provenance detail per pending proposal (DECIDE panel defect #3, from
+select_proposal_target()'s tier_provenance).
 """
 import html as html_mod
+
+_FIELD_INPUT_TYPES = {
+    "str": "text",
+    "int": "number",
+    "bool": "checkbox",
+    "list[str]": "text",
+}
+
+
+def _field_control_html(field_spec: dict, current_value) -> str:
+    """One form control for a FieldSpec-shaped dict, pre-filled with current_value."""
+    name = html_mod.escape(str(field_spec.get("name", "")))
+    label = html_mod.escape(str(field_spec.get("label", field_spec.get("name", ""))))
+    field_type = field_spec.get("type", "str")
+    input_type = _FIELD_INPUT_TYPES.get(field_type, "text")
+
+    if field_type == "bool":
+        checked = "checked" if current_value else ""
+        control = f'<input type="checkbox" name="{name}" {checked}>'
+    elif field_type == "list[str]":
+        value = ",".join(str(v) for v in (current_value or []))
+        control = f'<input type="text" name="{name}" value="{html_mod.escape(value)}" placeholder="comma-separated">'
+    else:
+        value = html_mod.escape(str(current_value if current_value is not None else ""))
+        control = f'<input type="{input_type}" name="{name}" value="{value}">'
+
+    return f'<label class="ops-field"><span class="ops-field-label">{label}</span>{control}</label>'
+
+
+def _proposal_provenance_html(proposal: dict) -> str:
+    provenance = proposal.get("tier_provenance") or []
+    title = html_mod.escape(str(proposal.get("title", proposal.get("proposal_id", ""))))
+    provenance_html = ", ".join(html_mod.escape(str(t)) for t in provenance) or "no evidence tiers recorded"
+    return (
+        f'<div class="ops-proposal" data-proposal-id="{html_mod.escape(str(proposal.get("proposal_id", "")))}">'
+        f'<span class="ops-proposal-title">{title}</span>'
+        f'<span class="ops-proposal-provenance" title="why this grouping">why this grouping: {provenance_html}</span>'
+        f'</div>'
+    )
 
 
 def _action_card_html(action: dict) -> str:
@@ -1785,12 +2501,19 @@ def _action_card_html(action: dict) -> str:
     enabled = bool(action.get("enabled"))
     mode = html_mod.escape(str(action.get("mode", "dry_run")))
     last_run = html_mod.escape(str(action.get("last_run") or "never"))
-    pending = int(action.get("pending_proposals", 0) or 0)
+    pending_proposals = action.get("pending_proposals") or []
+    pending = len(pending_proposals)
     toggle_label = "On" if enabled else "Off"
     low_signal_html = (
         '<span class="ops-low-signal" title="This workspace has little source-code coverage for the code graph to carry signal">low signal</span>'
         if action.get("low_signal") else ""
     )
+    config = action.get("config") or {}
+    fields_html = "".join(
+        _field_control_html(field_spec, config.get(field_spec.get("name")))
+        for field_spec in (action.get("filter_schema") or [])
+    )
+    proposals_html = "".join(_proposal_provenance_html(p) for p in pending_proposals)
     return f"""
       <div class="ops-action-card" data-action="{name}">
         <div class="ops-action-header">
@@ -1803,19 +2526,43 @@ def _action_card_html(action: dict) -> str:
           <span class="ops-last-run">Last run: {last_run}</span>
           <span class="ops-pending-count">{pending} pending proposal{'s' if pending != 1 else ''}</span>
         </div>
+        <div class="ops-action-fields">
+          {fields_html}
+        </div>
+        <div class="ops-action-proposals">
+          {proposals_html}
+        </div>
       </div>"""
+
+
+def _taxonomy_banner_html(taxonomy_status: dict) -> str:
+    """'using built-in defaults' banner when load_taxonomy()'s config
+    validation failed (DECIDE panel defect #5) -- taxonomy_status is the
+    dict returned by maintainer_taxonomy.load_taxonomy(), i.e. it has
+    schema_valid/validation_error keys."""
+    if not taxonomy_status or taxonomy_status.get("schema_valid", True):
+        return ""
+    error = html_mod.escape(str(taxonomy_status.get("validation_error") or "unknown validation error"))
+    return (
+        '<div class="ops-banner ops-banner-warning">'
+        f'Using built-in defaults &mdash; config failed validation: {error}'
+        '</div>'
+    )
 
 
 def generate_role_ops_panel_html(role_slug: str, data: dict) -> str:
     """Full operations panel for role_slug, consumed by viz/roles.py's
-    Agent Studio card. Renders one card per registered action in data["actions"]."""
+    Agent Studio card. Renders one card per registered action in data["actions"],
+    plus a defaults banner if data["taxonomy_status"] reports a validation failure."""
     role_slug_html = html_mod.escape(str(role_slug))
     actions = data.get("actions") or []
     cards_html = "".join(_action_card_html(a) for a in actions)
+    banner_html = _taxonomy_banner_html(data.get("taxonomy_status") or {})
     return f"""
     <details class="edit-charter ops-panel" data-role="{role_slug_html}">
       <summary>Operations</summary>
       <div class="ops-panel-body">
+        {banner_html}
         {cards_html}
       </div>
     </details>"""
@@ -1826,7 +2573,7 @@ def generate_condensed_widget_html(role_slug: str, data: dict) -> str:
     count + last-wake-cycle timestamp, linking out to the full panel."""
     role_slug_html = html_mod.escape(str(role_slug))
     actions = data.get("actions") or []
-    total_pending = sum(int(a.get("pending_proposals", 0) or 0) for a in actions)
+    total_pending = sum(len(a.get("pending_proposals") or []) for a in actions)
     last_wake = max(
         (a.get("last_run") for a in actions if a.get("last_run")),
         default="never",
@@ -1853,7 +2600,7 @@ def generate_condensed_widget_html(role_slug: str, data: dict) -> str:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_viz_role_ops_panel.py -v`
-Expected: PASS (2 passed)
+Expected: PASS (5 passed)
 
 - [ ] **Step 5: Write the failing test for roles.py insertion**
 
@@ -1866,7 +2613,8 @@ def test_maintainer_role_card_includes_operations_panel():
     data = {
         "agents": [
             {"slug": "maintainer", "title": "Platform Maintainer", "harness": "claude",
-             "ops_data": {"actions": [{"name": "sentinel_triage", "enabled": True, "mode": "dry_run", "last_run": None, "pending_proposals": 0}]}},
+             "ops_data": {"actions": [{"name": "sentinel_triage", "enabled": True, "mode": "dry_run", "last_run": None, "pending_proposals": [], "filter_schema": [], "config": {}}],
+                          "taxonomy_status": {"schema_valid": True, "validation_error": None}}},
         ]
     }
     html = generate_roles_html(data, port=8321)
@@ -1919,7 +2667,10 @@ def test_overview_renders_maintainer_operations_widget():
         "workspace": {"name": "test-workspace", "updated_at": "2026-11-24"},
         "telemetry": {"sentinel_alerts": []},
         "sentinel_acks": {},
-        "maintainer_ops": {"actions": [{"name": "sentinel_triage", "enabled": True, "mode": "dry_run", "last_run": None, "pending_proposals": 1}]},
+        "maintainer_ops": {"actions": [{"name": "sentinel_triage", "enabled": True, "mode": "dry_run", "last_run": None,
+                                         "pending_proposals": [{"proposal_id": "p1", "title": "Sentinel: E501", "tier_provenance": ["sentinel"]}],
+                                         "filter_schema": [], "config": {}}],
+                           "taxonomy_status": {"schema_valid": True, "validation_error": None}},
     }
     html = generate_overview_html(data, port=8321)
     assert "ops-widget" in html
@@ -1963,32 +2714,141 @@ Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
 
 ---
 
-### Task 14: Proposal Studio generalization (spec §5.5)
+### Task 14: Proposal Studio generalization (spec §5.5, REVISED per DECIDE panel 2026-11-24 — HELD until Tasks 1-6 have merged)
+
+**Why revised:** DECIDE panel defect #4 flagged that this task, as originally drafted, renders whatever shape of dict each source happens to produce (TPM's story dicts vs. Task 6's three maintainer-action proposal dicts) with no shared schema between them — `cardHtml`'s `story.source`/`story.severity`/`story.github_issue` reads would silently show `undefined` for any source that doesn't happen to populate those exact keys, and a future fifth source would have to reverse-engineer the contract from existing JS rather than a stated schema. Do not dispatch this task until Tasks 1-6 have merged — Step 0 below defines the schema that Task 6's three proposal-producing actions (`_run_sentinel_triage_action`, `_run_backlog_burndown_action`, `_run_mesh_sweep_action`) must already satisfy, and that Task 5's `tier_provenance` return value feeds.
+
+**Correction (2026-11-24, same-day follow-up to defect #4 close):** the original draft of this task placed `normalize_proposal_for_studio` and the merge logic in `synlynk/viz/roadmap_studio.py` — the module that renders the static HTML shell for `generate_proposal_studio_html(port)`. That module never touches ticket/proposal data at all: its own JS fetches `studioData` client-side from `GET api/roadmap_studio` (see its `draw()`/`load()` functions — `fetch('api/roadmap_studio?_=' + Date.now())`), which is served by **`synlynk/roadmap_studio.py`'s `studio_data()`** (a distinct module, confirmed by reading both files — `synlynk/viz/server.py:305` imports `studio_data` from `synlynk.roadmap_studio`, not from `synlynk.viz.roadmap_studio`). Normalizing in the JS-shell module would do nothing: the JSON the browser actually receives would still be whatever raw shape `studio_data()` returns. The adapter and the maintainer-proposal merge therefore belong in `synlynk/roadmap_studio.py`, applied once, server-side, before the dict is serialized to JSON — so the JS in `synlynk/viz/roadmap_studio.py` receives already-normalized objects and never needs its own defaulting logic.
 
 **Files:**
-- Modify: `synlynk/viz/roadmap_studio.py` (rename function, keep alias, add `source` badge + severity lane)
-- Test: `tests/test_viz_roadmap_studio.py` (append)
+- Modify: `synlynk/roadmap_studio.py` (add `normalize_proposal_for_studio` adapter; apply it to every story row `studio_data()` already builds, and merge in `load_maintainer_proposals()` entries as a new `studio_data()["backlog"]`-adjacent list — see Step 0/3 below)
+- Modify: `synlynk/viz/roadmap_studio.py` (rename `generate_roadmap_studio_html` to `generate_proposal_studio_html`, keep alias, add `source` badge + severity lane to `cardHtml` — the JS side needs no defaulting since `studio_data()` now always supplies `source`/`severity`/`github_issue`/`tier_provenance`)
+- Test: `tests/test_roadmap_studio.py` (append — the existing test module for `synlynk/roadmap_studio.py`'s `studio_data()`; check `ls tests/test_roadmap_studio.py` first to confirm the name)
+- Test: `tests/test_viz_roadmap_studio.py` (append — for the `viz/roadmap_studio.py` rename/alias/badge changes)
+
+- [ ] **Step 0: Define the shared proposal schema and normalization adapter in `synlynk/roadmap_studio.py`**
+
+Every proposal-producing source (TPM's roadmap stories, and Task 6's three maintainer wake-cycle actions) must reach the browser in one consistent shape. Rather than require every producer to emit identical dict keys (TPM's story rows, read from the `stories` SQL table, and maintainer's proposal dicts, read from `.synlynk/maintainer_proposals.json` via Task 6's `load_maintainer_proposals()`, have different native shapes), add one normalization point in `synlynk/roadmap_studio.py` — the module that already owns `studio_data()` — that every story/proposal passes through before `studio_data()` returns:
+
+```python
+def normalize_proposal_for_studio(raw: dict, default_source: str = "tpm") -> dict:
+    """Shared card-rendering schema (DECIDE panel defect #4, 2026-11-24).
+
+    Maps a TPM story row (from the `stories` table) or a Task 6
+    maintainer-proposal dict (from load_maintainer_proposals()) onto one
+    consistent shape so synlynk/viz/roadmap_studio.py's cardHtml JS never
+    special-cases the source. Every key below is always present with a
+    defined default -- never absent, never None where a string/list is
+    expected -- so the JS template never reads `undefined`.
+    """
+    return {
+        "story_id": str(raw.get("story_id") or raw.get("proposal_id") or ""),
+        "title": str(raw.get("title") or raw.get("story_id") or raw.get("proposal_id") or "Untitled"),
+        "source": str(raw.get("source") or default_source),
+        "severity": str(raw.get("severity") or "normal"),
+        "github_issue": raw.get("github_issue") or raw.get("gh_issue"),
+        "tier_provenance": list(raw.get("tier_provenance") or []),
+    }
+```
+
+(`raw.get("gh_issue")` is included as a fallback because the `stories` table's own column is named `gh_issue`, not `github_issue` — `studio_data()`'s existing SQL query already selects it under that name; this keeps a bare TPM story row normalizing correctly without the caller having to rename the key first.)
+
+This is the schema Task 6's three actions (`_run_sentinel_triage_action`, `_run_backlog_burndown_action`, `_run_mesh_sweep_action`, all in `synlynk/maintainer.py`) already populate on each proposal dict they build — `proposal_id`, `title`, `source` (e.g. `"maintainer:sentinel_triage"`), `severity`, `tier_provenance` (Task 5's `select_proposal_target` return value, or `["sentinel"]` per Task 13 Step 0 for the sentinel path) — and that `_persist_maintainer_proposals()` (Task 6) writes to `.synlynk/maintainer_proposals.json`. `github_issue` is populated once `_ensure_github_issue_for_story` (Task 6) has run in `promote` mode; it is `None` for a still-pending dry-run proposal, which `normalize_proposal_for_studio` passes through unchanged (the `issueLink` JS below already treats a falsy `github_issue` as "no link").
 
 - [ ] **Step 1: Write the failing test**
+
+Append to `tests/test_roadmap_studio.py` (the test module for `synlynk/roadmap_studio.py`'s `studio_data()` — NOT the `viz/` one):
+
+```python
+def test_normalize_proposal_for_studio_fills_every_key_with_a_default():
+    from synlynk.roadmap_studio import normalize_proposal_for_studio
+
+    # A bare TPM story row: no `source`, no `severity`, no `tier_provenance`.
+    tpm_row = {"story_id": "s1", "title": "Fix the thing"}
+    normalized = normalize_proposal_for_studio(tpm_row)
+    assert normalized == {
+        "story_id": "s1", "title": "Fix the thing", "source": "tpm",
+        "severity": "normal", "github_issue": None, "tier_provenance": [],
+    }
+
+    # A Task 6 maintainer proposal dict: no `story_id`, has `proposal_id`.
+    maintainer_row = {
+        "proposal_id": "maintainer-sentinel-abc", "title": "Sentinel: E501",
+        "source": "maintainer:sentinel_triage", "severity": "critical",
+        "github_issue": 5500, "tier_provenance": ["sentinel"],
+    }
+    normalized = normalize_proposal_for_studio(maintainer_row)
+    assert normalized == {
+        "story_id": "maintainer-sentinel-abc", "title": "Sentinel: E501",
+        "source": "maintainer:sentinel_triage", "severity": "critical",
+        "github_issue": 5500, "tier_provenance": ["sentinel"],
+    }
+
+
+def test_studio_data_merges_persisted_maintainer_proposals(tmp_path, monkeypatch):
+    """DECIDE panel defect #4 (2026-11-24): studio_data() is the function that
+    actually serves /api/roadmap_studio's JSON (synlynk/viz/server.py:305
+    imports studio_data from this module) -- Proposal Studio's JS fetches that
+    endpoint and never talks to the DB directly, so normalization has to
+    happen here, not in the viz/ render-shell module."""
+    import json
+
+    from synlynk.board import _open_product_db
+    from synlynk.roadmap_studio import studio_data
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "maintainer_proposals.json").write_text(json.dumps({
+        "generated_at": 0,
+        "proposals": [
+            {"proposal_id": "maintainer-sentinel-abc", "title": "Sentinel: E501",
+             "source": "maintainer:sentinel_triage", "severity": "critical",
+             "action": "sentinel_triage", "tier_provenance": ["sentinel"]},
+        ],
+    }))
+
+    conn, _slug = _open_product_db(str(tmp_path), migrate=True)
+    try:
+        data = studio_data(str(tmp_path), conn=conn)
+        assert "maintainer_proposals" in data
+        normalized = data["maintainer_proposals"][0]
+        assert normalized["story_id"] == "maintainer-sentinel-abc"
+        assert normalized["source"] == "maintainer:sentinel_triage"
+        assert normalized["severity"] == "critical"
+        assert normalized["github_issue"] is None
+    finally:
+        conn.close()
+
+
+def test_studio_data_returns_empty_maintainer_proposals_when_file_missing(tmp_path):
+    from synlynk.board import _open_product_db
+    from synlynk.roadmap_studio import studio_data
+
+    conn, _slug = _open_product_db(str(tmp_path), migrate=True)
+    try:
+        data = studio_data(str(tmp_path), conn=conn)
+        assert data["maintainer_proposals"] == []
+    finally:
+        conn.close()
+```
+
+- [ ] **Step 1b: Write the failing test for the `viz/roadmap_studio.py` rename/alias/badge**
 
 Append to `tests/test_viz_roadmap_studio.py`:
 
 ```python
-def test_generate_proposal_studio_html_renders_source_badge_and_severity_lane():
+def test_generate_proposal_studio_html_renders_the_shell_page():
     from synlynk.viz.roadmap_studio import generate_proposal_studio_html
 
-    studio_data = {
-        "tickets": [
-            {"id": "t1", "release_version": "v0.40.0", "theme": "Maintainer", "status": "open",
-             "stories": [{"story_id": "s1", "source": "maintainer:sentinel_triage", "severity": "critical", "github_issue": 5500}]},
-        ]
-    }
     html = generate_proposal_studio_html(port=8321)
     # generate_proposal_studio_html's existing signature takes only `port` and
-    # reads studio data from the live DB at render time (matching
-    # generate_roadmap_studio_html's current signature) -- this test only
-    # confirms the renamed function is importable and still returns a non-empty page.
+    # renders a static shell whose JS fetches studioData from api/roadmap_studio
+    # client-side (see synlynk/roadmap_studio.py's studio_data(), Task 14 Step 0/3)
+    # -- this test only confirms the renamed function is importable and still
+    # returns a non-empty page, plus the new badge/lane markup.
     assert "<html" in html.lower()
+    assert "source-badge" in html
+    assert "needs-attention-lane" in html
 
 
 def test_generate_roadmap_studio_html_alias_still_importable():
@@ -1997,12 +2857,84 @@ def test_generate_roadmap_studio_html_alias_still_importable():
     assert generate_roadmap_studio_html is generate_proposal_studio_html
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 2: Run both test files to verify they fail**
 
-Run: `pytest tests/test_viz_roadmap_studio.py -v -k proposal_studio`
-Expected: FAIL with `ImportError: cannot import name 'generate_proposal_studio_html'`
+Run: `pytest tests/test_roadmap_studio.py -v -k "normalize_proposal_for_studio or studio_data_merges or studio_data_returns_empty"; pytest tests/test_viz_roadmap_studio.py -v -k "generate_proposal_studio_html or generate_roadmap_studio_html_alias"`
+Expected: both FAIL — first with `ImportError: cannot import name 'normalize_proposal_for_studio'` (not yet defined in `synlynk/roadmap_studio.py`), second with `ImportError: cannot import name 'generate_proposal_studio_html'`
 
-- [ ] **Step 3: Rename the function and add the alias**
+- [ ] **Step 3: Add the normalization adapter and merge it into `studio_data()`**
+
+Edit `synlynk/roadmap_studio.py`. Add the `normalize_proposal_for_studio` function from Step 0 above near the top of the file, after the existing `_version_sort_key` function and before `studio_data()`. Add the import for `load_maintainer_proposals` alongside the file's existing imports:
+
+```python
+from synlynk.maintainer import load_maintainer_proposals
+```
+
+Then change `studio_data()`'s body to normalize every TPM story row it already builds, and merge in the maintainer proposals:
+
+```python
+def studio_data(repo_path: str = ".", *, conn: Optional[sqlite3.Connection] = None) -> dict:
+    """Return open/held release_proposal tickets (with resolved constituent stories), the
+    backlog pool, and pending maintainer proposals (DECIDE panel defect #4, 2026-11-24:
+    this is the function /api/roadmap_studio actually serves, so normalization and the
+    maintainer-proposal merge both happen here, not in the viz/ render-shell module)."""
+    active_conn, owns = _conn(conn, repo_path)
+    try:
+        ticket_rows = active_conn.execute(
+            "SELECT id, story_id AS release_version, issue_url, status, constituent_story_ids, theme "
+            "FROM approval_tickets WHERE action=? AND status IN ('open','held')",
+            (RELEASE_PROPOSAL_ACTION,),
+        ).fetchall()
+
+        claimed: set[str] = set()
+        tickets = []
+        for row in ticket_rows:
+            row_dict = dict(row)
+            story_ids = _constituent_ids(row_dict)
+            claimed.update(story_ids)
+            stories = []
+            if story_ids:
+                placeholders = ",".join("?" for _ in story_ids)
+                story_rows = active_conn.execute(
+                    f"SELECT story_id, title, role, estimated_tokens, gh_issue, readiness, status, "
+                    f"priority, proposal_order FROM stories WHERE story_id IN ({placeholders}) "
+                    f"ORDER BY proposal_order ASC NULLS LAST, rowid ASC",
+                    story_ids,
+                ).fetchall()
+                stories = [normalize_proposal_for_studio(dict(r)) for r in story_rows]
+            tickets.append(
+                {
+                    "id": row_dict["id"],
+                    "release_version": row_dict["release_version"],
+                    "issue_url": row_dict["issue_url"],
+                    "status": row_dict["status"],
+                    "theme": row_dict.get("theme"),
+                    "stories": stories,
+                }
+            )
+
+        tickets.sort(key=lambda t: _version_sort_key(t.get("release_version") or ""))
+
+        backlog_rows = active_conn.execute(
+            "SELECT story_id, title, role, estimated_tokens, gh_issue FROM stories "
+            "WHERE (readiness='advisory' OR (readiness IN ('ready','draft') AND status NOT IN ('done','archived')))"
+        ).fetchall()
+        backlog = [normalize_proposal_for_studio(dict(r)) for r in backlog_rows if r["story_id"] not in claimed]
+
+        maintainer_proposals = [
+            normalize_proposal_for_studio(raw, default_source="maintainer")
+            for raw in load_maintainer_proposals(repo_root=repo_path)
+        ]
+
+        return {"tickets": tickets, "backlog": backlog, "maintainer_proposals": maintainer_proposals}
+    finally:
+        if owns:
+            active_conn.close()
+```
+
+(This replaces the existing `studio_data()` body verbatim — every line above is the complete new function, not a diff fragment. The only behavioral changes versus the current function: `stories`/`backlog` entries are now passed through `normalize_proposal_for_studio` instead of being bare `dict(r)` results, and a new `maintainer_proposals` key is always present in the return value.)
+
+- [ ] **Step 3b: Rename the `viz/roadmap_studio.py` function and add the alias**
 
 Edit `synlynk/viz/roadmap_studio.py`, changing the function definition line:
 
@@ -2028,11 +2960,11 @@ generate_roadmap_studio_html = generate_proposal_studio_html
 
 - [ ] **Step 4: Add the `source` badge and severity lane to `cardHtml`**
 
-Within `generate_proposal_studio_html`'s existing `cardHtml(story, ticketId, openTickets)` JS function (part of the returned HTML's `<script>` block), add a `source` badge span and route severity-flagged stories into a separate lane. Find the existing card-building template literal inside `cardHtml` and add a badge element reading `story.source`:
+Within `generate_proposal_studio_html`'s existing `cardHtml(story, ticketId, openTickets)` JS function (part of the returned HTML's `<script>` block), add a `source` badge span and route severity-flagged stories into a separate lane. Because `studio_data()` (Step 3 above) now runs every story/proposal through `normalize_proposal_for_studio` before it ever reaches the browser, `story.source`/`story.severity`/`story.github_issue` are guaranteed present on every object in `studioData` — the JS needs no `|| 'tpm'`-style defaulting of its own. Find the existing card-building template literal inside `cardHtml` and add a badge element reading `story.source`:
 
 ```javascript
 function cardHtml(story, ticketId, openTickets) {
-  const sourceLabel = story.source ? story.source.replace('maintainer:', 'M: ') : 'tpm';
+  const sourceLabel = story.source.replace('maintainer:', 'M: ');
   const sourceBadge = `<span class="source-badge source-${sourceLabel.replace(/[^a-z0-9]/gi, '-')}">${sourceLabel}</span>`;
   const issueLink = story.github_issue
     ? `<a class="issue-link" href="https://github.com/${window.__SYNLYNK_REPO__ || ''}/issues/${story.github_issue}" target="_blank">#${story.github_issue}</a>`
@@ -2078,21 +3010,21 @@ And in the JS `draw()` function (the existing render entry point), add a pass th
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `pytest tests/test_viz_roadmap_studio.py -v`
+Run: `pytest tests/test_roadmap_studio.py tests/test_viz_roadmap_studio.py -v`
 Expected: PASS (all tests green)
 
 - [ ] **Step 6: Run the full roadmap/proposal studio test suites to check for regressions**
 
-Run: `pytest tests/test_viz_roadmap_studio.py tests/test_viz_nav_roadmap_studio.py tests/test_viz_roadmap_studio_routes.py tests/test_viz_write_routes_roadmap_studio.py -v`
-Expected: PASS (all tests green — confirms `cache.py`'s unmodified `from synlynk.viz.roadmap_studio import generate_roadmap_studio_html` import still resolves via the alias)
+Run: `pytest tests/test_roadmap_studio.py tests/test_viz_roadmap_studio.py tests/test_viz_nav_roadmap_studio.py tests/test_viz_roadmap_studio_routes.py tests/test_viz_write_routes_roadmap_studio.py -v`
+Expected: PASS (all tests green — confirms `cache.py`'s unmodified `from synlynk.viz.roadmap_studio import generate_roadmap_studio_html` import still resolves via the alias, and that `studio_data()`'s new `normalize_proposal_for_studio`/`maintainer_proposals` behavior doesn't break any of `roadmap_studio.py`'s existing write-route callers, which only read `tickets`/`backlog` and are unaffected by the new third key)
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add synlynk/viz/roadmap_studio.py tests/test_viz_roadmap_studio.py
-git commit -m "feat(viz): generalize Roadmap Studio into multi-source Proposal Studio
+git add synlynk/roadmap_studio.py synlynk/viz/roadmap_studio.py tests/test_roadmap_studio.py tests/test_viz_roadmap_studio.py
+git commit -m "feat: generalize Roadmap Studio into multi-source Proposal Studio
 
-Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -2109,14 +3041,14 @@ Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
 - §5.7 notifications (Vizor always-on, Slack gated, fence hints) → Vizor coverage is Task 13's widget/panel; Slack is Task 9; fence hints are Task 8.
 - §5.8 CLI/GH trigger → Task 10 (CLI), Task 11 (GH Actions workflow); slash-command dispatcher explicitly out of scope (non-goal, not planned).
 - §5.9 onboarding fix → Task 12.
-- §6 taxonomy-as-config → Tasks 1 and 3.
-- §7 Domain Pack extension point → Task 2.
+- §6 taxonomy-as-config, including schema-version validate-or-fallback (DECIDE panel defect #5) → Task 1; `cluster_open_issues()`/`is_issue_remediated()` consuming it → Task 3.
+- §7 Domain Pack extension point, including schema-version validate-or-fallback extended to `domain_pack.json` (DECIDE panel defect #5) → Task 2.
 - §8 testing approach → every task includes its own unit tests per the spec's list (action dry-run/promote branching in Task 6/9, proximal-selection tiers including the non-code-dominant degradation case in Task 5, severity-override bypass in Task 6, `load_domain_pack()` merge behavior in Task 2, full wake-cycle integration in Task 6, Vizor rendering in Tasks 13-14, CLI wiring in Task 10).
 - §9 future work → correctly excluded from every task (no slash-command dispatcher, no rxcc/vdowrx/Hitchcock-specific packs, no changes to other roles' wake cycles beyond the minimum TPM/Roadmap-Studio touch already covered in Task 14).
 
 **2. Placeholder scan:** No TBD/TODO markers; every step has complete code, including the HTML/JS insertions in Tasks 13-14, which quote the exact surrounding lines from the files read during planning (`synlynk/viz/roles.py`'s Edit Charter `</details>` boundary, `synlynk/viz/overview.py`'s "Recent / Active Dispatches" section-card boundary, `synlynk/viz/roadmap_studio.py`'s `cardHtml`/`draw()` functions).
 
-**3. Type/signature consistency:** `select_proposal_target(candidate, open_proposals, repo_root=".")` (Task 5) is called with keyword args consistently; `run_maintainer_wake_cycle(repo_root=".")` (Task 6) matches its call sites in Task 7 (scheduler, no args — uses the default) and Task 10 (CLI, explicit `repo_root=os.getcwd()`); `get_action_config(name, repo_root=".")` (Task 4) is called identically in Tasks 6 and 9; `generate_role_ops_panel_html(role_slug, data)` and `generate_condensed_widget_html(role_slug, data)` (Task 13) share the same two-arg shape the spec's §5.4 text specifies; `_ensure_github_issue_for_story(story, repo_root=".")` (Task 6) is referenced with the same signature in Task 6's own `_run_sentinel_triage_action` and in Task 9's test monkeypatches.
+**3. Type/signature consistency:** `load_taxonomy(repo_root=".")` (Task 1, added per DECIDE panel defect #5) returns `{"cluster_keywords", "remediation_topics", "proximal_selection", "schema_valid", "validation_error"}`; `cluster_keywords()`/`remediation_topics()` (Task 1) are thin wrappers over it, and Task 2's `load_domain_pack()`/domain-pack layering happens *inside* `load_taxonomy()` itself rather than in a separate function that bypasses it, so Task 2's edit to Task 1's `load_taxonomy()` body is the only place domain-pack merge logic lives; Task 5's `_proximal_selection_config()` calls `load_taxonomy(repo_root=repo_root)` and reads `["proximal_selection"]` — the function it depends on now actually exists, closing a gap introduced during this plan's own revision; `select_proposal_target(candidate, open_proposals, repo_root=".")` returning `(proposal_id_or_None, tier_provenance)` (Task 5, revised per DECIDE panel defect #3) is called with keyword args consistently; `run_maintainer_wake_cycle(repo_root=".")` (Task 6) matches its call sites in Task 7 (scheduler, no args — uses the default) and Task 10 (CLI, explicit `repo_root=os.getcwd()`); `get_action_config(action_id, repo_root=".")` (Task 4, revised — takes the `"<role_slug>:<name>"` action_id, not a bare name) is called identically (`"maintainer:sentinel_triage"` etc.) in Tasks 6 and 9; `registered_actions(role_slug=None)` (Task 4, revised) is called with `role_slug="maintainer"` in Task 6 and bare in Task 4's own tests; `generate_role_ops_panel_html(role_slug, data)` and `generate_condensed_widget_html(role_slug, data)` (Task 13) share the same two-arg shape the spec's §5.4 text specifies; `build_maintainer_ops_data(role_slug, repo_root=".")` (Task 13 Step 0b, new) returns the `{"actions": [...], "taxonomy_status": {...}}` shape Step 1's test fixtures model by hand, and calls `registered_actions()`/`get_action_config()` (Task 4) and `load_maintainer_proposals()` (Task 6) with their real signatures — it is not yet wired into `viz/data.py`'s actual `data` assembly (flagged as a known residual item in Task 13's Files section, not fixed by this plan); `normalize_proposal_for_studio(raw, default_source="tpm")` (Task 14 Step 0, corrected) is called from `synlynk/roadmap_studio.py`'s own `studio_data()` for every `stories`/`backlog` row and once more per entry from `load_maintainer_proposals()` with `default_source="maintainer"`, matching Task 6's `_persist_maintainer_proposals()` output shape; `_ensure_github_issue_for_story(story, repo_root=".")` (Task 6, now gated by `_qa_role_token_available()`) is referenced with the same signature in Task 6's own `_run_sentinel_triage_action` and in Task 9's test monkeypatches.
 
 ---
 

@@ -54,20 +54,25 @@ Mirrors `run_tpm_wake_cycle()`'s shape. Runs three registered actions in sequenc
 
 Called from `_run_maintainer_triage_pass()` in `synlynk/scheduler.py` on the existing cadence, replacing today's discarded call.
 
-### 5.2 `MaintainerActionRegistry` (new, `synlynk/maintainer_registry.py`)
+### 5.2 `AutonomousActionRegistry` (new, `synlynk/maintainer_registry.py`, role-aware despite the module path)
 
-A small registration object, not a Maintainer-specific concept — any future autonomous action (for Maintainer or another role adopting this pattern) registers:
+**Revised per DECIDE panel 2026-11-24 (Claude + Codex defect #1):** the registry is not Maintainer-shaped. It takes a `role_slug` at registration time, assigns each action a stable `action_id` (`f"{role_slug}:{name}"`, not a bare `name` — this is the persistence key in `.synlynk/config.json` and the only id the Role Operations Panel, §5.4, is allowed to key off), and `filter_schema` is a typed field-spec list, not a free-form dict, because §5.4's panel renders form controls directly from it:
 
 ```python
 register_action(
+    role_slug="maintainer",
     name="sentinel_triage",
     default_config={"enabled": True, "mode": "dry_run"},
-    filter_schema={"exclude_codes": "list[str]"},
+    filter_schema=[
+        FieldSpec(name="exclude_codes", type="list[str]", default=[], label="Exclude alert codes"),
+    ],
     run_fn=triage_sentinel_alerts_and_act,
 )
 ```
 
-Registration automatically produces: a settings entry under `.synlynk/config.json`'s `maintainer_autonomy` block, a toggle/filter card in the Role Operations Panel (§5.4), and wake-cycle participation. Example resulting config:
+`FieldSpec` (`name`, `type` — one of `str`/`bool`/`list[str]`/`int`, `default`, `label`) is validated at registration time; an unknown `type` raises at import, not at render time. `registered_actions(role_slug=None)` lists specs filtered by role (or all, for the panel's cross-role views). `get_action_config(action_id)` reads/validates against the owning action's `default_config` shape, rejecting unknown keys.
+
+Registration automatically produces: a settings entry under `.synlynk/config.json`'s `<role_slug>_autonomy` block (`maintainer_autonomy` for this spec's three actions), a toggle/filter card in the Role Operations Panel (§5.4), and wake-cycle participation. Example resulting config:
 
 ```json
 "maintainer_autonomy": {
@@ -77,11 +82,11 @@ Registration automatically produces: a settings entry under `.synlynk/config.jso
 }
 ```
 
-`mode` is `dry_run` (findings staged, visible, no side effects) or `promote` (real side effects — GH issue close, graph rebuild — execute).
+`mode` is `dry_run` or `promote` — see §5.3a for what each actually does; "no side effects in dry-run" is a stronger guarantee than originally described, and is now the thing being fixed.
 
-### 5.3 Proposal data shape (consumed by Proposal Studio, §5.5)
+### 5.3 Proposal data shape — shared schema, not `release_proposal`-specific (revised per DECIDE panel defect #4)
 
-Every staged proposal, regardless of source:
+Every staged proposal, regardless of source, is a `Proposal` record in a new shared table/schema (`synlynk/proposal_schema.py` or equivalent — exact module decided at plan time), not a reuse of TPM's `release_proposal` rows with Maintainer fields bolted on:
 
 ```json
 {
@@ -89,11 +94,26 @@ Every staged proposal, regardless of source:
   "source": "maintainer:backlog_burndown",
   "title": "...",
   "severity": "critical|high|normal",
+  "lifecycle": "staged|approved|held|dropped",
+  "approval": {"approved_by": null, "approved_at": null},
   "stories": [{"story_id": "...", "github_issue": 1234}]
 }
 ```
 
-`github_issue` is enforced non-null per story at staging time — if a finding has no existing GH issue, Maintainer opens one (via the `qa`-role write path) before staging, so Proposal Studio never shows an orphaned story.
+`source` is namespaced `<role_slug>:<action_name>` (`tpm:release_proposal`, `maintainer:backlog_burndown`, ...) so Proposal Studio (§5.5) can query/filter across sources without a source-specific code path. TPM's existing `release_proposal` rows are read through an adapter that maps them into this shape — TPM's own write path is unchanged (§4 non-goal), only the read side generalizes. `github_issue` is enforced non-null per story at staging time — if a finding has no existing GH issue, Maintainer opens one (via the `qa`-role write path) before staging, so Proposal Studio never shows an orphaned story. Opening that issue is itself a promotion-boundary action — see §5.3a.
+
+### 5.3a Dry-run vs. promotion boundary (new section, DECIDE panel defect #2)
+
+The original spec described `dry_run` as side-effect-free, but staging a proposal that needs a GitHub issue (§5.3) opens one even in `dry_run` mode — that is a real side effect under a label promising none. This section is the fix:
+
+- **Local staging** (writing a `Proposal` row, computing clusters/findings, running proximal selection) is side-effect-free in both `dry_run` and `promote` mode. It never touches GitHub.
+- **Promotion** — opening a GitHub issue for an orphaned story, closing an issue on backlog-burndown remediation, or any other external write — happens **only** in `promote` mode, and only through these guards, all enforced in `synlynk/maintainer.py`'s promotion path:
+  1. **Per-action opt-in, recorded.** An action's `mode: promote` setting is necessary but not sufficient — each individual promotion call records an audit-log entry (`.synlynk/maintainer_audit.jsonl` or the existing telemetry log, decided at plan time) with the action id, the external write performed, and a timestamp, before the write executes.
+  2. **Per-cycle cap.** A `max_promotions_per_cycle` setting (default: a small fixed number, e.g. 10) hard-stops further promotions once hit within a single `run_maintainer_wake_cycle()` invocation; remaining candidates stay in `staged` lifecycle for the next cycle.
+  3. **Dedupe.** Before opening an issue, Maintainer searches existing open issues for the same finding signature (same cluster + same file/topic fingerprint) and attaches to the existing issue instead of opening a duplicate.
+  4. **Rate limit.** Promotions respect a minimum spacing between consecutive external writes (reusing whatever rate-limit helper `synlynk gh` already wraps, if one exists; otherwise a simple sleep/backoff) — this is about not hammering the GitHub API in one sweep, not security.
+  5. **No host-token fallback.** If no `qa`-role (or other configured writer-role) GitHub App token is provisioned, the promotion step stages the finding and skips the external write — it does **not** fall back to a host-authenticated `gh` call. This matches the Hardened PR Review Policy's standing invariant (CLAUDE.md: "Personal GitHub token is strictly off-limits to every agent/harness") — there is no carve-out for Maintainer.
+- GitHub Actions running `synlynk maintainer wake` (§5.8) is itself scoped least-privilege (issues: write only, not full repo), runs under a named writer identity (the `qa`-role App token, injected as a secret — never the workflow's default `GITHUB_TOKEN` acting as a human), and uses a `concurrency` group keyed on the workflow name so overlapping scheduled + manual runs can't race each other's promotion caps/dedupe.
 
 ### 5.4 Role Operations Panel (new, `synlynk/viz/role_ops_panel.py`)
 
@@ -113,15 +133,27 @@ The panel is written generically (keyed by `role_slug` + the registry's register
 - Severity-flagged (`critical`/`high`) proposals render in a "Needs attention now" lane above the normal volume-clustered lane, and bypass the minimum-cluster-volume threshold entirely.
 - Existing drag/drop/pin actions (`api/roadmap_studio/drop` etc.) work unchanged — they only need `story_id`.
 
-### 5.6 Proximal selection (dual-graph, with keyword fallback)
+### 5.6 Proximal selection (dual-graph, with keyword fallback) — revised per DECIDE panel defect #3
 
-Replaces `cluster_open_issues()`'s pure keyword matching with a three-tier resolution order, checked in this sequence for each candidate finding:
+**The original description under-specified the mechanism — Codex's review found the implied implementation omits distance-two traversal, `reverse_doc_index`, and issue/PR evidence entirely.** This section replaces it with one normalized evidence model, evaluated once per candidate finding, with a single deterministic scoring/tie-break instead of three independent "first match wins" tiers:
 
-1. **Code-graph proximity** — via `ensure_graph_for_head()`/`write_traversal_cache()` (`synlynk/scan.py`, `synlynk/graph_cache.py`): if the candidate's touched files are graph-adjacent (under a distance threshold) to an existing open proposal's files, join it. Meaningful only where the workspace has enough `_SOURCE_SUFFIXES` coverage for the graph to carry signal.
-2. **Doc-graph proximity** — via `docgraph.py`'s `reverse_code_index`/`reverse_doc_index`: if the candidate shares a referencing doc, or shares `issues_and_prs`/`code_references`, with an existing proposal's stories, join it. This graph's classification keys off synlynk's own structural conventions (every `synlynk init`-created workspace has `project-docs/decisions/` etc.), so it carries signal even in a workspace with little or no source code.
-3. **Keyword clustering** (fallback, today's mechanism) — now reading its taxonomy from `.synlynk/maintainer_taxonomy.json` (§6) instead of a hardcoded Python dict.
+**Evidence model.** For each candidate finding and each existing open proposal, collect zero or more `Evidence` records:
 
-If no tier produces a match and the finding isn't critical/high-severity, it accumulates toward the minimum-cluster-volume threshold under its keyword bucket, same as today.
+```python
+Evidence(tier="code_graph", weight=..., detail="distance-1 import edge: a.py -> b.py")
+Evidence(tier="code_graph", weight=..., detail="distance-2 via shared caller")
+Evidence(tier="doc_graph",  weight=..., detail="shared reverse_doc_index entry: spec.md")
+Evidence(tier="doc_graph",  weight=..., detail="shared issues_and_prs: #1234")
+Evidence(tier="keyword",    weight=..., detail="cluster match: backend")
+```
+
+- **`code_graph` tier** — via `ensure_graph_for_head()`/`write_traversal_cache()` (`synlynk/scan.py`, `synlynk/graph_cache.py`): evaluates both **distance-1** (direct edge between touched files) and **distance-2** (shared neighbor/caller) adjacency to an existing proposal's files. Distance-2 carries a lower weight than distance-1 — both are config-driven (`.synlynk/maintainer_taxonomy.json`'s `proximal_selection.code_graph_weights`, §6), not hardcoded.
+- **`doc_graph` tier** — via `docgraph.py`'s `reverse_code_index` **and** `reverse_doc_index` (the original spec named `reverse_code_index` only and dropped the second): a shared referencing doc, OR a shared `issues_and_prs` entry, OR a shared `code_references` entry each produce one `Evidence` record with their own configured weight.
+- **`keyword` tier** — today's `cluster_open_issues()` mechanism, reading its taxonomy from `.synlynk/maintainer_taxonomy.json` (§6) instead of a hardcoded Python dict. Lowest default weight of the three tiers.
+
+**Resolution.** Sum each open proposal's evidence weights; the candidate joins the highest-scoring proposal if that score clears a configured `join_threshold` (`.synlynk/maintainer_taxonomy.json`'s `proximal_selection.join_threshold`, §6 — not a hardcoded constant). Ties break deterministically by proposal age (oldest wins), then `proposal_id` lexical order. If no proposal clears the threshold and the finding isn't critical/high-severity, it accumulates toward the minimum-cluster-volume threshold under its keyword bucket, same as today.
+
+**Provenance.** Every proposal join records which tier(s) and which specific `Evidence` entries produced the winning score, surfaced in Proposal Studio (§5.5) as a "why this grouping" expandable detail on the card — this is what makes the mechanism auditable instead of a black box, and is what the fixture tests (§8) assert against directly (tier 1/2/3 resolution order, not just "a match happened").
 
 ### 5.7 Notifications & fence comms
 
@@ -152,10 +184,11 @@ Two pieces of Maintainer's current logic are hardcoded to this repo's software-e
 1. `cluster_open_issues()`'s keyword taxonomy (`backend`/`frontend`/`cli`/`docs`/`sentinel`/`testing`, keywords like `sqlite`, `css`, `pytest`).
 2. `_REMEDIATION_TOPICS = ("invariant 1", "circuit breaker", "daemon supervision")` — synlynk-engineering-specific fix-matching vocabulary.
 
-Both move out of `maintainer.py` into a new per-workspace config file, `.synlynk/maintainer_taxonomy.json`:
+Both move out of `maintainer.py` into a new per-workspace config file, `.synlynk/maintainer_taxonomy.json`. **Revised per DECIDE panel defect #5:** this file (and `.synlynk/domain_pack.json`, §7) is a versioned, validated schema, not a loosely-shaped JSON blob — a malformed or missing file must degrade safely, not crash the wake cycle:
 
 ```json
 {
+  "schema_version": 1,
   "cluster_keywords": {
     "backend": ["sqlite", "api", "server"],
     "frontend": ["css", "html", "vizor"],
@@ -164,9 +197,17 @@ Both move out of `maintainer.py` into a new per-workspace config file, `.synlynk
     "sentinel": ["alert", "circuit breaker"],
     "testing": ["pytest", "fixture"]
   },
-  "remediation_topics": ["invariant 1", "circuit breaker", "daemon supervision"]
+  "remediation_topics": ["invariant 1", "circuit breaker", "daemon supervision"],
+  "proximal_selection": {
+    "code_graph_weights": {"distance_1": 10, "distance_2": 4},
+    "doc_graph_weights": {"reverse_doc_index": 6, "issues_and_prs": 8, "code_references": 5},
+    "keyword_weight": 2,
+    "join_threshold": 6
+  }
 }
 ```
+
+**Validation and fallback:** `synlynk/maintainer_taxonomy.py::load_taxonomy()` validates `schema_version` is a known value (currently `1`; an unrecognized version logs a warning and falls back to built-in defaults rather than guessing at a migration), checks every `cluster_keywords` value is a list of strings and every weight is a non-negative number, and on any validation failure — malformed JSON, missing file, bad types — falls back to the built-in default taxonomy (synlynk's own current lists, hardcoded as the ultimate fallback in `maintainer_taxonomy.py` itself) rather than raising. This failure is logged, and the Role Operations Panel (§5.4) surfaces a "using built-in defaults — config failed validation" banner so the gap doesn't go silent.
 
 synlynk's own repo ships this file pre-populated with its current lists (no behavior change for this repo). A fresh `synlynk init` elsewhere scaffolds an empty/minimal version; burndown's `#N`/`fixes #N` commit-reference matching (already domain-agnostic) still works with zero configuration, so a new workspace isn't crippled on day one — it just won't catch topic-based matches until someone fills this in. The Role Operations Panel (§5.4) gains a "Cluster taxonomy" editor (cluster name → keyword chips) so this is user-editable without touching code.
 
@@ -176,10 +217,11 @@ synlynk's own repo ships this file pre-populated with its current lists (no beha
 
 To support the stated future plan of shipping industry/domain-specific resource packs that populate the taxonomy or doc-graph classifier, this spec adds the extension point without building the packs:
 
-- New schema, `.synlynk/domain_pack.json`:
+- New schema, `.synlynk/domain_pack.json`, also versioned per defect #5:
 
 ```json
 {
+  "schema_version": 1,
   "pack_name": "synlynk-default",
   "cluster_keywords": { "...": ["..."] },
   "remediation_topics": ["..."],
@@ -190,19 +232,31 @@ To support the stated future plan of shipping industry/domain-specific resource 
 }
 ```
 
-- New loader `load_domain_pack()` (`synlynk/maintainer_taxonomy.py`), called at wake-cycle start: merges `cluster_keywords`/`remediation_topics` into `.synlynk/maintainer_taxonomy.json`'s runtime values, and merges `doc_type_extensions` into `docgraph.py::classify_doc_type()`'s classification (checked after the built-in structural buckets, before falling through to `general_doc`).
+- New loader `load_domain_pack()` (`synlynk/maintainer_taxonomy.py`), called at wake-cycle start: merges `cluster_keywords`/`remediation_topics` into `.synlynk/maintainer_taxonomy.json`'s runtime values, and merges `doc_type_extensions` into `docgraph.py::classify_doc_type()`'s classification (checked after the built-in structural buckets, before falling through to `general_doc`). **Documented precedence (defect #5):** domain pack values layer *over* `.synlynk/maintainer_taxonomy.json`'s own values for any key present in both (pack wins), which in turn layer over `maintainer_taxonomy.py`'s hardcoded built-in defaults (taxonomy file wins over built-ins). Same `schema_version`/fallback validation as §6 applies — a malformed or unversioned domain pack is skipped entirely (logged, panel banner shown) rather than partially merged.
 - v1 ships exactly one worked pack: synlynk's own current software-engineering lists, expressed in this format as the "default" pack — this is what proves the mechanism works, without requiring fabricated specifics about rxcc/vdowrx/Hitchcock's actual current vocabulary.
 - Building the rxcc/vdowrx/Hitchcock-specific packs themselves is out of scope for this spec (§4) — flagged as the natural next step once this mechanism lands.
 
 ## 8. Testing Approach
 
 - Unit tests per registered action: dry-run vs. promote branching, settings-registry defaults, filter application (`exclude_codes`/`exclude_labels`).
-- Unit tests for proximal selection: code-graph match, doc-graph match (using a fixture `DocGraph` with overlapping `reverse_code_index` entries), keyword fallback, and the "non-code-dominant workspace" fixture (mostly non-`_SOURCE_SUFFIXES` files) proving graceful degradation to doc-graph/keyword tiers without error.
+- Unit tests for proximal selection (revised per defect #3): fixture asserting distance-1 vs. distance-2 code-graph weighting, a fixture `DocGraph` exercising **both** `reverse_code_index` and `reverse_doc_index` plus `issues_and_prs`/`code_references` evidence, keyword-only fallback, threshold tie-breaking (proposal age then `proposal_id`), and the "non-code-dominant workspace" fixture (mostly non-`_SOURCE_SUFFIXES` files) proving graceful degradation to doc-graph/keyword tiers without error. Each case asserts the recorded tier provenance matches which `Evidence` records actually won, not just that *a* match happened.
 - Unit test for severity-override bypass of the minimum-cluster-volume threshold.
-- Unit test for `load_domain_pack()` merge behavior (pack values layer over repo defaults, `doc_type_extensions` checked before `general_doc` fallback).
+- Unit tests for `.synlynk/maintainer_taxonomy.json`/`.synlynk/domain_pack.json` schema validation and fallback (defect #5): unknown `schema_version`, malformed JSON, missing file, bad field types — each must fall back to built-in defaults and log/surface the panel banner, never raise.
+- Unit test for `load_domain_pack()` merge/precedence behavior (pack > taxonomy file > built-in defaults; `doc_type_extensions` checked before `general_doc` fallback).
+- Unit tests for the promotion boundary (defect #2): dry-run staging makes zero external calls (asserted via a mocked/forbidden `gh` call in the test), per-cycle cap stops promotion mid-cycle, dedupe attaches to an existing issue instead of opening a duplicate, and the no-host-token-fallback path stages without erroring when no role App token is configured.
 - Integration test for the full wake cycle against a fixture `sentinel.md` + fixture open-issues list, asserting staged proposals have non-null `github_issue` per story.
-- Vizor rendering tests: Role Operations Panel renders all three registered actions with correct toggle/mode state; Overview widget renders condensed badges; Proposal Studio renders multi-source cards with correct `source` badges and the "Needs attention now" lane for severity-flagged proposals.
+- Vizor rendering tests: Role Operations Panel renders all three registered actions with correct toggle/mode state from typed `FieldSpec`s; Overview widget renders condensed badges; Proposal Studio renders multi-source cards (via the shared `Proposal` schema, defect #4, including a TPM `release_proposal` row read through the adapter) with correct `source` badges, "why this grouping" provenance detail, and the "Needs attention now" lane for severity-flagged proposals.
 - CLI test for `synlynk maintainer wake` subcommand wiring.
+
+## 8a. Implementation Sequencing (added per DECIDE panel 2026-11-24)
+
+Reviewed by `synlynk decide --record` (panel: claude, agy, codex — grok excluded, 402 billing exhaustion; see `project-docs/decisions/2026-11-24-maintainer-full-autonomy-docs-superpower.md`). Verdict: conditionally approved, contingent on the revisions in §5.2, §5.3/§5.3a, §5.6, §6, §7 above (registry role-awareness + typed `FieldSpec`, dry-run/promotion split with audit/cap/dedupe/rate-limit/no-host-fallback, evidence-based proximal selection with config-driven weights and tier provenance, shared `Proposal` schema, versioned taxonomy/domain-pack schemas with validated fallback) — all now folded into this spec.
+
+Dispatch order:
+1. **Foundation wave (T1–T4 in the implementation plan):** taxonomy/domain-pack schema + loader + validation (§6, §7), registry (§5.2). No dependency on the proximal-selection or promotion-boundary work.
+2. **Hold** the proximal-selection task (plan T5) until its evidence model/weights/provenance (§5.6) are fully specified in the plan — not yet true as of this spec revision; the plan itself still needs updating to match.
+3. **Hold** the Role Operations Panel and Proposal Studio generalization tasks (plan T13–T14) until the registry contract (§5.2) is proven working end-to-end, since both render from it.
+4. Re-run `synlynk decide --record` on this revised spec before dispatching anything, per standing policy ([[feedback_decide_panel_for_specs]]).
 
 ## 9. Future Work (explicitly out of scope here)
 
