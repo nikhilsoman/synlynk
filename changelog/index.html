@@ -45,6 +45,36 @@
 Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
 <hr>
 <h2><a href="https://github.com/nikhilsoman/synlynk/compare/v0.3.0...HEAD">Unreleased</a></h2>
+<div class="changelog-version-header"><span class="changelog-version">vv0.39.1</span><span class="changelog-date">2026-11-24</span></div>
+<h3 class="tag-added">Added</h3>
+- **Hetzner Cloud Swarm Runner Driver & Vertical Host Orchestration (#5360, PR #5464):**
+  - Native stdlib-only REST client `HetznerRunnerDriver` in `synlynk/runners/hetzner.py` supporting dynamic cloud server provisioning (`cpx21`, `cpx31`, `cpx51`, `cax41`).
+  - Dual-mode `synlynk swarm lease` CLI supporting Direct BYOT and Hosted Centralized Relay Dispatch.
+  - Scale-to-zero triple-layer watchdogs (idle timeout, dead-agent watchdog, and max-duration circuit-breaker).
+  - GitHub Actions orchestrator workflow template `.github/workflows/swarm-lease.yml`.
+<hr>
+<div class="changelog-version-header"><span class="changelog-version">vv0.39.0</span><span class="changelog-date">2026-11-23</span></div>
+<h3 class="tag-added">Added</h3>
+- **Hardened FTUE Wizard & Vizor HUD (#5413, #5302, PRs #5426, #5428, #5430, #5432, #5436, #5437):**
+  - Zero-harness OpenRouter BYOK fallback in Screen 1 when 0 CLIs are on PATH (`story-ftue-01`).
+  - Multi-digit index picker and repo scan in `synlynk/wizard.py` (`story-ftue-02`).
+  - CWD guards refusing init in tool checkouts (`story-ftue-03`).
+  - Atomic workspace commitment preserving configured workspace name with zero disk writes on failed dispatch (`story-ftue-04`).
+  - Personal edition bypass of GOVERNS enforce with synthetic first-win story bypass (`story-ftue-05`).
+  - Universal proxy env passthrough and self-healing tool `synlynk onboard repair` (`story-ftue-06`).
+- **Bug-Report Intake & Flight Recorder (#5419, PRs #5427, #5429, #5431):**
+  - Canonical allowlist bundle collector in `synlynk/report_bundle.py` with schema hashing and fingerprinting.
+  - Ring-buffer flight recorder in `synlynk/flight_recorder.py` (`.synlynk/flight.jsonl`).
+  - Interactive preview and whole-body secret scan in `synlynk/report_scan.py`.
+- **Standalone Modular Ecosystem Suite & Law 3 Tier 3 Promotion (PR #5463):**
+  - 5 standalone, zero-dependency packages in `packages/`: `tokenprice`, `tokentrail`, `worktree-lease`, `harness-spec`, `token-breaker`.
+  - Promoted Constitutional Law 3 to `DeliveryTier.INJECTED` with cost provenance gates.
+- **Core Data Integrity Remediations (PR #5462):**
+  - Pre-drop preservation in `synlynk/db_schema.py` auto-inserting unplaced legacy arcs/phases into `goals` (gh:#5443).
+  - Story arc version resolution in `synlynk/gh_sync.py` and `synlynk/gh_sync_backfill.py` resolving milestones across multi-story arcs (gh:#5434).
+  - Cascading timeout and terminal error transitions in `synlynk/jobs.py`.
+  - Scheduler replay atomic reservation constraint in `synlynk/scheduler.py`.
+<hr>
 <div class="changelog-version-header"><span class="changelog-version">vv0.38.3</span><span class="changelog-date">2026-11-20</span></div>
 <h3 class="tag-added">Added</h3>
 - **Harness Parity Phase 3: Live Routing & Manifest Mechanics (#5369, #5389, PR #5395):**
