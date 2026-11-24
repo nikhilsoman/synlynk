@@ -674,12 +674,12 @@ SELECT
     arc_version
   ) AS title,
   CASE
-    WHEN MAX(CASE WHEN status != 'done' THEN 1 ELSE 0 END) = 0 THEN 'shipped'
+    WHEN MAX(CASE WHEN status NOT IN ('done', 'shipped') THEN 1 ELSE 0 END) = 0 THEN 'shipped'
     WHEN MAX(CASE WHEN status = 'active' THEN 1 ELSE 0 END) = 1 THEN 'in_progress'
     ELSE 'planned'
   END AS status,
   CASE
-    WHEN MAX(CASE WHEN status != 'done' THEN 1 ELSE 0 END) = 0 THEN 'shipped'
+    WHEN MAX(CASE WHEN status NOT IN ('done', 'shipped') THEN 1 ELSE 0 END) = 0 THEN 'shipped'
     WHEN MAX(CASE WHEN status = 'active' THEN 1 ELSE 0 END) = 1 THEN 'in_progress'
     ELSE 'planned'
   END AS computed_status,
@@ -708,13 +708,13 @@ SELECT
   arc_version,
   phase_title,
   CASE
-    WHEN MAX(CASE WHEN status != 'done' THEN 1 ELSE 0 END) = 0 THEN 'done'
+    WHEN MAX(CASE WHEN status NOT IN ('done', 'shipped') THEN 1 ELSE 0 END) = 0 THEN 'done'
     WHEN MAX(CASE WHEN status = 'active' THEN 1 ELSE 0 END) = 1 THEN 'in_progress'
     WHEN MAX(CASE WHEN status = 'deferred' THEN 1 ELSE 0 END) = 1 THEN 'deferred'
     ELSE 'planned'
   END AS status,
   CASE
-    WHEN MAX(CASE WHEN status != 'done' THEN 1 ELSE 0 END) = 0 THEN 'shipped'
+    WHEN MAX(CASE WHEN status NOT IN ('done', 'shipped') THEN 1 ELSE 0 END) = 0 THEN 'shipped'
     WHEN MAX(CASE WHEN status = 'active' THEN 1 ELSE 0 END) = 1 THEN 'in_progress'
     WHEN MAX(CASE WHEN status = 'deferred' THEN 1 ELSE 0 END) = 1 THEN 'deferred'
     ELSE 'planned'
