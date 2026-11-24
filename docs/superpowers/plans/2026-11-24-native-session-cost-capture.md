@@ -130,7 +130,7 @@ def _up(conn: sqlite3.Connection) -> None:
             session_id      TEXT PRIMARY KEY,
             transcript_path TEXT NOT NULL,
             byte_offset     INTEGER NOT NULL DEFAULT 0,
-            recent_ids_json TEXT NOT NULL DEFAULT '[]',
+            anchor          TEXT NOT NULL DEFAULT '',
             final           INTEGER NOT NULL DEFAULT 0,
             updated_at      TEXT DEFAULT (datetime('now'))
         )"""
@@ -356,28 +356,30 @@ from tests.native_capture_fixtures import assistant, pr_link
 
 def test_repeated_message_id_counts_once_first_seen_wins():
     data = "\n".join([assistant("m1", o=5), assistant("m1", o=5), assistant("m2", o=7)]).encode() + b"\n"
-    res = nc.parse_chunk(data, recent_ids=[])
+    res = nc.parse_chunk(data, known_ids=set())
     assert [r.message_id for r in res.records] == ["m1", "m2"]
     assert res.consumed == len(data)
 
 
-def test_dedup_across_chunk_boundary_via_recent_ids():
-    first = nc.parse_chunk((assistant("m1") + "\n").encode(), recent_ids=[])
-    second = nc.parse_chunk((assistant("m1") + "\n" + assistant("m2") + "\n").encode(), recent_ids=first.recent_ids)
-    assert [r.message_id for r in second.records] == ["m2"]
+def test_dedup_against_ids_known_from_earlier_chunks_at_any_distance():
+    known = {f"x{i}" for i in range(1000)}   # session-wide, not a sliding window
+    data = (assistant("x0") + "\n" + assistant("m2") + "\n").encode()
+    res = nc.parse_chunk(data, known_ids=known)
+    assert [r.message_id for r in res.records] == ["m2"]
+    assert known == {f"x{i}" for i in range(1000)}   # parse_chunk does not mutate its input
 
 
 def test_incomplete_trailing_line_is_left_unconsumed():
     complete = (assistant("m1") + "\n").encode()
     partial = b'{"type":"assistant","message":{"id":"m2"'
-    res = nc.parse_chunk(complete + partial, recent_ids=[])
+    res = nc.parse_chunk(complete + partial, known_ids=set())
     assert res.consumed == len(complete)
     assert len(res.records) == 1
 
 
 def test_synthetic_model_and_non_assistant_skipped():
     data = (assistant("m1", model="<synthetic>") + "\n" + pr_link(5) + "\n").encode()
-    res = nc.parse_chunk(data, recent_ids=[])
+    res = nc.parse_chunk(data, known_ids=set())
     assert res.records == []
     assert res.pr_links == [(5, "2026-11-24T10:05:00.000Z")]
 
@@ -385,7 +387,7 @@ def test_synthetic_model_and_non_assistant_skipped():
 def test_format_drift_fails_loudly():
     bad = '{"type":"assistant","timestamp":"2026-11-24T10:00:00Z","message":{"id":"m1","model":"x","usage":{"tokens":5}}}\n'
     try:
-        nc.parse_chunk(bad.encode(), recent_ids=[])
+        nc.parse_chunk(bad.encode(), known_ids=set())
         raised = False
     except nc.TranscriptFormatError:
         raised = True
@@ -396,7 +398,7 @@ def test_buckets_split_by_model_and_utc_day():
     lines = [assistant("m1", ts="2026-11-24T23:59:00.000Z"),
              assistant("m2", ts="2026-11-25T00:01:00.000Z"),
              assistant("m3", model="claude-opus-4-8", ts="2026-11-25T00:02:00.000Z")]
-    res = nc.parse_chunk(("\n".join(lines) + "\n").encode(), recent_ids=[])
+    res = nc.parse_chunk(("\n".join(lines) + "\n").encode(), known_ids=set())
     b = nc.bucketize(res.records)
     assert set(b) == {("claude-sonnet-5-5", "2026-11-24"), ("claude-sonnet-5-5", "2026-11-25"), ("claude-opus-4-8", "2026-11-25")}
     assert b[("claude-sonnet-5-5", "2026-11-24")].output_tokens == 20
@@ -406,12 +408,12 @@ def test_buckets_split_by_model_and_utc_day():
 
 - [ ] **Step 4: Implement the parser**
 
+De-duplication is session-wide: the caller passes every message id already counted for the session (`known_ids`), so a repeat is dropped at any distance, not only within a sliding window.
+
 ```python
 """Native-session transcript capture: reader, de-dup, bucketing, ledger upsert."""
 import json
 from dataclasses import dataclass, field
-
-RECENT_ID_WINDOW = 16
 
 
 class TranscriptFormatError(Exception):
@@ -443,15 +445,14 @@ class ParseResult:
     records: list
     pr_links: list
     consumed: int
-    recent_ids: list
 
 
 _USAGE_KEYS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
 
 
-def parse_chunk(data: bytes, recent_ids: list) -> ParseResult:
+def parse_chunk(data: bytes, known_ids: set) -> ParseResult:
     end = data.rfind(b"\n") + 1  # only complete lines
-    seen = list(recent_ids)
+    seen = set(known_ids)       # never mutate the caller's set
     records, pr_links = [], []
     for raw in data[:end].splitlines():
         if not raw.strip():
@@ -478,12 +479,11 @@ def parse_chunk(data: bytes, recent_ids: list) -> ParseResult:
             raise TranscriptFormatError("assistant record without message.id")
         if mid in seen:
             continue
-        seen.append(mid)
-        seen = seen[-RECENT_ID_WINDOW:]
+        seen.add(mid)
         ts = obj.get("timestamp") or ""
         records.append(Record(mid, model, ts[:10], usage["input_tokens"], usage["output_tokens"],
                               usage["cache_creation_input_tokens"], usage["cache_read_input_tokens"]))
-    return ParseResult(records, pr_links, end, seen)
+    return ParseResult(records, pr_links, end)
 
 
 def bucketize(records) -> dict:
@@ -502,13 +502,18 @@ def bucketize(records) -> dict:
 
 ---
 
-### Task 5: Ledger upsert, cursor, rescan and recovery
+### Task 5: Ledger upsert, cursor, rescan and bounded capture
 
 **Files:**
 - Modify: `synlynk/native_capture.py`
 - Test: `tests/test_native_capture_ledger.py`
 
-Behavior (spec 4.0): normal path reads from `byte_offset`, adds bucket deltas to the row, advances the cursor in one transaction. A **rescan** (full read from byte 0) recomputes totals and *replaces* the rows for the session. Rescan triggers: no cursor but existing rows; file size below `byte_offset`; `final` capture (SessionEnd/sweep verification, replaces only if totals differ and logs the difference to the error log).
+Behavior (spec 4, 4.0, 8):
+- **Chunked and bounded.** `capture` reads the transcript in `CHUNK_BYTES` chunks. Each chunk is parsed, applied to the ledger and the cursor advanced in ONE transaction, so progress is persisted after every chunk. When `budget_s` is given and elapsed time exceeds it with bytes still unread, `capture` returns `complete=False` and leaves the remainder to the sweep. The Stop hook passes a small budget; the sweep and CLI pass none.
+- **Session-wide de-dup.** Every counted message id is kept in the bucket row's `turn_usage_json["messages"]`; `capture` loads them once per call as `known_ids`, so a repeat is dropped at any distance, immediately.
+- **Offset integrity.** The cursor stores an `anchor`: sha1 of the first 4096 bytes plus the last 4096 bytes before `byte_offset`. A mismatch means the file was rewritten (same size or larger) and triggers a rescan.
+- **Rescan triggers:** no cursor but existing rows; file smaller than `byte_offset`; anchor mismatch. A rescan deletes the session's `transcript_derived` rows and cursor in one transaction, then proceeds from byte 0 through the same chunk loop.
+- `final=True` (SessionEnd) only marks the cursor `final=1` when the capture completed. There is no separate verification pass, because de-dup is session-wide and exact.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -539,9 +544,13 @@ def rows(c):
     return c.execute("SELECT model, session_date, input_tokens, output_tokens, cache_read_tokens, estimate_basis, cost_source FROM cost_entries ORDER BY model, session_date").fetchall()
 
 
+def cursor(c):
+    return c.execute("SELECT byte_offset, final FROM native_capture_cursor WHERE session_id='s1'").fetchone()
+
+
 def test_capture_writes_one_row_per_bucket(conn, tmp_path):
     p = write(tmp_path / "s1.jsonl", [assistant("m1"), assistant("m1"), assistant("m2")])
-    nc.capture(conn, "s1", p)
+    assert nc.capture(conn, "s1", p)["complete"] is True
     r = rows(conn)
     assert len(r) == 1
     assert r[0][2:5] == (20, 40, 80)       # in, out, cache_read for m1+m2, de-duplicated
@@ -572,6 +581,16 @@ def test_incremental_append_adds_only_new_usage(conn, tmp_path):
     assert rows(conn)[0][2:5] == (20, 40, 80)
 
 
+def test_far_apart_repeat_is_dropped_immediately_on_incremental_append(conn, tmp_path):
+    ids = [f"x{i}" for i in range(40)]            # far beyond any small window
+    p = write(tmp_path / "s1.jsonl", [assistant(i) for i in ids])
+    nc.capture(conn, "s1", p)
+    with open(p, "a") as f:
+        f.write(assistant("x0") + "\n")            # repeat of a message counted 40 messages ago
+    nc.capture(conn, "s1", p)
+    assert rows(conn)[0][2] == 10 * 40             # no double count, no later correction needed
+
+
 def test_cursor_loss_triggers_rescan_not_double_count(conn, tmp_path):
     p = write(tmp_path / "s1.jsonl", [assistant("m1"), assistant("m2")])
     nc.capture(conn, "s1", p)
@@ -580,7 +599,7 @@ def test_cursor_loss_triggers_rescan_not_double_count(conn, tmp_path):
     assert rows(conn)[0][2:5] == (20, 40, 80)
 
 
-def test_shrunk_or_rewritten_transcript_triggers_rescan(conn, tmp_path):
+def test_shrunk_transcript_triggers_rescan(conn, tmp_path):
     p = write(tmp_path / "s1.jsonl", [assistant("m1"), assistant("m2"), assistant("m3")])
     nc.capture(conn, "s1", p)
     write(p, [assistant("m1")])
@@ -588,16 +607,57 @@ def test_shrunk_or_rewritten_transcript_triggers_rescan(conn, tmp_path):
     assert rows(conn)[0][2:5] == (10, 20, 40)
 
 
-def test_far_apart_repeat_is_corrected_by_final_verification(conn, tmp_path):
-    ids = [f"x{i}" for i in range(30)]
-    lines = [assistant(i) for i in ids] + [assistant("x0")]   # repeat beyond the 16-id window
-    p = write(tmp_path / "s1.jsonl", lines[:-1])
+def test_same_size_rewrite_triggers_rescan(conn, tmp_path):
+    p = write(tmp_path / "s1.jsonl", [assistant("m1", o=11), assistant("m2", o=22)])
     nc.capture(conn, "s1", p)
-    with open(p, "a") as f:
-        f.write(lines[-1] + "\n")
-    nc.capture(conn, "s1", p)             # incremental path over-counts the far repeat
-    nc.capture(conn, "s1", p, final=True) # verification rescans and corrects
-    assert rows(conn)[0][2] == 10 * 30
+    size = p.stat().st_size
+    write(p, [assistant("n1", o=33), assistant("n2", o=44)])      # same byte length, different content
+    assert p.stat().st_size == size
+    nc.capture(conn, "s1", p)
+    assert rows(conn)[0][3] == 33 + 44
+
+
+def test_larger_rewrite_triggers_rescan(conn, tmp_path):
+    p = write(tmp_path / "s1.jsonl", [assistant("m1", o=11)])
+    nc.capture(conn, "s1", p)
+    write(p, [assistant("n1", o=33), assistant("n2", o=44), assistant("n3", o=55)])
+    nc.capture(conn, "s1", p)
+    assert rows(conn)[0][3] == 33 + 44 + 55
+
+
+def test_budget_exhausted_saves_progress_and_defers_remainder(conn, tmp_path, monkeypatch):
+    monkeypatch.setattr(nc, "CHUNK_BYTES", 2048)                   # force many chunks
+    p = write(tmp_path / "s1.jsonl", [assistant(f"m{i}") for i in range(200)])
+    size = p.stat().st_size
+    first = nc.capture(conn, "s1", p, budget_s=0)                  # budget already spent after the first chunk
+    assert first["complete"] is False
+    off, final = cursor(conn)
+    assert 0 < off < size and final == 0                           # progress persisted, not marked final
+    partial = rows(conn)[0][2]
+    assert 0 < partial < 10 * 200
+    second = nc.capture(conn, "s1", p)                             # the sweep path: no budget
+    assert second["complete"] is True
+    assert rows(conn)[0][2] == 10 * 200                            # exact total, nothing lost or doubled
+    assert cursor(conn)[0] == size
+
+
+def test_final_marks_cursor_only_when_complete(conn, tmp_path, monkeypatch):
+    monkeypatch.setattr(nc, "CHUNK_BYTES", 2048)
+    p = write(tmp_path / "s1.jsonl", [assistant(f"m{i}") for i in range(200)])
+    nc.capture(conn, "s1", p, final=True, budget_s=0)
+    assert cursor(conn)[1] == 0
+    nc.capture(conn, "s1", p, final=True)
+    assert cursor(conn)[1] == 1
+
+
+def test_line_longer_than_a_chunk_still_makes_progress(conn, tmp_path, monkeypatch):
+    monkeypatch.setattr(nc, "CHUNK_BYTES", 256)
+    big = json.loads(assistant("m1"))
+    big["padding"] = "x" * 5000                                    # one line far larger than CHUNK_BYTES
+    p = tmp_path / "s1.jsonl"
+    p.write_text(json.dumps(big) + "\n" + assistant("m2") + "\n")
+    nc.capture(conn, "s1", p)
+    assert rows(conn)[0][2] == 20
 
 
 def test_missing_transcript_is_explicit_error_never_a_zero_row(conn, tmp_path):
@@ -632,11 +692,16 @@ def test_persisted_rows_and_error_log_contain_no_message_text(conn, tmp_path):
 Append to `synlynk/native_capture.py`:
 
 ```python
+import hashlib
 import os
 import sqlite3
+import time
 from pathlib import Path
 
 from synlynk import pricing
+
+CHUNK_BYTES = 1 << 20
+ANCHOR_BYTES = 4096
 
 
 class TranscriptMissingError(Exception):
@@ -650,12 +715,34 @@ def _session_row(conn, session_id):
     )
 
 
+def _anchor(path: Path, offset: int) -> str:
+    """sha1 of the first and last ANCHOR_BYTES before `offset`; detects a rewritten transcript."""
+    if offset <= 0:
+        return ""
+    h = hashlib.sha1()
+    with open(path, "rb") as f:
+        h.update(f.read(min(ANCHOR_BYTES, offset)))
+        f.seek(max(0, offset - ANCHOR_BYTES))
+        h.update(f.read(min(ANCHOR_BYTES, offset)))
+    return h.hexdigest()
+
+
+def _known_ids(conn, session_id) -> set:
+    ids: set = set()
+    for (blob,) in conn.execute(
+        "SELECT turn_usage_json FROM cost_entries WHERE cost_source='transcript_derived' AND session_id=?",
+        (session_id,),
+    ):
+        ids.update(json.loads(blob or "{}").get("messages", {}))
+    return ids
+
+
 def _row_cost(model, inp, out, cr, cc):
     cost = pricing.price_usd(model, inp, out, cr, cc)
     return cost, ("unpriced" if cost is None else "transcript_priced")
 
 
-def _apply_bucket(conn, session_id, model, day, b, *, replace: bool):
+def _apply_bucket(conn, session_id, model, day, b):
     existing = conn.execute(
         "SELECT id, input_tokens, output_tokens, cache_read_tokens, turn_usage_json FROM cost_entries "
         "WHERE cost_source='transcript_derived' AND session_id=? AND model=? AND substr(session_date,1,10)=?",
@@ -663,7 +750,7 @@ def _apply_bucket(conn, session_id, model, day, b, *, replace: bool):
     ).fetchone()
     inp, out, cr, cc = b.input_tokens, b.output_tokens, b.cache_read_tokens, b.cache_creation_tokens
     msgs = dict(b.messages)
-    if existing and not replace:
+    if existing:
         _id, e_in, e_out, e_cr, e_json = existing
         prev = json.loads(e_json or "{}")
         inp += e_in or 0
@@ -698,56 +785,79 @@ def _log_error(msg: str) -> None:
         pass
 
 
-def capture(conn, session_id: str, transcript, *, final: bool = False) -> dict:
+def capture(conn, session_id: str, transcript, *, final: bool = False, budget_s=None) -> dict:
     path = Path(transcript)
     if not path.exists():
         raise TranscriptMissingError(str(path))
+    started = time.monotonic()
     size = path.stat().st_size
     cur = conn.execute(
-        "SELECT byte_offset, recent_ids_json FROM native_capture_cursor WHERE session_id=?", (session_id,)
+        "SELECT byte_offset, anchor FROM native_capture_cursor WHERE session_id=?", (session_id,)
     ).fetchone()
     has_rows = conn.execute(
         "SELECT 1 FROM cost_entries WHERE cost_source='transcript_derived' AND session_id=? LIMIT 1", (session_id,)
     ).fetchone()
-    rescan = final or (cur is None and bool(has_rows)) or (cur is not None and size < cur[0])
-    offset, recent = (0, []) if (rescan or cur is None) else (cur[0], json.loads(cur[1]))
-    with open(path, "rb") as f:
-        f.seek(offset)
-        data = f.read()
-    res = parse_chunk(data, recent)
-    buckets = bucketize(res.records)
+    rescan = (cur is None and bool(has_rows)) or (
+        cur is not None and (size < cur[0] or _anchor(path, cur[0]) != cur[1])
+    )
+    if cur is not None and not rescan and size == cur[0]:
+        if final:
+            with conn:
+                conn.execute("UPDATE native_capture_cursor SET final=1 WHERE session_id=?", (session_id,))
+        return {"records": 0, "complete": True, "rescan": False}   # nothing new: no id load, no parse
+    offset = 0 if (rescan or cur is None) else cur[0]
     with conn:
         _session_row(conn, session_id)
         if rescan:
-            if final and has_rows:
-                old = conn.execute(
-                    "SELECT COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(cache_read_tokens),0) "
-                    "FROM cost_entries WHERE cost_source='transcript_derived' AND session_id=?", (session_id,)).fetchone()
-                new = (sum(b.input_tokens for b in buckets.values()), sum(b.output_tokens for b in buckets.values()),
-                       sum(b.cache_read_tokens for b in buckets.values()))
-                if tuple(old) != new:
-                    _log_error(f"verification mismatch session={session_id} old={tuple(old)} new={new}; rows replaced")
             conn.execute("DELETE FROM cost_entries WHERE cost_source='transcript_derived' AND session_id=?", (session_id,))
-        for (model, day), b in buckets.items():
-            _apply_bucket(conn, session_id, model, day, b, replace=rescan)
-        for pr, ts in res.pr_links:
+            conn.execute("DELETE FROM native_capture_cursor WHERE session_id=?", (session_id,))
+    known = _known_ids(conn, session_id)
+    total = 0
+    complete = False
+    while True:
+        n = CHUNK_BYTES
+        while True:                               # grow the read until it holds a complete line
+            with open(path, "rb") as f:
+                f.seek(offset)
+                data = f.read(n)
+            res = parse_chunk(data, known)
+            if res.consumed or len(data) < n:
+                break
+            n *= 2
+        if not data or res.consumed == 0:
+            complete = True                       # EOF, or only a partial trailing line remains
+            break
+        buckets = bucketize(res.records)
+        new_offset = offset + res.consumed
+        with conn:
+            for (model, day), b in buckets.items():
+                _apply_bucket(conn, session_id, model, day, b)
+            for pr, ts in res.pr_links:
+                conn.execute(
+                    "INSERT OR IGNORE INTO session_pr_links (session_id, pr_number, role, first_seen_ts, source) "
+                    "VALUES (?, ?, 'implementer', ?, 'pr-link')", (session_id, pr, ts))
             conn.execute(
-                "INSERT OR IGNORE INTO session_pr_links (session_id, pr_number, role, first_seen_ts, source) "
-                "VALUES (?, ?, 'implementer', ?, 'pr-link')", (session_id, pr, ts))
-        conn.execute(
-            "INSERT INTO native_capture_cursor (session_id, transcript_path, byte_offset, recent_ids_json, final, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, datetime('now')) ON CONFLICT(session_id) DO UPDATE SET transcript_path=excluded.transcript_path, "
-            "byte_offset=excluded.byte_offset, recent_ids_json=excluded.recent_ids_json, final=excluded.final, updated_at=excluded.updated_at",
-            (session_id, str(path), offset + res.consumed, json.dumps(res.recent_ids), 1 if final else 0),
-        )
-    return {"records": len(res.records), "buckets": len(buckets), "rescan": rescan}
+                "INSERT INTO native_capture_cursor (session_id, transcript_path, byte_offset, anchor, final, updated_at) "
+                "VALUES (?, ?, ?, ?, 0, datetime('now')) ON CONFLICT(session_id) DO UPDATE SET "
+                "transcript_path=excluded.transcript_path, byte_offset=excluded.byte_offset, "
+                "anchor=excluded.anchor, updated_at=excluded.updated_at",
+                (session_id, str(path), new_offset, _anchor(path, new_offset)))
+        known.update(r.message_id for r in res.records)
+        total += len(res.records)
+        offset = new_offset
+        if budget_s is not None and time.monotonic() - started > budget_s and offset < path.stat().st_size:
+            break                                 # progress is saved; the sweep finishes the rest
+    if complete and final:
+        with conn:
+            conn.execute("UPDATE native_capture_cursor SET final=1 WHERE session_id=?", (session_id,))
+    return {"records": total, "complete": complete, "rescan": rescan}
 ```
 
-Notes for the implementer: the incremental path must never be given `final=True` input for its delta accounting (rescan replaces). A rescan also re-derives `session_pr_links` (INSERT OR IGNORE keeps it idempotent).
+Notes for the implementer: every chunk commits atomically with its cursor, so an interruption at any point leaves ledger and cursor consistent and a later call resumes exactly where it stopped. A rescan re-derives `session_pr_links` through the same loop (`INSERT OR IGNORE` keeps it idempotent).
 
 - [ ] **Step 4: Run** — `pytest -q tests/test_native_capture_ledger.py` Expected: PASS. Fix any test whose expected token tuple differs only because of fixture defaults (i=10, o=20, cr=40 per message).
 
-- [ ] **Step 5: Commit** — `git add synlynk tests && git commit -m "feat(capture): idempotent upsert, cursor, rescan and verification"`.
+- [ ] **Step 5: Commit** — `git add synlynk tests && git commit -m "feat(capture): chunked, bounded, session-wide-deduped capture with rescan recovery"`.
 
 ---
 
@@ -834,7 +944,7 @@ def sweep(conn, projects_dir=None) -> dict:
             if cur and cur[1] and t.stat().st_size == cur[0]:
                 continue
             try:
-                capture(conn, sid, t, final=bool(cur and cur[1]) or False)
+                capture(conn, sid, t)
                 out["captured"] += 1
             except (TranscriptFormatError, TranscriptMissingError, sqlite3.Error) as exc:
                 out["errors"] += 1
@@ -922,7 +1032,7 @@ _GH_PR_RE = re.compile(r"\bgh\b[^|;&\n]*?\bpr\s+(review|merge|create|checks|view
 # role: review/merge by a reviewer session -> 'reviewer'; create -> 'implementer'
 ```
 
-Add `tool_pr_links: list` to `ParseResult`; `capture` inserts them with `source='tool-use'`. Role mapping: `review` → `reviewer`, `create` → `implementer`, everything else → `implementer` only if no reviewer link exists for that session/PR, else skip. Then:
+Add `tool_pr_links: list = field(default_factory=list)` to `ParseResult` (a defaulted field, so Task 4's constructor calls keep working); inside `capture`'s per-chunk transaction, insert each one into `session_pr_links` with `source='tool-use'` next to the existing `pr-link` inserts. Role mapping: `review` → `reviewer`, `create` → `implementer`, everything else → `implementer` only if no reviewer link exists for that session/PR, else skip. Then:
 
 ```python
 def link_session(conn, session_id, pr_number, *, role="implementer", source="manual"):
@@ -1012,6 +1122,7 @@ import io
 import json
 
 from synlynk import session_hooks as sh
+from tests.test_native_capture_ledger import conn  # noqa: F401
 
 
 def test_garbage_payload_exits_zero_and_logs(monkeypatch, tmp_path):
@@ -1039,17 +1150,52 @@ def test_handler_exception_never_propagates(monkeypatch, tmp_path):
     assert sh.run("claude", "Stop", io.StringIO(json.dumps({"session_id": "s1", "transcript_path": "/x"}))) == 0
 
 
-def test_stop_latency_under_budget_for_incremental_append(tmp_path, monkeypatch):
-    import sqlite3, time
+def test_hook_passes_a_time_budget_to_capture(monkeypatch):
+    seen = []
     from synlynk import native_capture as nc
-    from synlynk.migrations.m0041_native_session_capture import MIGRATION
+    monkeypatch.setattr(sh, "_get_conn", lambda: object())
+    monkeypatch.setattr(nc, "capture", lambda conn, sid, path, **kw: seen.append(kw) or {"complete": True})
+    sh.run("claude", "Stop", io.StringIO(json.dumps({"session_id": "s1", "transcript_path": "/x"})))
+    sh.run("claude", "SessionEnd", io.StringIO(json.dumps({"session_id": "s1", "transcript_path": "/x"})))
+    assert seen[0]["budget_s"] <= 0.2 and seen[0]["final"] is False
+    assert seen[1]["budget_s"] <= 8 and seen[1]["final"] is True       # below the 10 s hook timeout
+
+
+def test_stop_incremental_append_is_fast_on_a_realistic_large_transcript(conn, tmp_path):
+    """~50 MB transcript, ~2000 assistant messages (real sessions are mostly large tool-result lines)."""
+    import json as _json
+    import time
+    from synlynk import native_capture as nc
+    from tests.native_capture_fixtures import assistant
+    pad = _json.dumps({"type": "user", "message": {"content": "p" * 100_000}})
+    lines = []
+    for i in range(2000):
+        lines.append(assistant(f"m{i}"))
+        if i % 4 == 0:
+            lines.append(pad)
+    p = tmp_path / "s1.jsonl"
+    p.write_text("\n".join(lines) + "\n")
+    assert p.stat().st_size > 45_000_000
+    nc.capture(conn, "s1", p)
+    with open(p, "a") as fh:
+        fh.write("\n".join(assistant(f"n{i}") for i in range(10)) + "\n")
+    t0 = time.perf_counter()
+    nc.capture(conn, "s1", p, budget_s=0.15)
+    assert time.perf_counter() - t0 < 0.2
+
+
+def test_first_capture_of_a_large_pending_transcript_is_bounded_and_resumable(conn, tmp_path, monkeypatch):
+    from synlynk import native_capture as nc
     from tests.native_capture_fixtures import assistant, write
-    from tests.test_native_capture_ledger import conn  # noqa: F401
-    # build a ~50 MB transcript once, capture it, append 10 records, time the incremental capture
-    # (see Step 3 for the helper that builds the large file)
+    monkeypatch.setattr(nc, "CHUNK_BYTES", 4096)
+    p = write(tmp_path / "s1.jsonl", [assistant(f"m{i}") for i in range(500)])
+    first = nc.capture(conn, "s1", p, budget_s=0)          # Stop-hook behaviour when the budget is already spent
+    assert first["complete"] is False                    # remainder deferred to the sweep
+    assert conn.execute("SELECT byte_offset FROM native_capture_cursor").fetchone()[0] > 0   # progress persisted
+
 ```
 
-Complete the latency test as: create a transcript with `assistant(f"m{i}")` repeated until the file reaches 50 MB (write in a loop of 200k lines), run `nc.capture` once, append 10 new records, then assert `time.perf_counter()` around the second `nc.capture` is below 0.2 s. Mark it `@pytest.mark.slow` only if the repo already has such a marker (grep `pytest.ini`/`pyproject.toml`); otherwise leave unmarked and keep the file under 30 s to build.
+The `conn` fixture is imported at the top of `tests/test_session_hooks.py` with `from tests.test_native_capture_ledger import conn  # noqa: F401`, as the other native-capture test files do. The 200 ms assertion is the spec's Stop budget; if CI machines are too slow for it, keep the assertion and lower the padding, never raise the threshold. Do not mark the test `slow` unless the repo already defines that marker.
 
 - [ ] **Step 2: Run to verify failure.**
 
@@ -1073,11 +1219,21 @@ def _log(msg: str) -> None:
         pass
 
 
-def _cost_capture(payload: dict, final: bool) -> None:
+STOP_BUDGET_S = 0.15        # Stop must stay well under the 200 ms spec budget
+SESSION_END_BUDGET_S = 5.0  # below the 10 s hook timeout; leftover work is finished by the sweep
+
+
+def _get_conn():
     from synlynk import _get_db
+
+    return _get_db()
+
+
+def _cost_capture(payload: dict, final: bool) -> None:
     from synlynk import native_capture as nc
 
-    nc.capture(_get_db(), payload["session_id"], payload["transcript_path"], final=final)
+    nc.capture(_get_conn(), payload["session_id"], payload["transcript_path"], final=final,
+               budget_s=SESSION_END_BUDGET_S if final else STOP_BUDGET_S)
 
 
 _HANDLERS = {("claude", "Stop"): [("cost_capture", False)], ("claude", "SessionEnd"): [("cost_capture", True)]}
@@ -1116,6 +1272,7 @@ CLI: `synlynk hook claude <Stop|SessionEnd|...>` calls `session_hooks.run(agent,
 
 ```python
 from synlynk import session_hooks as sh
+from tests.test_native_capture_ledger import conn  # noqa: F401
 
 EXISTING = {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "bash /h/auto-checkpoint-docs.sh"}]}],
                       "PreCompact": [{"hooks": [{"type": "command", "command": "bash /h/x.sh"}]}]}, "theme": "dark"}
@@ -1346,6 +1503,6 @@ If the totals differ, do not edit the expected numbers: the truncation point is 
 
 **Known risks the implementer must check, not assume:** (1) the exact JSON field names `timestamp`, `message.id`, `message.usage` and `tool_use` content shape were verified on one session only; Task 4's drift test and Task 12's fixture are the safety net. (2) `cost_entries.session_id` has a foreign key to `sessions`; Task 5 inserts a `sessions` row first. (3) `SELECT *` views freeze columns (Task 1 note). (4) Tests that build bare `cost_entries` schemas will need the m0041 view (Task 2 Step 3). (5) `is_dispatch_slug` must be verified against real directory names (Task 6 Step 5).
 
-**Type consistency:** `capture(conn, session_id, transcript, *, final=False)` is the one entry point used by the CLI (Task 8), hook (Task 9), sweep (Task 6) and acceptance test (Task 12). `parse_chunk(data, recent_ids)` returns `ParseResult(records, pr_links, consumed, recent_ids)`; Task 7 adds `tool_pr_links` without renaming existing fields.
+**Type consistency:** `capture(conn, session_id, transcript, *, final=False, budget_s=None)` (returns `{records, complete, rescan}`) is the one entry point used by the CLI (Task 8), hook (Task 9), sweep (Task 6) and acceptance test (Task 12). `parse_chunk(data, known_ids)` returns `ParseResult(records, pr_links, consumed)`; Task 7 adds `tool_pr_links` without renaming existing fields.
 
 **Dispatch routing (interim default, measured per the capability policy):** Tasks 1-2, 4-6 and 11 are data/plumbing (Codex); Tasks 8-10 are CLI/hook plumbing (Codex or Grok); Task 12 and 13 are PM-verified. Review is cross-harness+model on every PR; Claude is the author of this plan and must not review work it directs line by line without a non-author reviewer.
