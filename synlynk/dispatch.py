@@ -1086,7 +1086,7 @@ def _infer_dispatch_defaults(
     if inferred_agent is None:
         inferred_agent = "codex"
 
-    if agent is None and inferred_agent:
+    if agent is None and inferred_agent and role is None and story_role is None:
         pool = []
         for name in [default_harness, *list(fallback_list), inferred_agent]:
             if name and name not in pool:
