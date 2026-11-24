@@ -324,12 +324,16 @@ def _fetch_github_intent_events(conn=None) -> list[dict]:
                     "text": f"{issue.get('title', '')}\n\n{issue.get('body', '')}".strip(),
                     "url": issue.get("url", ""),
                 })
-            comments_response = run_gh_as_role(
-                "tpm", ["issue", "view", str(number), "--json", "comments"], timeout=15,
-            )
-            if comments_response.returncode != 0:
+            try:
+                comments_response = run_gh_as_role(
+                    "tpm", ["issue", "view", str(number), "--json", "comments"], timeout=15,
+                )
+                if comments_response.returncode != 0:
+                    continue
+                comments_data = json.loads(comments_response.stdout or "{}").get("comments", [])
+            except Exception:
                 continue
-            for comment in json.loads(comments_response.stdout or "{}").get("comments", []):
+            for comment in comments_data:
                 events.append({
                     "id": f"comment:{comment.get('id') or comment.get('url')}",
                     "kind": "comment", "text": comment.get("body", ""),
