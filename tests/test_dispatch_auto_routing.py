@@ -143,3 +143,32 @@ def test_auto_consults_live_router_instead_of_static_fallback(tmp_path):
     # codex has the better (lower) score, must win over the hardcoded "agy" default.
     assert result == "codex"
 
+
+def test_auto_filters_harnesses_without_required_github_write_before_routing(monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    routed_pools = []
+
+    def capture_select(_router, eligible_harnesses, task_type, db_conn):
+        routed_pools.append(list(eligible_harnesses))
+        return eligible_harnesses[0]
+
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_eligible_harnesses_for_task_type",
+        lambda _task_type: ["muse", "codex", "grok"],
+    )
+    monkeypatch.setattr(dispatch_mod, "_preflight_local_silent", lambda: False)
+    monkeypatch.setattr("synlynk.routing.LiveQueryRouter.select", capture_select)
+
+    result = dispatch_mod._resolve_dispatch_agent(
+        "auto",
+        "gh_write",
+        MagicMock(),
+        task="create a pull request",
+        requires_gh_write=True,
+    )
+
+    assert result == "codex"
+    assert routed_pools == [["codex", "grok"]]
+
