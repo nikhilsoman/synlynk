@@ -24,6 +24,23 @@ SCORE_COST_DIVISOR = {
 _DEFAULT_SCORE_COST_DIVISOR = 50.0
 
 
+def _sample_count(conn: sqlite3.Connection, harness: str, task_type: str) -> int:
+    columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(capability_ratings)").fetchall()
+    }
+    source_filter = (
+        " AND (signal_source IS NULL OR signal_source != 'baseline_seed')"
+        if "signal_source" in columns
+        else ""
+    )
+    row = conn.execute(
+        "SELECT COUNT(*) FROM capability_ratings "
+        "WHERE agent=? AND discipline=?" + source_filter,
+        (harness, task_type),
+    ).fetchone()
+    return int(row[0]) if row else 0
+
+
 class LiveQueryRouter:
     """Selects one harness from an eligible set for a task type."""
 
@@ -34,7 +51,10 @@ class LiveQueryRouter:
             return eligible_harnesses[0]
 
         samples = {h: self._sample_count(db_conn, h, task_type) for h in eligible_harnesses}
-        below_floor = [h for h in eligible_harnesses if samples[h] < SAMPLE_SIZE_FLOOR]
+        below_floor = [
+            h for h in eligible_harnesses
+            if not is_calibrated(h, task_type, db_conn)
+        ]
         if below_floor:
             return self._round_robin(db_conn, task_type, below_floor)
 
@@ -46,11 +66,7 @@ class LiveQueryRouter:
         return scored[0][2]
 
     def _sample_count(self, conn: sqlite3.Connection, harness: str, task_type: str) -> int:
-        row = conn.execute(
-            "SELECT COUNT(*) FROM capability_ratings WHERE agent=? AND discipline=?",
-            (harness, task_type),
-        ).fetchone()
-        return row[0] if row else 0
+        return _sample_count(conn, harness, task_type)
 
     def _score(self, conn: sqlite3.Connection, harness: str, task_type: str) -> float:
         cycles = [
@@ -86,3 +102,8 @@ class LiveQueryRouter:
         )
         conn.commit()
         return picked
+
+
+def is_calibrated(harness: str, task_type: str, conn: sqlite3.Connection) -> bool:
+    """Return whether a harness has enough measured samples for one task cell."""
+    return _sample_count(conn, harness, task_type) >= SAMPLE_SIZE_FLOOR
