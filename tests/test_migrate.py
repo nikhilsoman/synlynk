@@ -7,6 +7,12 @@ import pytest
 import synlynk
 
 
+@pytest.fixture(autouse=True)
+def _interactive_migration_side_effects(monkeypatch):
+    """Run migration write-through tests outside dispatch-job suppression."""
+    monkeypatch.delenv("SYNLYNK_JOB_ID", raising=False)
+
+
 def test_migrate_db_creates_new_tables(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()
@@ -489,6 +495,27 @@ def test_import_todo_to_stories_preserves_slug_story_id(tmp_path, monkeypatch):
     assert row[0] == "story-jlgv-128"
     assert row[1] == "Single slug story"
     assert row[2] == "done"
+
+
+def test_import_todo_to_stories_persists_checkbox_tags(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    docs = tmp_path / "project-docs"
+    docs.mkdir()
+    (docs / "todo.md").write_text(
+        "- [ ] Tagged story [platform, urgent] <!-- id:story-tagged -->\n"
+    )
+
+    synlynk._migrate_import(str(docs))
+
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT title, org_domain_tags FROM stories WHERE story_id=?",
+        ("story-tagged",),
+    ).fetchone()
+    conn.close()
+    assert row[0] == "Tagged story"
+    assert json.loads(row[1]) == ["platform", "urgent"]
 
 
 def test_migrate_rolls_back_on_mid_operation_failure(tmp_path, monkeypatch):

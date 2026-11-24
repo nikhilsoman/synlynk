@@ -4500,8 +4500,20 @@ def _import_todo_to_stories(docs_dir: str = None, conn=None) -> int:
             status = checkbox_status.get(mark)
             if status is None:
                 continue
+            body_text = checkbox_match.group("body")
+            tag_values = []
+            for tag_match in re.findall(r"\[([^\]]+)\]", body_text):
+                tag_values.extend(
+                    tag.strip() for tag in tag_match.split(",") if tag.strip()
+                )
+            tag_values = _normalize_stack_tags(tag_values)
             id_match = re.search(r'<!--\s*id:\s*([^>\s]+)\s*-->', line)
             if id_match and id_match.group(1) in existing_ids:
+                if tag_values:
+                    conn.execute(
+                        "UPDATE stories SET org_domain_tags=? WHERE story_id=?",
+                        (json.dumps(tag_values), id_match.group(1)),
+                    )
                 continue
 
             title_match = re.match(
@@ -4522,8 +4534,9 @@ def _import_todo_to_stories(docs_dir: str = None, conn=None) -> int:
                 if _fetchone(conn.execute("SELECT 1 FROM stories WHERE title=?", (title,))):
                     continue
                 conn.execute(
-                    "INSERT INTO stories (story_id, title, status) VALUES (?, ?, ?)",
-                    (story_id, title, status),
+                    "INSERT INTO stories (story_id, title, status, org_domain_tags) "
+                    "VALUES (?, ?, ?, ?)",
+                    (story_id, title, status, json.dumps(tag_values)),
                 )
                 try:
                     from synlynk.governs_engine import associate_story
