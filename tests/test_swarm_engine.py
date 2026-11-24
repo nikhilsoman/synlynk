@@ -65,3 +65,40 @@ def test_swarm_batch_initialization_with_task_ids():
     assert len(batch.task_ids) == 2
     assert batch.status == "running"
 
+
+def test_swarm_lease_cli_parser():
+    """Verify that CLI parser recognizes 'swarm lease' arguments."""
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["swarm", "lease", "--epic", "epic-abc", "--driver", "hetzner", "--size", "large", "--relay"])
+    assert args.command == "swarm"
+    assert args.swarm_action == "lease"
+    assert args.epic == "epic-abc"
+    assert args.driver == "hetzner"
+    assert args.size == "large"
+    assert args.relay is True
+
+
+def test_cmd_swarm_lease_execution(monkeypatch):
+    """Verify cmd_swarm_lease provisions runner through RunnerManager."""
+    from argparse import Namespace
+    from synlynk.swarm import cmd_swarm_lease
+
+    class MockManager:
+        def provision(self, spec, driver):
+            assert spec["epic_id"] == "epic-999"
+            assert driver == "hetzner"
+            return "runner-hetzner-123"
+
+    monkeypatch.setattr("synlynk.swarm._manager", lambda: MockManager())
+    monkeypatch.setattr("synlynk.swarm._publish_progress", lambda r_id, p: None)
+
+    args = Namespace(epic="epic-999", driver="hetzner", size="auto", relay=False)
+    result = cmd_swarm_lease(args)
+    assert result["lease_id"] == "runner-hetzner-123"
+    assert result["epic_id"] == "epic-999"
+    assert result["driver"] == "hetzner"
+    assert result["status"] == "active"
+
+

@@ -1,0 +1,49 @@
+name: Hetzner Swarm Lease Orchestrator
+
+on:
+  workflow_dispatch:
+    inputs:
+      epic_id:
+        description: 'Governing epic or goal ID to execute'
+        required: true
+      size:
+        description: 'Vertical host size (auto, small, medium, large, arm_large)'
+        default: 'auto'
+        required: false
+      relay:
+        description: 'Dispatch through centralized Synlynk Relay'
+        type: boolean
+        default: false
+
+jobs:
+  execute-swarm:
+    name: Execute Swarm on Hetzner KVM Host
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Lease Hetzner Host & Execute Swarm
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          pip install -e .
+          RELAY_FLAG=""
+          if [ "${{ inputs.relay }}" = "true" ]; then
+            RELAY_FLAG="--relay"
+          fi
+          synlynk swarm lease \
+            --epic "${{ inputs.epic_id }}" \
+            --size "${{ inputs.size }}" \
+            --driver hetzner \
+            $RELAY_FLAG \
+            --watch

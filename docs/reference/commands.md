@@ -110,6 +110,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 ## Tier 2 — Execute
 
 - `swarm dispatch` (primary) — execute
+- `swarm lease` (primary) — execute
 - `swarm status` (secondary) — visualize
 - `swarm destroy` (secondary) — execute
 - `media generate` (secondary) — sustain

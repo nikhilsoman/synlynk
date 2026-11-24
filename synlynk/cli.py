@@ -1159,9 +1159,17 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     swarm_parser = subparsers.add_parser("swarm", help="Manage ephemeral swarm runners")
     swarm_sub = swarm_parser.add_subparsers(dest="swarm_action")
     swarm_dispatch = swarm_sub.add_parser("dispatch", help="Provision an ephemeral runner batch")
-    swarm_dispatch.add_argument("--driver", choices=("local", "fly"), default="local")
+    swarm_dispatch.add_argument("--driver", choices=("local", "fly", "hetzner"), default="local")
     swarm_dispatch.add_argument("--batch-size", type=int, default=1)
     swarm_dispatch.add_argument("--task", default="true")
+    swarm_lease = swarm_sub.add_parser("lease", help="Lease dedicated swarm host for an epic")
+    swarm_lease.add_argument("--epic", required=True, help="Governing epic or goal ID")
+    swarm_lease.add_argument("--driver", choices=("hetzner", "fly", "local"), default="hetzner")
+    swarm_lease.add_argument("--size", choices=("auto", "small", "medium", "large", "arm_large"), default="auto")
+    swarm_lease.add_argument("--nodes", type=int, default=1, help="Number of nodes for striped queue-drain")
+    swarm_lease.add_argument("--drain-on-empty", action="store_true", help="Auto-destruct node when queue is drained")
+    swarm_lease.add_argument("--relay", action="store_true", help="Dispatch through centralized Synlynk Relay")
+    swarm_lease.add_argument("--watch", action="store_true", help="Stream telemetry until lease completion")
     swarm_status = swarm_sub.add_parser("status", help="Show swarm runner status")
     swarm_status.add_argument("--all", action="store_true")
     swarm_destroy = swarm_sub.add_parser("destroy", help="Destroy swarm runners")
@@ -2876,9 +2884,11 @@ def _dispatch_command(argv=None) -> None:
         else:
             cmd_watch(args)
     elif args.command == "swarm":
-        from synlynk.swarm import cmd_swarm_destroy, cmd_swarm_dispatch, cmd_swarm_status
+        from synlynk.swarm import cmd_swarm_destroy, cmd_swarm_dispatch, cmd_swarm_status, cmd_swarm_lease
         if args.swarm_action == "dispatch":
             cmd_swarm_dispatch(args)
+        elif args.swarm_action == "lease":
+            cmd_swarm_lease(args)
         elif args.swarm_action == "status":
             cmd_swarm_status(args)
         elif args.swarm_action == "destroy":

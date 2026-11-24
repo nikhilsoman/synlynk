@@ -1,8 +1,8 @@
 # Hetzner Cloud Swarm Runner Driver & Vertical Milestone Host Orchestration — Design Spec
 
-**Status:** Draft, pending user review  
+**Status:** Approved by Nikhil on 2026-11-24  
 **Issue:** [gh:#5360](https://github.com/nikhilsoman/synlynk/issues/5360) (Follow-on to gh:#1326, gh:#1341; paired with Monetization Epic [gh:#5359](https://github.com/nikhilsoman/synlynk/issues/5359))  
-**Date:** 2026-11-18  
+**Date:** 2026-11-18 (Ratified & Extended 2026-11-24)  
 **Author:** AGY (`agy-2.x`)  
 **Domain:** `platform` · `backend`  
 **Governing Goal:** `arc-goal-01C3FA0F` (Theme 6: Hetzner Cloud Swarm Runner & Vertical Milestone Host Orchestration; corrected 2026-11-18 from a stale `goal-d5323df6` reference that was never created in `goals` — see gh:#5373)  
@@ -260,8 +260,11 @@ This payload is emitted onto the local event bus (`milestone_lease_completed`) a
 
 ### 8.1 Command Syntax
 ```bash
-# Lease a dedicated vertical host for an epic
+# Lease a dedicated vertical host for an epic (Direct BYOT mode)
 synlynk swarm lease --epic <epic_id> [--driver hetzner] [--size auto|small|medium|large]
+
+# Lease via Centralized Hosted Relay Dispatch
+synlynk swarm lease --epic <epic_id> --relay
 
 # Striped multi-node execution for massive epics
 synlynk swarm lease --epic <epic_id> --nodes 4 --drain-on-empty
@@ -272,6 +275,26 @@ synlynk swarm lease list
 # Manually tear down an active lease
 synlynk swarm lease destroy <lease_id> [--all]
 ```
+
+### 8.2 GitHub Actions & Collaborator Agent Integration
+Workspace agents and target products (`rxcc`, `vdowrx`, `hitchcock`) trigger Hetzner swarms via GitHub Actions:
+1. **Agent CLI Workflow Dispatch:**
+   `gh workflow run swarm-lease.yml --ref main -f epic_id="epic-c1829f" -f size="auto"`
+   - Runs under agent's GitHub App identity (`--as-agent <role>`).
+   - Centralizes `HCLOUD_TOKEN` in GitHub Secrets (`secrets.HCLOUD_TOKEN`).
+   - Completely decouples execution from developer laptop uptime.
+2. **Issue / Collaborator Assignment:**
+   - Issues assigned to `@synlynk-agent` trigger `.github/workflows/synlynk-agent.yml`.
+   - Thin GitHub Actions runner provisions the Hetzner KVM host, streams execution telemetry, verifies test passes, and opens a pull request.
+   - Non-author QA collaborator agent (`@synlynk-qa`) reviews and merges under Law 2.
+
+### 8.3 Remote Host Synergy with Standalone `packages/` Suite
+Because the standalone packages in `packages/` have zero dependencies on `synlynk`, the Hetzner host runs them directly:
+- `packages/worktree-lease` (`wtlease`): Manages local git worktrees concurrently on NVMe with OS-level `fcntl.flock`.
+- `packages/harness-spec` (`harness-spec`): Normalizes prompt flags (`-p` vs `-c`) across agent CLIs.
+- `packages/token-breaker` (`tbreak`): Provides in-flight PID and streaming token circuit breaking.
+- `packages/tokentrail` + `packages/tokenprice`: Parses transcripts and computes exact nominal/effective cost to emit into `milestone_lease_completed`.
+
 
 ---
 

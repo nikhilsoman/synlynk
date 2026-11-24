@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tokentrail"
+version = "0.1.0"
+description = "Universal agent CLI & gateway transcript extractor and token deduplication engine"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+authors = [
+    { name = "Synlynk Team", email = "noreply@antigravity.dev" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "tokenprice>=0.1.0"
+]
+
+[project.scripts]
+tokentrail = "tokentrail.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tokentrail"]

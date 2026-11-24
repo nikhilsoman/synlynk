@@ -963,14 +963,30 @@ def ensure_derived_roadmap_views(conn) -> None:
             cur = conn.execute("SELECT type FROM sqlite_master WHERE name = ?", (tbl,))
             row = cur.fetchone()
             if row and row[0] == "table":
-                if tbl == "roadmap_arcs":
+                if tbl in ("roadmap_arcs", "roadmap_phases"):
+                    # Preserve unlinked/standalone legacy arcs and phases before table drop
                     try:
+                        # 1. Update goals with legacy arc_version through phase_id
                         conn.execute("""
                             UPDATE goals
                             SET arc_version = (SELECT ra.version FROM roadmap_arcs ra JOIN roadmap_phases rp ON rp.arc_version = ra.version WHERE rp.id = goals.phase_id),
                                 phase_title = (SELECT rp.phase_title FROM roadmap_phases rp WHERE rp.id = goals.phase_id),
                                 placement_status = 'placed'
                             WHERE phase_id IS NOT NULL AND arc_version IS NULL
+                        """)
+                        # 2. Insert any standalone legacy arcs into goals to ensure zero data loss
+                        conn.execute("""
+                            INSERT OR IGNORE INTO goals (goal_id, outcome, criterion, kind, arc_version, placement_status, status)
+                            SELECT 'goal-legacy-arc-' || hex(randomblob(4)), COALESCE(title, version), 'Migrated legacy arc', 'feature', version, 'placed', status
+                            FROM roadmap_arcs ra
+                            WHERE NOT EXISTS (SELECT 1 FROM goals g WHERE g.arc_version = ra.version)
+                        """)
+                        # 3. Insert any standalone legacy phases into goals to ensure zero data loss
+                        conn.execute("""
+                            INSERT OR IGNORE INTO goals (goal_id, outcome, criterion, kind, arc_version, phase_title, placement_status, status)
+                            SELECT 'goal-legacy-phase-' || hex(randomblob(4)), phase_title, 'Migrated legacy phase', 'feature', arc_version, phase_title, 'placed', status
+                            FROM roadmap_phases rp
+                            WHERE NOT EXISTS (SELECT 1 FROM goals g WHERE g.arc_version = rp.arc_version AND g.phase_title = rp.phase_title)
                         """)
                     except Exception:
                         pass
