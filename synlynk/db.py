@@ -4307,14 +4307,32 @@ def _write_decision_record_md(decision_id: str) -> str:
     os.makedirs(decisions_dir, exist_ok=True)
 
     slug = re.sub(r'[^a-z0-9]+', '-', topic.lower())[:40].strip('-')
-    candidate = slug
-    suffix = 1
-    while any(
-        os.path.exists(os.path.join(decisions_dir, f"{date}-{candidate}{extension}"))
-        for extension in (".md", ".json")
-    ):
-        suffix += 1
-        candidate = f"{slug}-{suffix}"
+    candidate = None
+    for filename in os.listdir(decisions_dir):
+        if not filename.endswith(".json"):
+            continue
+        path = os.path.join(decisions_dir, filename)
+        try:
+            with open(path) as f:
+                existing_record = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if existing_record.get("decision_id") == decision_id:
+            stem = filename[:-len(".json")]
+            prefix = f"{date}-"
+            if stem.startswith(prefix):
+                candidate = stem[len(prefix):]
+                break
+
+    if candidate is None:
+        candidate = slug
+        suffix = 1
+        while any(
+            os.path.exists(os.path.join(decisions_dir, f"{date}-{candidate}{extension}"))
+            for extension in (".md", ".json")
+        ):
+            suffix += 1
+            candidate = f"{slug}-{suffix}"
     base = os.path.join(decisions_dir, f"{date}-{candidate}")
 
     record = {
