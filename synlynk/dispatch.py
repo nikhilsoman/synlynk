@@ -320,6 +320,50 @@ def _filter_review_collision_harnesses(
     return [harness for harness in eligible_harnesses if harness.strip().lower() not in excluded]
 
 
+def _filter_dispatch_harnesses(
+    harnesses: list[str],
+    *,
+    task: str = "",
+    task_type: Optional[str] = None,
+    requires: Optional[list] = None,
+    grants: Optional[list] = None,
+    revokes: Optional[list] = None,
+    requires_gh_write: bool = False,
+) -> list[str]:
+    """Remove candidates that cannot physically satisfy this dispatch.
+
+    Policy eligibility is a learned/routing pool, not a capability grant. Do
+    this static capability gate before the pool reaches ``LiveQueryRouter`` so
+    an incapable harness cannot win round-robin selection and fail later.
+    """
+    from synlynk.capability_probe import (
+        CAP_GH_WRITE,
+        evaluate_harness_capabilities,
+        infer_task_required_capabilities,
+    )
+
+    required = infer_task_required_capabilities(
+        task=task,
+        task_type=task_type,
+        requires=requires,
+        requires_gh_write=requires_gh_write,
+    )
+    baselines_map = _pkg("HARNESS_CAPABILITY_BASELINES", HARNESS_CAPABILITY_BASELINES)
+    filtered = []
+    for harness in harnesses:
+        baseline = baselines_map.get(harness, {})
+        # GitHub-write capability is a hard baseline fact; grants may widen
+        # tool permissions but cannot make an unavailable harness available.
+        if CAP_GH_WRITE in required and not baseline.get("can_gh_write", False):
+            continue
+        evaluation = evaluate_harness_capabilities(
+            harness, required, grants=grants, revokes=revokes
+        )
+        if evaluation.allowed:
+            filtered.append(harness)
+    return filtered
+
+
 # Last auto-routing fallback, consumed by the CLI when it records the job.
 # Overwritten on the next fallback. Never changes the harness that was chosen.
 _pending_routing_fallback: Optional[dict] = None
@@ -407,6 +451,19 @@ def _resolve_dispatch_agent(
         db_conn=db,
         role=role,
     )
+    policy_eligible = list(eligible)
+    eligible = _filter_dispatch_harnesses(
+        eligible,
+        task=task,
+        task_type=task_type,
+        requires_gh_write=requires_gh_write,
+    )
+    if not eligible and policy_eligible:
+        from synlynk.capability_probe import NoCapableHarnessError
+
+        raise NoCapableHarnessError(
+            f"Dispatch failed: no eligible harness can satisfy task {task!r}"
+        )
     if len(eligible) > 1:
         from synlynk.routing import LiveQueryRouter
         fallback = LiveQueryRouter().select(eligible, task_type, db)
