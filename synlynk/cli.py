@@ -2109,6 +2109,10 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "sweep",
         help="Run a calibration sweep across agents/models to seed the capability baseline",
     )
+    regen_parser = capability_sub.add_parser(
+        "regen", help="Regenerate capability policy fields from canonical state.db"
+    )
+    regen_parser.add_argument("--dry-run", action="store_true", dest="dry_run")
     sweep_parser.add_argument(
         "--cost-cap",
         type=float,
@@ -3782,6 +3786,9 @@ def _dispatch_command(argv=None) -> None:
                 cost_cap_override=getattr(args, "cost_cap", None),
                 harness=getattr(args, "harness", None),
             )
+        elif args.capability_action == "regen":
+            from synlynk.capability_regen import cmd_capability_regen
+            cmd_capability_regen(dry_run=getattr(args, "dry_run", False))
         elif args.capability_action == "report":
 
             from synlynk.capability_report import cmd_capability_report
