@@ -41,6 +41,19 @@ def test_cost_log_parser_accepts_role_and_pr():
     assert args.model == "claude-sonnet-4-6"
 
 
+def test_cost_log_parser_accepts_task_type():
+    parser = cli_mod.build_parser()
+    args = parser.parse_args([
+        "cost", "log",
+        "--harness", "claude",
+        "--tokens-in", "10",
+        "--tokens-out", "5",
+        "--task-type", "review",
+    ])
+
+    assert args.task_type == "review"
+
+
 def test_dispatch_parser_accepts_issue_flag():
     from synlynk.cli import build_parser
 
