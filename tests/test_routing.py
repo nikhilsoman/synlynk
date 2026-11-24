@@ -2,14 +2,15 @@ import sqlite3
 
 import pytest
 
-from synlynk.routing import SAMPLE_SIZE_FLOOR, LiveQueryRouter
+from synlynk.routing import SAMPLE_SIZE_FLOOR, LiveQueryRouter, is_calibrated
 
 
 def _make_db():
     conn = sqlite3.connect(":memory:")
     conn.execute("""
         CREATE TABLE capability_ratings (
-            story_id TEXT, agent TEXT, discipline TEXT, pr_review_cycles REAL
+            story_id TEXT, agent TEXT, discipline TEXT, signal_source TEXT,
+            pr_review_cycles REAL
         )
     """)
     conn.execute("""
@@ -130,3 +131,34 @@ def test_round_robin_updates_cached_exploration_spend_from_cost_ledger():
         ("implement",),
     ).fetchone()
     assert row[0] == 1.25
+
+
+def test_calibration_ignores_baseline_seed_rows_per_harness_and_task_type():
+    conn = _make_db()
+    for i in range(SAMPLE_SIZE_FLOOR):
+        conn.execute(
+            "INSERT INTO capability_ratings "
+            "(story_id, agent, discipline, signal_source, pr_review_cycles) "
+            "VALUES (?, 'codex', 'implement', 'baseline_seed', ?)",
+            (f"seed-{i}", 1.0),
+        )
+    for i in range(SAMPLE_SIZE_FLOOR - 1):
+        conn.execute(
+            "INSERT INTO capability_ratings "
+            "(story_id, agent, discipline, signal_source, pr_review_cycles) "
+            "VALUES (?, 'codex', 'implement', 'auto', ?)",
+            (f"real-{i}", 1.0),
+        )
+    conn.commit()
+
+    assert is_calibrated("codex", "implement", conn) is False
+    assert LiveQueryRouter().select(["codex", "grok"], "implement", conn) == "codex"
+
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, discipline, signal_source, pr_review_cycles) "
+        "VALUES ('real-5', 'codex', 'implement', 'verifier', 1.0)"
+    )
+    conn.commit()
+
+    assert is_calibrated("codex", "implement", conn) is True
