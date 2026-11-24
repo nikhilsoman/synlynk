@@ -14,6 +14,7 @@ from statistics import median
 from typing import Optional
 
 SAMPLE_SIZE_FLOOR = 5
+EXPLORATION_SPEND_CAP_USD = 10.0
 SCORE_COST_DIVISOR = {
     "implement": 50.0,
     "test": 50.0,
@@ -24,17 +25,35 @@ SCORE_COST_DIVISOR = {
 _DEFAULT_SCORE_COST_DIVISOR = 50.0
 
 
+def _sample_count(conn: sqlite3.Connection, harness: str, task_type: str) -> int:
+    columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(capability_ratings)").fetchall()
+    }
+    source_filter = (
+        " AND (signal_source IS NULL OR signal_source != 'baseline_seed')"
+        if "signal_source" in columns
+        else ""
+    )
+    row = conn.execute(
+        "SELECT COUNT(*) FROM capability_ratings "
+        "WHERE agent=? AND discipline=?" + source_filter,
+        (harness, task_type),
+    ).fetchone()
+    return int(row[0]) if row else 0
+
+
 class LiveQueryRouter:
     """Selects one harness from an eligible set for a task type."""
 
     def select(self, eligible_harnesses: list[str], task_type: str, db_conn: sqlite3.Connection) -> str:
         if not eligible_harnesses:
             raise ValueError("eligible_harnesses must be non-empty")
-        if len(eligible_harnesses) == 1:
-            return eligible_harnesses[0]
 
         samples = {h: self._sample_count(db_conn, h, task_type) for h in eligible_harnesses}
-        below_floor = [h for h in eligible_harnesses if samples[h] < SAMPLE_SIZE_FLOOR]
+        below_floor = [
+            h for h in eligible_harnesses
+            if not is_calibrated(h, task_type, db_conn)
+        ]
         if below_floor:
             return self._round_robin(db_conn, task_type, below_floor)
 
@@ -46,11 +65,7 @@ class LiveQueryRouter:
         return scored[0][2]
 
     def _sample_count(self, conn: sqlite3.Connection, harness: str, task_type: str) -> int:
-        row = conn.execute(
-            "SELECT COUNT(*) FROM capability_ratings WHERE agent=? AND discipline=?",
-            (harness, task_type),
-        ).fetchone()
-        return row[0] if row else 0
+        return _sample_count(conn, harness, task_type)
 
     def _score(self, conn: sqlite3.Connection, harness: str, task_type: str) -> float:
         cycles = [
@@ -73,16 +88,51 @@ class LiveQueryRouter:
         return median_cycles + (median_cost / divisor)
 
     def _round_robin(self, conn: sqlite3.Connection, task_type: str, eligible_harnesses: list[str]) -> str:
+        eligible_harnesses = [
+            harness for harness in eligible_harnesses
+            if self._exploration_spend(conn, harness, task_type) < EXPLORATION_SPEND_CAP_USD
+        ]
+        if not eligible_harnesses:
+            raise ValueError(
+                f"exploration spend cap reached for every sub-floor harness in {task_type!r}"
+            )
         row = conn.execute(
             "SELECT cursor FROM routing_rotation_state WHERE task_type=?", (task_type,)
         ).fetchone()
         cursor = row[0] if row else 0
         picked = eligible_harnesses[cursor % len(eligible_harnesses)]
-        conn.execute(
-            "INSERT INTO routing_rotation_state (task_type, cursor, updated_at) "
-            "VALUES (?, ?, datetime('now')) "
-            "ON CONFLICT(task_type) DO UPDATE SET cursor=excluded.cursor, updated_at=excluded.updated_at",
-            (task_type, cursor + 1),
-        )
+        spend = self._exploration_spend(conn, picked, task_type)
+        state_cols = {row[1] for row in conn.execute("PRAGMA table_info(routing_rotation_state)")}
+        if "exploration_spend_usd" in state_cols:
+            conn.execute(
+                "INSERT INTO routing_rotation_state "
+                "(task_type, cursor, exploration_spend_usd, updated_at) "
+                "VALUES (?, ?, ?, datetime('now')) "
+                "ON CONFLICT(task_type) DO UPDATE SET cursor=excluded.cursor, "
+                "exploration_spend_usd=excluded.exploration_spend_usd, "
+                "updated_at=excluded.updated_at",
+                (task_type, cursor + 1, spend),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO routing_rotation_state (task_type, cursor, updated_at) "
+                "VALUES (?, ?, datetime('now')) "
+                "ON CONFLICT(task_type) DO UPDATE SET cursor=excluded.cursor, updated_at=excluded.updated_at",
+                (task_type, cursor + 1),
+            )
         conn.commit()
         return picked
+
+    @staticmethod
+    def _exploration_spend(conn: sqlite3.Connection, harness: str, task_type: str) -> float:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(total_cost_usd), 0) FROM cost_entries "
+            "WHERE agent=? AND type_id=? AND total_cost_usd IS NOT NULL",
+            (harness, task_type),
+        ).fetchone()
+        return float(row[0] or 0.0) if row else 0.0
+
+
+def is_calibrated(harness: str, task_type: str, conn: sqlite3.Connection) -> bool:
+    """Return whether a harness has enough measured samples for one task cell."""
+    return _sample_count(conn, harness, task_type) >= SAMPLE_SIZE_FLOOR
