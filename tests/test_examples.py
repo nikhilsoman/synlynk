@@ -1,4 +1,15 @@
-from synlynk.examples import active_items, greet
+from synlynk.examples import active_items, greet, shipping_cost
+
+
+def test_shipping_cost_applies_the_defined_base_rate_and_express_fee():
+    assert shipping_cost(weight_kg=3, express=True) == 21.0
+
+
+def test_shipping_cost_rejects_negative_weight():
+    import pytest
+
+    with pytest.raises(ValueError, match="non-negative"):
+        shipping_cost(weight_kg=-1)
 
 
 def test_greet_returns_a_friendly_message():
