@@ -20,6 +20,7 @@ _HARNESS_PATH_NAMES = ("claude", "agy", "codex", "grok", "gemini", "aider")
 
 def _detect_harnesses_on_path(names: tuple = None) -> list:
     """Return PATH-resolved harness metadata for known CLI agents."""
+    from concurrent.futures import ThreadPoolExecutor
     import shutil as _shutil
 
     candidates = []
@@ -29,9 +30,8 @@ def _detect_harnesses_on_path(names: tuple = None) -> list:
             continue
         candidates.append((name, cli_path))
 
-    harnesses = [None] * len(candidates)
-
-    def _probe(index: int, name: str, cli_path: str) -> None:
+    def _probe(candidate: tuple) -> dict:
+        name, cli_path = candidate
         version = "unknown"
         try:
             proc = subprocess.run(
@@ -45,26 +45,17 @@ def _detect_harnesses_on_path(names: tuple = None) -> list:
                 version = output[0]
         except (FileNotFoundError, subprocess.TimeoutExpired, OSError, TypeError, ValueError, AttributeError):
             pass
-        harnesses[index] = {
+        return {
             "name": name,
             "cli": name,
             "version": version,
             "path": cli_path,
         }
 
-    threads = []
-    for index, (name, cli_path) in enumerate(candidates):
-        thread = threading.Thread(
-            target=_probe,
-            args=(index, name, cli_path),
-            daemon=True,
-        )
-        thread.start()
-        threads.append(thread)
-    for thread in threads:
-        thread.join()
-
-    return harnesses
+    if not candidates:
+        return []
+    with ThreadPoolExecutor(max_workers=len(candidates)) as executor:
+        return list(executor.map(_probe, candidates))
 
 
 _SOURCE_SUFFIXES = {".py", ".js", ".ts", ".tsx", ".go", ".rs", ".java", ".rb", ".php"}
@@ -1545,28 +1536,19 @@ def run_workspace_scan(roots: list = None, workspace_name: str = None,
     else:
         topology = "single"
 
-    discovery = {"harnesses": [], "agents": []}
+    from concurrent.futures import ThreadPoolExecutor
 
-    def _discover_harnesses() -> None:
-        discovery["harnesses"] = _detect_harnesses_on_path()
-
-    def _discover_agents() -> None:
+    def _discover_agents() -> list:
         try:
-            discovery["agents"] = _pkg("discover_agents")()
+            return _pkg("discover_agents")()
         except Exception:
-            discovery["agents"] = []
+            return []
 
-    discovery_threads = [
-        threading.Thread(target=_discover_harnesses, daemon=True),
-        threading.Thread(target=_discover_agents, daemon=True),
-    ]
-    for thread in discovery_threads:
-        thread.start()
-    for thread in discovery_threads:
-        thread.join()
-
-    harnesses = discovery["harnesses"]
-    agents = discovery["agents"]
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        harness_future = executor.submit(_detect_harnesses_on_path)
+        agents_future = executor.submit(_discover_agents)
+        harnesses = harness_future.result()
+        agents = agents_future.result()
 
     skills = _pkg("scan_skills")()
     home_harness = _pkg("detect_home_harness")(harnesses)

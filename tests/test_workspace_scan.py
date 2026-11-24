@@ -1,10 +1,65 @@
 import os
 import sys
+import threading
 
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import synlynk
+
+
+def test_detect_harnesses_propagates_unexpected_probe_errors(monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda name: f"/bin/{name}")
+
+    def fail_probe(*args, **kwargs):
+        raise RuntimeError("probe exploded")
+
+    monkeypatch.setattr("synlynk.scan.subprocess.run", fail_probe)
+
+    with pytest.raises(RuntimeError, match="probe exploded"):
+        synlynk._detect_harnesses_on_path(("claude",))
+
+
+def test_discover_agents_overlaps_functional_probes(monkeypatch):
+    baselines = {
+        name: {
+            "cli": name,
+            "roles": [],
+            "strengths": [],
+            "non_interactive_flags": [],
+        }
+        for name in ("alpha", "beta")
+    }
+    barrier = threading.Barrier(2)
+
+    def synchronized_probe(cli):
+        try:
+            barrier.wait(timeout=0.5)
+        except threading.BrokenBarrierError:
+            return "serial"
+        return f"{cli}-1.0"
+
+    monkeypatch.setattr(synlynk, "HARNESS_CAPABILITY_BASELINES", baselines)
+    monkeypatch.setattr(synlynk, "AGENT_DISCOVERY_DEFAULTS", {})
+    monkeypatch.setattr(synlynk, "_check_agent_functional", synchronized_probe)
+
+    agents = synlynk.discover_agents(config={})
+
+    assert [agent["name"] for agent in agents] == ["alpha", "beta"]
+    assert [agent["version"] for agent in agents] == ["alpha-1.0", "beta-1.0"]
+
+
+def test_workspace_scan_propagates_unexpected_harness_discovery_errors(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        "synlynk.scan._detect_harnesses_on_path",
+        lambda: (_ for _ in ()).throw(RuntimeError("discovery exploded")),
+    )
+    monkeypatch.setattr(synlynk, "discover_agents", lambda config=None: [])
+
+    with pytest.raises(RuntimeError, match="discovery exploded"):
+        synlynk.run_workspace_scan(roots=[str(tmp_path)], deep=False)
 
 
 def test_write_workspace_config_creates_dir(tmp_path, monkeypatch):

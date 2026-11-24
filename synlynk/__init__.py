@@ -1903,14 +1903,20 @@ def discover_agents(config: dict = None) -> list:
     discovery_paths = {**AGENT_DISCOVERY_DEFAULTS}
     discovery_paths.update(config.get("agent_discovery_paths", {}))
 
-    found = []
+    from concurrent.futures import ThreadPoolExecutor
+
+    candidates = []
     for name, defaults in HARNESS_CAPABILITY_BASELINES.items():
         path = discovery_paths.get(name)
         if path and not os.path.exists(path):
             continue  # config dir not present — skip entirely
+        candidates.append((name, defaults, path))
+
+    def _probe_agent(candidate: tuple) -> dict:
+        name, defaults, path = candidate
         cli = defaults["cli"]
         version = _check_agent_functional(cli)
-        found.append({
+        return {
             "name": name,
             "cli": cli,
             "version": version,
@@ -1919,8 +1925,12 @@ def discover_agents(config: dict = None) -> list:
             "capabilities": defaults["strengths"],
             "non_interactive_flags": defaults["non_interactive_flags"],
             "discovery_path": path or "",
-        })
-    return found
+        }
+
+    if not candidates:
+        return []
+    with ThreadPoolExecutor(max_workers=len(candidates)) as executor:
+        return list(executor.map(_probe_agent, candidates))
 
 
 def probe_all_configured_harnesses(agents: list = None) -> dict:
