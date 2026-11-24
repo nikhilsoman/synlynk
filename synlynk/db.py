@@ -2815,7 +2815,7 @@ def _insert_cost_row(
                 ).fetchone()
                 if type_row and type_row[0]:
                     type_id = type_row[0]
-            except sqlite3.Error:
+            except Exception:
                 pass
         if type_id is None and story_id:
             try:
@@ -2825,7 +2825,7 @@ def _insert_cost_row(
                 ).fetchone()
                 if type_row and type_row[0]:
                     type_id = type_row[0]
-            except sqlite3.Error:
+            except Exception:
                 pass
 
         if epic_id is None and phase_id is None and story_id:
