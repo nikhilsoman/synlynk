@@ -21,6 +21,10 @@ def _coerce_scalar(raw: str):
         return True
     if raw in _FALSE_TOKENS:
         return False
+    if raw == "[]":
+        return []
+    if raw == "{}":
+        return {}
     if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ("'", '"'):
         return raw[1:-1]
     try:
