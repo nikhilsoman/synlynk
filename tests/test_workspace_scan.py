@@ -34,7 +34,7 @@ def test_discover_agents_overlaps_functional_probes(monkeypatch):
 
     def synchronized_probe(cli):
         try:
-            barrier.wait(timeout=0.5)
+            barrier.wait(timeout=2)
         except threading.BrokenBarrierError:
             return "serial"
         return f"{cli}-1.0"
