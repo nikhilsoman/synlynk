@@ -132,6 +132,67 @@ def test_load_taxonomy_missing_file_is_not_a_validation_error(tmp_path):
     result = load_taxonomy(repo_root=str(tmp_path))
     assert result["schema_valid"] is True
     assert result["validation_error"] is None
+
+
+def test_load_taxonomy_falls_back_on_non_list_cluster_keyword_value(tmp_path):
+    """DECIDE panel re-review 2026-11-24 (Codex, Tasks 1-2): shape validation,
+    not just schema_version, must gate every field -- a string where a list
+    is expected must fall back, not raise or silently misbehave downstream."""
+    taxonomy_path = tmp_path / ".synlynk" / "maintainer_taxonomy.json"
+    taxonomy_path.parent.mkdir(parents=True)
+    taxonomy_path.write_text(json.dumps({
+        "schema_version": 1,
+        "cluster_keywords": {"backend": "sqlite"},  # should be a list, not a str
+    }))
+
+    result = load_taxonomy(repo_root=str(tmp_path))
+    assert result["schema_valid"] is False
+    assert "cluster_keywords" in result["validation_error"]
+    assert result["cluster_keywords"] == _BUILTIN_CLUSTER_KEYWORDS_FOR_TEST
+
+
+def test_load_taxonomy_falls_back_on_missing_proximal_selection_key(tmp_path):
+    taxonomy_path = tmp_path / ".synlynk" / "maintainer_taxonomy.json"
+    taxonomy_path.parent.mkdir(parents=True)
+    taxonomy_path.write_text(json.dumps({
+        "schema_version": 1,
+        "proximal_selection": {"code_graph_weights": {"distance_1": 0.6}},  # missing other required keys
+    }))
+
+    result = load_taxonomy(repo_root=str(tmp_path))
+    assert result["schema_valid"] is False
+    assert "proximal_selection" in result["validation_error"]
+
+
+def test_load_taxonomy_falls_back_on_negative_proximal_selection_weight(tmp_path):
+    taxonomy_path = tmp_path / ".synlynk" / "maintainer_taxonomy.json"
+    taxonomy_path.parent.mkdir(parents=True)
+    taxonomy_path.write_text(json.dumps({
+        "schema_version": 1,
+        "proximal_selection": {
+            "code_graph_weights": {"distance_1": 0.6, "distance_2": 0.3},
+            "doc_graph_weights": {"shared_doc": 0.4, "shared_issue_or_pr": 0.3},
+            "keyword_weight": -0.1,  # negative weight is invalid
+            "join_threshold": 0.5,
+        },
+    }))
+
+    result = load_taxonomy(repo_root=str(tmp_path))
+    assert result["schema_valid"] is False
+    assert "keyword_weight" in result["validation_error"]
+```
+
+`_BUILTIN_CLUSTER_KEYWORDS_FOR_TEST` is a copy-paste of the module's `_BUILTIN_CLUSTER_KEYWORDS` dict, added at the top of `tests/test_maintainer_taxonomy.py` so the test file doesn't reach into the module's private constant:
+
+```python
+_BUILTIN_CLUSTER_KEYWORDS_FOR_TEST = {
+    "backend": ["sqlite", "database", "server", "api", "endpoint", "query"],
+    "frontend": ["css", "html", "ui", "vizor", "widget", "render"],
+    "cli": ["argparse", "subcommand", "cli.py", "command"],
+    "docs": ["readme", "docstring", "documentation", "spec"],
+    "sentinel": ["alert", "circuit breaker", "sentinel", "flatline"],
+    "testing": ["pytest", "fixture", "test_", "flaky"],
+}
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -179,6 +240,68 @@ _BUILTIN_PROXIMAL_SELECTION: Dict[str, Any] = {
 
 _SUPPORTED_TAXONOMY_SCHEMA_VERSIONS = {1}
 
+_REQUIRED_PROXIMAL_SELECTION_KEYS = {"code_graph_weights", "doc_graph_weights", "keyword_weight", "join_threshold"}
+
+
+def _validate_cluster_keywords_shape(value: Any) -> Optional[str]:
+    """DECIDE panel re-review 2026-11-24 (Codex): schema_version alone doesn't
+    catch a field holding the wrong shape. Every optional field gets its own
+    shape check so a malformed single field falls back the same way a
+    malformed whole file does, instead of raising deeper in cluster_keywords()
+    or being silently misused as the wrong type."""
+    if not isinstance(value, dict):
+        return "cluster_keywords must be an object"
+    for cluster, words in value.items():
+        if not isinstance(cluster, str):
+            return "cluster_keywords keys must be strings"
+        if not isinstance(words, list) or not all(isinstance(w, str) and w for w in words):
+            return f"cluster_keywords[{cluster!r}] must be a list of non-empty strings"
+    return None
+
+
+def _validate_remediation_topics_shape(value: Any) -> Optional[str]:
+    if not isinstance(value, list) or not all(isinstance(t, str) and t for t in value):
+        return "remediation_topics must be a list of non-empty strings"
+    return None
+
+
+def _validate_doc_type_extensions_shape(value: Any) -> Optional[str]:
+    if not isinstance(value, dict):
+        return "doc_type_extensions must be an object"
+    for doc_type, substrings in value.items():
+        if not isinstance(doc_type, str):
+            return "doc_type_extensions keys must be strings"
+        if not isinstance(substrings, list) or not all(isinstance(s, str) and s for s in substrings):
+            return f"doc_type_extensions[{doc_type!r}] must be a list of non-empty strings"
+    return None
+
+
+def _validate_weight(value: Any, label: str) -> Optional[str]:
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or value < 0:
+        return f"{label} must be a non-negative number"
+    return None
+
+
+def _validate_proximal_selection_shape(value: Any) -> Optional[str]:
+    if not isinstance(value, dict):
+        return "proximal_selection must be an object"
+    missing = _REQUIRED_PROXIMAL_SELECTION_KEYS - value.keys()
+    if missing:
+        return f"proximal_selection missing required key(s): {sorted(missing)}"
+    for group_key in ("code_graph_weights", "doc_graph_weights"):
+        group = value[group_key]
+        if not isinstance(group, dict) or not group:
+            return f"proximal_selection.{group_key} must be a non-empty object"
+        for sub_key, weight in group.items():
+            error = _validate_weight(weight, f"proximal_selection.{group_key}.{sub_key}")
+            if error:
+                return error
+    for scalar_key in ("keyword_weight", "join_threshold"):
+        error = _validate_weight(value[scalar_key], f"proximal_selection.{scalar_key}")
+        if error:
+            return error
+    return None
+
 
 def _taxonomy_path(repo_root: str) -> str:
     return os.path.join(repo_root, ".synlynk", "maintainer_taxonomy.json")
@@ -205,6 +328,21 @@ def _load_taxonomy_file_raw(repo_root: str) -> Tuple[dict, Optional[str]]:
     schema_version = data.get("schema_version")
     if schema_version not in _SUPPORTED_TAXONOMY_SCHEMA_VERSIONS:
         return {}, f"unsupported schema_version {schema_version!r} in {path} (supported: {sorted(_SUPPORTED_TAXONOMY_SCHEMA_VERSIONS)})"
+
+    # DECIDE panel re-review 2026-11-24 (Codex): validate each optional
+    # field's shape, not just the top-level schema_version.
+    if "cluster_keywords" in data:
+        shape_error = _validate_cluster_keywords_shape(data["cluster_keywords"])
+        if shape_error:
+            return {}, f"{path}: {shape_error}"
+    if "remediation_topics" in data:
+        shape_error = _validate_remediation_topics_shape(data["remediation_topics"])
+        if shape_error:
+            return {}, f"{path}: {shape_error}"
+    if "proximal_selection" in data:
+        shape_error = _validate_proximal_selection_shape(data["proximal_selection"])
+        if shape_error:
+            return {}, f"{path}: {shape_error}"
 
     return data, None
 
@@ -278,7 +416,7 @@ def remediation_topics(repo_root: str = ".") -> Tuple[str, ...]:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_maintainer_taxonomy.py -v`
-Expected: PASS (7 passed)
+Expected: PASS (10 passed)
 
 - [ ] **Step 5: Commit**
 
@@ -286,7 +424,7 @@ Expected: PASS (7 passed)
 git add synlynk/maintainer_taxonomy.py .synlynk/maintainer_taxonomy.json tests/test_maintainer_taxonomy.py
 git commit -m "feat(maintainer): externalize cluster/remediation vocabulary into per-workspace config
 
-Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -361,6 +499,36 @@ def test_doc_type_extensions_reads_domain_pack(tmp_path):
         "doc_type_extensions": {"shot_list": ["shotlist", "shot-list"]},
     }))
     assert doc_type_extensions(repo_root=str(tmp_path)) == {"shot_list": ["shotlist", "shot-list"]}
+
+
+def test_load_domain_pack_falls_back_on_invalid_doc_type_extensions_shape(tmp_path):
+    """DECIDE panel re-review 2026-11-24 (Codex, Tasks 1-2): the domain pack
+    needs the same per-field shape validation as the taxonomy file, not just
+    a schema_version check."""
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "domain_pack.json").write_text(json.dumps({
+        "schema_version": 1,
+        "pack_name": "test-pack",
+        "doc_type_extensions": {"shot_list": "shotlist"},  # should be a list, not a str
+    }))
+
+    assert load_domain_pack(repo_root=str(tmp_path)) is None
+    result = load_taxonomy(repo_root=str(tmp_path))
+    assert result["schema_valid"] is False
+    assert "doc_type_extensions" in result["validation_error"]
+
+
+def test_load_domain_pack_falls_back_on_invalid_cluster_keywords_shape(tmp_path):
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "domain_pack.json").write_text(json.dumps({
+        "schema_version": 1,
+        "pack_name": "test-pack",
+        "cluster_keywords": {"ops": [1, 2]},  # list entries must be strings
+    }))
+
+    assert load_domain_pack(repo_root=str(tmp_path)) is None
 ```
 
 Append to `tests/test_docgraph.py`:
@@ -417,6 +585,21 @@ def _load_domain_pack_raw(repo_root: str) -> Tuple[Optional[dict], Optional[str]
     schema_version = data.get("schema_version")
     if schema_version not in _SUPPORTED_TAXONOMY_SCHEMA_VERSIONS:
         return None, f"unsupported schema_version {schema_version!r} in domain_pack.json (supported: {sorted(_SUPPORTED_TAXONOMY_SCHEMA_VERSIONS)})"
+
+    # DECIDE panel re-review 2026-11-24 (Codex): same per-field shape
+    # validation as the taxonomy file (Task 1), reusing its validators.
+    if "cluster_keywords" in data:
+        shape_error = _validate_cluster_keywords_shape(data["cluster_keywords"])
+        if shape_error:
+            return None, f"domain_pack.json: {shape_error}"
+    if "remediation_topics" in data:
+        shape_error = _validate_remediation_topics_shape(data["remediation_topics"])
+        if shape_error:
+            return None, f"domain_pack.json: {shape_error}"
+    if "doc_type_extensions" in data:
+        shape_error = _validate_doc_type_extensions_shape(data["doc_type_extensions"])
+        if shape_error:
+            return None, f"domain_pack.json: {shape_error}"
 
     return data, None
 
@@ -564,7 +747,7 @@ Expected: PASS (all tests green)
 git add synlynk/maintainer_taxonomy.py synlynk/docgraph.py .synlynk/domain_pack.json tests/test_maintainer_taxonomy.py tests/test_docgraph.py
 git commit -m "feat(maintainer): domain pack extension point for taxonomy and doc-type classification
 
-Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -688,7 +871,7 @@ Expected: PASS (all existing + 2 new tests green — confirms the taxonomy swap 
 git add synlynk/maintainer.py tests/test_maintainer.py
 git commit -m "refactor(maintainer): cluster_open_issues and is_issue_remediated read taxonomy from config
 
-Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -964,7 +1147,7 @@ Expected: PASS (8 passed)
 git add synlynk/maintainer_registry.py tests/test_maintainer_registry.py
 git commit -m "feat(maintainer): role-aware action registry with typed FieldSpec
 
-Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -972,6 +1155,8 @@ Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
 ### Task 5: Evidence-weighted proximal selection (spec §5.6, REVISED per DECIDE panel 2026-11-24 defect #3 — HELD until this task's own review passes; do not dispatch Task 13/14 before this one merges)
 
 **Why revised:** the original task matched the old spec's "first-match-wins, three-tier" description and only read `reverse_code_index`, silently dropping `reverse_doc_index` and any issues/PRs evidence. The panel (Codex) found this gap directly. The new model collects weighted `Evidence` across all tiers, sums per candidate proposal, and resolves deterministically against a configurable threshold — see spec §5.6 and the `proximal_selection` config block in spec §6.
+
+**Why revised again (DECIDE panel re-review 2026-11-24, defect #3, still open after the first revision):** `_code_graph_distance` called a `read_traversal_cache()` helper that was never implemented anywhere in the codebase — `graph_cache.py` only exposes `write_traversal_cache()`/`lookup_traversal()`/`god_neighborhood_ids()`, none of which return a file adjacency map. It now reads `.synlynk/graphify-out/graph.json` directly (the same file `write_traversal_cache()` itself reads) and derives file adjacency from the raw node/edge lists. The panel also flagged that every prior test monkeypatched `_collect_evidence`, so no test proved the real tier-resolution logic against actual graph/docgraph data — Step 1 below now adds two fixture-based tests exercising the unmocked `_collect_evidence` against a real `graph.json` and a real `docgraph.json`.
 
 **Files:**
 - Modify: `synlynk/maintainer.py` (add `Evidence`, `_collect_evidence`, `select_proposal_target`)
@@ -1048,11 +1233,59 @@ def test_select_proposal_target_degrades_gracefully_on_non_code_dominant_workspa
     target, tier_provenance = select_proposal_target(candidate, open_proposals, repo_root=str(tmp_path))
     assert target is None
     assert tier_provenance == []
+
+
+def test_collect_evidence_resolves_code_graph_tier_from_real_graph_json(tmp_path):
+    """DECIDE panel re-review 2026-11-24 (Codex): proves the unmocked
+    _collect_evidence actually resolves a code_graph Evidence record against
+    a real .synlynk/graphify-out/graph.json, not a monkeypatched stand-in."""
+    from synlynk.maintainer import _collect_evidence
+
+    graphify_dir = tmp_path / ".synlynk" / "graphify-out"
+    graphify_dir.mkdir(parents=True)
+    (graphify_dir / "graph.json").write_text(json.dumps({
+        "nodes": [
+            {"id": "n1", "file": "synlynk/a.py"},
+            {"id": "n2", "file": "synlynk/b.py"},
+        ],
+        "edges": [{"source": "n1", "target": "n2"}],
+    }))
+
+    candidate = {"touched_files": ["synlynk/a.py"]}
+    proposal = {"touched_files": ["synlynk/b.py"]}
+
+    evidence = _collect_evidence(candidate, proposal, repo_root=str(tmp_path))
+    code_graph_evidence = [e for e in evidence if e.tier == "code_graph"]
+    assert len(code_graph_evidence) == 1
+    assert code_graph_evidence[0].weight == 0.6  # proximal_selection default distance_1 weight
+
+
+def test_collect_evidence_resolves_doc_graph_tier_from_real_docgraph_json(tmp_path):
+    """Same proof as above, for the doc_graph tier against a real
+    .synlynk/docgraph.json (reverse_code_index), not a mocked DocGraph."""
+    from synlynk.docgraph import DocGraph
+    from synlynk.maintainer import _collect_evidence
+
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    docgraph = DocGraph(reverse_code_index={
+        "synlynk/a.py": ["docs/superpowers/specs/shared-spec.md"],
+        "synlynk/b.py": ["docs/superpowers/specs/shared-spec.md"],
+    })
+    (synlynk_dir / "docgraph.json").write_text(json.dumps(docgraph.to_dict()))
+
+    candidate = {"touched_files": ["synlynk/a.py"]}
+    proposal = {"touched_files": ["synlynk/b.py"]}
+
+    evidence = _collect_evidence(candidate, proposal, repo_root=str(tmp_path))
+    doc_graph_evidence = [e for e in evidence if e.tier == "doc_graph"]
+    assert len(doc_graph_evidence) == 1
+    assert doc_graph_evidence[0].weight == 0.4  # proximal_selection default shared_doc weight
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `pytest tests/test_maintainer.py -v -k select_proposal_target`
+Run: `pytest tests/test_maintainer.py -v -k "select_proposal_target or collect_evidence"`
 Expected: FAIL with `ImportError: cannot import name 'Evidence'`
 
 - [ ] **Step 3: Implement**
@@ -1072,25 +1305,50 @@ class Evidence:
 
 
 def _code_graph_distance(file_a: str, file_b: str, repo_root: str = ".") -> Optional[int]:
-    """Graph distance between two source files via the code graph, or None
-    if either file has no graph node (e.g. non-source file, or the graph
-    hasn't been built for this HEAD)."""
-    try:
-        from synlynk.graph_cache import read_traversal_cache
-    except Exception:
+    """File-level graph distance (1 = a direct edge connects some node in
+    file_a to some node in file_b; 2 = one hop apart via a shared neighbor
+    file), or None if either file has no graph node.
+
+    DECIDE panel re-review 2026-11-24 (Codex): the original draft called a
+    `read_traversal_cache()` helper that does not exist. graph_cache.py's
+    cache (`.synlynk/graph-cache/traversals.json`, built by
+    `write_traversal_cache()`) stores keyword-ranked path chains for context
+    packing, not a file adjacency map -- the wrong data source for distance
+    lookups. This reads `.synlynk/graphify-out/graph.json` directly instead,
+    the same source `write_traversal_cache()` itself reads, and derives
+    file-to-file adjacency from its node/edge lists on the fly."""
+    import json
+    import os
+
+    if file_a == file_b:
+        return 0
+    graph_path = os.path.join(repo_root, ".synlynk", "graphify-out", "graph.json")
+    if not os.path.exists(graph_path):
         return None
     try:
-        cache = read_traversal_cache(repo_root)
-    except Exception:
+        with open(graph_path, "r", encoding="utf-8") as f:
+            graph = json.load(f)
+    except (json.JSONDecodeError, OSError):
         return None
-    if not cache:
+
+    nodes = [n for n in (graph.get("nodes") or []) if isinstance(n, dict) and n.get("id")]
+    edges = [e for e in (graph.get("edges") or graph.get("links") or []) if isinstance(e, dict)]
+    node_file = {str(n["id"]): n.get("file") for n in nodes}
+
+    file_adjacency: dict = {}
+    for edge in edges:
+        source_file = node_file.get(str(edge.get("source") or ""))
+        target_file = node_file.get(str(edge.get("target") or ""))
+        if not source_file or not target_file or source_file == target_file:
+            continue
+        file_adjacency.setdefault(source_file, set()).add(target_file)
+        file_adjacency.setdefault(target_file, set()).add(source_file)
+
+    if file_a not in file_adjacency or file_b not in file_adjacency:
         return None
-    adjacency = cache.get("adjacency") or {}
-    if file_a not in adjacency or file_b not in adjacency:
-        return None
-    if file_b in adjacency.get(file_a, []):
+    if file_b in file_adjacency[file_a]:
         return 1
-    if any(file_b in adjacency.get(mid, []) for mid in adjacency.get(file_a, [])):
+    if any(file_b in file_adjacency.get(mid, set()) for mid in file_adjacency[file_a]):
         return 2
     return None
 
@@ -1203,8 +1461,8 @@ def select_proposal_target(
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `pytest tests/test_maintainer.py -v -k select_proposal_target`
-Expected: PASS (4 passed)
+Run: `pytest tests/test_maintainer.py -v -k "select_proposal_target or collect_evidence"`
+Expected: PASS (6 passed)
 
 - [ ] **Step 5: Commit**
 
@@ -1212,12 +1470,14 @@ Expected: PASS (4 passed)
 git add synlynk/maintainer.py tests/test_maintainer.py
 git commit -m "feat(maintainer): evidence-weighted proximal selection with tier provenance
 
-Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 6: `run_maintainer_wake_cycle()` (spec §5.1, §5.3)
+### Task 6: `run_maintainer_wake_cycle()` (spec §5.1, §5.3, REVISED per DECIDE panel 2026-11-24 defect #2 — HELD until this task's own review passes; do not dispatch Task 13/14 before this one merges)
+
+**Why revised:** the first draft's promotion boundary wrote its audit-log entry *after* `action.run_fn` ran (so a crash mid-promotion left no audit trace of the attempt), capped `_MAX_PROMOTIONS_PER_CYCLE` per *action* rather than per external write (one action can emit many external writes via multiple stories), had no dedupe against already-open GitHub issues (only a same-cycle audit-log check, which does nothing across cycles), no rate limit, and `_ensure_github_issue_for_story` left dry-run stories with no `github_issue` key at all — contradicting the stories' own contract (every other story in the plan sets `github_issue` to an int or `None`, never omits the key). This revision: (1) moves the audit-log write to immediately before each external write, as an append-only JSONL so a crash mid-write still leaves a trace; (2) counts the cap per external write (per `_ensure_github_issue_for_story` call that would actually create an issue), not per action; (3) adds finding-signature dedupe against both the audit log and currently-open GitHub issues; (4) adds a simple per-cycle rate limit distinct from the cap; (5) gives every dry-run story an explicit `github_issue: None` placeholder.
 
 **Files:**
 - Modify: `synlynk/maintainer.py` (add `_ensure_github_issue_for_story`, `run_maintainer_wake_cycle`, register the 3 actions at module import time; add `_persist_maintainer_proposals`/`load_maintainer_proposals` and bring `_run_backlog_burndown_action`/`_run_mesh_sweep_action` up to the same `proposals: [...]` shape `_run_sentinel_triage_action` already has — DECIDE panel defect #4 follow-up, 2026-11-24: Proposal Studio (Task 14) and the Role Operations Panel (Task 13) both need a real persistence point for a wake cycle's findings, which did not exist until now)
@@ -1278,7 +1538,11 @@ def test_run_maintainer_wake_cycle_skips_disabled_actions(tmp_path, monkeypatch)
 
 def test_run_maintainer_wake_cycle_critical_finding_bypasses_cluster_minimum(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / ".synlynk").mkdir()
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "config.json").write_text(json.dumps({
+        "maintainer_autonomy": {"sentinel_triage": {"mode": "promote"}}
+    }))
 
     critical_group = {
         "fingerprint": "CRITICAL:SEV1_FAULT",
@@ -1295,7 +1559,7 @@ def test_run_maintainer_wake_cycle_critical_finding_bypasses_cluster_minimum(tmp
     monkeypatch.setattr("synlynk.maintainer.cmd_maintainer_sweep", lambda **kwargs: 0)
     monkeypatch.setattr(
         "synlynk.maintainer._ensure_github_issue_for_story",
-        lambda story, repo_root=".": 999,
+        lambda story, repo_root=".", cycle_id="": 999,
     )
 
     result = run_maintainer_wake_cycle(repo_root=str(tmp_path))
@@ -1357,22 +1621,148 @@ def test_ensure_github_issue_for_story_stages_without_host_fallback_when_no_qa_t
 
     (tmp_path / ".synlynk").mkdir()
     result = _ensure_github_issue_for_story({"title": "finding"}, repo_root=str(tmp_path))
-    assert result == 0
+    assert result is None
 
 
-def test_run_maintainer_wake_cycle_caps_promotions_per_cycle(tmp_path, monkeypatch):
+def _fake_qa_token(tmp_path):
+    """Helper: make _qa_role_token_available() return True without a real
+    GitHub App token, by creating the directory it checks for."""
+    app_dir = tmp_path / ".synlynk" / "github_apps" / "qa"
+    app_dir.mkdir(parents=True)
+    (app_dir / "token.json").write_text("{}")
+
+
+def test_ensure_github_issue_for_story_writes_audit_entry_before_external_write(tmp_path, monkeypatch):
+    """DECIDE panel re-review 2026-11-24 (defect #2, Codex+Claude): the
+    audit entry recording this promotion attempt must exist in the log
+    *before* the external gh call runs, not only after it returns -- so a
+    crash mid-call still leaves a trace. Proven here by making the
+    subprocess call itself raise, and checking an "attempting" entry
+    survived anyway."""
+    from synlynk.maintainer import _ensure_github_issue_for_story, _read_promotion_audit_log
+
+    _fake_qa_token(tmp_path)
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("network down mid-write")
+
+    monkeypatch.setattr("subprocess.run", _boom)
+
+    with pytest.raises(RuntimeError):
+        _ensure_github_issue_for_story({"story_id": "s1", "title": "t"}, repo_root=str(tmp_path), cycle_id="cycle-1")
+
+    entries = _read_promotion_audit_log(str(tmp_path))
+    assert any(e["status"] == "attempting" and e["signature"] == "s1" for e in entries)
+    assert not any(e["status"] == "completed" for e in entries)
+
+
+def test_ensure_github_issue_for_story_dedupes_against_audit_log(tmp_path, monkeypatch):
+    """Same finding signature already recorded as a completed promotion in
+    a prior cycle -> stage, don't open a second issue."""
+    from synlynk.maintainer import _append_promotion_audit_log, _ensure_github_issue_for_story
+
+    _fake_qa_token(tmp_path)
+    _append_promotion_audit_log(str(tmp_path), {
+        "cycle_id": "cycle-0", "signature": "s1", "status": "completed",
+        "ts": 0, "issue_number": 42,
+    })
+
+    def _should_not_run(*args, **kwargs):
+        raise AssertionError("must not call gh for an already-promoted signature")
+
+    monkeypatch.setattr("subprocess.run", _should_not_run)
+
+    result = _ensure_github_issue_for_story({"story_id": "s1", "title": "t"}, repo_root=str(tmp_path), cycle_id="cycle-1")
+    assert result is None
+
+
+def test_ensure_github_issue_for_story_dedupes_against_open_github_issues(tmp_path, monkeypatch):
+    """Same finding signature already filed as an open GitHub issue (found
+    via the maintainer-finding label + body marker) -> stage, don't
+    duplicate it."""
+    from synlynk.maintainer import _ensure_github_issue_for_story
+
+    _fake_qa_token(tmp_path)
+
+    def _fake_run(cmd, **kwargs):
+        if "list" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(
+                [{"body": "some finding\n\n<!-- finding-signature: s1 -->"}]
+            ), stderr="")
+        raise AssertionError("must not call gh issue create for an already-open signature")
+
+    monkeypatch.setattr("subprocess.run", _fake_run)
+
+    result = _ensure_github_issue_for_story({"story_id": "s1", "title": "t"}, repo_root=str(tmp_path), cycle_id="cycle-1")
+    assert result is None
+
+
+def test_ensure_github_issue_for_story_caps_promotions_per_cycle(tmp_path, monkeypatch):
+    """DECIDE panel re-review 2026-11-24: the cap is counted per external
+    write (one _ensure_github_issue_for_story call that actually reaches
+    gh), not per action -- proven by calling it 3 times for 3 distinct
+    signatures in the same cycle with the cap set to 2."""
+    from synlynk.maintainer import _ensure_github_issue_for_story
+
+    _fake_qa_token(tmp_path)
+    monkeypatch.setattr("synlynk.maintainer._MAX_PROMOTIONS_PER_CYCLE", 2)
+
+    created = []
+
+    def _fake_run(cmd, **kwargs):
+        if "list" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]", stderr="")
+        created.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="Created issue #1", stderr="")
+
+    monkeypatch.setattr("subprocess.run", _fake_run)
+
+    results = [
+        _ensure_github_issue_for_story({"story_id": f"s{i}", "title": "t"}, repo_root=str(tmp_path), cycle_id="cycle-1")
+        for i in range(3)
+    ]
+    assert results[0] is not None
+    assert results[1] is not None
+    assert results[2] is None  # 3rd write exceeds the per-cycle cap of 2
+    assert len(created) == 2
+
+
+def test_ensure_github_issue_for_story_rate_limits_across_cycles(tmp_path, monkeypatch):
+    """A rolling-window rate limit is distinct from the per-cycle cap --
+    proven by exhausting the window's budget across two different
+    cycle_ids and confirming the next write in either cycle still stages."""
+    from synlynk.maintainer import _ensure_github_issue_for_story
+
+    _fake_qa_token(tmp_path)
+    monkeypatch.setattr("synlynk.maintainer._MAX_PROMOTIONS_PER_CYCLE", 10)
+    monkeypatch.setattr("synlynk.maintainer._MAX_PROMOTIONS_PER_WINDOW", 1)
+
+    def _fake_run(cmd, **kwargs):
+        if "list" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]", stderr="")
+        return subprocess.CompletedProcess(cmd, 0, stdout="Created issue #1", stderr="")
+
+    monkeypatch.setattr("subprocess.run", _fake_run)
+
+    first = _ensure_github_issue_for_story({"story_id": "s1", "title": "t"}, repo_root=str(tmp_path), cycle_id="cycle-1")
+    second = _ensure_github_issue_for_story({"story_id": "s2", "title": "t"}, repo_root=str(tmp_path), cycle_id="cycle-2")
+    assert first is not None
+    assert second is None  # window budget of 1 already spent by the first write
+
+
+def test_run_maintainer_wake_cycle_dry_run_stories_carry_github_issue_placeholder(tmp_path, monkeypatch):
+    """DECIDE panel re-review 2026-11-24: a dry-run story must set
+    github_issue explicitly to None, not omit the key -- every other
+    story in this plan sets github_issue to an int or None, never omits
+    it."""
     monkeypatch.chdir(tmp_path)
-    synlynk_dir = tmp_path / ".synlynk"
-    synlynk_dir.mkdir()
-    (synlynk_dir / "config.json").write_text(json.dumps({
-        "maintainer_autonomy": {
-            "sentinel_triage": {"mode": "promote"},
-            "backlog_burndown": {"mode": "promote"},
-            "mesh_sweep": {"mode": "promote"},
-        }
-    }))
-    monkeypatch.setattr("synlynk.maintainer._MAX_PROMOTIONS_PER_CYCLE", 1)
-    monkeypatch.setattr("synlynk.maintainer.triage_sentinel_alerts", lambda **kwargs: [])
+    (tmp_path / ".synlynk").mkdir()
+
+    critical_group = {
+        "fingerprint": "CRITICAL:SEV1_FAULT", "severity": "CRITICAL", "code": "SEV1_FAULT",
+        "total_occurrences": 1, "sample_messages": ["crash"],
+    }
+    monkeypatch.setattr("synlynk.maintainer.triage_sentinel_alerts", lambda **kwargs: [critical_group])
     monkeypatch.setattr(
         "synlynk.maintainer.run_backlog_burndown_sweep",
         lambda **kwargs: {"closed": [], "sprint_staged": None, "clustered": {}},
@@ -1380,8 +1770,9 @@ def test_run_maintainer_wake_cycle_caps_promotions_per_cycle(tmp_path, monkeypat
     monkeypatch.setattr("synlynk.maintainer.cmd_maintainer_sweep", lambda **kwargs: 0)
 
     result = run_maintainer_wake_cycle(repo_root=str(tmp_path))
-    skipped = [v for v in result.values() if v.get("skipped")]
-    assert len(skipped) == 2  # only 1 of 3 actions actually promotes this cycle
+    story = result["sentinel_triage"]["proposals"][0]["stories"][0]
+    assert "github_issue" in story
+    assert story["github_issue"] is None
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -1406,42 +1797,205 @@ def _qa_role_token_available(repo_root: str = ".") -> bool:
     return os.path.isdir(app_dir) and bool(os.listdir(app_dir))
 
 
-def _ensure_github_issue_for_story(story: dict, repo_root: str = ".") -> int:
-    """Open a GitHub issue for a story that has none yet, via the qa-role
-    write path, so Proposal Studio never shows an orphaned story (spec §5.3).
+# Promotion-boundary guards (spec §5.3a, DECIDE panel re-review 2026-11-24
+# defect #2). dry_run staging must make zero external calls; only "promote"
+# mode may open a GitHub issue, and only within these guards. The cap and
+# the rate limit are deliberately separate knobs: the cap bounds a single
+# cycle's blast radius, the window bounds sustained promotion rate across
+# many cycles (e.g. a scheduler that fires every few minutes).
+_MAX_PROMOTIONS_PER_CYCLE = 5
+_MAX_PROMOTIONS_PER_WINDOW = 10
+_PROMOTION_WINDOW_SECONDS = 3600
 
-    If no qa role App token is provisioned, this stages the finding and
-    returns 0 (no github_issue) rather than falling back to any host/personal
-    token -- that fallback path does not exist here, by design (spec §5.3a).
+
+def _promotion_audit_log_path(repo_root: str) -> str:
+    import os
+
+    return os.path.join(repo_root, ".synlynk", "maintainer_promotion_audit.jsonl")
+
+
+def _read_promotion_audit_log(repo_root: str = ".") -> list[dict]:
+    """Append-only JSONL reader (DECIDE panel re-review 2026-11-24, defect
+    #2): one JSON object per line, not a single JSON array. A line that
+    fails to parse (e.g. a write that was cut off mid-flush) is skipped
+    rather than invalidating the whole log."""
+    import json
+
+    path = _promotion_audit_log_path(repo_root)
+    if not os.path.exists(path):
+        return []
+    entries = []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entries.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    except OSError:
+        return []
+    return entries
+
+
+def _append_promotion_audit_log(repo_root: str, entry: dict) -> None:
+    """Append one JSON object as its own line. Never rewrites the file, so
+    a crash immediately after this call still leaves every prior line
+    intact (DECIDE panel re-review 2026-11-24, defect #2 -- the original
+    `json.dump(log[-500:], ...)` rewrote the whole file every call, which
+    is exactly the opposite of crash-safe)."""
+    import json
+
+    path = _promotion_audit_log_path(repo_root)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry) + "\n")
+
+
+def _finding_signature(story: dict) -> str:
+    """Stable identity for a finding, used to dedupe promotions across
+    cycles and against already-open GitHub issues (DECIDE panel re-review
+    2026-11-24, defect #2). story_id already encodes the fingerprint/domain
+    that produced the finding, so it's sufficient on its own; title is only
+    a fallback for a story with no story_id."""
+    return str(story.get("story_id") or story.get("title") or "")
+
+
+def _open_github_issue_signatures(repo_root: str = ".") -> set:
+    """Signatures already filed as open GitHub issues, read from
+    maintainer-finding-labeled issues' bodies (each carries a
+    `<!-- finding-signature: SIG -->` marker, written by
+    _ensure_github_issue_for_story). Best-effort: no qa token, a gh
+    failure, or unparseable output all degrade to an empty set rather than
+    raising -- dedupe then falls back to the audit log alone, not a hard
+    failure (DECIDE panel re-review 2026-11-24, defect #2: dedupe must
+    check open issues, not only the local audit log, since the audit log
+    alone misses an issue filed by a different workspace clone or a
+    pre-existing issue filed by a human)."""
+    import json
+    import re
+    import subprocess
+
+    if not _qa_role_token_available(repo_root):
+        return set()
+    try:
+        result = subprocess.run(
+            [
+                "python3", "bin/synlynk.py", "gh", "--role", "qa", "--",
+                "issue", "list", "--label", "maintainer-finding",
+                "--state", "open", "--json", "body",
+            ],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        issues = json.loads(result.stdout or "[]")
+    except (subprocess.SubprocessError, OSError, ValueError):
+        return set()
+    signatures = set()
+    for issue in issues:
+        match = re.search(r"<!-- finding-signature: (.+?) -->", issue.get("body") or "")
+        if match:
+            signatures.add(match.group(1))
+    return signatures
+
+
+def _promotions_in_cycle(repo_root: str, cycle_id: str) -> int:
+    """Count of *completed* external writes this cycle -- an "attempting"
+    entry with no matching "completed" entry means the write never
+    finished (crash, timeout) and must not count against this cycle's cap."""
+    return sum(
+        1 for e in _read_promotion_audit_log(repo_root)
+        if e.get("cycle_id") == cycle_id and e.get("status") == "completed"
+    )
+
+
+def _promotions_in_window(repo_root: str, now: float) -> int:
+    cutoff = now - _PROMOTION_WINDOW_SECONDS
+    return sum(
+        1 for e in _read_promotion_audit_log(repo_root)
+        if e.get("status") == "completed" and e.get("ts", 0) >= cutoff
+    )
+
+
+def _ensure_github_issue_for_story(story: dict, repo_root: str = ".", cycle_id: str = "") -> Optional[int]:
+    """Open a GitHub issue for a story that has none yet, via the qa-role
+    write path (spec §5.3). Returns the issue number on success, or None
+    if the story was staged instead of promoted.
+
+    A story is staged (returns None) when any of: no qa role App token is
+    provisioned (no host/personal-token fallback exists, by design, spec
+    §5.3a); the finding's signature already has a completed promotion in
+    the audit log, or is already open as a GitHub issue (dedupe, DECIDE
+    panel re-review 2026-11-24 defect #2); the per-cycle cap
+    (_MAX_PROMOTIONS_PER_CYCLE) or the rolling-window rate limit
+    (_MAX_PROMOTIONS_PER_WINDOW within _PROMOTION_WINDOW_SECONDS) has been
+    reached.
+
+    Audit-log ordering (same defect #2): an "attempting" entry is appended
+    *before* the subprocess call that creates the issue runs, and a
+    "completed" entry is appended only after it returns -- so a crash
+    mid-call still leaves a trace that a promotion was in flight, and
+    cap/rate-limit counts only ever include "completed" entries.
     """
     existing = story.get("github_issue")
     if existing:
         return int(existing)
 
     if not _qa_role_token_available(repo_root):
-        return 0
+        return None
 
+    signature = _finding_signature(story)
+    audit_log = _read_promotion_audit_log(repo_root)
+    if any(e.get("signature") == signature and e.get("status") == "completed" for e in audit_log):
+        return None
+    if signature in _open_github_issue_signatures(repo_root):
+        return None
+
+    import time
+
+    now = time.time()
+    if _promotions_in_cycle(repo_root, cycle_id) >= _MAX_PROMOTIONS_PER_CYCLE:
+        return None
+    if _promotions_in_window(repo_root, now) >= _MAX_PROMOTIONS_PER_WINDOW:
+        return None
+
+    _append_promotion_audit_log(repo_root, {
+        "cycle_id": cycle_id, "signature": signature, "status": "attempting", "ts": now,
+    })
+
+    import re
     import subprocess
 
     title = story.get("title") or f"Maintainer finding: {story.get('story_id', 'untitled')}"
-    body = story.get("body") or "Filed by Maintainer's autonomous wake cycle."
+    body = (story.get("body") or "Filed by Maintainer's autonomous wake cycle.") + (
+        f"\n\n<!-- finding-signature: {signature} -->"
+    )
     result = subprocess.run(
         [
             "python3", "bin/synlynk.py", "gh", "--role", "qa", "--",
             "issue", "create", "--title", title, "--body", body,
+            "--label", "maintainer-finding",
         ],
         cwd=repo_root,
         capture_output=True,
         text=True,
         timeout=30,
     )
-    import re
-
     match = re.search(r"#(\d+)", result.stdout or "")
-    return int(match.group(1)) if match else 0
+    issue_number = int(match.group(1)) if match else None
+
+    _append_promotion_audit_log(repo_root, {
+        "cycle_id": cycle_id, "signature": signature, "status": "completed",
+        "ts": time.time(), "issue_number": issue_number,
+    })
+    return issue_number
 
 
-def _run_sentinel_triage_action(mode: str, repo_root: str = ".") -> dict:
+def _run_sentinel_triage_action(mode: str, repo_root: str = ".", cycle_id: str = "") -> dict:
     groups = triage_sentinel_alerts(max_age_days=7)
     proposals = []
     for group in groups:
@@ -1449,9 +2003,13 @@ def _run_sentinel_triage_action(mode: str, repo_root: str = ".") -> dict:
             "high" if group["severity"] == "ERROR" else "normal"
         )
         if severity_label in ("critical", "high"):
-            story = {"story_id": group["fingerprint"], "title": format_triage_issue(group)[:80]}
+            story = {
+                "story_id": group["fingerprint"],
+                "title": format_triage_issue(group)[:80],
+                "github_issue": None,
+            }
             if mode == "promote":
-                story["github_issue"] = _ensure_github_issue_for_story(story, repo_root=repo_root)
+                story["github_issue"] = _ensure_github_issue_for_story(story, repo_root=repo_root, cycle_id=cycle_id)
             proposals.append({
                 "proposal_id": f"maintainer-sentinel-{group['fingerprint']}",
                 "source": "maintainer:sentinel_triage",
@@ -1463,7 +2021,7 @@ def _run_sentinel_triage_action(mode: str, repo_root: str = ".") -> dict:
     return {"mode": mode, "groups": len(groups), "proposals": proposals}
 
 
-def _run_backlog_burndown_action(mode: str, repo_root: str = ".") -> dict:
+def _run_backlog_burndown_action(mode: str, repo_root: str = ".", cycle_id: str = "") -> dict:
     result = run_backlog_burndown_sweep(repo_root=repo_root, dry_run=(mode != "promote"))
     sprint = result.get("sprint_staged")
     proposals = []
@@ -1479,7 +2037,7 @@ def _run_backlog_burndown_action(mode: str, repo_root: str = ".") -> dict:
     return {"mode": mode, "proposals": proposals, **result}
 
 
-def _run_mesh_sweep_action(mode: str, repo_root: str = ".") -> dict:
+def _run_mesh_sweep_action(mode: str, repo_root: str = ".", cycle_id: str = "") -> dict:
     exit_code = cmd_maintainer_sweep(repo_root=repo_root, refresh_graph=(mode == "promote"))
     return {"mode": mode, "exit_code": exit_code, "proposals": []}
 
@@ -1541,54 +2099,19 @@ register_action(
 )
 
 
-# Promotion-boundary guards (spec §5.3a, DECIDE panel defect #2). dry_run
-# staging must make zero external calls; only "promote" mode may open/attach
-# a GitHub issue, and only within these guards.
-_MAX_PROMOTIONS_PER_CYCLE = 5
-
-
-def _read_promotion_audit_log(repo_root: str = ".") -> list[dict]:
-    import json
-    import os
-
-    path = os.path.join(repo_root, ".synlynk", "maintainer_promotion_audit.json")
-    if not os.path.exists(path):
-        return []
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return []
-
-
-def _append_promotion_audit_log(repo_root: str, entry: dict) -> None:
-    import json
-    import os
-
-    path = os.path.join(repo_root, ".synlynk", "maintainer_promotion_audit.json")
-    log = _read_promotion_audit_log(repo_root)
-    log.append(entry)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(log[-500:], f, indent=2)
-
-
-def _promotions_already_done_this_cycle(repo_root: str, cycle_id: str) -> int:
-    return sum(1 for entry in _read_promotion_audit_log(repo_root) if entry.get("cycle_id") == cycle_id)
-
-
 def run_maintainer_wake_cycle(repo_root: str = ".") -> dict:
     """Run Maintainer's autonomous wake-cycle SOP: sentinel triage, backlog
     burndown, mesh sweep -- mirroring run_tpm_wake_cycle()'s shape (spec §5.1).
     Each registered action runs in dry_run (stage, no side effects) or
     promote (real side effects) mode per its settings-registry config.
 
-    Promotion boundary (spec §5.3a): "promote" mode is capped at
-    _MAX_PROMOTIONS_PER_CYCLE per cycle, deduped against the existing
-    .synlynk/maintainer_promotion_audit.json log, and every promotion this
-    cycle is appended to that log before returning. If no `qa` role App
-    token is configured, _ensure_github_issue_for_story stages the finding
-    (returns 0, no github_issue) and does NOT fall back to a host token --
-    see Task 6a below for that guard's own test.
+    Promotion boundary (spec §5.3a, DECIDE panel re-review 2026-11-24
+    defect #2): the cap, rate limit, dedupe, and audit-log ordering all
+    live inside `_ensure_github_issue_for_story` itself -- one call there
+    is one attempted external write, so the guard applies uniformly no
+    matter which action (or how many stories within one action) is doing
+    the promoting. This function only generates a fresh `cycle_id` and
+    passes it through to every action's `run_fn`.
     """
     import time
     import uuid
@@ -1596,7 +2119,6 @@ def run_maintainer_wake_cycle(repo_root: str = ".") -> dict:
     from synlynk.maintainer_registry import registered_actions
 
     cycle_id = f"cycle-{int(time.time())}-{uuid.uuid4().hex[:8]}"
-    already_promoted = _promotions_already_done_this_cycle(repo_root, cycle_id)
 
     results: dict = {}
     for action_id, action in registered_actions(role_slug="maintainer").items():
@@ -1605,13 +2127,7 @@ def run_maintainer_wake_cycle(repo_root: str = ".") -> dict:
             results[action.name] = {"skipped": True}
             continue
         mode = config.get("mode", "dry_run")
-        if mode == "promote" and already_promoted >= _MAX_PROMOTIONS_PER_CYCLE:
-            results[action.name] = {"skipped": True, "reason": "max_promotions_per_cycle reached"}
-            continue
-        outcome = action.run_fn(mode=mode, repo_root=repo_root)
-        if mode == "promote":
-            _append_promotion_audit_log(repo_root, {"cycle_id": cycle_id, "action_id": action_id})
-            already_promoted += 1
+        outcome = action.run_fn(mode=mode, repo_root=repo_root, cycle_id=cycle_id)
         results[action.name] = outcome
 
     all_proposals = []
@@ -1626,7 +2142,7 @@ def run_maintainer_wake_cycle(repo_root: str = ".") -> dict:
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_maintainer.py -v -k "wake_cycle or ensure_github_issue_for_story"`
-Expected: PASS (7 passed)
+Expected: PASS (12 passed — `test_load_maintainer_proposals_returns_empty_list_when_file_missing` doesn't match this `-k` filter by name; it's covered by Step 5's full-module run instead)
 
 - [ ] **Step 5: Run the full maintainer test module to check for regressions**
 
@@ -1639,7 +2155,7 @@ Expected: PASS (all tests green)
 git add synlynk/maintainer.py tests/test_maintainer.py
 git commit -m "feat(maintainer): run_maintainer_wake_cycle acts on triage/burndown/sweep findings
 
-Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -1703,7 +2219,7 @@ Expected: PASS (all tests green)
 git add synlynk/scheduler.py tests/test_scheduler.py
 git commit -m "fix(scheduler): maintainer triage pass runs the full wake cycle, not just triage
 
-Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -1819,7 +2335,7 @@ Expected: PASS (all tests green)
 git add synlynk/maintainer_hints.py synlynk/cli.py tests/test_fencing_hint_contributors.py
 git commit -m "feat(maintainer): register fence-hint contributor for pending proposals
 
-Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -1871,7 +2387,10 @@ def test_sentinel_triage_action_notifies_slack_for_critical_regardless_of_mode(m
         "sample_messages": ["boom"],
     }
     monkeypatch.setattr("synlynk.maintainer.triage_sentinel_alerts", lambda **kwargs: [critical_group])
-    monkeypatch.setattr("synlynk.maintainer._ensure_github_issue_for_story", lambda story, repo_root=".": 1)
+    monkeypatch.setattr(
+        "synlynk.maintainer._ensure_github_issue_for_story",
+        lambda story, repo_root=".", cycle_id="": 1,
+    )
 
     notified = []
     monkeypatch.setattr(
@@ -1879,7 +2398,7 @@ def test_sentinel_triage_action_notifies_slack_for_critical_regardless_of_mode(m
         lambda proposal, repo_root=".": notified.append(proposal["proposal_id"]),
     )
 
-    _run_sentinel_triage_action(mode="dry_run")
+    _run_sentinel_triage_action(mode="dry_run", cycle_id="cycle-test")
     assert len(notified) == 1
 ```
 
@@ -1956,9 +2475,13 @@ Now wire it into `_run_sentinel_triage_action` (edit the function added in Task 
             "high" if group["severity"] == "ERROR" else "normal"
         )
         if severity_label in ("critical", "high"):
-            story = {"story_id": group["fingerprint"], "title": format_triage_issue(group)[:80]}
+            story = {
+                "story_id": group["fingerprint"],
+                "title": format_triage_issue(group)[:80],
+                "github_issue": None,
+            }
             if mode == "promote":
-                story["github_issue"] = _ensure_github_issue_for_story(story, repo_root=repo_root)
+                story["github_issue"] = _ensure_github_issue_for_story(story, repo_root=repo_root, cycle_id=cycle_id)
             proposal = {
                 "proposal_id": f"maintainer-sentinel-{group['fingerprint']}",
                 "source": "maintainer:sentinel_triage",
@@ -1973,7 +2496,7 @@ Now wire it into `_run_sentinel_triage_action` (edit the function added in Task 
                 _notify_slack_on_promotion(proposal, repo_root=repo_root)
 ```
 
-(This replaces the equivalent loop body written in Task 6's `_run_sentinel_triage_action` — same function, same file, just the loop body gains the notify branch.)
+(This replaces the equivalent loop body written in Task 6's `_run_sentinel_triage_action` — same function, same file, just the loop body gains the notify branch. The function's own signature keeps the `cycle_id: str = ""` parameter Task 6 gave it.)
 
 Also add `"notify_slack": False` to the three `register_action(...)` calls' `default_config` dicts (sentinel_triage, backlog_burndown, mesh_sweep) from Task 6, matching spec §5.7's "per-action `notify_slack: bool` setting (default `false`)":
 
@@ -2012,7 +2535,7 @@ Expected: PASS (all tests green, including the Task 6 wake-cycle tests — `test
 git add synlynk/notifiers/slack.py synlynk/maintainer.py tests/test_notifiers_slack.py tests/test_maintainer.py
 git commit -m "feat(maintainer): gate a Slack push on promotion via notify_slack setting
 
-Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -2116,7 +2639,7 @@ Expected: PASS (all tests green)
 git add synlynk/cli.py synlynk/taxonomy.py docs/reference/commands.md tests/test_cli_maintainer_wake.py
 git commit -m "feat(cli): add 'synlynk maintainer wake' subcommand
 
-Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -2160,7 +2683,7 @@ Expected: no output, exit code 0
 git add .github/workflows/maintainer-sweep.yml
 git commit -m "ci: add nightly + manual GitHub Actions trigger for Maintainer's wake cycle
 
-Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -2225,7 +2748,7 @@ Expected: PASS (all tests green)
 git add synlynk/viz/onboarding.py tests/test_viz_onboarding.py
 git commit -m "fix(onboarding): add maintainer to GitHub App identity roles_info
 
-Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -2709,7 +3232,7 @@ Expected: PASS
 git add synlynk/viz/role_ops_panel.py synlynk/viz/roles.py synlynk/viz/overview.py tests/test_viz_role_ops_panel.py tests/test_viz_roles.py tests/test_viz_overview.py
 git commit -m "feat(viz): generic Role Operations Panel for Agent Studio + Overview widget
 
-Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -2718,13 +3241,147 @@ Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
 
 **Why revised:** DECIDE panel defect #4 flagged that this task, as originally drafted, renders whatever shape of dict each source happens to produce (TPM's story dicts vs. Task 6's three maintainer-action proposal dicts) with no shared schema between them — `cardHtml`'s `story.source`/`story.severity`/`story.github_issue` reads would silently show `undefined` for any source that doesn't happen to populate those exact keys, and a future fifth source would have to reverse-engineer the contract from existing JS rather than a stated schema. Do not dispatch this task until Tasks 1-6 have merged — Step 0 below defines the schema that Task 6's three proposal-producing actions (`_run_sentinel_triage_action`, `_run_backlog_burndown_action`, `_run_mesh_sweep_action`) must already satisfy, and that Task 5's `tier_provenance` return value feeds.
 
+**Re-review follow-up (2026-11-24, DECIDE panel re-review defect #4):** the first revision's `normalize_proposal_for_studio` fixed missing-key drift (every key always present with a default) but left the *shape itself* an unvalidated dict convention — a producer that passes a garbage `severity` value, or a non-list `tier_provenance`, would sail through `normalize_proposal_for_studio`'s `str(...)`/`list(...)` coercions and reach the browser silently malformed (e.g. `severity: "URGENT!!"` never matching the JS's `'critical'`/`'high'` checks, so a genuinely critical finding would quietly never appear in the "Needs attention now" lane). Step -1 below adds a dedicated schema module, `synlynk/proposal_schema.py`, with an actual validation boundary — `validate_proposal()` checks field types *and* that `severity` is one of the three values the JS actually branches on — and Step 0's `normalize_proposal_for_studio` calls it and falls back (not raises) on failure, so a malformed producer degrades to `"normal"` severity instead of silently breaking the lane.
+
 **Correction (2026-11-24, same-day follow-up to defect #4 close):** the original draft of this task placed `normalize_proposal_for_studio` and the merge logic in `synlynk/viz/roadmap_studio.py` — the module that renders the static HTML shell for `generate_proposal_studio_html(port)`. That module never touches ticket/proposal data at all: its own JS fetches `studioData` client-side from `GET api/roadmap_studio` (see its `draw()`/`load()` functions — `fetch('api/roadmap_studio?_=' + Date.now())`), which is served by **`synlynk/roadmap_studio.py`'s `studio_data()`** (a distinct module, confirmed by reading both files — `synlynk/viz/server.py:305` imports `studio_data` from `synlynk.roadmap_studio`, not from `synlynk.viz.roadmap_studio`). Normalizing in the JS-shell module would do nothing: the JSON the browser actually receives would still be whatever raw shape `studio_data()` returns. The adapter and the maintainer-proposal merge therefore belong in `synlynk/roadmap_studio.py`, applied once, server-side, before the dict is serialized to JSON — so the JS in `synlynk/viz/roadmap_studio.py` receives already-normalized objects and never needs its own defaulting logic.
 
 **Files:**
-- Modify: `synlynk/roadmap_studio.py` (add `normalize_proposal_for_studio` adapter; apply it to every story row `studio_data()` already builds, and merge in `load_maintainer_proposals()` entries as a new `studio_data()["backlog"]`-adjacent list — see Step 0/3 below)
+- Create: `synlynk/proposal_schema.py` (shared `Proposal` field contract + `validate_proposal()` — DECIDE panel re-review defect #4)
+- Modify: `synlynk/roadmap_studio.py` (add `normalize_proposal_for_studio` adapter, calling `validate_proposal()`; apply it to every story row `studio_data()` already builds, and merge in `load_maintainer_proposals()` entries as a new `studio_data()["backlog"]`-adjacent list — see Step 0/3 below)
 - Modify: `synlynk/viz/roadmap_studio.py` (rename `generate_roadmap_studio_html` to `generate_proposal_studio_html`, keep alias, add `source` badge + severity lane to `cardHtml` — the JS side needs no defaulting since `studio_data()` now always supplies `source`/`severity`/`github_issue`/`tier_provenance`)
+- Test: `tests/test_proposal_schema.py` (new — for `validate_proposal()`)
 - Test: `tests/test_roadmap_studio.py` (append — the existing test module for `synlynk/roadmap_studio.py`'s `studio_data()`; check `ls tests/test_roadmap_studio.py` first to confirm the name)
 - Test: `tests/test_viz_roadmap_studio.py` (append — for the `viz/roadmap_studio.py` rename/alias/badge changes)
+
+- [ ] **Step -1: Write the failing test for the shared Proposal schema's validator**
+
+Create `tests/test_proposal_schema.py`:
+
+```python
+def test_validate_proposal_accepts_a_conforming_proposal():
+    from synlynk.proposal_schema import validate_proposal
+
+    proposal = {
+        "story_id": "s1", "title": "Fix the thing", "source": "tpm",
+        "severity": "normal", "github_issue": None, "tier_provenance": [],
+    }
+    assert validate_proposal(proposal) is None
+
+
+def test_validate_proposal_rejects_unknown_severity():
+    from synlynk.proposal_schema import validate_proposal
+
+    proposal = {
+        "story_id": "s1", "title": "Fix the thing", "source": "tpm",
+        "severity": "URGENT!!", "github_issue": None, "tier_provenance": [],
+    }
+    error = validate_proposal(proposal)
+    assert error is not None
+    assert "severity" in error
+
+
+def test_validate_proposal_rejects_non_list_tier_provenance():
+    from synlynk.proposal_schema import validate_proposal
+
+    proposal = {
+        "story_id": "s1", "title": "Fix the thing", "source": "tpm",
+        "severity": "normal", "github_issue": None, "tier_provenance": "sentinel",
+    }
+    error = validate_proposal(proposal)
+    assert error is not None
+    assert "tier_provenance" in error
+
+
+def test_validate_proposal_rejects_non_int_github_issue():
+    from synlynk.proposal_schema import validate_proposal
+
+    proposal = {
+        "story_id": "s1", "title": "Fix the thing", "source": "tpm",
+        "severity": "normal", "github_issue": "not-an-int", "tier_provenance": [],
+    }
+    error = validate_proposal(proposal)
+    assert error is not None
+    assert "github_issue" in error
+
+
+def test_validate_proposal_rejects_blank_required_string_field():
+    from synlynk.proposal_schema import validate_proposal
+
+    proposal = {
+        "story_id": "", "title": "Fix the thing", "source": "tpm",
+        "severity": "normal", "github_issue": None, "tier_provenance": [],
+    }
+    error = validate_proposal(proposal)
+    assert error is not None
+    assert "story_id" in error
+```
+
+- [ ] **Step -1b: Run test to verify it fails**
+
+Run: `pytest tests/test_proposal_schema.py -v`
+Expected: FAIL — `ModuleNotFoundError: No module named 'synlynk.proposal_schema'`
+
+- [ ] **Step -1c: Implement the shared Proposal schema module**
+
+Create `synlynk/proposal_schema.py`:
+
+```python
+"""Shared Proposal schema (DECIDE panel re-review 2026-11-24, defect #4).
+
+Every proposal-producing source -- TPM's story rows (from the `stories`
+table) and Task 6's maintainer wake-cycle actions (from
+`load_maintainer_proposals()`) -- must conform to this shape before
+`synlynk/roadmap_studio.py`'s `normalize_proposal_for_studio` hands it to
+`studio_data()`, which is what the browser's Proposal Studio JS actually
+reads. This module is the one place that shape is defined and checked,
+instead of leaving conformance as an implicit convention between
+`normalize_proposal_for_studio`'s key-defaulting and whatever each
+producer happens to emit -- the gap the DECIDE panel's re-review flagged:
+a producer could pass a garbage `severity` or a non-list
+`tier_provenance` and `normalize_proposal_for_studio`'s `str(...)`/
+`list(...)` coercions would let it through silently malformed.
+"""
+from typing import Optional
+
+REQUIRED_STRING_FIELDS = ("story_id", "title", "source", "severity")
+
+# The only three values synlynk/viz/roadmap_studio.py's `draw()` and
+# `cardHtml()` JS actually branch on (`story.severity === 'critical' ||
+# story.severity === 'high'` routes a card into the "Needs attention now"
+# lane; anything else renders as a normal card). A fourth value would
+# silently never route into the lane, which is exactly the drift this
+# validator exists to catch.
+VALID_SEVERITIES = {"normal", "high", "critical"}
+
+
+def validate_proposal(proposal: dict) -> Optional[str]:
+    """Return None if `proposal` conforms to the shared Proposal schema,
+    else a short, specific validation-error string. Mirrors the
+    validate-or-fallback shape Tasks 1/2 use for taxonomy/domain-pack
+    schemas: callers degrade on a non-None return rather than raising."""
+    for field in REQUIRED_STRING_FIELDS:
+        value = proposal.get(field)
+        if not isinstance(value, str) or not value:
+            return f"'{field}' must be a non-empty string, got {value!r}"
+
+    if proposal["severity"] not in VALID_SEVERITIES:
+        return f"'severity' must be one of {sorted(VALID_SEVERITIES)}, got {proposal['severity']!r}"
+
+    github_issue = proposal.get("github_issue")
+    if github_issue is not None and not isinstance(github_issue, int):
+        return f"'github_issue' must be an int or None, got {github_issue!r}"
+
+    tier_provenance = proposal.get("tier_provenance")
+    if not isinstance(tier_provenance, list) or not all(isinstance(x, str) for x in tier_provenance):
+        return f"'tier_provenance' must be a list of strings, got {tier_provenance!r}"
+
+    return None
+```
+
+- [ ] **Step -1d: Run test to verify it passes**
+
+Run: `pytest tests/test_proposal_schema.py -v`
+Expected: PASS (5 passed)
 
 - [ ] **Step 0: Define the shared proposal schema and normalization adapter in `synlynk/roadmap_studio.py`**
 
@@ -2732,7 +3389,8 @@ Every proposal-producing source (TPM's roadmap stories, and Task 6's three maint
 
 ```python
 def normalize_proposal_for_studio(raw: dict, default_source: str = "tpm") -> dict:
-    """Shared card-rendering schema (DECIDE panel defect #4, 2026-11-24).
+    """Shared card-rendering schema (DECIDE panel defect #4, 2026-11-24;
+    validation boundary added per re-review defect #4, same day).
 
     Maps a TPM story row (from the `stories` table) or a Task 6
     maintainer-proposal dict (from load_maintainer_proposals()) onto one
@@ -2740,8 +3398,19 @@ def normalize_proposal_for_studio(raw: dict, default_source: str = "tpm") -> dic
     special-cases the source. Every key below is always present with a
     defined default -- never absent, never None where a string/list is
     expected -- so the JS template never reads `undefined`.
+
+    After building the normalized dict, it's checked against the shared
+    schema in synlynk/proposal_schema.py. A producer that emitted a
+    `severity` the JS doesn't branch on, or a non-list `tier_provenance`,
+    would otherwise sail through the `str(...)`/`list(...)` coercions
+    above silently malformed -- `validate_proposal` catches that and this
+    function falls back the one field most likely to cause a silent UI
+    bug (`severity` -> "normal") rather than raising, so a single bad
+    producer never breaks Proposal Studio's render.
     """
-    return {
+    from synlynk.proposal_schema import validate_proposal
+
+    normalized = {
         "story_id": str(raw.get("story_id") or raw.get("proposal_id") or ""),
         "title": str(raw.get("title") or raw.get("story_id") or raw.get("proposal_id") or "Untitled"),
         "source": str(raw.get("source") or default_source),
@@ -2749,6 +3418,9 @@ def normalize_proposal_for_studio(raw: dict, default_source: str = "tpm") -> dic
         "github_issue": raw.get("github_issue") or raw.get("gh_issue"),
         "tier_provenance": list(raw.get("tier_provenance") or []),
     }
+    if validate_proposal(normalized) is not None:
+        normalized["severity"] = "normal"
+    return normalized
 ```
 
 (`raw.get("gh_issue")` is included as a fallback because the `stories` table's own column is named `gh_issue`, not `github_issue` — `studio_data()`'s existing SQL query already selects it under that name; this keeps a bare TPM story row normalizing correctly without the caller having to rename the key first.)
@@ -2830,6 +3502,17 @@ def test_studio_data_returns_empty_maintainer_proposals_when_file_missing(tmp_pa
         assert data["maintainer_proposals"] == []
     finally:
         conn.close()
+
+
+def test_normalize_proposal_for_studio_falls_back_invalid_severity_to_normal():
+    """DECIDE panel re-review defect #4: a producer emitting a severity the
+    JS doesn't branch on must degrade to 'normal', not pass through
+    malformed -- see synlynk/proposal_schema.py's validate_proposal."""
+    from synlynk.roadmap_studio import normalize_proposal_for_studio
+
+    raw = {"story_id": "s1", "title": "Weird finding", "severity": "URGENT!!"}
+    normalized = normalize_proposal_for_studio(raw)
+    assert normalized["severity"] == "normal"
 ```
 
 - [ ] **Step 1b: Write the failing test for the `viz/roadmap_studio.py` rename/alias/badge**
@@ -2860,6 +3543,7 @@ def test_generate_roadmap_studio_html_alias_still_importable():
 - [ ] **Step 2: Run both test files to verify they fail**
 
 Run: `pytest tests/test_roadmap_studio.py -v -k "normalize_proposal_for_studio or studio_data_merges or studio_data_returns_empty"; pytest tests/test_viz_roadmap_studio.py -v -k "generate_proposal_studio_html or generate_roadmap_studio_html_alias"`
+(This filter now also matches the new `test_normalize_proposal_for_studio_falls_back_invalid_severity_to_normal` test added above, for 4 matches in the first command — all 4 fail for the same reason as before: `normalize_proposal_for_studio` doesn't exist in `synlynk/roadmap_studio.py` yet, so every one raises `ImportError: cannot import name 'normalize_proposal_for_studio'`.)
 Expected: both FAIL — first with `ImportError: cannot import name 'normalize_proposal_for_studio'` (not yet defined in `synlynk/roadmap_studio.py`), second with `ImportError: cannot import name 'generate_proposal_studio_html'`
 
 - [ ] **Step 3: Add the normalization adapter and merge it into `studio_data()`**
@@ -3021,8 +3705,11 @@ Expected: PASS (all tests green — confirms `cache.py`'s unmodified `from synly
 - [ ] **Step 7: Commit**
 
 ```bash
-git add synlynk/roadmap_studio.py synlynk/viz/roadmap_studio.py tests/test_roadmap_studio.py tests/test_viz_roadmap_studio.py
+git add synlynk/proposal_schema.py synlynk/roadmap_studio.py synlynk/viz/roadmap_studio.py tests/test_proposal_schema.py tests/test_roadmap_studio.py tests/test_viz_roadmap_studio.py
 git commit -m "feat: generalize Roadmap Studio into multi-source Proposal Studio
+
+Adds the shared Proposal schema module (synlynk/proposal_schema.py) with
+a validation boundary, per DECIDE panel re-review 2026-11-24 defect #4.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
@@ -3048,7 +3735,9 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 **2. Placeholder scan:** No TBD/TODO markers; every step has complete code, including the HTML/JS insertions in Tasks 13-14, which quote the exact surrounding lines from the files read during planning (`synlynk/viz/roles.py`'s Edit Charter `</details>` boundary, `synlynk/viz/overview.py`'s "Recent / Active Dispatches" section-card boundary, `synlynk/viz/roadmap_studio.py`'s `cardHtml`/`draw()` functions).
 
-**3. Type/signature consistency:** `load_taxonomy(repo_root=".")` (Task 1, added per DECIDE panel defect #5) returns `{"cluster_keywords", "remediation_topics", "proximal_selection", "schema_valid", "validation_error"}`; `cluster_keywords()`/`remediation_topics()` (Task 1) are thin wrappers over it, and Task 2's `load_domain_pack()`/domain-pack layering happens *inside* `load_taxonomy()` itself rather than in a separate function that bypasses it, so Task 2's edit to Task 1's `load_taxonomy()` body is the only place domain-pack merge logic lives; Task 5's `_proximal_selection_config()` calls `load_taxonomy(repo_root=repo_root)` and reads `["proximal_selection"]` — the function it depends on now actually exists, closing a gap introduced during this plan's own revision; `select_proposal_target(candidate, open_proposals, repo_root=".")` returning `(proposal_id_or_None, tier_provenance)` (Task 5, revised per DECIDE panel defect #3) is called with keyword args consistently; `run_maintainer_wake_cycle(repo_root=".")` (Task 6) matches its call sites in Task 7 (scheduler, no args — uses the default) and Task 10 (CLI, explicit `repo_root=os.getcwd()`); `get_action_config(action_id, repo_root=".")` (Task 4, revised — takes the `"<role_slug>:<name>"` action_id, not a bare name) is called identically (`"maintainer:sentinel_triage"` etc.) in Tasks 6 and 9; `registered_actions(role_slug=None)` (Task 4, revised) is called with `role_slug="maintainer"` in Task 6 and bare in Task 4's own tests; `generate_role_ops_panel_html(role_slug, data)` and `generate_condensed_widget_html(role_slug, data)` (Task 13) share the same two-arg shape the spec's §5.4 text specifies; `build_maintainer_ops_data(role_slug, repo_root=".")` (Task 13 Step 0b, new) returns the `{"actions": [...], "taxonomy_status": {...}}` shape Step 1's test fixtures model by hand, and calls `registered_actions()`/`get_action_config()` (Task 4) and `load_maintainer_proposals()` (Task 6) with their real signatures — it is not yet wired into `viz/data.py`'s actual `data` assembly (flagged as a known residual item in Task 13's Files section, not fixed by this plan); `normalize_proposal_for_studio(raw, default_source="tpm")` (Task 14 Step 0, corrected) is called from `synlynk/roadmap_studio.py`'s own `studio_data()` for every `stories`/`backlog` row and once more per entry from `load_maintainer_proposals()` with `default_source="maintainer"`, matching Task 6's `_persist_maintainer_proposals()` output shape; `_ensure_github_issue_for_story(story, repo_root=".")` (Task 6, now gated by `_qa_role_token_available()`) is referenced with the same signature in Task 6's own `_run_sentinel_triage_action` and in Task 9's test monkeypatches.
+**3. Type/signature consistency:** `load_taxonomy(repo_root=".")` (Task 1, added per DECIDE panel defect #5) returns `{"cluster_keywords", "remediation_topics", "proximal_selection", "schema_valid", "validation_error"}`; `cluster_keywords()`/`remediation_topics()` (Task 1) are thin wrappers over it, and Task 2's `load_domain_pack()`/domain-pack layering happens *inside* `load_taxonomy()` itself rather than in a separate function that bypasses it, so Task 2's edit to Task 1's `load_taxonomy()` body is the only place domain-pack merge logic lives; Task 5's `_proximal_selection_config()` calls `load_taxonomy(repo_root=repo_root)` and reads `["proximal_selection"]` — the function it depends on now actually exists, closing a gap introduced during this plan's own revision; `select_proposal_target(candidate, open_proposals, repo_root=".")` returning `(proposal_id_or_None, tier_provenance)` (Task 5, revised per DECIDE panel defect #3) is called with keyword args consistently; `run_maintainer_wake_cycle(repo_root=".")` (Task 6) matches its call sites in Task 7 (scheduler, no args — uses the default) and Task 10 (CLI, explicit `repo_root=os.getcwd()`); `get_action_config(action_id, repo_root=".")` (Task 4, revised — takes the `"<role_slug>:<name>"` action_id, not a bare name) is called identically (`"maintainer:sentinel_triage"` etc.) in Tasks 6 and 9; `registered_actions(role_slug=None)` (Task 4, revised) is called with `role_slug="maintainer"` in Task 6 and bare in Task 4's own tests; `generate_role_ops_panel_html(role_slug, data)` and `generate_condensed_widget_html(role_slug, data)` (Task 13) share the same two-arg shape the spec's §5.4 text specifies; `build_maintainer_ops_data(role_slug, repo_root=".")` (Task 13 Step 0b, new) returns the `{"actions": [...], "taxonomy_status": {...}}` shape Step 1's test fixtures model by hand, and calls `registered_actions()`/`get_action_config()` (Task 4) and `load_maintainer_proposals()` (Task 6) with their real signatures — it is not yet wired into `viz/data.py`'s actual `data` assembly (flagged as a known residual item in Task 13's Files section, not fixed by this plan); `normalize_proposal_for_studio(raw, default_source="tpm")` (Task 14 Step 0, corrected) is called from `synlynk/roadmap_studio.py`'s own `studio_data()` for every `stories`/`backlog` row and once more per entry from `load_maintainer_proposals()` with `default_source="maintainer"`, matching Task 6's `_persist_maintainer_proposals()` output shape; `_ensure_github_issue_for_story(story, repo_root=".")` (Task 6, now gated by `_qa_role_token_available()`) is referenced with the same signature in Task 6's own `_run_sentinel_triage_action` and in Task 9's test monkeypatches; `validate_proposal(proposal) -> Optional[str]` (Task 14 Step -1c, new, per DECIDE panel re-review defect #4) lives in its own module `synlynk/proposal_schema.py` rather than `roadmap_studio.py`, so it can be imported independently of `normalize_proposal_for_studio` if a future producer wants to validate before normalizing; it's called with the same `validate_proposal(dict) -> Optional[str]` signature from both its own test module (`tests/test_proposal_schema.py`) and from inside `normalize_proposal_for_studio` itself.
+
+**4. Re-review defect #4 closure note (Task 14):** the DECIDE panel re-review's literal requirement was "add a shared `Proposal` schema module with a validation boundary" — distinct from the first revision's `normalize_proposal_for_studio` adapter, which only defaulted missing keys and let a malformed `severity`/`tier_provenance`/`github_issue` value through unchecked (e.g. `severity: "URGENT!!"` would never match the JS's `'critical'`/`'high'` branch, so a genuinely critical finding would silently never reach the "Needs attention now" lane). Step -1/-1c now adds `synlynk/proposal_schema.py` with `validate_proposal()` as that boundary, and Step 0's `normalize_proposal_for_studio` calls it and falls back `severity` to `"normal"` on failure rather than passing a malformed value through. This closes defect #4 fully — both the placement correction from the first revision and the schema/validation gap the re-review flagged.
 
 ---
 
