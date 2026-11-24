@@ -2712,6 +2712,7 @@ def _insert_cost_row(
     total_cost_usd: float = 0.0,
     notes: str = None,
     story_id: str = None,
+    type_id: str = None,
     epic_id: int = None,
     phase_id: int = None,
     estimate_basis: str = None,
@@ -2870,6 +2871,7 @@ def _insert_cost_row(
                         payment_mode=?,
                         notes=?,
                         story_id=?,
+                        type_id=COALESCE(?, type_id),
                         epic_id=?,
                         phase_id=?,
                         dispatch_context=COALESCE(?, dispatch_context),
@@ -2901,6 +2903,7 @@ def _insert_cost_row(
                         payment_mode,
                         notes,
                         story_id,
+                        type_id,
                         epic_id,
                         phase_id,
                         dispatch_context,
@@ -2933,9 +2936,9 @@ def _insert_cost_row(
                 return
         insert_sql = """INSERT INTO cost_entries
                 (session_date, agent, harness, agent_role, model, input_tokens, output_tokens, cache_read_tokens,
-                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, pr_number, decision_revision, turn_usage_json,
+                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, type_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, pr_number, decision_revision, turn_usage_json,
                  estimated_input_tokens, estimated_output_tokens, estimated_cost_usd, compaction_event_type, requested_harness)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
         insert_params = (
                 session_date,
                 agent_val,
@@ -2953,6 +2956,7 @@ def _insert_cost_row(
                 payment_mode,
                 notes,
                 story_id,
+                type_id,
                 epic_id,
                 phase_id,
                 job_id,
@@ -5606,6 +5610,7 @@ def cmd_cost_log(
     tokens_in: int,
     tokens_out: int,
     story_id: str = None,
+    task_type: str = None,
     job_id: str = None,
     pr: int = None,
     note: str = None,
@@ -5672,6 +5677,7 @@ def cmd_cost_log(
         total_cost_usd=est_cost,
         notes=note,
         story_id=story_id,
+        type_id=task_type,
         api_equivalent_usd=payment_value.api_equivalent_usd,
         actual_usd=payment_value.actual_usd,
         payment_mode=payment_value.mode,
