@@ -34,6 +34,13 @@ def test_hetzner_driver_implements_interface():
     assert driver.location == "fsn1"
 
 
+def test_hetzner_driver_resolves_environment_token_reference(monkeypatch):
+    monkeypatch.setenv("HCLOUD_TOKEN", "environment-token")
+    driver = HetznerRunnerDriver(config={"token": "env:HCLOUD_TOKEN"})
+
+    assert driver.token == "environment-token"
+
+
 def test_hetzner_driver_registered_in_manager():
     config = {
         "swarm_runners": {

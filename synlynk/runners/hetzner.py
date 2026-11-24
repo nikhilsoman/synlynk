@@ -38,7 +38,10 @@ class HetznerRunnerDriver(SwarmRunnerDriver):
     def __init__(self, config: Optional[dict] = None, opener: Any = None):
         self.config = config or {}
         self.base_url = self.config.get("base_url", "https://api.hetzner.cloud/v1").rstrip("/")
-        self.token = self.config.get("token") or os.environ.get("HCLOUD_TOKEN") or os.environ.get("HETZNER_API_TOKEN")
+        token = self.config.get("token")
+        if isinstance(token, str) and token.startswith("env:"):
+            token = os.environ.get(token[4:])
+        self.token = token or os.environ.get("HCLOUD_TOKEN") or os.environ.get("HETZNER_API_TOKEN")
         self.location = self.config.get("location", "nbg1")
         self.image = self.config.get("image", "ubuntu-24.04")
         self.ssh_key = self.config.get("ssh_key")
