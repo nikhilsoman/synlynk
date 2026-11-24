@@ -94,12 +94,28 @@ class LiveQueryRouter:
         task_type: str,
         eligible_harnesses: list[str],
     ) -> dict:
+        try:
+            cols = {
+                r[1] for r in conn.execute("PRAGMA table_info(capability_ratings)").fetchall()
+            }
+        except Exception:
+            cols = set()
+
+        def col_or_null(name: str) -> str:
+            return name if name in cols else f"NULL AS {name}"
+
+        query = (
+            f"SELECT {col_or_null('pr_review_cycles')}, "
+            f"{col_or_null('dispatch_rework')}, "
+            f"{col_or_null('micro_rework')}, "
+            f"{col_or_null('duration_vs_estimate')}, "
+            f"{col_or_null('correct')} "
+            f"FROM capability_ratings WHERE agent=? AND discipline=?"
+        )
         ratings = {}
         for harness in eligible_harnesses:
             ratings[harness] = conn.execute(
-                "SELECT pr_review_cycles, dispatch_rework, micro_rework, "
-                "duration_vs_estimate, correct FROM capability_ratings "
-                "WHERE agent=? AND discipline=?",
+                query,
                 (harness, task_type),
             ).fetchall()
 
