@@ -106,6 +106,34 @@ def test_provision_creates_server_and_arms_watchdog():
     assert "987654" not in driver._watchdogs
 
 
+def test_provision_honors_explicit_size_and_environment():
+    captured_requests = []
+
+    def mock_opener(req, timeout=30):
+        captured_requests.append(req)
+        return MockHTTPResponse({"server": {"id": 2468}})
+
+    driver = HetznerRunnerDriver(
+        config={"token": "fake-token", "timeout_seconds": 120},
+        opener=mock_opener,
+    )
+
+    server_id = driver.provision(
+        {
+            "runner_id": "synlynk-sized-node",
+            "size": "small",
+            "task_count": 9,
+            "env": {"SYNLYNK_LEASE_ID": "lease-abc123"},
+        }
+    )
+
+    assert server_id == "2468"
+    payload = json.loads(captured_requests[0].data.decode("utf-8"))
+    assert payload["server_type"] == "cpx21"
+    assert "export SYNLYNK_LEASE_ID=lease-abc123" in payload["user_data"]
+    driver.destroy(server_id)
+
+
 def test_destroy_cancels_watchdog_and_issues_delete():
     deleted_urls = []
 
