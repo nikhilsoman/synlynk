@@ -9,16 +9,16 @@ from synlynk import gh_sync
 
 
 def run_backfill(conn, owner: str, repo: str, role: str = "pm") -> dict:
-    arc_ids = [
+    arc_uids = [
         row[0]
         for row in conn.execute(
-            "SELECT id FROM roadmap_arcs "
+            "SELECT arc_uid FROM roadmap_arcs "
             "WHERE is_milestone_eligible = 1 ORDER BY id ASC"
         ).fetchall()
     ]
-    for arc_id in arc_ids:
+    for arc_uid in arc_uids:
         gh_sync.sync_arc(
-            conn, arc_id=arc_id, owner=owner, repo=repo, role=role
+            conn, arc_uid=arc_uid, owner=owner, repo=repo, role=role
         )
 
     story_ids = [
@@ -28,16 +28,14 @@ def run_backfill(conn, owner: str, repo: str, role: str = "pm") -> dict:
         ).fetchall()
     ]
     for story_id in story_ids:
-        phase = conn.execute(
-            "SELECT arc_version FROM roadmap_phases WHERE story_id=?", (story_id,)
-        ).fetchone()
+        arc_ver = gh_sync.story_arc_version(conn, story_id)
         milestone_number = None
-        if phase:
+        if arc_ver:
             mapped = conn.execute(
                 "SELECT gm.github_number FROM github_sync_map gm "
-                "JOIN roadmap_arcs ra ON ra.id = CAST(gm.entity_id AS INTEGER) "
+                "JOIN roadmap_arcs ra ON ra.arc_uid = gm.entity_id "
                 "WHERE gm.entity_type='roadmap_arc' AND ra.version=?",
-                (phase[0],),
+                (arc_ver,),
             ).fetchone()
             milestone_number = mapped[0] if mapped else None
         gh_sync.sync_story(
@@ -65,7 +63,7 @@ def run_backfill(conn, owner: str, repo: str, role: str = "pm") -> dict:
         )
 
     return {
-        "arcs_synced": len(arc_ids),
+        "arcs_synced": len(arc_uids),
         "stories_synced": len(story_ids),
         "decisions_synced": len(decision_ids),
     }

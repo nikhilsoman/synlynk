@@ -38,6 +38,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `harness probe` (secondary) — open
 - `config set` (secondary) — open
 - `config nudges` (secondary) — open
+- `report` (primary) — sustain
 - `whoami` (secondary) — open
 
 ## Tier 1 — Goal
@@ -109,6 +110,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 ## Tier 2 — Execute
 
 - `swarm dispatch` (primary) — execute
+- `swarm lease` (primary) — execute
 - `swarm status` (secondary) — visualize
 - `swarm destroy` (secondary) — execute
 - `media generate` (secondary) — sustain
@@ -122,6 +124,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `dispatch` (primary) — execute
 - `backfill-capability-ratings` (secondary) — execute
 - `charters adapt` (secondary) — sustain
+- `charter migrate` (secondary) — sustain
 - `jobs` (primary) — execute
 - `jobs handoff` (secondary) — execute
 - `jobs reap` (secondary) — execute
@@ -184,6 +187,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `capability report` (secondary) — sustain
 - `capability backfill` (secondary) — sustain
 - `capability export-pack` (secondary) — sustain
+- `capability regen` (secondary) — sustain
 - `run` (primary) — execute
 - `run --trio` (secondary) — execute
 - `local doctor` (secondary) — sustain

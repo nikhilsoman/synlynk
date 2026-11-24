@@ -32,11 +32,11 @@ def test_constitution_canonical_laws_exist():
     assert "Evidence Over Assertions" in law2.name
     assert law2.tier == DeliveryTier.INJECTED
 
-    # Law 3: Metered Self-Preservation
+    # Law 3: Metered Self-Preservation & Cost Traceability
     law3 = CONSTITUTION_LAWS["law-3"]
     assert law3.number == 3
     assert "Self-Preservation" in law3.name
-    assert law3.tier == DeliveryTier.CITED
+    assert law3.tier == DeliveryTier.INJECTED
 
     # Intent Invariant
     inv = CONSTITUTION_LAWS["intent-invariant"]

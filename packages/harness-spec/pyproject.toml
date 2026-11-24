@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "harness-spec"
+version = "0.1.0"
+description = "Universal Agent CLI Discovery & Sandboxing Protocol"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+harness-spec = "harness_spec.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/harness_spec"]

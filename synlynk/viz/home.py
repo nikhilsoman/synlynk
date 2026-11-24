@@ -2,8 +2,11 @@
 import html
 import json
 import os
+from urllib.parse import quote, urlencode
+from synlynk._constants import VERSION
 from synlynk.viz.banner import _compute_underused_feature_banner
 from synlynk.viz.chrome import _live_js
+from synlynk.viz.data import report_issue_payload
 def generate_index_html(data: dict, port: int) -> str:
     """Generate the master Vizor shell with two-tier accordion and location breadcrumbs."""
     workspace = data.get("workspace") or {}
@@ -295,6 +298,19 @@ def generate_index_html(data: dict, port: int) -> str:
       padding:10px 14px;
       background:var(--bg2);
     }
+    .report-issue-link {
+      display:block;
+      margin-bottom:8px;
+      padding:5px 8px;
+      border:1px solid var(--border);
+      border-radius:5px;
+      color:var(--text2);
+      font-size:11px;
+      font-weight:600;
+      text-align:center;
+      text-decoration:none;
+    }
+    .report-issue-link:hover { border-color:var(--accent); color:var(--accent); }
     .theme-sw { display:flex; gap:4px; margin-bottom:8px; }
     .theme-btn {
       flex:1;
@@ -420,7 +436,15 @@ def generate_index_html(data: dict, port: int) -> str:
     .status-updated { margin-left:auto; }
     """
 
-    meta_json = json.dumps({"port": port, "updated_at": updated_at})
+    meta = {"port": port, "updated_at": updated_at, "version": VERSION}
+    meta_json = json.dumps(meta)
+    report_route = f"/w/{quote(workspace_name, safe='')}/overview.html"
+    report_payload = report_issue_payload(report_route, meta)
+    report_query = urlencode({
+        "template": "bug_report.yml",
+        "bundle": json.dumps(report_payload, sort_keys=True, separators=(",", ":")),
+    })
+    report_issue_url = f"https://github.com/nikhilsoman/synlynk/issues/new?{report_query}"
     avatar_label = (workspace_name[:1] or "S").upper()
 
     banner_message = _compute_underused_feature_banner(data)
@@ -585,6 +609,7 @@ def generate_index_html(data: dict, port: int) -> str:
     </div>
 
     <div class="nav-footer">
+      <a class="report-issue-link" data-action="report-issue" href="{html.escape(report_issue_url, quote=True)}" target="_blank" rel="noopener noreferrer" title="Open a public issue with route, version, and fingerprint only">Report issue ↗</a>
       <div class="theme-sw">
         <button class="theme-btn" type="button" data-theme-mode="light">☀ Light</button>
         <button class="theme-btn" type="button" data-theme-mode="dark">☾ Dark</button>

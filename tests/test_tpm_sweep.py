@@ -370,3 +370,34 @@ def test_tpm_wake_cycle_routes_missing_goal_to_needs_architect_input(isolated_db
     assert _backlog_status(row_id) == "needs_architect_input"
     assert result["routed"]["needs_architect_input"] == 1
     assert result["routed"]["tpm_drafted"] == 0
+
+
+def test_package_next_release_proposal_derives_version_from_active_arc(tmp_path):
+    from synlynk.db import _get_db
+    from synlynk.tpm_sweep import package_next_release_proposal
+
+    # Create dummy VERSION file with an older version 0.38.3
+    vfile = tmp_path / "VERSION"
+    vfile.write_text("0.38.3\n", encoding="utf-8")
+
+    conn = _get_db()
+    try:
+        # Create goals and active arc v0.39.2
+        conn.execute(
+            "INSERT INTO goals (goal_id, outcome, criterion, status, arc_version, placement_status) "
+            "VALUES ('goal-test-regen', 'Harness capability routing regen', 'criterion', 'active', 'v0.39.2', 'placed')"
+        )
+        conn.execute(
+            "INSERT INTO stories (story_id, title, role, goal_id, status, readiness) "
+            "VALUES ('story-test-1', 'Regen CLI command', 'dev', 'goal-test-regen', 'open', 'ready')"
+        )
+        conn.commit()
+
+        proposal = package_next_release_proposal(conn=conn, repo_root=str(tmp_path))
+        assert proposal is not None
+        # Must resolve to v0.39.2 from the canonical arc/goal, NOT v0.38.4 from VERSION file!
+        assert proposal["release_version"] == "v0.39.2"
+        assert proposal["target_goal_id"] == "goal-test-regen"
+    finally:
+        conn.close()
+

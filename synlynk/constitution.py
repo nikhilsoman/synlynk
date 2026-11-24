@@ -59,10 +59,10 @@ CONSTITUTION_LAWS: Dict[str, ConstitutionLaw] = {
     "law-3": ConstitutionLaw(
         id="law-3",
         number=3,
-        name="Metered Self-Preservation",
-        summary="Autonomous execution is cost-bounded; token and financial circuit-breakers gate dispatch readiness and demote repeating failures.",
-        tier=DeliveryTier.CITED,
-        enforcement_mechanism="Token circuit breakers, prompt estimate ceiling (200k ceiling), and 2x-consecutive failure stall demotion.",
+        name="Metered Self-Preservation & Cost Traceability",
+        summary="Autonomous execution is cost-bounded and cost-traceable; token and financial circuit-breakers gate dispatch readiness, transcripts have proven provenance, and repeating failures demote.",
+        tier=DeliveryTier.INJECTED,
+        enforcement_mechanism="Token circuit breakers, prompt estimate ceiling (200k ceiling), provenance validation, and 2x-consecutive failure stall demotion.",
     ),
     "intent-invariant": ConstitutionLaw(
         id="intent-invariant",

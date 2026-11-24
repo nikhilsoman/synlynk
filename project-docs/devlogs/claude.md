@@ -624,3 +624,66 @@ chase the `pr_number`-NULL pattern as a broader dispatch pipeline bug.
 - Proposed (pending Nikhil's pick): A) YAML issue form; B) `synlynk report` redacted diagnostic bundle w/ preview; C) flight-recorder ring buffer + failure footers + bearings/task-boundary hint + Vizor "Report issue" button + triage ingestion. Recommended layered A+B+C in 3 slices.
 - Open question: intake destination (public GH issue vs private-first). Spec not yet written.
 [@claude]
+
+## 2026-11-23 — gh:#5443 (LIVE-34) item 3 shipped: PR #5459 merged, two harness failures worked around
+
+- Fixed the `github_sync_map` entity_id drift bug for roadmap arcs/phases (`synlynk/roadmap_identity.py` —
+  `resolve_arc_uid`/`resolve_phase_uid`/`merge_arcs`/`split_arc`/`move_phase`, bound-uid guards, alias-cycle
+  detection). 21 commits across this session, co-authored by Claude (spec/plan + 2 final fixes), Codex
+  (majority implementation + push/PR-create), and Grok (resolver/merge_arcs/split_arc + migration 38).
+  PR #5459 merged (`c7a730d8`).
+- **Cross-harness+model review required both Codex and Claude to be ruled out** (both had authored
+  commits), leaving Agy as the only clean reviewer. Grok's dispatch (job-8e24ea85) failed fast with
+  `402 Payment Required: Grok Build usage balance exhausted` — known recurring failure mode, see
+  `[[feedback_grok_auth_agy_fallback]]`. Agy's dispatch was initially blocked on a stale CLI-version
+  manifest (`synlynk harness probe --harness agy --discover` fixed it), then ran a full, correct review
+  (full diff, test suite 504 passed/28 pre-existing-unrelated failed, `synlynk pr check`/`policy
+  check-merge --role qa` both green, posted the real `gh pr review --approve`, caught the PR was
+  `BEHIND` and ran `gh pr update-branch`) before dying mid-CI-wait with `RESOURCE_EXHAUSTED (429) /
+  "AI credits balance too low"` (job-e1115e94). Rather than redispatching the whole review to a third
+  harness, independently verified via `gh pr view` that the approval + branch update had persisted and
+  CI had since gone green, then dispatched a minimal merge-only follow-up to Agy (job-9df19548,
+  succeeded in ~5m19s) — this re-used the harness that had already done the (still-valid) work instead
+  of discarding it.
+- Posted progress + resolution comments on parent tracking issue #5443 per the Multi-Task & Multi-Goal
+  Series Tracking Protocol.
+- **Could not run Worktree Hygiene Protocol cleanup from this session** — this worktree is sandboxed
+  to its own directory; `cd` to the main repo root (required for `git worktree remove`) is refused
+  outright. Flagged to Nikhil rather than working around it; this worktree and its ~45 nested
+  `worktrees/job-*` dirs need a session rooted at the main checkout to sweep.
+- Appended a fresh recurrence entry to `[[feedback_grok_auth_agy_fallback]]` (job-e1115e94, this
+  session) — Agy's quota exhaustion is not resolved, just rotates; always re-verify before trusting it
+  on anything time-sensitive.
+[@claude]
+
+## 2026-11-23 — gh:#5443 item 3 housekeeping round 2: PR #5460 (docs-only) shipped, nested worktrees swept
+
+- Cut `chore/claude/stable-roadmap-devlog-housekeeping` fresh off `origin/main` (not the now-superseded
+  `chore/claude/stable-roadmap-arc-phase-identity-spec` branch, since PR #5459 had already squash-merged
+  — continuing commits on the old branch would have targeted dead history) to carry the devlog entry
+  above plus a cost-archive backfill row. Per CLAUDE.md's "docs PRs must be separate from code PRs," this
+  had to be its own PR rather than bundled into #5459.
+- Host-identity `git push` was correctly refused by the `synlynk gh` shim ("host identity is not used") —
+  this is the intended policy (personal GitHub token is off-limits to every agent/harness), not a bug to
+  route around. Dispatched the push+PR-create step to Codex per the project's #426 GitHub-write routing
+  priority (`job-5cbf82a2`). It reported the ambiguous status `succeeded_gh_write_failed`
+  (`unknown_contract`) — rather than trusting the label, verified directly via `git ls-remote` and
+  `gh pr list --search head:...`, which confirmed the branch was pushed and PR #5460 was genuinely open.
+  Another instance of this project's long-running job-status false-negative pattern
+  (`[[job-status-false-negative-rca-1377]]`).
+- Dispatched the Hardened PR Review Policy's non-authoring review+merge to Codex (`job-178ead99`, role
+  `qa`) — valid despite Codex having pushed the branch, since it never authored the devlog/memory content
+  itself (I wrote that). Reported `done`/`contract_effect_verified`; independently confirmed via
+  `gh pr view --json state,mergedAt,mergeCommit,reviews` that PR #5460 is genuinely `MERGED` (`a0c4d2e7`)
+  with a real `APPROVED` review from the `synlynk-synlynk-qa` identity, not just a status label.
+- Swept both nested dispatch worktrees/branches (`job-5cbf82a2`, `job-178ead99`) same-turn — both clean,
+  work already folded into the merged PR. The parent worktree itself
+  (`.claude/worktrees/chore-claude-stable-roadmap-arc-phase-identity-spec`, now on branch
+  `chore/claude/stable-roadmap-devlog-housekeeping`) is harness-owned (this session's own isolation), not
+  something created via `git worktree add` from here — left in place per protocol; still needs a
+  main-checkout-rooted session to retire, same carried-over blocker as the prior entry.
+- Posted a closing status comment on parent tracking issue gh:#5443 covering both PRs (#5459, #5460) and
+  the verification-not-trust pattern on the ambiguous job status.
+- Logged native-session cost (`synlynk cost log --pr 5460 ...`) for the dispatch-orchestration +
+  independent-verification work in this round.
+[@claude]

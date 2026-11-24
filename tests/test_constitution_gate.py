@@ -63,3 +63,13 @@ GOVERNS linkage.
     result = check_constitution_gate(str(tmp_path), policy)
     assert result["passed"] is True
     assert len(result["errors"]) == 0
+
+
+def test_check_cost_provenance_gate(tmp_path):
+    """Verify check_cost_provenance_gate passes under Law 3 Tier 3."""
+    from synlynk.pr_check import check_cost_provenance_gate
+
+    res = check_cost_provenance_gate(str(tmp_path))
+    assert res["passed"] is True
+    assert res.get("law") in (None, "law-3")
+

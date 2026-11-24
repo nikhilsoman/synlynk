@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "token-breaker"
+version = "0.1.0"
+description = "In-Flight Token & Spend Circuit Breaker"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+tbreak = "token_breaker.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/token_breaker"]

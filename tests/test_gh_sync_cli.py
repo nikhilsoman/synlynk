@@ -6,7 +6,8 @@ def test_cmd_sync_roadmap_dry_run_does_not_write_sync_map(tmp_path, monkeypatch)
     conn = sqlite3.connect(tmp_path / "state.db")
     conn.execute(
         "CREATE TABLE roadmap_arcs (id INTEGER PRIMARY KEY, version TEXT, title TEXT, "
-        "status TEXT, target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN)"
+        "status TEXT, target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN, "
+        "arc_uid TEXT)"
     )
     conn.execute(
         "CREATE TABLE github_sync_map (entity_type TEXT, entity_id TEXT, github_number INTEGER, "
@@ -15,7 +16,7 @@ def test_cmd_sync_roadmap_dry_run_does_not_write_sync_map(tmp_path, monkeypatch)
     )
     conn.execute(
         "INSERT INTO roadmap_arcs VALUES "
-        "(1, 'v1.0.0', 'First release', 'planned', NULL, NULL, 1)"
+        "(1, 'v1.0.0', 'First release', 'planned', NULL, NULL, 1, 'arc-first')"
     )
     conn.commit()
     conn.close()
@@ -33,3 +34,14 @@ def test_cmd_sync_roadmap_dry_run_does_not_write_sync_map(tmp_path, monkeypatch)
     )
 
     assert calls == []  # dry-run never calls the real sync functions
+
+    gh_sync_cli.cmd_sync_roadmap(
+        dry_run=False, backfill=False, owner="o", repo="r"
+    )
+
+    assert calls[0][2] == {
+        "arc_uid": "arc-first",
+        "owner": "o",
+        "repo": "r",
+        "role": "pm",
+    }

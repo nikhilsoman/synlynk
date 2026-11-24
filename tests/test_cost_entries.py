@@ -98,3 +98,45 @@ def test_insert_cost_row_marks_epic_id_unresolved_when_no_phase_match(
     ).fetchone()
     conn.close()
     assert row == (None, None, "epic_unresolved")
+
+
+def test_insert_cost_row_populates_type_id_from_job_or_story(tmp_path, monkeypatch):
+    db_path = tmp_path / "state.db"
+    conn = _create_cost_test_db(db_path)
+    conn.execute("ALTER TABLE daemon_jobs ADD COLUMN type_id TEXT")
+    conn.execute("ALTER TABLE stories ADD COLUMN type_id TEXT")
+    conn.execute("INSERT INTO daemon_jobs (job_id, role, type_id) VALUES (?, ?, ?)",
+                 ("job-typed", "dev", "implementation"))
+    conn.execute("INSERT INTO stories (story_id, role, type_id) VALUES (?, ?, ?)",
+                 ("story-typed", "dev", "bug"))
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(synlynk, "_get_db", lambda: sqlite3.connect(db_path))
+
+    db._insert_cost_row(
+        session_date="2026-11-24",
+        agent="codex",
+        job_id="job-typed",
+        story_id="story-typed",
+        total_cost_usd=1.0,
+        cost_source="actual",
+    )
+    db._insert_cost_row(
+        session_date="2026-11-24",
+        agent="codex",
+        story_id="story-typed",
+        total_cost_usd=1.0,
+        cost_source="actual",
+    )
+
+    conn = sqlite3.connect(db_path)
+    row = conn.execute(
+        "SELECT type_id FROM cost_entries WHERE job_id='job-typed'"
+    ).fetchone()
+    story_row = conn.execute(
+        "SELECT type_id FROM cost_entries WHERE job_id IS NULL AND story_id='story-typed'"
+    ).fetchone()
+    conn.close()
+    assert row == ("implementation",)
+    assert story_row == ("bug",)

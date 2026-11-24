@@ -1,7 +1,9 @@
 import argparse
+import contextlib
 import json
 import os
 import sys
+import time
 from pathlib import Path
 import re
 
@@ -324,11 +326,11 @@ _TOP_LEVEL_COMMANDS = (
     "help", "init", "quickstart", "upgrade", "fleet", "uninstall", "join", "start", "home", "testbed", "tool",
     "pack", "connector", "impact", "mesh", "spike", "team", "decide", "heal",
     "audit-docs", "goal", "governs", "intent", "local", "models", "media", "scan", "workspace",
-    "migrate", "rollback", "probe", "doctor", "worktree", "tui", "notify", "exit",
+    "migrate", "rollback", "probe", "doctor", "report", "worktree", "tui", "notify", "exit",
     "repair", "sync", "configure", "identity", "type", "whoami", "events", "session",
     "harness", "agent", "exec", "gh", "watch", "swarm", "daemon", "checkpoint", "status",
     "backup", "state", "ops", "selftest", "config", "sentinel", "dispatch", "jobs", "relay",
-    "logs", "shell", "open", "launch", "run", "story", "pm", "tpm", "score", "charters", "cost",
+    "logs", "shell", "open", "launch", "run", "story", "pm", "tpm", "score", "charter", "charters", "cost",
     "roadmap", "policy", "credit", "backlog", "quota", "schedule", "pr", "capability",
     "instructions", "marketing", "roles", "release", "viz", "provenance",
     "backfill-capability-ratings",
@@ -853,6 +855,21 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     doctor_parser.add_argument("--version", action="store_true",
                                help="Report read-only version-authority status")
 
+    report_parser = subparsers.add_parser(
+        "report", help="File a redacted, previewed bug report"
+    )
+    report_parser.add_argument(
+        "--last",
+        action="store_true",
+        help="Build the report from the most recent failed command (Part 2)",
+    )
+    report_parser.add_argument(
+        "--clear-flight",
+        action="store_true",
+        dest="clear_flight",
+        help="Delete the local flight-recorder buffer (Part 2)",
+    )
+
     worktree_parser = subparsers.add_parser(
         "worktree", help="Audit and clean up stale git worktrees/branches"
     )
@@ -1142,9 +1159,17 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     swarm_parser = subparsers.add_parser("swarm", help="Manage ephemeral swarm runners")
     swarm_sub = swarm_parser.add_subparsers(dest="swarm_action")
     swarm_dispatch = swarm_sub.add_parser("dispatch", help="Provision an ephemeral runner batch")
-    swarm_dispatch.add_argument("--driver", choices=("local", "fly"), default="local")
+    swarm_dispatch.add_argument("--driver", choices=("local", "fly", "hetzner"), default="local")
     swarm_dispatch.add_argument("--batch-size", type=int, default=1)
     swarm_dispatch.add_argument("--task", default="true")
+    swarm_lease = swarm_sub.add_parser("lease", help="Lease dedicated swarm host for an epic")
+    swarm_lease.add_argument("--epic", required=True, help="Governing epic or goal ID")
+    swarm_lease.add_argument("--driver", choices=("hetzner", "fly", "local"), default="hetzner")
+    swarm_lease.add_argument("--size", choices=("auto", "small", "medium", "large", "arm_large"), default="auto")
+    swarm_lease.add_argument("--nodes", type=int, default=1, help="Number of nodes for striped queue-drain")
+    swarm_lease.add_argument("--drain-on-empty", action="store_true", help="Auto-destruct node when queue is drained")
+    swarm_lease.add_argument("--relay", action="store_true", help="Dispatch through centralized Synlynk Relay")
+    swarm_lease.add_argument("--watch", action="store_true", help="Stream telemetry until lease completion")
     swarm_status = swarm_sub.add_parser("status", help="Show swarm runner status")
     swarm_status.add_argument("--all", action="store_true")
     swarm_destroy = swarm_sub.add_parser("destroy", help="Destroy swarm runners")
@@ -1778,6 +1803,11 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     charters_adapt_parser.add_argument("--threshold", type=float, default=0.25)
     charters_adapt_parser.add_argument("--write-proposals", action="store_true",
                                        help="Write reviewable proposal files")
+    charter_parser = subparsers.add_parser("charter", help="Migrate/validate individual role charters (Charter v3.0)")
+    charter_sub = charter_parser.add_subparsers(dest="charter_action")
+    charter_migrate_parser = charter_sub.add_parser("migrate", help="Migrate a v1/v2.0 charter to Charter v3.0")
+    charter_migrate_parser.add_argument("--role", required=True, help="Role to migrate (e.g. pm, dev)")
+    charter_migrate_parser.add_argument("--apply", action="store_true", help="Write the migrated v3 YAML file (default: dry-run)")
     attest_parser = score_sub.add_parser("attest", help="Retroactively attest model version")
     attest_parser.add_argument("story_id")
     attest_parser.add_argument("--model", required=True)
@@ -1789,6 +1819,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     cost_log_parser.add_argument("--tokens-in", type=int, required=True, dest="tokens_in")
     cost_log_parser.add_argument("--tokens-out", type=int, required=True, dest="tokens_out")
     cost_log_parser.add_argument("--story-id", "--story", default=None, dest="story_id")
+    cost_log_parser.add_argument("--task-type", default=None, dest="task_type")
     cost_log_parser.add_argument("--job-id", default=None, dest="job_id")
     cost_log_parser.add_argument(
         "--pr", type=int, default=None,
@@ -2078,6 +2109,10 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "sweep",
         help="Run a calibration sweep across agents/models to seed the capability baseline",
     )
+    regen_parser = capability_sub.add_parser(
+        "regen", help="Regenerate capability policy fields from canonical state.db"
+    )
+    regen_parser.add_argument("--dry-run", action="store_true", dest="dry_run")
     sweep_parser.add_argument(
         "--cost-cap",
         type=float,
@@ -2519,7 +2554,7 @@ def _run_fast_observability_command(cli_tokens, selected_command):
 
 
 
-def main(argv=None) -> None:
+def _dispatch_command(argv=None) -> None:
     import synlynk as _package
 
     cli_tokens = list(argv) if argv is not None else sys.argv[1:]
@@ -2539,16 +2574,17 @@ def main(argv=None) -> None:
             print(f"error: {exc}", file=sys.stderr)
             raise SystemExit(2) from exc
 
-    # Non-intrusive background update check
-    try:
-        from synlynk.upgrade import check_for_updates_background, get_update_notice
+    # Reporting is read-only until the user explicitly files or saves a draft.
+    if not cli_tokens or cli_tokens[0] != "report":
+        try:
+            from synlynk.upgrade import check_for_updates_background, get_update_notice
 
-        check_for_updates_background()
-        notice = get_update_notice()
-        if notice and sys.stderr.isatty() and not any(t in cli_tokens for t in ["--json", "pack", "--raw"]):
-            print(f"\n  {notice}\n", file=sys.stderr)
-    except Exception:
-        pass
+            check_for_updates_background()
+            notice = get_update_notice()
+            if notice and sys.stderr.isatty() and not any(t in cli_tokens for t in ["--json", "pack", "--raw"]):
+                print(f"\n  {notice}\n", file=sys.stderr)
+        except Exception:
+            pass
 
     fast_entrypoint = _package._FAST_CLI
     if cli_tokens and cli_tokens[0] == "help":
@@ -2666,7 +2702,7 @@ def main(argv=None) -> None:
             _cmd_name = tok
             break
     _repo_initialized = os.path.exists(".synlynk/config.json") or os.path.exists(".synlynk/workspace.json")
-    if _repo_initialized or _cmd_name != "init":
+    if _cmd_name != "report" and (_repo_initialized or _cmd_name != "init"):
         _reconcile_jobs()
         try:
             from synlynk.capability_watch import spawn_staleness_check_thread
@@ -2775,6 +2811,18 @@ def main(argv=None) -> None:
             sys.exit(0)
         gh_args = getattr(args, "gh_args", []) or []
         if gh_args and gh_args[0] == "sync-roadmap":
+            allowed_flags = {"--dry-run", "--backfill"}
+            unsupported = [token for token in gh_args[1:] if token not in allowed_flags]
+            if unsupported:
+                print(
+                    "usage: synlynk gh sync-roadmap [--dry-run] [--backfill]",
+                    file=sys.stderr,
+                )
+                print(
+                    f"error: unrecognized argument: {unsupported[0]}",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
             from synlynk.gh_sync_cli import cmd_sync_roadmap
             from synlynk.github_repo import resolve_owner_repo
             owner, repo = resolve_owner_repo()
@@ -2841,9 +2889,11 @@ def main(argv=None) -> None:
         else:
             cmd_watch(args)
     elif args.command == "swarm":
-        from synlynk.swarm import cmd_swarm_destroy, cmd_swarm_dispatch, cmd_swarm_status
+        from synlynk.swarm import cmd_swarm_destroy, cmd_swarm_dispatch, cmd_swarm_status, cmd_swarm_lease
         if args.swarm_action == "dispatch":
             cmd_swarm_dispatch(args)
+        elif args.swarm_action == "lease":
+            cmd_swarm_lease(args)
         elif args.swarm_action == "status":
             cmd_swarm_status(args)
         elif args.swarm_action == "destroy":
@@ -3270,6 +3320,17 @@ def main(argv=None) -> None:
             cmd_charters_adapt(threshold=args.threshold, dry_run=not args.write_proposals)
         else:
             parser.parse_args(["charters", "--help"])
+    elif args.command == "charter":
+        if getattr(args, "charter_action", None) == "migrate":
+            from synlynk.charter_migrate import cmd_charter_migrate
+            result = cmd_charter_migrate(
+                role=args.role, apply=args.apply, charters_dir=os.path.join(os.getcwd(), ".synlynk", "charters")
+            )
+            print(f"role={result['role']} applied={result['applied']}")
+            if not result["applied"]:
+                print("(dry-run — pass --apply to write the v3 YAML file)")
+        else:
+            parser.parse_args(["charter", "--help"])
     elif args.command == "jobs":
         if getattr(args, "jobs_cmd", None) == "handoff":
             _warn_deprecated_harness_flag(cli_tokens)
@@ -3471,6 +3532,7 @@ def main(argv=None) -> None:
                 args.tokens_in,
                 args.tokens_out,
                 story_id=args.story_id,
+                task_type=args.task_type,
                 job_id=args.job_id,
                 pr=args.pr,
                 note=args.note,
@@ -3724,6 +3786,9 @@ def main(argv=None) -> None:
                 cost_cap_override=getattr(args, "cost_cap", None),
                 harness=getattr(args, "harness", None),
             )
+        elif args.capability_action == "regen":
+            from synlynk.capability_regen import cmd_capability_regen
+            cmd_capability_regen(dry_run=getattr(args, "dry_run", False))
         elif args.capability_action == "report":
 
             from synlynk.capability_report import cmd_capability_report
@@ -4092,6 +4157,10 @@ def main(argv=None) -> None:
         )
     elif args.command == "doctor":
         sys.exit(cmd_doctor(args))
+    elif args.command == "report":
+        from synlynk.report_cmd import cmd_report
+
+        sys.exit(cmd_report(args))
     elif args.command == "worktree":
         from synlynk.worktree import cmd_worktree_audit, cmd_worktree_clean
         action = getattr(args, "worktree_action", None)
@@ -4370,6 +4439,94 @@ def main(argv=None) -> None:
         sys.exit(cmd_spec_lint(args))
     else:
         parser.print_help()
+
+
+class _StderrTee:
+    """Forward stderr while retaining only a bounded first non-empty line."""
+
+    _MAX_CAPTURED_LINE = 2048
+
+    def __init__(self, target):
+        self.target = target
+        self.first_line = ""
+
+    def write(self, text):
+        result = self.target.write(text)
+        if not self.first_line:
+            for character in text:
+                if character in "\r\n":
+                    if self.first_line:
+                        break
+                    continue
+                if len(self.first_line) < self._MAX_CAPTURED_LINE:
+                    self.first_line += character
+                if len(self.first_line) == self._MAX_CAPTURED_LINE:
+                    break
+        return result
+
+    def flush(self):
+        return self.target.flush()
+
+    def __getattr__(self, name):
+        return getattr(self.target, name)
+
+
+def _system_exit_code(exc: SystemExit) -> int:
+    if exc.code is None:
+        return 0
+    if isinstance(exc.code, int):
+        return exc.code
+    return 1
+
+
+def run_with_recorder(argv=None) -> int:
+    """Run the CLI and best-effort record its outcome without changing it."""
+    cli_tokens = list(argv) if argv is not None else sys.argv[1:]
+    selected_command = _command_from_argv(cli_tokens)
+    if selected_command == "report":
+        result = _dispatch_command(cli_tokens)
+        return result if isinstance(result, int) else 0
+
+    started = time.monotonic()
+    stderr_capture = _StderrTee(sys.stderr)
+    exit_code = 0
+    error = ""
+    try:
+        with contextlib.redirect_stderr(stderr_capture):
+            result = _dispatch_command(cli_tokens)
+        exit_code = result if isinstance(result, int) else 0
+        return exit_code
+    except SystemExit as exc:
+        exit_code = _system_exit_code(exc)
+        raise
+    except BaseException as exc:
+        exit_code = 1
+        error = str(exc)
+        raise
+    finally:
+        if stderr_capture.first_line:
+            error = stderr_capture.first_line
+        try:
+            from synlynk import flight_recorder
+
+            flight_recorder.record(
+                os.getcwd(),
+                command=selected_command or "",
+                flags=cli_tokens,
+                exit_code=exit_code,
+                duration=time.monotonic() - started,
+                error=error,
+            )
+        except Exception:
+            pass
+        if exit_code != 0:
+            from synlynk.report_cmd import report_hint
+
+            print(report_hint(), file=sys.stderr)
+
+
+def main(argv=None) -> int:
+    return run_with_recorder(argv)
 
 if __name__ == "__main__":
     main()

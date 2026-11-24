@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import re
+import sys
 import time
 
 from synlynk.gh_shim import run_gh
@@ -63,19 +64,58 @@ _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _TITLE_MAX_LEN = 240  # Headroom under GitHub's practical 256-character limit.
 
 
-def _render_arc_description(conn, arc_id: int) -> str:
+
+
+def story_arc_version(conn, story_id: str) -> str | None:
+    """Return the roadmap arc containing a story through its linked goal or phase."""
+    try:
+        row = conn.execute(
+            """
+            SELECT arc_version
+            FROM (
+                SELECT g.arc_version, 0 AS link_order
+                FROM stories s
+                JOIN goals g ON g.goal_id = s.goal_id
+                WHERE s.story_id = ?
+                UNION ALL
+                SELECT g.arc_version, 1 AS link_order
+                FROM goal_contributions gc
+                JOIN goals g ON g.goal_id = gc.goal_id
+                WHERE gc.story_id = ?
+            )
+            WHERE arc_version IS NOT NULL
+            ORDER BY link_order
+            LIMIT 1
+            """,
+            (story_id, story_id),
+        ).fetchone()
+        if row and row[0]:
+            return row[0]
+    except Exception:
+        pass
+    try:
+        phase = conn.execute(
+            "SELECT arc_version FROM roadmap_phases WHERE story_id=?", (story_id,)
+        ).fetchone()
+        if phase and phase[0]:
+            return phase[0]
+    except Exception:
+        pass
+    return None
+
+def _render_arc_description(conn, arc_uid: str) -> str:
     notes_row = conn.execute(
-        "SELECT notes FROM roadmap_arcs WHERE id=?",
-        (arc_id,),
+        "SELECT notes FROM roadmap_arcs WHERE arc_uid=?",
+        (arc_uid,),
     ).fetchone()
     notes = (notes_row[0] or "").strip() if notes_row else ""
     phases = conn.execute(
         "SELECT phase_title, status FROM roadmap_phases "
-        "WHERE arc_version = (SELECT version FROM roadmap_arcs WHERE id=?) "
+        "WHERE arc_version = (SELECT version FROM roadmap_arcs WHERE arc_uid=?) "
         "ORDER BY id ASC",
-        (arc_id,),
+        (arc_uid,),
     ).fetchall()
-    rollup = _cost_rollup_for_arc(conn, arc_id)
+    rollup = _cost_rollup_for_arc(conn, arc_uid)
     lines = []
     if notes:
         lines.append(notes)
@@ -92,17 +132,17 @@ def _render_arc_description(conn, arc_id: int) -> str:
     return "\n".join(lines)
 
 
-def _arc_sync_fields(conn, arc_id: int) -> dict:
+def _arc_sync_fields(conn, arc_uid: str) -> dict:
     row = conn.execute(
-        "SELECT version, title, status, target_date FROM roadmap_arcs WHERE id=?",
-        (arc_id,),
+        "SELECT version, title, status, target_date FROM roadmap_arcs WHERE arc_uid=?",
+        (arc_uid,),
     ).fetchone()
     version, title, status, target_date = row
     return {
         "title": version,
         "state": "closed" if status in _CLOSED_STATUSES else "open",
         "due_on": target_date,
-        "description": _render_arc_description(conn, arc_id),
+        "description": _render_arc_description(conn, arc_uid),
     }
 
 
@@ -128,22 +168,27 @@ def _find_milestone_by_title(
     return None
 
 
-def sync_arc(conn, arc_id: int, owner: str, repo: str, role: str = "pm") -> None:
+def sync_arc(conn, arc_uid: str, owner: str, repo: str, role: str = "pm") -> None:
+    from synlynk.roadmap_identity import resolve_arc_uid
+
+    resolved_uid = resolve_arc_uid(conn, arc_uid)
     row = conn.execute(
-        "SELECT version, status, is_milestone_eligible FROM roadmap_arcs WHERE id=?",
-        (arc_id,),
+        "SELECT version, status, is_milestone_eligible FROM roadmap_arcs WHERE arc_uid=?",
+        (resolved_uid,),
     ).fetchone()
+    if row is None:
+        return  # arc_uid unresolvable (e.g. diverged arc_version group) -- skip, doctor already warns
     version, status, eligible = row
     if not eligible:
         return
 
-    fields = _arc_sync_fields(conn, arc_id)
+    fields = _arc_sync_fields(conn, resolved_uid)
     new_hash = _content_hash(fields)
 
     mapped = conn.execute(
         "SELECT github_number, content_hash FROM github_sync_map "
         "WHERE entity_type='roadmap_arc' AND entity_id=?",
-        (str(arc_id),),
+        (resolved_uid,),
     ).fetchone()
 
     if mapped and mapped[1] == new_hash:
@@ -159,6 +204,22 @@ def sync_arc(conn, arc_id: int, owner: str, repo: str, role: str = "pm") -> None
 
     if mapped:
         github_number = mapped[0]
+        live_milestone = _gh_api_json(
+            [
+                f"repos/{owner}/{repo}/milestones/{github_number}",
+                "--method",
+                "GET",
+            ],
+            role=role,
+        )
+        live_title = live_milestone.get("title") if live_milestone else None
+        if live_title != fields["title"]:
+            print(
+                f"warning: refusing to sync arc {resolved_uid}: expected mapped milestone "
+                f"title {fields['title']!r}, found {live_title!r}",
+                file=sys.stderr,
+            )
+            return
         result = _gh_api_json(
             [f"repos/{owner}/{repo}/milestones/{github_number}", "--method", "PATCH"]
             + [f"-f{k}={v}" for k, v in payload.items()],
@@ -194,7 +255,7 @@ def sync_arc(conn, arc_id: int, owner: str, repo: str, role: str = "pm") -> None
         "ON CONFLICT(entity_type, entity_id) DO UPDATE SET "
         "github_number=excluded.github_number, github_node_id=excluded.github_node_id, "
         "content_hash=excluded.content_hash, last_synced_at=excluded.last_synced_at",
-        (str(arc_id), github_number, node_id, new_hash),
+        (resolved_uid, github_number, node_id, new_hash),
     )
     conn.commit()
 
@@ -214,12 +275,17 @@ def sync_arc(conn, arc_id: int, owner: str, repo: str, role: str = "pm") -> None
             pass  # Milestones don't support labels directly on all gh versions; best-effort only
 
 
-def _cost_rollup_for_arc(conn, arc_id: int) -> dict:
+def _cost_rollup_for_arc(conn, arc_uid: str) -> dict:
+    positional_id = conn.execute(
+        "SELECT id FROM roadmap_arcs WHERE arc_uid=?", (arc_uid,)
+    ).fetchone()
+    if positional_id is None:
+        return {"actual_usd": 0.0, "entry_count": 0, "unresolved_count": 0}
     row = conn.execute(
         "SELECT COALESCE(SUM(actual_usd), 0.0), COUNT(*), "
         "SUM(CASE WHEN estimate_basis='epic_unresolved' THEN 1 ELSE 0 END) "
         "FROM cost_entries WHERE epic_id=?",
-        (arc_id,),
+        (positional_id[0],),
     ).fetchone()
     return {
         "actual_usd": row[0] or 0.0,

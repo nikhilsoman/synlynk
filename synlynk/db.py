@@ -2712,6 +2712,7 @@ def _insert_cost_row(
     total_cost_usd: float = 0.0,
     notes: str = None,
     story_id: str = None,
+    type_id: str = None,
     epic_id: int = None,
     phase_id: int = None,
     estimate_basis: str = None,
@@ -2806,6 +2807,27 @@ def _insert_cost_row(
             except Exception:
                 pass
 
+        if type_id is None and job_id:
+            try:
+                type_row = conn.execute(
+                    "SELECT type_id FROM daemon_jobs WHERE job_id=?",
+                    (job_id,),
+                ).fetchone()
+                if type_row and type_row[0]:
+                    type_id = type_row[0]
+            except Exception:
+                pass
+        if type_id is None and story_id:
+            try:
+                type_row = conn.execute(
+                    "SELECT type_id FROM stories WHERE story_id=?",
+                    (story_id,),
+                ).fetchone()
+                if type_row and type_row[0]:
+                    type_id = type_row[0]
+            except Exception:
+                pass
+
         if epic_id is None and phase_id is None and story_id:
             try:
                 p_row = conn.execute(
@@ -2870,6 +2892,7 @@ def _insert_cost_row(
                         payment_mode=?,
                         notes=?,
                         story_id=?,
+                        type_id=COALESCE(?, type_id),
                         epic_id=?,
                         phase_id=?,
                         dispatch_context=COALESCE(?, dispatch_context),
@@ -2901,6 +2924,7 @@ def _insert_cost_row(
                         payment_mode,
                         notes,
                         story_id,
+                        type_id,
                         epic_id,
                         phase_id,
                         dispatch_context,
@@ -2933,9 +2957,9 @@ def _insert_cost_row(
                 return
         insert_sql = """INSERT INTO cost_entries
                 (session_date, agent, harness, agent_role, model, input_tokens, output_tokens, cache_read_tokens,
-                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, pr_number, decision_revision, turn_usage_json,
+                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, type_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, pr_number, decision_revision, turn_usage_json,
                  estimated_input_tokens, estimated_output_tokens, estimated_cost_usd, compaction_event_type, requested_harness)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
         insert_params = (
                 session_date,
                 agent_val,
@@ -2953,6 +2977,7 @@ def _insert_cost_row(
                 payment_mode,
                 notes,
                 story_id,
+                type_id,
                 epic_id,
                 phase_id,
                 job_id,
@@ -4061,10 +4086,10 @@ def _try_sync_arc_by_version(version: str) -> None:
         owner, repo = resolve_owner_repo()
         conn = _get_db()
         row = conn.execute(
-            "SELECT id FROM roadmap_arcs WHERE version=?", (version,)
+            "SELECT arc_uid FROM roadmap_arcs WHERE version=?", (version,)
         ).fetchone()
         if row:
-            sync_arc(conn, arc_id=row[0], owner=owner, repo=repo)
+            sync_arc(conn, arc_uid=row[0], owner=owner, repo=repo)
     except Exception:
         pass
     finally:
@@ -4082,16 +4107,15 @@ def _try_sync_story(story_id: str) -> None:
     try:
         owner, repo = resolve_owner_repo()
         conn = _get_db()
-        phase = conn.execute(
-            "SELECT arc_version FROM roadmap_phases WHERE story_id=?", (story_id,)
-        ).fetchone()
+        from synlynk.gh_sync import story_arc_version
+        arc_ver = story_arc_version(conn, story_id)
         milestone_number = None
-        if phase:
+        if arc_ver:
             mapped = conn.execute(
                 "SELECT gm.github_number FROM github_sync_map gm "
-                "JOIN roadmap_arcs ra ON ra.id = CAST(gm.entity_id AS INTEGER) "
+                "JOIN roadmap_arcs ra ON ra.arc_uid = gm.entity_id "
                 "WHERE gm.entity_type='roadmap_arc' AND ra.version=?",
-                (phase[0],),
+                (arc_ver,),
             ).fetchone()
             milestone_number = mapped[0] if mapped else None
         sync_story(
@@ -5607,6 +5631,7 @@ def cmd_cost_log(
     tokens_in: int,
     tokens_out: int,
     story_id: str = None,
+    task_type: str = None,
     job_id: str = None,
     pr: int = None,
     note: str = None,
@@ -5673,6 +5698,7 @@ def cmd_cost_log(
         total_cost_usd=est_cost,
         notes=note,
         story_id=story_id,
+        type_id=task_type,
         api_equivalent_usd=payment_value.api_equivalent_usd,
         actual_usd=payment_value.actual_usd,
         payment_mode=payment_value.mode,

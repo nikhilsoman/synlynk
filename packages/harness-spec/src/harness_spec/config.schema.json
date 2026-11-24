@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HarnessSpecConfig",
+  "type": "object",
+  "properties": {
+    "custom_harnesses": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "binary_name": { "type": "string" },
+          "display_name": { "type": "string" },
+          "headless_prompt_flag": { "type": "string" },
+          "default_sandbox_flag": { "type": "string" }
+        },
+        "required": ["binary_name"]
+      }
+    },
+    "preferred_harness_order": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": true
+}

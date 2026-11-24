@@ -266,9 +266,12 @@ def _reconciliation_lock():
     """Serialize flat-file reconciliation across concurrent CLI processes."""
     jobs_file = _pkg("JOBS_FILE")
     lock_path = f"{jobs_file}.reconcile.lock"
+    lock_dir = os.path.dirname(lock_path)
+    if not os.path.isdir(lock_dir):
+        yield
+        return
     handle = None
     try:
-        os.makedirs(os.path.dirname(lock_path), exist_ok=True)
         handle = open(lock_path, "a+")
     except OSError as exc:
         print(
@@ -6331,7 +6334,9 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                     deps
                 ).fetchall()
                 dep_statuses = {r[0]: r[1] for r in dep_rows}
-                if any(dep_statuses.get(d) == "failed" for d in deps):
+                # Terminal failure cascade: if any dependency failed, timed out, cancelled, or aborted, abort the dependent job
+                terminal_fail_states = {"failed", "timeout", "timed_out", "cancelled", "error", "aborted"}
+                if any(dep_statuses.get(d) in terminal_fail_states for d in deps):
                     _settle_daemon_job_terminal(
                         conn, job_id, "failed", 1, now, only_running=False,
                         process_state=_terminal_process_state(conn, job_id),

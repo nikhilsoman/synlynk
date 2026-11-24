@@ -11,6 +11,22 @@ from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 from synlynk._lazy import pkg as _pkg
 
 
+_FP_RE = re.compile(r"^fingerprint: ([0-9a-f]{12})$", re.M)
+
+
+def find_duplicate_by_fingerprint(issue: dict, existing: list[dict]) -> int | None:
+    match = _FP_RE.search(issue.get("body", ""))
+    if not match:
+        return None
+    for other in existing:
+        if (
+            other["number"] != issue["number"]
+            and match.group(1) in _FP_RE.findall(other.get("body", ""))
+        ):
+            return other["number"]
+    return None
+
+
 def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) -> None:
     """Run named agent: collect signals → dedup → investigate → file → fix."""
     import hashlib as _hashlib
@@ -84,7 +100,7 @@ def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) 
     for finding in to_process:
         print(f"  [agent:{name}] investigating: {finding['summary'][:80]}")
         investigation = _run_investigation(finding, cfg)
-        gh_issue_url = _file_gh_issue(finding, investigation, dry_run=False)
+        gh_issue_url = _publish_triage_result(finding, investigation)
         status = "filed"
 
         fix_pr_url = ""
@@ -354,6 +370,20 @@ def _collect_github_issues(signal_cfg: dict) -> list:
         issue_labels = [lbl.get("name", "") for lbl in issue.get("labels", [])]
         if "support-engineer" in issue_labels:
             continue
+        issue_number = issue.get("number")
+        early_adopter = "early-adopter" in issue_labels
+        older_issues = [
+            other
+            for other in issues
+            if other.get("number") is not None
+            and issue_number is not None
+            and other["number"] < issue_number
+        ]
+        duplicate_number = (
+            find_duplicate_by_fingerprint(issue, older_issues)
+            if early_adopter
+            else None
+        )
         signal_hash = _hashlib.md5(str(issue.get("number", "")).encode()).hexdigest()[:16]
         findings.append({
             "type": "github_issues",
@@ -361,6 +391,9 @@ def _collect_github_issues(signal_cfg: dict) -> list:
             "summary": f"#{issue['number']}: {issue.get('title', '')[:100]}",
             "detail": issue.get("body", "")[:500],
             "signal_hash": signal_hash,
+            "issue_number": issue_number,
+            "early_adopter": early_adopter,
+            "duplicate_number": duplicate_number,
         })
     return findings
 
@@ -515,6 +548,39 @@ def _file_gh_issue(finding: dict, investigation: dict, dry_run: bool) -> str:
     )
     if result.returncode != 0:
         print(f"  [support] gh issue create failed: {result.stderr[:200]}")
+        return ""
+    return result.stdout.strip()
+
+
+def _publish_triage_result(finding: dict, investigation: dict) -> str:
+    """Publish early-adopter triage as a comment; preserve legacy filing otherwise."""
+    if finding.get("type") != "github_issues" or not finding.get("early_adopter"):
+        return _file_gh_issue(finding, investigation, dry_run=False)
+
+    number = finding.get("issue_number")
+    if number is None:
+        return ""
+
+    severity = {
+        "high": "Sev1 — core broken, data loss, or correctness risk",
+        "medium": "Sev2 — major feature degraded; a workaround may exist",
+        "low": "Sev3 — minor UX issue or edge case",
+    }.get(finding.get("severity"), "Sev2 — major feature degraded; a workaround may exist")
+    lines = ["Automated triage suggestion:"]
+    duplicate = finding.get("duplicate_number")
+    if duplicate is not None:
+        lines.append(f"- Possible duplicate of #{duplicate}.")
+    lines.append(f"- Severity suggestion: **{severity}**.")
+    lines.append("Maintainers should confirm both suggestions before taking action.")
+    body = "\n".join(lines)
+
+    result = subprocess.run(
+        ["gh", "issue", "comment", str(number), "--body", body],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(f"  [support] gh issue comment failed: {result.stderr[:200]}")
         return ""
     return result.stdout.strip()
 

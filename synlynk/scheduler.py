@@ -182,6 +182,13 @@ def _enqueue_plan(plan: list) -> list:
     try:
         for item in plan:
             story_id = item["story_id"]
+            # Prevent double reservations / duplicate jobs on replay
+            existing = conn.execute(
+                "SELECT job_id FROM daemon_jobs WHERE story_id=? AND status IN ('queued', 'running')",
+                (story_id,)
+            ).fetchone()
+            if existing:
+                continue
             agent = item["agent"]
             task = f"Implement {story_id}: {item.get('title') or story_id}"
             job_id = "djob-" + hashlib.md5(

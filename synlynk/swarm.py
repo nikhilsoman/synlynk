@@ -68,6 +68,35 @@ def cmd_swarm_status(args):
 def cmd_swarm_destroy(args):
     manager = _manager()
     records = manager.list(include_destroyed=False)
+
+
+def cmd_swarm_lease(args):
+    """Lease a dedicated vertical swarm host for an epic (Direct BYOT or Hosted Relay)."""
+    driver_name = getattr(args, "driver", "hetzner")
+    epic_id = getattr(args, "epic", None)
+    size = getattr(args, "size", "auto")
+    relay_mode = getattr(args, "relay", False)
+
+    manager = _manager()
+    spec = {
+        "epic_id": epic_id,
+        "size": size,
+        "driver": driver_name,
+        "relay": relay_mode,
+        "command": ["synlynk", "swarm", "worker", "--epic", str(epic_id)],
+    }
+    runner_id = manager.provision(spec, driver_name)
+    _publish_progress(runner_id, {"status": "leased", "epic_id": epic_id, "driver": driver_name})
+    result = {
+        "lease_id": runner_id,
+        "epic_id": epic_id,
+        "driver": driver_name,
+        "relay": relay_mode,
+        "status": "active",
+    }
+    print(json.dumps(result, indent=2))
+    return result
+
     targets = [r["runner_id"] for r in records] if args.all else ([args.runner_id] if args.runner_id else [])
     destroyed = [runner_id for runner_id in targets if manager.destroy(runner_id)]
     print(json.dumps({"destroyed": destroyed}))
