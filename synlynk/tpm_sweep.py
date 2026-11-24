@@ -961,38 +961,57 @@ def _resolve_packaging_target(
     # 1. Check if rel_ver is explicitly bound in roadmap_arcs with active stories
     if rel_ver and has_arcs:
         arc_row = conn.execute(
-            "SELECT version, title FROM roadmap_arcs WHERE (version=? OR version=?) AND title IS NOT NULL LIMIT 1",
+            "SELECT version, title, goal_id FROM roadmap_arcs WHERE (version=? OR version=?) AND title IS NOT NULL LIMIT 1" if "goal_id" in arc_cols else "SELECT version, title, NULL FROM roadmap_arcs WHERE (version=? OR version=?) AND title IS NOT NULL LIMIT 1",
             (rel_ver, clean_ver),
         ).fetchone()
         if arc_row:
-            aver, title = arc_row[0], arc_row[1]
-            has_stories = conn.execute(
-                "SELECT s.goal_id, COALESCE(g.phase_title, g.outcome) FROM stories s "
-                "JOIN goals g ON (s.goal_id = g.goal_id OR s.goal_id = CAST(g.id AS TEXT)) "
-                "WHERE (g.arc_version=? OR g.arc_version=?) AND s.status NOT IN ('done', 'archived') LIMIT 1",
-                (rel_ver, clean_ver),
-            ).fetchone()
+            aver, title, arc_gid = arc_row[0], arc_row[1], arc_row[2]
+            # Match either via goals.arc_version (when present) or directly via arc_row.goal_id
+            has_stories = None
+            if "arc_version" in goal_cols:
+                has_stories = conn.execute(
+                    "SELECT s.goal_id, COALESCE(g.phase_title, g.outcome) FROM stories s "
+                    "JOIN goals g ON (s.goal_id = g.goal_id OR s.goal_id = CAST(g.id AS TEXT)) "
+                    "WHERE (g.arc_version=? OR g.arc_version=?) AND s.status NOT IN ('done', 'archived') LIMIT 1",
+                    (rel_ver, clean_ver),
+                ).fetchone()
+            elif arc_gid:
+                has_stories = conn.execute(
+                    "SELECT s.goal_id, NULL FROM stories s "
+                    "WHERE (s.goal_id=? OR s.goal_id=?) AND s.status NOT IN ('done', 'archived') LIMIT 1",
+                    (arc_gid, arc_gid),
+                ).fetchone()
             if has_stories:
                 return has_stories[0], has_stories[1] or title, aver
 
     # 2. Find next active arc with uncompleted stories (filtered to >= cur_base_ver so legacy arcs are excluded)
     if has_arcs:
         active_arcs = conn.execute(
-            "SELECT version, title FROM roadmap_arcs WHERE status NOT IN ('shipped', 'done') AND version IS NOT NULL"
+            "SELECT version, title, goal_id FROM roadmap_arcs WHERE status NOT IN ('shipped', 'done') AND version IS NOT NULL" if "goal_id" in arc_cols else "SELECT version, title, NULL FROM roadmap_arcs WHERE status NOT IN ('shipped', 'done') AND version IS NOT NULL"
         ).fetchall()
         valid_arcs = []
-        for aver, title in active_arcs:
+        for aver, title, arc_gid in active_arcs:
             s_ver = _parse_semver(aver)
             if s_ver and s_ver >= cur_base_ver:
-                valid_arcs.append((s_ver, aver, title))
+                valid_arcs.append((s_ver, aver, title, arc_gid))
         valid_arcs.sort(key=lambda x: x[0])
-        for _, aver, title in valid_arcs:
-            has_stories = conn.execute(
-                "SELECT s.goal_id, COALESCE(g.phase_title, g.outcome) FROM stories s "
-                "JOIN goals g ON (s.goal_id = g.goal_id OR s.goal_id = CAST(g.id AS TEXT)) "
-                "WHERE g.arc_version = ? AND s.status NOT IN ('done', 'archived') LIMIT 1",
-                (aver,),
-            ).fetchone()
+        for _, aver, title, arc_gid in valid_arcs:
+            has_stories = None
+            if "arc_version" in goal_cols:
+                has_stories = conn.execute(
+                    "SELECT s.goal_id, COALESCE(g.phase_title, g.outcome) FROM stories s "
+                    "JOIN goals g ON (s.goal_id = g.goal_id OR s.goal_id = CAST(g.id AS TEXT)) "
+                    "WHERE g.arc_version = ? AND s.status NOT IN ('done', 'archived') LIMIT 1",
+                    (aver,),
+                ).fetchone()
+            elif arc_gid:
+                has_stories = conn.execute(
+                    "SELECT s.goal_id, NULL FROM stories s "
+                    "WHERE (s.goal_id=? OR s.goal_id=?) AND s.status NOT IN ('done', 'archived') LIMIT 1",
+                    (arc_gid, arc_gid),
+                ).fetchone()
+            if has_stories:
+                return has_stories[0], has_stories[1] or title, aver
             if has_stories:
                 return has_stories[0], has_stories[1] or title, aver
 
