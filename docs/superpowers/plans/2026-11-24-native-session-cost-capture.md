@@ -449,10 +449,11 @@ class ParseResult:
 _USAGE_KEYS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
 
 
-def parse_chunk(data: bytes, recent_ids: list) -> ParseResult:
+def parse_chunk(data: bytes, recent_ids: list, *, session_wide: bool = False) -> ParseResult:
     end = data.rfind(b"\n") + 1  # only complete lines
-    seen = list(recent_ids)
+    seen = set(recent_ids) if session_wide else list(recent_ids)
     records, pr_links = [], []
+    recent_tail = list(recent_ids)[-RECENT_ID_WINDOW:]
     for raw in data[:end].splitlines():
         if not raw.strip():
             continue
@@ -476,14 +477,21 @@ def parse_chunk(data: bytes, recent_ids: list) -> ParseResult:
         mid = msg.get("id")
         if not mid:
             raise TranscriptFormatError("assistant record without message.id")
-        if mid in seen:
-            continue
-        seen.append(mid)
-        seen = seen[-RECENT_ID_WINDOW:]
+        if session_wide:
+            if mid in seen:
+                continue
+            seen.add(mid)
+        else:
+            if mid in seen:
+                continue
+            seen.append(mid)
+            seen = seen[-RECENT_ID_WINDOW:]
+        recent_tail.append(mid)
+        recent_tail = recent_tail[-RECENT_ID_WINDOW:]
         ts = obj.get("timestamp") or ""
         records.append(Record(mid, model, ts[:10], usage["input_tokens"], usage["output_tokens"],
                               usage["cache_creation_input_tokens"], usage["cache_read_input_tokens"]))
-    return ParseResult(records, pr_links, end, seen)
+    return ParseResult(records, pr_links, end, recent_tail)
 
 
 def bucketize(records) -> dict:
@@ -698,7 +706,9 @@ def _log_error(msg: str) -> None:
         pass
 
 
-def capture(conn, session_id: str, transcript, *, final: bool = False) -> dict:
+def capture(conn, session_id: str, transcript, *, final: bool = False, time_budget_s: float | None = None) -> dict:
+    import time
+    start_time = time.perf_counter()
     path = Path(transcript)
     if not path.exists():
         raise TranscriptMissingError(str(path))
@@ -709,12 +719,28 @@ def capture(conn, session_id: str, transcript, *, final: bool = False) -> dict:
     has_rows = conn.execute(
         "SELECT 1 FROM cost_entries WHERE cost_source='transcript_derived' AND session_id=? LIMIT 1", (session_id,)
     ).fetchone()
-    rescan = final or (cur is None and bool(has_rows)) or (cur is not None and size < cur[0])
+
+    # Spec 4.0: Validate offset integrity and detect rewrites without shrinking
+    offset_valid = True
+    if cur is not None and cur[0] > 0 and cur[0] <= size:
+        with open(path, "rb") as f:
+            if cur[0] < size:
+                f.seek(cur[0])
+                first_byte = f.read(1)
+                # In JSONL, offset must either be at EOF or start of line ('{' or '\n')
+                if first_byte not in (b"{", b"\n", b""):
+                    offset_valid = False
+
+    rescan = final or (cur is None and bool(has_rows)) or (cur is not None and (size < cur[0] or not offset_valid))
     offset, recent = (0, []) if (rescan or cur is None) else (cur[0], json.loads(cur[1]))
+
+    # If time_budget_s is provided (e.g. Stop hook budget), read bounded chunks
+    max_read_bytes = 2 * 1024 * 1024 if time_budget_s is not None else None
     with open(path, "rb") as f:
         f.seek(offset)
-        data = f.read()
-    res = parse_chunk(data, recent)
+        data = f.read(max_read_bytes) if max_read_bytes is not None else f.read()
+
+    res = parse_chunk(data, recent, session_wide=rescan)
     buckets = bucketize(res.records)
     with conn:
         _session_row(conn, session_id)
