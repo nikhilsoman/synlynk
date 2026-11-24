@@ -51,4 +51,10 @@ include = ["synlynk*"]
 version = { file = ["VERSION"] }
 
 [tool.setuptools.package-data]
-synlynk = ["py.typed", "capability_baseline.json", "packs/*.yaml"]
+synlynk = [
+    "py.typed",
+    "capability_baseline.json",
+    "sfia_taxonomy.json",
+    "domain_packs/*.json",
+    "packs/*.yaml",
+]

@@ -132,3 +132,20 @@ def test_pyproject_package_data_includes_packs():
             assert '"packs/*.yaml"' in content or "'packs/*.yaml'" in content
 
 
+def test_pyproject_package_data_includes_runtime_json_assets():
+    root = os.path.dirname(os.path.dirname(__file__))
+    pyproject_path = os.path.join(root, "pyproject.toml")
+    try:
+        import tomllib
+        with open(pyproject_path, "rb") as f:
+            data = tomllib.load(f)
+        pkg_data = data.get("tool", {}).get("setuptools", {}).get("package-data", {}).get("synlynk", [])
+        assert "domain_packs/*.json" in pkg_data
+        assert "sfia_taxonomy.json" in pkg_data
+    except ModuleNotFoundError:
+        with open(pyproject_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        assert "domain_packs/*.json" in content
+        assert "sfia_taxonomy.json" in content
+
+
