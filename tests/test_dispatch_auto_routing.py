@@ -146,6 +146,42 @@ def test_auto_consults_live_router_instead_of_static_fallback(tmp_path):
     assert result == "codex"
 
 
+def test_review_routing_excludes_implementer_harness_from_eligible_pool(monkeypatch):
+    import sqlite3
+
+    from synlynk.dispatch import _filter_review_collision_harnesses
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE daemon_jobs ("
+        "job_id TEXT PRIMARY KEY, harness TEXT, agent TEXT, purpose TEXT, "
+        "resolved_model TEXT, requested_model TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE cost_entries ("
+        "id INTEGER PRIMARY KEY, job_id TEXT, harness TEXT, agent TEXT, model TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs "
+        "(job_id, harness, agent, purpose, resolved_model, requested_model) "
+        "VALUES ('job-impl', 'codex', 'codex', 'implementation', "
+        "'gpt-5.3-codex', NULL)"
+    )
+    conn.commit()
+
+    monkeypatch.setattr(
+        "synlynk.db._implementation_job_from_branch",
+        lambda _conn, _pr_number: "job-impl",
+    )
+
+    assert _filter_review_collision_harnesses(
+        ["codex", "claude", "agy"],
+        task_type="review",
+        task="review PR #2272",
+        db_conn=conn,
+    ) == ["claude", "agy"]
+
+
 def test_enforce_mode_blocks_sub_floor_exploration_for_high_blast_radius_task(tmp_path, monkeypatch):
     from synlynk.dispatch import _resolve_dispatch_agent
 
