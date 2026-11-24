@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import ipaddress
 import os
+import shlex
 import threading
 import urllib.request
 import urllib.error
@@ -42,6 +44,11 @@ class HetznerRunnerDriver(SwarmRunnerDriver):
         self.location = self.config.get("location", "nbg1")
         self.image = self.config.get("image", "ubuntu-24.04")
         self.ssh_key = self.config.get("ssh_key")
+        self.repo_url = self.config.get(
+            "repo_url", "https://github.com/nikhilsoman/synlynk.git"
+        )
+        self.ssm_available = bool(self.config.get("ssm_available", True))
+        self.operator_cidr = self.config.get("operator_cidr")
         self.timeout_seconds = int(self.config.get("timeout_seconds", 3600))
         self.opener = opener or urllib.request.urlopen
         self._watchdogs: Dict[str, threading.Timer] = {}
@@ -68,10 +75,33 @@ class HetznerRunnerDriver(SwarmRunnerDriver):
             raise RuntimeError(f"Hetzner API error ({e.code}) on {method} {path}: {err_body}") from e
 
     def build_cloud_init(self, job_spec: dict) -> str:
-        """Build cloud-init user-data script enforcing Layer 1 hardware shutdown watchdog."""
+        """Build an isolated Ubuntu bootstrap and the host watchdog.
+
+        The host receives only a shallow checkout of the requested ref.  In
+        particular, no caller-side ``.synlynk`` directory or ``state.db`` is
+        copied to the machine; the install is made from the checked-out source
+        and the readiness probe only invokes ``synlynk --version``.
+        """
         ttl_minutes = max(1, self.timeout_seconds // 60)
+        git_ref = str(job_spec.get("git_ref", "origin/main"))
+        if not git_ref.strip():
+            raise ValueError("git_ref must not be empty")
+        fetch_ref = git_ref.removeprefix("origin/")
+
+        if not self.ssm_available:
+            if not self.operator_cidr:
+                raise ValueError("operator_cidr is required when SSM is unavailable")
+            try:
+                cidr = str(ipaddress.ip_network(self.operator_cidr, strict=False))
+            except ValueError as exc:
+                raise ValueError("operator_cidr must be a valid IPv4 or IPv6 CIDR") from exc
+        else:
+            cidr = None
+
         command = job_spec.get("command", ["echo", "synlynk-worker-ready"])
-        cmd_str = " ".join(command) if isinstance(command, list) else str(command)
+        cmd_str = shlex.join([str(part) for part in command]) if isinstance(command, list) else str(command)
+        repo_url = shlex.quote(str(job_spec.get("repo_url", self.repo_url)))
+        quoted_ref = shlex.quote(fetch_ref)
 
         lines = [
             "#cloud-config",
@@ -80,11 +110,44 @@ class HetznerRunnerDriver(SwarmRunnerDriver):
             "  - git",
             "  - python3",
             "  - python3-pip",
+            "  - python3-venv",
+            "  - ufw",
+            "  - snapd",
             "runcmd:",
             f"  - shutdown -h +{ttl_minutes}",  # Layer 1 OS watchdog
+            "  - install -d -m 0755 /opt/synlynk /var/lib/synlynk",
+            "  - rm -rf /opt/synlynk/.git /opt/synlynk/*",
+            "  - git -C /opt/synlynk init",
+            f"  - git -C /opt/synlynk remote add origin {repo_url}",
+            f"  - git -C /opt/synlynk fetch --depth 1 origin {quoted_ref}",
+            "  - git -C /opt/synlynk checkout --detach FETCH_HEAD",
+            "  - rm -rf /opt/synlynk/.synlynk",
+            "  - test -s /opt/synlynk/VERSION",
+            "  - python3 -m venv /opt/synlynk-venv",
+            "  - /opt/synlynk-venv/bin/pip install --no-deps /opt/synlynk",
+            "  - ln -sf /opt/synlynk-venv/bin/synlynk /usr/local/bin/synlynk",
+            "  - timeout 120 synlynk --version",
+            "  - touch /var/lib/synlynk/ready",
+        ]
+        if self.ssm_available:
+            lines.extend([
+                "  - systemctl enable --now snapd.socket",
+                "  - snap install amazon-ssm-agent --classic",
+                "  - systemctl enable --now snap.amazon-ssm-agent.amazon-ssm-agent.service",
+                "  - ufw default deny incoming",
+                "  - ufw --force deny 22/tcp",
+                "  - ufw --force enable",
+            ])
+        else:
+            lines.extend([
+                "  - ufw default deny incoming",
+                f"  - ufw allow from {cidr} to any port 22 proto tcp",
+                "  - ufw --force enable",
+            ])
+        lines.extend([
             f"  - {cmd_str}",
             "  - poweroff",  # Layer 2 process completion shutdown
-        ]
+        ])
         return "\n".join(lines)
 
     def provision(self, job_spec: dict) -> str:
@@ -105,6 +168,9 @@ class HetznerRunnerDriver(SwarmRunnerDriver):
                 "epic_id": job_spec.get("epic_id", "none"),
             },
         }
+
+        if self.config.get("firewall_id") is not None:
+            payload["firewalls"] = [{"firewall": self.config["firewall_id"]}]
 
         if self.ssh_key:
             payload["ssh_keys"] = [self.ssh_key]
