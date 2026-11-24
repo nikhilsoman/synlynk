@@ -1475,7 +1475,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 6: `run_maintainer_wake_cycle()` (spec §5.1, §5.3, REVISED per DECIDE panel 2026-11-24 defect #2 — HELD until this task's own review passes; do not dispatch Task 13/14 before this one merges)
+### Task 6: `run_maintainer_wake_cycle()` (spec §5.1, §5.3, REVISED per DECIDE panel 2026-11-24 defect #2; conditions 1-3 and 6 from the 2026-11-24 round-2 re-review closed in this revision, panel is satisfied with the written plan and no new round is required — do not dispatch Task 13/14 before this one merges)
 
 **Why revised:** the first draft's promotion boundary wrote its audit-log entry *after* `action.run_fn` ran (so a crash mid-promotion left no audit trace of the attempt), capped `_MAX_PROMOTIONS_PER_CYCLE` per *action* rather than per external write (one action can emit many external writes via multiple stories), had no dedupe against already-open GitHub issues (only a same-cycle audit-log check, which does nothing across cycles), no rate limit, and `_ensure_github_issue_for_story` left dry-run stories with no `github_issue` key at all — contradicting the stories' own contract (every other story in the plan sets `github_issue` to an int or `None`, never omits the key). This revision: (1) moves the audit-log write to immediately before each external write, as an append-only JSONL so a crash mid-write still leaves a trace; (2) counts the cap per external write (per `_ensure_github_issue_for_story` call that would actually create an issue), not per action; (3) adds finding-signature dedupe against both the audit log and currently-open GitHub issues; (4) adds a simple per-cycle rate limit distinct from the cap; (5) gives every dry-run story an explicit `github_issue: None` placeholder.
 
@@ -1488,6 +1488,10 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 Append to `tests/test_maintainer.py`:
 
 ```python
+import json
+import subprocess
+import time
+
 from synlynk.maintainer import run_maintainer_wake_cycle
 from synlynk.maintainer_registry import clear_registry, registered_actions
 
@@ -1750,6 +1754,98 @@ def test_ensure_github_issue_for_story_rate_limits_across_cycles(tmp_path, monke
     assert second is None  # window budget of 1 already spent by the first write
 
 
+def test_ensure_github_issue_for_story_cap_counts_incomplete_attempts(tmp_path, monkeypatch):
+    """DECIDE panel re-review 2026-11-24 round 2 (Codex, condition 1): a
+    crashed/timed-out write still consumes capacity -- otherwise failed
+    writes could retry unbounded within one cycle. Pre-seed one
+    "attempting" entry for a distinct signature (simulating a crash) then
+    prove a cap of 2 only allows 1 more successful write this cycle."""
+    from synlynk.maintainer import _append_promotion_audit_log, _ensure_github_issue_for_story
+
+    _fake_qa_token(tmp_path)
+    monkeypatch.setattr("synlynk.maintainer._MAX_PROMOTIONS_PER_CYCLE", 2)
+    _append_promotion_audit_log(str(tmp_path), {
+        "cycle_id": "cycle-1", "signature": "crashed-sig", "status": "attempting", "ts": 0,
+    })
+
+    def _fake_run(cmd, **kwargs):
+        if "list" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]", stderr="")
+        return subprocess.CompletedProcess(cmd, 0, stdout="Created issue #1", stderr="")
+
+    monkeypatch.setattr("subprocess.run", _fake_run)
+
+    first = _ensure_github_issue_for_story({"story_id": "s1", "title": "t"}, repo_root=str(tmp_path), cycle_id="cycle-1")
+    second = _ensure_github_issue_for_story({"story_id": "s2", "title": "t"}, repo_root=str(tmp_path), cycle_id="cycle-1")
+    assert first is not None
+    assert second is None  # the stale attempting entry + first write already filled the cap of 2
+
+
+def test_ensure_github_issue_for_story_parses_issue_number_from_url_stdout(tmp_path, monkeypatch):
+    """DECIDE panel re-review round 2 (Claude, condition 2): gh issue
+    create's real stdout is a URL (https://github.com/org/repo/issues/123),
+    not '#123' -- the parser must handle both forms."""
+    from synlynk.maintainer import _ensure_github_issue_for_story
+
+    _fake_qa_token(tmp_path)
+
+    def _fake_run(cmd, **kwargs):
+        if "list" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]", stderr="")
+        return subprocess.CompletedProcess(
+            cmd, 0, stdout="https://github.com/acme/widget/issues/123\n", stderr="",
+        )
+
+    monkeypatch.setattr("subprocess.run", _fake_run)
+
+    result = _ensure_github_issue_for_story({"story_id": "s1", "title": "t"}, repo_root=str(tmp_path), cycle_id="cycle-1")
+    assert result == 123
+
+
+def test_ensure_github_issue_for_story_writes_completed_entry_even_if_number_parse_fails(tmp_path, monkeypatch):
+    """DECIDE panel re-review round 2 (Claude, condition 2): the create
+    call succeeding (returncode 0) is what makes the write "completed" --
+    an unparseable stdout must not be mistaken for a failed write."""
+    from synlynk.maintainer import _ensure_github_issue_for_story, _read_promotion_audit_log
+
+    _fake_qa_token(tmp_path)
+
+    def _fake_run(cmd, **kwargs):
+        if "list" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]", stderr="")
+        return subprocess.CompletedProcess(cmd, 0, stdout="no issue number here", stderr="")
+
+    monkeypatch.setattr("subprocess.run", _fake_run)
+
+    result = _ensure_github_issue_for_story({"story_id": "s1", "title": "t"}, repo_root=str(tmp_path), cycle_id="cycle-1")
+    assert result is None  # number unknown, but the write still succeeded
+    entries = _read_promotion_audit_log(str(tmp_path))
+    assert any(e["status"] == "completed" and e["signature"] == "s1" for e in entries)
+
+
+def test_ensure_github_issue_for_story_blocks_retry_while_attempt_in_flight(tmp_path, monkeypatch):
+    """DECIDE panel re-review round 2 (Claude, condition 3): an
+    "attempting" entry with no matching "completed" entry, still inside
+    the in-flight lock window, must block an immediate retry for the same
+    signature -- otherwise a crash-then-retry (e.g. gh unavailable, the
+    open-issue check degrading to an empty set) can file a duplicate
+    issue."""
+    from synlynk.maintainer import _append_promotion_audit_log, _ensure_github_issue_for_story
+
+    _fake_qa_token(tmp_path)
+    _append_promotion_audit_log(str(tmp_path), {
+        "cycle_id": "cycle-1", "signature": "s1", "status": "attempting", "ts": time.time(),
+    })
+
+    def _should_not_run(*args, **kwargs):
+        raise AssertionError("must not call gh while a same-signature attempt is in flight")
+
+    monkeypatch.setattr("subprocess.run", _should_not_run)
+
+    result = _ensure_github_issue_for_story({"story_id": "s1", "title": "t"}, repo_root=str(tmp_path), cycle_id="cycle-2")
+    assert result is None
+
+
 def test_run_maintainer_wake_cycle_dry_run_stories_carry_github_issue_placeholder(tmp_path, monkeypatch):
     """DECIDE panel re-review 2026-11-24: a dry-run story must set
     github_issue explicitly to None, not omit the key -- every other
@@ -1777,7 +1873,7 @@ def test_run_maintainer_wake_cycle_dry_run_stories_carry_github_issue_placeholde
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `pytest tests/test_maintainer.py -v -k wake_cycle`
+Run: `pytest tests/test_maintainer.py -q -k wake_cycle`
 Expected: FAIL with `ImportError: cannot import name 'run_maintainer_wake_cycle'`
 
 - [ ] **Step 3: Implement**
@@ -1806,6 +1902,13 @@ def _qa_role_token_available(repo_root: str = ".") -> bool:
 _MAX_PROMOTIONS_PER_CYCLE = 5
 _MAX_PROMOTIONS_PER_WINDOW = 10
 _PROMOTION_WINDOW_SECONDS = 3600
+
+# How long an "attempting" entry with no matching "completed" entry is
+# treated as still in flight (DECIDE panel re-review 2026-11-24 round 2,
+# condition 3). A crash-then-immediate-retry for the same signature must
+# not file a duplicate issue just because the open-issue/audit-log dedupe
+# checks can't see an in-progress write.
+_PROMOTION_ATTEMPT_LOCK_SECONDS = 300
 
 
 def _promotion_audit_log_path(repo_root: str) -> str:
@@ -1904,20 +2007,50 @@ def _open_github_issue_signatures(repo_root: str = ".") -> set:
 
 
 def _promotions_in_cycle(repo_root: str, cycle_id: str) -> int:
-    """Count of *completed* external writes this cycle -- an "attempting"
-    entry with no matching "completed" entry means the write never
-    finished (crash, timeout) and must not count against this cycle's cap."""
+    """Count of external writes *attempted* this cycle, "attempting" or
+    "completed" (DECIDE panel re-review 2026-11-24 round 2, condition 1):
+    counting only "completed" entries let a failed or timed-out write run
+    unbounded in a single cycle, since it never left a completed entry to
+    count against the cap. Each status is counted once per entry -- an
+    "attempting" entry is written before the external call and is not
+    duplicated by its own later "completed" entry, since the cap check
+    always runs before either is appended for that write."""
     return sum(
         1 for e in _read_promotion_audit_log(repo_root)
-        if e.get("cycle_id") == cycle_id and e.get("status") == "completed"
+        if e.get("cycle_id") == cycle_id and e.get("status") in ("attempting", "completed")
     )
 
 
 def _promotions_in_window(repo_root: str, now: float) -> int:
+    """Same fix as _promotions_in_cycle (condition 1): count "attempting"
+    entries too, so a sustained string of failed writes still exhausts the
+    rolling-window rate limit instead of retrying unbounded."""
     cutoff = now - _PROMOTION_WINDOW_SECONDS
     return sum(
         1 for e in _read_promotion_audit_log(repo_root)
-        if e.get("status") == "completed" and e.get("ts", 0) >= cutoff
+        if e.get("status") in ("attempting", "completed") and e.get("ts", 0) >= cutoff
+    )
+
+
+def _has_in_flight_attempt(repo_root: str, signature: str, now: float) -> bool:
+    """True if an "attempting" entry for this signature has no matching
+    "completed" entry anywhere in the log, and is still within
+    _PROMOTION_ATTEMPT_LOCK_SECONDS of now (DECIDE panel re-review
+    2026-11-24 round 2, condition 3). Treated as a lock: a crash
+    immediately followed by a retry for the same signature must not file
+    a duplicate issue just because the audit-log/open-issue dedupe checks
+    can't see an in-progress write by themselves."""
+    entries = _read_promotion_audit_log(repo_root)
+    completed_signatures = {
+        e.get("signature") for e in entries if e.get("status") == "completed"
+    }
+    if signature in completed_signatures:
+        return False
+    return any(
+        e.get("signature") == signature
+        and e.get("status") == "attempting"
+        and now - e.get("ts", 0) < _PROMOTION_ATTEMPT_LOCK_SECONDS
+        for e in entries
     )
 
 
@@ -1930,16 +2063,23 @@ def _ensure_github_issue_for_story(story: dict, repo_root: str = ".", cycle_id: 
     provisioned (no host/personal-token fallback exists, by design, spec
     §5.3a); the finding's signature already has a completed promotion in
     the audit log, or is already open as a GitHub issue (dedupe, DECIDE
-    panel re-review 2026-11-24 defect #2); the per-cycle cap
-    (_MAX_PROMOTIONS_PER_CYCLE) or the rolling-window rate limit
-    (_MAX_PROMOTIONS_PER_WINDOW within _PROMOTION_WINDOW_SECONDS) has been
-    reached.
+    panel re-review 2026-11-24 defect #2); the signature has an
+    "attempting" entry with no matching "completed" entry that is still
+    within the in-flight lock window (round-2 condition 3 -- an orphaned
+    attempt, e.g. from a crash, blocks a retry rather than risking a
+    duplicate issue); the per-cycle cap (_MAX_PROMOTIONS_PER_CYCLE) or the
+    rolling-window rate limit (_MAX_PROMOTIONS_PER_WINDOW within
+    _PROMOTION_WINDOW_SECONDS) has been reached, counting both
+    "attempting" and "completed" entries (round-2 condition 1).
 
-    Audit-log ordering (same defect #2): an "attempting" entry is appended
+    Audit-log ordering (defect #2): an "attempting" entry is appended
     *before* the subprocess call that creates the issue runs, and a
-    "completed" entry is appended only after it returns -- so a crash
-    mid-call still leaves a trace that a promotion was in flight, and
-    cap/rate-limit counts only ever include "completed" entries.
+    "completed" entry is appended as soon as that call *succeeds*
+    (`returncode == 0`), independent of whether the issue number could be
+    parsed out of its stdout (round-2 condition 2) -- so a crash mid-call
+    still leaves a trace that a promotion was in flight, and a successful
+    `gh` call is never miscounted as failed just because its stdout
+    didn't match the parser.
     """
     existing = story.get("github_issue")
     if existing:
@@ -1958,6 +2098,8 @@ def _ensure_github_issue_for_story(story: dict, repo_root: str = ".", cycle_id: 
     import time
 
     now = time.time()
+    if _has_in_flight_attempt(repo_root, signature, now):
+        return None
     if _promotions_in_cycle(repo_root, cycle_id) >= _MAX_PROMOTIONS_PER_CYCLE:
         return None
     if _promotions_in_window(repo_root, now) >= _MAX_PROMOTIONS_PER_WINDOW:
@@ -1985,7 +2127,16 @@ def _ensure_github_issue_for_story(story: dict, repo_root: str = ".", cycle_id: 
         text=True,
         timeout=30,
     )
-    match = re.search(r"#(\d+)", result.stdout or "")
+    if result.returncode != 0:
+        # The call itself failed -- leave the "attempting" entry as the
+        # only trace (same as a crash) rather than writing "completed"
+        # for a write that never actually happened.
+        return None
+
+    stdout = result.stdout or ""
+    # gh issue create prints a URL (".../issues/123"), not "#123" -- try
+    # both forms (round-2 condition 2).
+    match = re.search(r"#(\d+)", stdout) or re.search(r"/issues/(\d+)", stdout)
     issue_number = int(match.group(1)) if match else None
 
     _append_promotion_audit_log(repo_root, {
@@ -2141,12 +2292,12 @@ def run_maintainer_wake_cycle(repo_root: str = ".") -> dict:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `pytest tests/test_maintainer.py -v -k "wake_cycle or ensure_github_issue_for_story"`
+Run: `pytest tests/test_maintainer.py -q -k "wake_cycle or ensure_github_issue_for_story"`
 Expected: PASS (12 passed — `test_load_maintainer_proposals_returns_empty_list_when_file_missing` doesn't match this `-k` filter by name; it's covered by Step 5's full-module run instead)
 
 - [ ] **Step 5: Run the full maintainer test module to check for regressions**
 
-Run: `pytest tests/test_maintainer.py tests/test_maintainer_graph_sweep.py -v`
+Run: `pytest tests/test_maintainer.py tests/test_maintainer_graph_sweep.py -q`
 Expected: PASS (all tests green)
 
 - [ ] **Step 6: Commit**
@@ -3237,7 +3388,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 14: Proposal Studio generalization (spec §5.5, REVISED per DECIDE panel 2026-11-24 — HELD until Tasks 1-6 have merged)
+### Task 14: Proposal Studio generalization (spec §5.5, REVISED per DECIDE panel 2026-11-24; conditions 4-6 from the 2026-11-24 round-2 re-review closed in this revision, panel is satisfied with the written plan and no new round is required — HELD until Tasks 1-6 have merged)
 
 **Why revised:** DECIDE panel defect #4 flagged that this task, as originally drafted, renders whatever shape of dict each source happens to produce (TPM's story dicts vs. Task 6's three maintainer-action proposal dicts) with no shared schema between them — `cardHtml`'s `story.source`/`story.severity`/`story.github_issue` reads would silently show `undefined` for any source that doesn't happen to populate those exact keys, and a future fifth source would have to reverse-engineer the contract from existing JS rather than a stated schema. Do not dispatch this task until Tasks 1-6 have merged — Step 0 below defines the schema that Task 6's three proposal-producing actions (`_run_sentinel_triage_action`, `_run_backlog_burndown_action`, `_run_mesh_sweep_action`) must already satisfy, and that Task 5's `tier_provenance` return value feeds.
 
@@ -3318,7 +3469,7 @@ def test_validate_proposal_rejects_blank_required_string_field():
 
 - [ ] **Step -1b: Run test to verify it fails**
 
-Run: `pytest tests/test_proposal_schema.py -v`
+Run: `pytest tests/test_proposal_schema.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'synlynk.proposal_schema'`
 
 - [ ] **Step -1c: Implement the shared Proposal schema module**
@@ -3380,7 +3531,7 @@ def validate_proposal(proposal: dict) -> Optional[str]:
 
 - [ ] **Step -1d: Run test to verify it passes**
 
-Run: `pytest tests/test_proposal_schema.py -v`
+Run: `pytest tests/test_proposal_schema.py -q`
 Expected: PASS (5 passed)
 
 - [ ] **Step 0: Define the shared proposal schema and normalization adapter in `synlynk/roadmap_studio.py`**
@@ -3388,9 +3539,15 @@ Expected: PASS (5 passed)
 Every proposal-producing source (TPM's roadmap stories, and Task 6's three maintainer wake-cycle actions) must reach the browser in one consistent shape. Rather than require every producer to emit identical dict keys (TPM's story rows, read from the `stories` SQL table, and maintainer's proposal dicts, read from `.synlynk/maintainer_proposals.json` via Task 6's `load_maintainer_proposals()`, have different native shapes), add one normalization point in `synlynk/roadmap_studio.py` — the module that already owns `studio_data()` — that every story/proposal passes through before `studio_data()` returns:
 
 ```python
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 def normalize_proposal_for_studio(raw: dict, default_source: str = "tpm") -> dict:
     """Shared card-rendering schema (DECIDE panel defect #4, 2026-11-24;
-    validation boundary added per re-review defect #4, same day).
+    validation boundary added per re-review defect #4, same day; fixed
+    per re-review round 2 conditions 4-5, same day).
 
     Maps a TPM story row (from the `stories` table) or a Task 6
     maintainer-proposal dict (from load_maintainer_proposals()) onto one
@@ -3399,28 +3556,63 @@ def normalize_proposal_for_studio(raw: dict, default_source: str = "tpm") -> dic
     defined default -- never absent, never None where a string/list is
     expected -- so the JS template never reads `undefined`.
 
-    After building the normalized dict, it's checked against the shared
-    schema in synlynk/proposal_schema.py. A producer that emitted a
-    `severity` the JS doesn't branch on, or a non-list `tier_provenance`,
-    would otherwise sail through the `str(...)`/`list(...)` coercions
-    above silently malformed -- `validate_proposal` catches that and this
-    function falls back the one field most likely to cause a silent UI
-    bug (`severity` -> "normal") rather than raising, so a single bad
-    producer never breaks Proposal Studio's render.
-    """
-    from synlynk.proposal_schema import validate_proposal
+    Each field's *raw* shape is checked before any coercion runs (round-2
+    condition 4). The earlier version called `list(raw.get("tier_provenance")
+    or [])` unconditionally -- if a producer passed a non-empty string
+    there, `or []` never triggers (a non-empty string is truthy) and
+    `list("abc")` silently becomes `['a', 'b', 'c']`, which then looks
+    like a valid list of strings to a check that only runs after the
+    coercion. Checking `isinstance(..., list)` first, before touching the
+    value, catches that instead of laundering it into a technically-valid
+    shape.
 
-    normalized = {
-        "story_id": str(raw.get("story_id") or raw.get("proposal_id") or ""),
-        "title": str(raw.get("title") or raw.get("story_id") or raw.get("proposal_id") or "Untitled"),
-        "source": str(raw.get("source") or default_source),
-        "severity": str(raw.get("severity") or "normal"),
-        "github_issue": raw.get("github_issue") or raw.get("gh_issue"),
-        "tier_provenance": list(raw.get("tier_provenance") or []),
+    On an invalid field, only *that* field falls back to its default --
+    not just `severity` (round-2 condition 5) -- and a warning is logged
+    each time, so a malformed producer is visible in logs rather than
+    silently degraded.
+    """
+    from synlynk.proposal_schema import VALID_SEVERITIES
+
+    story_id = raw.get("story_id") or raw.get("proposal_id") or ""
+    title = raw.get("title") or raw.get("story_id") or raw.get("proposal_id") or "Untitled"
+    source = raw.get("source") or default_source
+
+    severity = raw.get("severity")
+    if not isinstance(severity, str) or severity not in VALID_SEVERITIES:
+        if severity is not None:
+            logger.warning(
+                "normalize_proposal_for_studio: invalid severity %r for story_id=%r, falling back to 'normal'",
+                severity, story_id,
+            )
+        severity = "normal"
+
+    github_issue = raw.get("github_issue")
+    if github_issue is None:
+        github_issue = raw.get("gh_issue")
+    if github_issue is not None and not isinstance(github_issue, int):
+        logger.warning(
+            "normalize_proposal_for_studio: invalid github_issue %r for story_id=%r, falling back to None",
+            github_issue, story_id,
+        )
+        github_issue = None
+
+    tier_provenance = raw.get("tier_provenance")
+    if not isinstance(tier_provenance, list) or not all(isinstance(x, str) for x in tier_provenance):
+        if tier_provenance is not None:
+            logger.warning(
+                "normalize_proposal_for_studio: invalid tier_provenance %r for story_id=%r, falling back to []",
+                tier_provenance, story_id,
+            )
+        tier_provenance = []
+
+    return {
+        "story_id": str(story_id),
+        "title": str(title),
+        "source": str(source),
+        "severity": severity,
+        "github_issue": github_issue,
+        "tier_provenance": tier_provenance,
     }
-    if validate_proposal(normalized) is not None:
-        normalized["severity"] = "normal"
-    return normalized
 ```
 
 (`raw.get("gh_issue")` is included as a fallback because the `stories` table's own column is named `gh_issue`, not `github_issue` — `studio_data()`'s existing SQL query already selects it under that name; this keeps a bare TPM story row normalizing correctly without the caller having to rename the key first.)
@@ -3513,6 +3705,56 @@ def test_normalize_proposal_for_studio_falls_back_invalid_severity_to_normal():
     raw = {"story_id": "s1", "title": "Weird finding", "severity": "URGENT!!"}
     normalized = normalize_proposal_for_studio(raw)
     assert normalized["severity"] == "normal"
+
+
+def test_normalize_proposal_for_studio_rejects_non_list_tier_provenance_before_coercing(caplog):
+    """DECIDE panel re-review round 2, condition 4: the pre-fix code ran
+    `list(raw.get("tier_provenance") or [])` unconditionally. A non-empty
+    string is truthy, so `or []` never triggers, and `list("abc")` silently
+    becomes `['a', 'b', 'c']` -- a value that then looks like a valid list
+    of strings to any check that only runs after the coercion. The raw
+    shape must be checked before any coercion runs, so a string here falls
+    back to `[]`, not to a list of its own characters."""
+    from synlynk.roadmap_studio import normalize_proposal_for_studio
+
+    raw = {"story_id": "s1", "title": "Weird finding", "tier_provenance": "sentinel"}
+    with caplog.at_level("WARNING"):
+        normalized = normalize_proposal_for_studio(raw)
+    assert normalized["tier_provenance"] == []
+    assert "tier_provenance" in caplog.text
+
+
+def test_normalize_proposal_for_studio_falls_back_invalid_github_issue_to_none(caplog):
+    """DECIDE panel re-review round 2, condition 5: validation failure must
+    apply a full field-level fallback, not just `severity`. An invalid
+    `github_issue` (e.g. a non-int the producer mistakenly emitted) must
+    fall back to `None` on its own, independent of whether `severity` is
+    also valid, and the fallback must be logged."""
+    from synlynk.roadmap_studio import normalize_proposal_for_studio
+
+    raw = {"story_id": "s1", "title": "Weird finding", "github_issue": "not-an-int"}
+    with caplog.at_level("WARNING"):
+        normalized = normalize_proposal_for_studio(raw)
+    assert normalized["github_issue"] is None
+    assert "github_issue" in caplog.text
+
+
+def test_normalize_proposal_for_studio_falls_back_each_invalid_field_independently(caplog):
+    """A producer can emit more than one malformed field at once. Each must
+    fall back independently -- fixing severity must not leave
+    tier_provenance or github_issue still malformed in the result."""
+    from synlynk.roadmap_studio import normalize_proposal_for_studio
+
+    raw = {
+        "story_id": "s1", "title": "Weird finding",
+        "severity": "URGENT!!", "tier_provenance": "sentinel",
+        "github_issue": "not-an-int",
+    }
+    with caplog.at_level("WARNING"):
+        normalized = normalize_proposal_for_studio(raw)
+    assert normalized["severity"] == "normal"
+    assert normalized["tier_provenance"] == []
+    assert normalized["github_issue"] is None
 ```
 
 - [ ] **Step 1b: Write the failing test for the `viz/roadmap_studio.py` rename/alias/badge**
@@ -3542,8 +3784,8 @@ def test_generate_roadmap_studio_html_alias_still_importable():
 
 - [ ] **Step 2: Run both test files to verify they fail**
 
-Run: `pytest tests/test_roadmap_studio.py -v -k "normalize_proposal_for_studio or studio_data_merges or studio_data_returns_empty"; pytest tests/test_viz_roadmap_studio.py -v -k "generate_proposal_studio_html or generate_roadmap_studio_html_alias"`
-(This filter now also matches the new `test_normalize_proposal_for_studio_falls_back_invalid_severity_to_normal` test added above, for 4 matches in the first command — all 4 fail for the same reason as before: `normalize_proposal_for_studio` doesn't exist in `synlynk/roadmap_studio.py` yet, so every one raises `ImportError: cannot import name 'normalize_proposal_for_studio'`.)
+Run: `pytest tests/test_roadmap_studio.py -q -k "normalize_proposal_for_studio or studio_data_merges or studio_data_returns_empty"; pytest tests/test_viz_roadmap_studio.py -q -k "generate_proposal_studio_html or generate_roadmap_studio_html_alias"`
+(This filter now also matches the new `test_normalize_proposal_for_studio_falls_back_invalid_severity_to_normal`, `test_normalize_proposal_for_studio_rejects_non_list_tier_provenance_before_coercing`, `test_normalize_proposal_for_studio_falls_back_invalid_github_issue_to_none`, and `test_normalize_proposal_for_studio_falls_back_each_invalid_field_independently` tests added above, for 7 matches in the first command — all 7 fail for the same reason as before: `normalize_proposal_for_studio` doesn't exist in `synlynk/roadmap_studio.py` yet, so every one raises `ImportError: cannot import name 'normalize_proposal_for_studio'`.)
 Expected: both FAIL — first with `ImportError: cannot import name 'normalize_proposal_for_studio'` (not yet defined in `synlynk/roadmap_studio.py`), second with `ImportError: cannot import name 'generate_proposal_studio_html'`
 
 - [ ] **Step 3: Add the normalization adapter and merge it into `studio_data()`**
@@ -3694,12 +3936,12 @@ And in the JS `draw()` function (the existing render entry point), add a pass th
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `pytest tests/test_roadmap_studio.py tests/test_viz_roadmap_studio.py -v`
+Run: `pytest tests/test_roadmap_studio.py tests/test_viz_roadmap_studio.py -q`
 Expected: PASS (all tests green)
 
 - [ ] **Step 6: Run the full roadmap/proposal studio test suites to check for regressions**
 
-Run: `pytest tests/test_roadmap_studio.py tests/test_viz_roadmap_studio.py tests/test_viz_nav_roadmap_studio.py tests/test_viz_roadmap_studio_routes.py tests/test_viz_write_routes_roadmap_studio.py -v`
+Run: `pytest tests/test_roadmap_studio.py tests/test_viz_roadmap_studio.py tests/test_viz_nav_roadmap_studio.py tests/test_viz_roadmap_studio_routes.py tests/test_viz_write_routes_roadmap_studio.py -q`
 Expected: PASS (all tests green — confirms `cache.py`'s unmodified `from synlynk.viz.roadmap_studio import generate_roadmap_studio_html` import still resolves via the alias, and that `studio_data()`'s new `normalize_proposal_for_studio`/`maintainer_proposals` behavior doesn't break any of `roadmap_studio.py`'s existing write-route callers, which only read `tickets`/`backlog` and are unaffected by the new third key)
 
 - [ ] **Step 7: Commit**
