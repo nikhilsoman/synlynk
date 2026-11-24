@@ -93,3 +93,20 @@ def test_cmd_charter_migrate_apply_writes_v3_yaml_file(tmp_path):
     assert out_file.exists()
     written = parse_yaml(out_file.read_text())
     assert written["core"]["charter_id"] == "pm"
+
+
+def test_cli_charter_migrate_dry_run_subprocess(tmp_path, monkeypatch):
+    import subprocess
+    import sys
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk" / "charters").mkdir(parents=True)
+
+    cli_path = __import__("synlynk.cli", fromlist=["__file__"]).__file__
+    proc = subprocess.run(
+        [sys.executable, cli_path, "charter", "migrate", "--role", "pm"],
+        capture_output=True, text=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "pm" in proc.stdout
+    assert not (tmp_path / ".synlynk" / "charters" / "pm.v3.yaml").exists()
