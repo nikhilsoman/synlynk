@@ -22,11 +22,16 @@ def _detect_harnesses_on_path(names: tuple = None) -> list:
     """Return PATH-resolved harness metadata for known CLI agents."""
     import shutil as _shutil
 
-    harnesses = []
+    candidates = []
     for name in names or _HARNESS_PATH_NAMES:
         cli_path = _shutil.which(name)
         if not cli_path:
             continue
+        candidates.append((name, cli_path))
+
+    harnesses = [None] * len(candidates)
+
+    def _probe(index: int, name: str, cli_path: str) -> None:
         version = "unknown"
         try:
             proc = subprocess.run(
@@ -40,12 +45,25 @@ def _detect_harnesses_on_path(names: tuple = None) -> list:
                 version = output[0]
         except (FileNotFoundError, subprocess.TimeoutExpired, OSError, TypeError, ValueError, AttributeError):
             pass
-        harnesses.append({
+        harnesses[index] = {
             "name": name,
             "cli": name,
             "version": version,
             "path": cli_path,
-        })
+        }
+
+    threads = []
+    for index, (name, cli_path) in enumerate(candidates):
+        thread = threading.Thread(
+            target=_probe,
+            args=(index, name, cli_path),
+            daemon=True,
+        )
+        thread.start()
+        threads.append(thread)
+    for thread in threads:
+        thread.join()
+
     return harnesses
 
 
@@ -1527,12 +1545,28 @@ def run_workspace_scan(roots: list = None, workspace_name: str = None,
     else:
         topology = "single"
 
-    harnesses = _detect_harnesses_on_path()
+    discovery = {"harnesses": [], "agents": []}
 
-    try:
-        agents = _pkg("discover_agents")()
-    except Exception:
-        agents = []
+    def _discover_harnesses() -> None:
+        discovery["harnesses"] = _detect_harnesses_on_path()
+
+    def _discover_agents() -> None:
+        try:
+            discovery["agents"] = _pkg("discover_agents")()
+        except Exception:
+            discovery["agents"] = []
+
+    discovery_threads = [
+        threading.Thread(target=_discover_harnesses, daemon=True),
+        threading.Thread(target=_discover_agents, daemon=True),
+    ]
+    for thread in discovery_threads:
+        thread.start()
+    for thread in discovery_threads:
+        thread.join()
+
+    harnesses = discovery["harnesses"]
+    agents = discovery["agents"]
 
     skills = _pkg("scan_skills")()
     home_harness = _pkg("detect_home_harness")(harnesses)
