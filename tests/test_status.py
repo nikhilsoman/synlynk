@@ -107,6 +107,31 @@ def test_cmd_status_platform_budget_pulse(project_dir, capsys):
     assert "75% used" in out
 
 
+def test_cmd_status_platform_budget_pulse_reads_cost_entries(project_dir, capsys):
+    import synlynk
+
+    conn = synlynk._get_db()
+    conn.executemany(
+        "INSERT INTO cost_entries "
+        "(session_date, total_cost_usd, actual_usd, cost_source, recorded_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        [
+            (_utc_iso(1), 1.25, 1.25, "actual", _utc_iso(1)),
+            (_utc_iso(12), 2.75, 2.75, "actual", _utc_iso(12)),
+            (_utc_iso(48), 3.50, 3.50, "actual", _utc_iso(48)),
+        ],
+    )
+    conn.commit()
+    conn.close()
+
+    with pytest.raises(SystemExit):
+        synlynk.cmd_status(platform=True)
+
+    out = capsys.readouterr().out
+    assert "today: $4.00" in out
+    assert "week: $7.50" in out
+
+
 def test_cmd_status_platform_flag_wired(project_dir, monkeypatch):
     import synlynk
 

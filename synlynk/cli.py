@@ -1201,7 +1201,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     status_parser.add_argument("--json", action="store_true", dest="json_output",
                                help="Output machine-readable JSON")
     status_parser.add_argument("--platform", action="store_true", dest="platform",
-                               help="Show legacy project dashboard instead of ecosystem status")
+                               help="Show platform infrastructure health instead of ecosystem status")
 
     backup_parser = subparsers.add_parser(
         "backup", help="Create or verify SQLite-consistent state.db DR snapshots"

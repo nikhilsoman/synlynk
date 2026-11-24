@@ -27,6 +27,27 @@ def _load_telemetry_events() -> list:
         return []
 
 
+def _load_cost_entry_events() -> list | None:
+    """Return canonical cost-entry events, or ``None`` if the DB is unavailable."""
+    try:
+        conn = _pkg("_get_db")()
+    except Exception:
+        return None
+    try:
+        rows = conn.execute(
+            "SELECT COALESCE(actual_usd, total_cost_usd), recorded_at "
+            "FROM cost_entries WHERE COALESCE(actual_usd, total_cost_usd) IS NOT NULL"
+        ).fetchall()
+    except Exception:
+        return None
+    finally:
+        conn.close()
+    return [
+        {"cost_usd": cost, "timestamp": recorded_at}
+        for cost, recorded_at in rows
+    ]
+
+
 def _parse_status_timestamp(value):
     if value is None:
         return None
@@ -157,7 +178,9 @@ def _print_platform_table(title: str, headers: list, rows: list) -> None:
 
 
 def _print_platform_health() -> bool:
-    events = _load_telemetry_events()
+    events = _load_cost_entry_events()
+    if not events:
+        events = _load_telemetry_events()
     config = _pkg("load_config")()
     limit = float(config.get("budget", {}).get("limit_usd", 0.0) or 0.0)
     daily, weekly, remaining, pct = _load_platform_budget_pulse(events, limit)
