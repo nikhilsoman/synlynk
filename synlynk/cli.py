@@ -330,7 +330,7 @@ _TOP_LEVEL_COMMANDS = (
     "repair", "sync", "configure", "identity", "type", "whoami", "events", "session",
     "harness", "agent", "exec", "gh", "watch", "swarm", "daemon", "checkpoint", "status",
     "backup", "state", "ops", "selftest", "config", "sentinel", "dispatch", "jobs", "relay",
-    "logs", "shell", "open", "launch", "run", "story", "pm", "tpm", "score", "charters", "cost",
+    "logs", "shell", "open", "launch", "run", "story", "pm", "tpm", "score", "charter", "charters", "cost",
     "roadmap", "policy", "credit", "backlog", "quota", "schedule", "pr", "capability",
     "instructions", "marketing", "roles", "release", "viz", "provenance",
     "backfill-capability-ratings",
@@ -1803,6 +1803,11 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     charters_adapt_parser.add_argument("--threshold", type=float, default=0.25)
     charters_adapt_parser.add_argument("--write-proposals", action="store_true",
                                        help="Write reviewable proposal files")
+    charter_parser = subparsers.add_parser("charter", help="Migrate/validate individual role charters (Charter v3.0)")
+    charter_sub = charter_parser.add_subparsers(dest="charter_action")
+    charter_migrate_parser = charter_sub.add_parser("migrate", help="Migrate a v1/v2.0 charter to Charter v3.0")
+    charter_migrate_parser.add_argument("--role", required=True, help="Role to migrate (e.g. pm, dev)")
+    charter_migrate_parser.add_argument("--apply", action="store_true", help="Write the migrated v3 YAML file (default: dry-run)")
     attest_parser = score_sub.add_parser("attest", help="Retroactively attest model version")
     attest_parser.add_argument("story_id")
     attest_parser.add_argument("--model", required=True)
@@ -3310,6 +3315,17 @@ def _dispatch_command(argv=None) -> None:
             cmd_charters_adapt(threshold=args.threshold, dry_run=not args.write_proposals)
         else:
             parser.parse_args(["charters", "--help"])
+    elif args.command == "charter":
+        if getattr(args, "charter_action", None) == "migrate":
+            from synlynk.charter_migrate import cmd_charter_migrate
+            result = cmd_charter_migrate(
+                role=args.role, apply=args.apply, charters_dir=os.path.join(os.getcwd(), ".synlynk", "charters")
+            )
+            print(f"role={result['role']} applied={result['applied']}")
+            if not result["applied"]:
+                print("(dry-run — pass --apply to write the v3 YAML file)")
+        else:
+            parser.parse_args(["charter", "--help"])
     elif args.command == "jobs":
         if getattr(args, "jobs_cmd", None) == "handoff":
             _warn_deprecated_harness_flag(cli_tokens)

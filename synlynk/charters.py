@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from synlynk.capability import capability_score
+from synlynk.charter_core.yaml_subset import parse_yaml
 from synlynk.charter_schema import get_sfia_skill, get_sfia_taxonomy
 
 
@@ -32,6 +33,11 @@ class AgentCharter:
     sfia_mapping: Optional[dict] = None
     boundaries: List[str] = field(default_factory=list)
     evidence_contracts: List[str] = field(default_factory=list)
+    schema_version: Optional[str] = None
+    identity: Optional[dict] = None
+    coordination: Optional[dict] = None
+    constitution_binding: Optional[dict] = None
+    requirements: Optional[dict] = None
 
 
 DEFAULT_ROLE_CHARTERS: Dict[str, dict] = {
@@ -193,6 +199,30 @@ def validate_charter(charter: AgentCharter) -> bool:
 
 
 def load_charter(role: str) -> AgentCharter:
+    v3_path = os.path.join(_charters_dir(), f"{role}.yaml")
+    if os.path.isfile(v3_path):
+        with open(v3_path) as f:
+            data = parse_yaml(f.read())
+        core = data.get("core", {})
+        return AgentCharter(
+            role=core.get("charter_id", role),
+            harness_bindings=[],
+            mandate=core.get("mandate", ""),
+            autonomous_authorities=list(core.get("authorities", [])),
+            escalation_triggers=list(core.get("escalation", [])),
+            behavioral_weights={},
+            wake_cycle_sop=list(core.get("sop", [])),
+            tools=list(data.get("governance", {}).get("tools", [])),
+            credentials=list(data.get("governance", {}).get("credentials", [])),
+            verification_contracts=list(data.get("governance", {}).get("evidence_contracts", [])),
+            sfia_mapping=data.get("sfia_mapping"),
+            boundaries=list(data.get("boundaries", [])),
+            schema_version=data.get("schema_version"),
+            identity=data.get("identity"),
+            coordination=data.get("coordination"),
+            constitution_binding=data.get("constitution_binding"),
+            requirements=data.get("requirements"),
+        )
     # 1. Load legacy JSON data or canonical built-in data if present as baseline fallback
     path = os.path.join(_charters_dir(), f"{role}.json")
     json_data: dict = {}
