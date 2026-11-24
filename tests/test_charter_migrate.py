@@ -96,16 +96,23 @@ def test_cmd_charter_migrate_apply_writes_v3_yaml_file(tmp_path):
 
 
 def test_cli_charter_migrate_dry_run_subprocess(tmp_path, monkeypatch):
+    import os
     import subprocess
     import sys
 
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk" / "charters").mkdir(parents=True)
 
-    cli_path = __import__("synlynk.cli", fromlist=["__file__"]).__file__
+    cli_module = __import__("synlynk.cli", fromlist=["__file__"])
+    cli_path = cli_module.__file__
+    repo_root = os.path.dirname(os.path.dirname(cli_path))
+
+    env = dict(os.environ)
+    env["PYTHONPATH"] = repo_root + os.pathsep + env.get("PYTHONPATH", "")
+
     proc = subprocess.run(
         [sys.executable, cli_path, "charter", "migrate", "--role", "pm"],
-        capture_output=True, text=True,
+        capture_output=True, text=True, env=env,
     )
     assert proc.returncode == 0, proc.stderr
     assert "pm" in proc.stdout
