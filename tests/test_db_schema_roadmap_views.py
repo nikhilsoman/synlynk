@@ -115,3 +115,32 @@ def test_roadmap_phases_view_surfaces_null_uid_on_divergence(tmp_path, monkeypat
         assert uid is None
     finally:
         conn.close()
+
+
+def test_roadmap_arcs_and_phases_views_preserve_shipped_status(tmp_path, monkeypatch):
+    import synlynk
+
+    db_path = tmp_path / "state.db"
+    monkeypatch.setattr(synlynk, "DB_PATH", str(db_path))
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+
+    conn = synlynk._get_db()
+    try:
+        conn.execute(
+            "INSERT INTO goals "
+            "(goal_id, outcome, criterion, status, arc_version, phase_title, placement_status) "
+            "VALUES ('g-shipped', 'Shipped Arc', 'criterion', 'shipped', 'v0.39.1', 'Phase Shipped', 'placed')"
+        )
+        conn.commit()
+
+        arc_status = conn.execute(
+            "SELECT status, computed_status FROM roadmap_arcs WHERE version='v0.39.1'"
+        ).fetchone()
+        assert arc_status == ("shipped", "shipped")
+
+        phase_status = conn.execute(
+            "SELECT status, computed_status FROM roadmap_phases WHERE arc_version='v0.39.1'"
+        ).fetchone()
+        assert phase_status == ("done", "shipped")
+    finally:
+        conn.close()

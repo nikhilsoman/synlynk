@@ -6,13 +6,17 @@
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
 <p align="center">
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-5969%20collected-brightgreen" alt="Tests"></a>
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.38.3-blue" alt="Version"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-6037%20collected-brightgreen" alt="Tests"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.39.1-blue" alt="Version"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-Apache--2.0-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
 </p>
 
 Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. The Python CLI injects scoped project context into every dispatch, uses empirical harness allocation only after a harness has at least five completed, merged jobs for the relevant task type, and follows the documented interim policy until then. See the [empirical capability policy](docs/blog/244-chore-empirical-capability-policy.md) and [routing policy](.synlynk/policy.json). Synlynk also tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
+
+**v0.39.1:** Hetzner Cloud Swarm Runner Driver & Vertical Host Orchestration — Native Hetzner Cloud Runner Driver (`synlynk/runners/hetzner.py`), dual-mode `synlynk swarm lease` CLI with direct BYOT and hosted relay execution, triple-layer scale-to-zero watchdogs, and GitHub Actions workflow template (#5464).
+
+**v0.39.0:** Hardened FTUE, Vizor HUD, Bug-Report Intake & Core Data Integrity — Bulletproof First-Time User Experience and Vizor HUD (#5413/#5426-#5437), public bug-report intake with flight recorder (#5419), standalone ecosystem suite across 5 packages (`tokenprice`, `tokentrail`, `worktree-lease`, `harness-spec`, `token-breaker`), and 4 core data integrity liability remediations (#5462, #5463).
 
 **v0.38.3:** Harness Parity Phase 3: Live Routing & Manifest Mechanics — Live 14-day rolling capability router with rotation fallbacks (#5369, #5395), autonomous harness manifest schema validation and onboard/probe CLI mechanics, CLI-version preflight rediscovery, fail-closed local harness gates, and requested harness dual-ledger attribution.
 

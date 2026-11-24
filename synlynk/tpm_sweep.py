@@ -920,11 +920,33 @@ def _cluster_candidate_stories(stories_list: list[dict], target_count: int = 12)
     return clustered
 
 
-def _resolve_packaging_target(rel_ver: str, conn) -> tuple[Optional[str], Optional[str]]:
-    """Resolve (target_goal_id, theme) for release proposal packaging per dec-fcec4295."""
-    clean_ver = rel_ver.lstrip("v")
+def _parse_semver(v: Optional[str]) -> tuple[int, ...]:
+    if not v:
+        return ()
+    clean = v.lstrip("v").strip().split("-")[0]
+    parts = []
+    for p in clean.split("."):
+        if p.isdigit():
+            parts.append(int(p))
+    return tuple(parts)
+
+
+def _resolve_packaging_target(
+    rel_ver: Optional[str], conn, repo_root: str = "."
+) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """Resolve (target_goal_id, theme, arc_version) for release proposal packaging per dec-fcec4295."""
+    clean_ver = rel_ver.lstrip("v") if rel_ver else None
     if conn is None:
-        return None, None
+        return None, None, None
+
+    cur_base_ver = (0, 0, 0)
+    vfile = os.path.join(repo_root, "VERSION")
+    if os.path.isfile(vfile):
+        try:
+            with open(vfile, "r", encoding="utf-8") as vf:
+                cur_base_ver = _parse_semver(vf.read().strip())
+        except Exception:
+            pass
 
     has_arcs = conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name='roadmap_arcs'"
@@ -937,52 +959,69 @@ def _resolve_packaging_target(rel_ver: str, conn) -> tuple[Optional[str], Option
     goal_cols = {row[1] for row in conn.execute("PRAGMA table_info(goals)").fetchall()} if has_goals else set()
 
     # 1. Check if rel_ver is explicitly bound in roadmap_arcs with active stories
-    if has_arcs and "goal_id" in arc_cols:
+    if rel_ver and has_arcs:
         arc_row = conn.execute(
-            "SELECT goal_id, title FROM roadmap_arcs WHERE (version=? OR version=?) AND title IS NOT NULL LIMIT 1",
+            "SELECT version, title FROM roadmap_arcs WHERE (version=? OR version=?) AND title IS NOT NULL LIMIT 1",
             (rel_ver, clean_ver),
         ).fetchone()
-        if arc_row and arc_row[0]:
-            gid, title = arc_row[0], arc_row[1]
+        if arc_row:
+            aver, title = arc_row[0], arc_row[1]
             has_stories = conn.execute(
-                "SELECT 1 FROM stories WHERE (goal_id=? OR goal_id=?) AND status NOT IN ('done', 'archived') LIMIT 1",
-                (gid, gid),
+                "SELECT s.goal_id, COALESCE(g.phase_title, g.outcome) FROM stories s "
+                "JOIN goals g ON (s.goal_id = g.goal_id OR s.goal_id = CAST(g.id AS TEXT)) "
+                "WHERE (g.arc_version=? OR g.arc_version=?) AND s.status NOT IN ('done', 'archived') LIMIT 1",
+                (rel_ver, clean_ver),
             ).fetchone()
             if has_stories:
-                return gid, title
+                return has_stories[0], has_stories[1] or title, aver
 
-    # 2. Find next active arc with uncompleted stories
-    if has_arcs and "goal_id" in arc_cols:
+    # 2. Find next active arc with uncompleted stories (filtered to >= cur_base_ver so legacy arcs are excluded)
+    if has_arcs:
         active_arcs = conn.execute(
-            "SELECT goal_id, title FROM roadmap_arcs WHERE status NOT IN ('shipped', 'done') AND goal_id IS NOT NULL ORDER BY id ASC"
+            "SELECT version, title FROM roadmap_arcs WHERE status NOT IN ('shipped', 'done') AND version IS NOT NULL"
         ).fetchall()
-        for gid, title in active_arcs:
+        valid_arcs = []
+        for aver, title in active_arcs:
+            s_ver = _parse_semver(aver)
+            if s_ver and s_ver >= cur_base_ver:
+                valid_arcs.append((s_ver, aver, title))
+        valid_arcs.sort(key=lambda x: x[0])
+        for _, aver, title in valid_arcs:
             has_stories = conn.execute(
-                "SELECT 1 FROM stories WHERE (goal_id=? OR goal_id=?) AND status NOT IN ('done', 'archived') LIMIT 1",
-                (gid, gid),
+                "SELECT s.goal_id, COALESCE(g.phase_title, g.outcome) FROM stories s "
+                "JOIN goals g ON (s.goal_id = g.goal_id OR s.goal_id = CAST(g.id AS TEXT)) "
+                "WHERE g.arc_version = ? AND s.status NOT IN ('done', 'archived') LIMIT 1",
+                (aver,),
             ).fetchone()
             if has_stories:
-                return gid, title
+                return has_stories[0], has_stories[1] or title, aver
 
     # 3. Find active uncompleted goal in goals table with uncompleted stories
     if has_goals:
         p_title = "phase_title" if "phase_title" in goal_cols else "NULL"
         outcome = "outcome" if "outcome" in goal_cols else "NULL"
+        arc_v = "arc_version" if "arc_version" in goal_cols else "NULL"
         r_pri_order = "COALESCE(roadmap_priority, 'P9') ASC," if "roadmap_priority" in goal_cols else ""
         active_goals = conn.execute(
-            f"SELECT goal_id, id, {outcome}, {p_title} FROM goals "
-            f"WHERE status NOT IN ('done', 'archived') "
+            f"SELECT goal_id, id, {outcome}, {p_title}, {arc_v} FROM goals "
+            f"WHERE status NOT IN ('done', 'shipped', 'archived') "
             f"ORDER BY {r_pri_order} id ASC"
         ).fetchall()
-        for gid, num_id, outc, ptitle in active_goals:
-            target_gid = gid or str(num_id)
+        valid_goals = []
+        for gid, num_id, outc, ptitle, aver in active_goals:
+            s_ver = _parse_semver(aver)
+            if s_ver and s_ver < cur_base_ver:
+                continue
+            valid_goals.append((s_ver or (999,), gid or str(num_id), outc, ptitle, aver))
+        valid_goals.sort(key=lambda x: x[0])
+        for _, target_gid, outc, ptitle, aver in valid_goals:
             has_stories = conn.execute(
                 "SELECT 1 FROM stories WHERE (goal_id=? OR goal_id=?) AND status NOT IN ('done', 'archived') LIMIT 1",
-                (target_gid, str(num_id)),
+                (target_gid, target_gid),
             ).fetchone()
             if has_stories:
                 theme = ptitle or outc or f"Goal {target_gid}"
-                return target_gid, theme
+                return target_gid, theme, aver
 
     # 4. Check if any stories with any goal exist
     any_goal_story = conn.execute(
@@ -991,10 +1030,19 @@ def _resolve_packaging_target(rel_ver: str, conn) -> tuple[Optional[str], Option
         "ORDER BY s.rowid ASC LIMIT 1"
     ).fetchone()
     if any_goal_story and any_goal_story[0]:
-        return any_goal_story[0], None
+        target_gid = any_goal_story[0]
+        aver = None
+        if has_goals and "arc_version" in goal_cols:
+            grow = conn.execute(
+                "SELECT arc_version FROM goals WHERE goal_id=? OR id=? LIMIT 1",
+                (target_gid, target_gid),
+            ).fetchone()
+            if grow and grow[0]:
+                aver = grow[0]
+        return target_gid, None, aver
 
     # 5. Only orphan stories remain
-    return None, "Maintenance & Operational Hardening"
+    return None, "Maintenance & Operational Hardening", None
 
 
 def _resolve_roadmap_metadata(
@@ -1065,42 +1113,6 @@ def package_next_release_proposal(
         if not has_table:
             return None
 
-        # Dynamically determine version from VERSION file or latest git tag
-        version_str = None
-        vfile = os.path.join(repo_root, "VERSION")
-        if os.path.isfile(vfile):
-            try:
-                with open(vfile, "r", encoding="utf-8") as vf:
-                    cur_ver = vf.read().strip()
-                parts = cur_ver.split(".")
-                if len(parts) == 3 and parts[2].isdigit():
-                    version_str = f"{parts[0]}.{parts[1]}.{int(parts[2]) + 1}"
-            except Exception:
-                pass
-
-        if not version_str:
-            try:
-                import subprocess
-                res = subprocess.run(
-                    ["git", "describe", "--tags", "--abbrev=0"],
-                    cwd=repo_root,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                if res.returncode == 0 and res.stdout.strip():
-                    latest = res.stdout.strip().lstrip("v")
-                    p = latest.split(".")
-                    if len(p) == 3 and p[2].isdigit():
-                        version_str = f"{p[0]}.{p[1]}.{int(p[2]) + 1}"
-            except Exception:
-                pass
-
-        if not version_str:
-            version_str = "0.38.1"
-
-        rel_ver = f"v{version_str}"
-
         has_goals = conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name='goals'"
         ).fetchone()
@@ -1108,19 +1120,61 @@ def package_next_release_proposal(
             "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name='roadmap_arcs'"
         ).fetchone()
 
-        resolved_target_goal, resolved_theme = target_goal_id, None
+        resolved_target_goal, resolved_theme, resolved_version = target_goal_id, None, None
         if not resolved_target_goal:
-            resolved_target_goal, resolved_theme = _resolve_packaging_target(rel_ver, conn)
+            resolved_target_goal, resolved_theme, resolved_version = _resolve_packaging_target(None, conn, repo_root=repo_root)
         elif has_goals:
             goal_cols = {row[1] for row in conn.execute("PRAGMA table_info(goals)").fetchall()}
             p_title = "phase_title" if "phase_title" in goal_cols else "NULL"
             outcome = "outcome" if "outcome" in goal_cols else "NULL"
+            arc_v = "arc_version" if "arc_version" in goal_cols else "NULL"
             grow = conn.execute(
-                f"SELECT {outcome}, {p_title} FROM goals WHERE goal_id=? OR id=? LIMIT 1",
+                f"SELECT {outcome}, {p_title}, {arc_v} FROM goals WHERE goal_id=? OR id=? LIMIT 1",
                 (resolved_target_goal, resolved_target_goal),
             ).fetchone()
             if grow:
                 resolved_theme = grow[1] or grow[0]
+                resolved_version = grow[2]
+
+        if resolved_version:
+            v_str = str(resolved_version).strip()
+            rel_ver = v_str if v_str.startswith("v") else f"v{v_str}"
+        else:
+            # Fall back to dynamically determine version from VERSION file or latest git tag
+            version_str = None
+            vfile = os.path.join(repo_root, "VERSION")
+            if os.path.isfile(vfile):
+                try:
+                    with open(vfile, "r", encoding="utf-8") as vf:
+                        cur_ver = vf.read().strip()
+                    parts = cur_ver.split(".")
+                    if len(parts) == 3 and parts[2].isdigit():
+                        version_str = f"{parts[0]}.{parts[1]}.{int(parts[2]) + 1}"
+                except Exception:
+                    pass
+
+            if not version_str:
+                try:
+                    import subprocess
+                    res = subprocess.run(
+                        ["git", "describe", "--tags", "--abbrev=0"],
+                        cwd=repo_root,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    if res.returncode == 0 and res.stdout.strip():
+                        latest = res.stdout.strip().lstrip("v")
+                        p = latest.split(".")
+                        if len(p) == 3 and p[2].isdigit():
+                            version_str = f"{p[0]}.{p[1]}.{int(p[2]) + 1}"
+                except Exception:
+                    pass
+
+            if not version_str:
+                version_str = "0.39.2"
+
+            rel_ver = f"v{version_str}"
 
         if resolved_target_goal:
             # Goal-aware packaging per dec-fcec4295: package ready/draft stories sharing target_goal_id up to ~12 stories
@@ -1189,6 +1243,7 @@ def package_next_release_proposal(
 
         return {
             "release_version": rel_ver,
+            "target_goal_id": resolved_target_goal,
             "theme": meta["theme"],
             "bookend_mtd": meta["bookend_mtd"],
             "bookend_wtd": meta["bookend_wtd"],
