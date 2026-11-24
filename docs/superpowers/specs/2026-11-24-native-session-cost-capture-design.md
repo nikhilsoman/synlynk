@@ -42,21 +42,25 @@ Native Claude Code sessions (PM, review, brainstorm) sit outside the dispatch wr
 
 The CLI, the hook and the backfill all call one function, so there is one code path to test.
 
-The dispatcher registers handlers by name and event. Only `cost_capture` is implemented. Compaction triggers (checkpoint and pack at task boundaries) and intent capture (`synlynk/intent.py`, gh:#5382) are named extension points; no code for them ships here.
+The dispatcher routes events to a handler registry. Only `cost_capture` ships; no extension-point code, stubs or config for other handlers is added in this work. Compaction triggers and intent capture (`synlynk/intent.py`, gh:#5382) can register later without changing the dispatcher's interface.
 
 ## 4. Data flow
 
 1. `Stop` fires after each turn. The dispatcher receives `session_id` and `transcript_path` and calls the cost handler.
-2. The handler reads only bytes after a stored cursor (byte offset plus the last 16 message ids).
+2. The handler reads only bytes after a stored cursor (byte offset plus the last 16 message ids). Hook budget: the `Stop` path targets under 200 ms at the 95th percentile on a 50 MB transcript, measured in a test; over budget the handler records progress and defers the rest to the sweep.
 3. For each assistant record: skip `<synthetic>` models, skip an id already seen, record first-seen usage.
 4. Bucket by (session_id, model, UTC day) and upsert one `cost_entries` row per bucket:
    - `cost_source='transcript_derived'`, `harness='claude'`, `session_id` set, `pr_number` NULL, `story_id` NULL.
    - `input_tokens`, `output_tokens`, `cache_read_tokens` from the bucket; cache-creation tokens go in `turn_usage_json`, with per-message usage keyed by `message.id`. Counts only.
-   - `total_cost_usd` from the price table (gh:#5501); if the model is not in the table the row is stored with `estimate_basis='unpriced'` and a NULL cost, never another model's rate.
-   - `payment_mode` from `billing.json` until gh:#5500 supplies detection.
+   - `total_cost_usd` from the price table (gh:#5501), computed from input, output, cache-read **and cache-creation** tokens (a test pins this); if the model is not in the table the row is stored with `estimate_basis='unpriced'` and a NULL cost, never another model's rate.
+   - `payment_mode` from `billing.json` until gh:#5500 supplies detection; rows captured before then carry `payment_mode_provisional=1` (stored in `turn_usage_json` metadata or a column, plan decides) so gh:#5500 can correct them.
 5. The cursor advances in the same transaction as the upsert, so a crash re-reads at worst one chunk and the unique key prevents a double count.
 6. `SessionEnd` runs the same handler once more and marks the cursor final.
 7. The catch-up sweep (`capture-session --pending`, run by `doctor` and the daemon) captures transcripts that have no cursor or new bytes. This covers killed terminals, `kill -9` and multi-day sessions.
+
+### 4.0 De-duplication boundary and recovery
+
+The 16-id window is an optimisation, not the correctness guarantee. If the cursor is lost, the transcript shrinks or is rewritten (size below `byte_offset`, or the byte at `byte_offset` no longer starts a record), or a repeat is found further back than the window, capture does a full re-scan of that transcript and replaces its rows (same unique key, so it is idempotent). If the full re-scan itself cannot reconcile, it fails loudly into the error log and `doctor`. It never continues silently with a possibly drifted count.
 
 ### 4.1 Exclusions (no double counting)
 
@@ -64,18 +68,18 @@ Skip a transcript when any of these holds:
 - its project path contains `/worktrees/job-` (a dispatched job worktree, including ones nested under `.claude/worktrees/`);
 - its `session_id` already appears on a ledger row that has a `job_id`.
 
-Interactive sessions in Claude-managed worktrees (`.claude/worktrees/<name>`) are native and are captured. The plan must verify the exclusion rule against a sample of job transcripts before the backfill runs.
+Interactive sessions in Claude-managed worktrees (`.claude/worktrees/<name>`) are native and are captured. The plan must verify the exclusion rule against a sample of job transcripts before the backfill runs. The rule is re-evaluated on every sweep, not only at first capture, and a reconcile step flags any `session_id` that has both `transcript_derived` and `job_id` rows (a `doctor` finding, never an auto-delete).
 
 ### 4.2 Session-to-PR view
 
-A table `session_pr_links(session_id, pr_number, first_seen_ts, source)` is filled from `pr-link` records (`source='pr-link'`) and by `synlynk cost link-session --session <id> --pr <n>` (`source='manual'`). `synlynk pr check` consults it: a PR is considered to have native provenance when a linked session has captured rows. In v1 `pr check` reports the whole linked-session cost labelled as shared across the session's PRs. It does not split the cost.
+A table `session_pr_links(session_id, pr_number, first_seen_ts, source)` is filled from three sources: `pr-link` records (`source='pr-link'`), PR numbers extracted from `gh pr` tool-use records in the transcript (`source='tool-use'`; only the number is kept, never the command text), and `synlynk cost link-session --session <id> --pr <n>` (`source='manual'`). Links are never complete, so an absent link means *unknown*, not *none*: `pr check` must not conclude "no native cost" from a missing link. `synlynk pr check` consults it: a PR is considered to have native provenance when a linked session has captured rows. In v1 `pr check` reports the whole linked-session cost labelled as shared across the session's PRs. It does not split the cost. Invariant, enforced by a test: no consumer sums a session's cost once per linked PR (that would multiply it); per-PR figures are always labelled "shared across N PRs".
 
 ## 5. Schema changes
 
 - New unique partial index on `cost_entries (session_id, model, substr(session_date,1,10)) WHERE cost_source='transcript_derived'`.
 - New table `native_capture_cursor(session_id PRIMARY KEY, transcript_path, byte_offset, recent_ids_json, final, updated_at)`.
 - New table `session_pr_links` (above).
-- New `estimate_basis` value `superseded_by_transcript` for backfilled manual rows. Every consumer that sums `cost_entries` (`cost_audit.py`, quota, capability reporting, `costs.md` regeneration) must exclude it. The plan includes an audit of those consumers as its own task, with a test per consumer.
+- New `estimate_basis` value `superseded_by_transcript` for backfilled manual rows, hidden by a new view `cost_entries_effective` (`cost_entries` minus superseded rows). Every reader (`cost_audit.py`, quota, capability reporting, `costs.md` regeneration, `pr check`) reads the view, not the table. A repo test fails on any raw `FROM cost_entries` read outside the allow-list (writers, the view definition, migrations). This is a gating requirement: the view and the test land before any backfill `--apply`.
 - Migrations follow the repo's existing lazy-migration convention; sparse and legacy databases must not fail.
 
 ## 6. Hook installation
@@ -118,11 +122,17 @@ Only counts, model ids, timestamps, session ids and PR numbers are read into mem
 - Format drift: a renamed or missing usage field fails loudly.
 - Hook safety: exits 0 on garbage input; settings merge preserves existing hooks; install is idempotent.
 - Privacy: persisted rows and the error log contain no message text.
-- Consumer audit: each `cost_entries` consumer excludes `superseded_by_transcript`.
-- Acceptance: a run on session 124f8b4d reproduces the de-duplicated totals in the RCA (output 243,094; cache_read 54,415,618 at the time of measurement).
+- Effective view: superseded rows are invisible to every reader; the raw-read guard test fails on a new raw read.
+- Cache-creation tokens contribute to `total_cost_usd`.
+- Cursor loss, a rewritten transcript and a far-apart repeat each trigger a full re-scan or a loud failure.
+- Reconcile flags a session with both `transcript_derived` and `job_id` rows.
+- Hook latency budget (section 4, step 2) is measured.
+- No consumer sums a session's cost per linked PR.
+- Acceptance: a pinned fixture (a fixed snapshot of session 124f8b4d's usage records, text stripped, at the RCA measurement point) reproduces the RCA's de-duplicated totals (output 243,094; cache_read 54,415,618). A live session keeps growing, so it is never the fixture.
 
 ## 12. Risks and open items
 
 - **Transcript format drift** is the main risk; covered by the drift test and the `doctor` check, but it needs an owner.
-- **Double counting** between hook rows and legacy manual rows is solved by the backfill's supersede mark, but only for sessions with surviving transcripts. Until the backfill runs, totals include both. The plan must order the backfill before any report that sums native cost.
+- **Double counting** between hook rows and legacy manual rows is solved by the backfill's supersede mark, but only for sessions with surviving transcripts. Until the backfill runs, totals include both. The plan orders the work: effective view and guard test, then capture, then backfill, and only then any report that sums native cost.
+- **DECIDE record:** `project-docs/decisions/2026-11-24-native-session-cost-capture-per-session.md`, conditional approval; the 11 amendments are incorporated in this revision.
 - **Roadmap drift:** `roadmap check` reports `ARC_NO_DECISION` for v0.39.3 until this spec's DECIDE record is approved and links `goal-62f693b8`.
