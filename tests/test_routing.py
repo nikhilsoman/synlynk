@@ -21,7 +21,7 @@ def _make_db():
     conn.execute("""
         CREATE TABLE routing_rotation_state (
             task_type TEXT PRIMARY KEY, cursor INTEGER NOT NULL DEFAULT 0,
-            updated_at TEXT
+            updated_at TEXT, exploration_spend_usd REAL NOT NULL DEFAULT 0
         )
     """)
     return conn
@@ -100,6 +100,37 @@ def test_empty_eligible_list_raises():
     router = LiveQueryRouter()
     with pytest.raises(ValueError):
         router.select([], "implement", conn)
+
+
+def test_round_robin_skips_a_sub_floor_harness_at_the_exploration_spend_cap():
+    conn = _make_db()
+    conn.execute(
+        "INSERT INTO cost_entries (agent, type_id, total_cost_usd) VALUES (?, ?, ?)",
+        ("codex", "implement", 10.0),
+    )
+    conn.commit()
+
+    router = LiveQueryRouter()
+
+    assert router.select(["codex", "grok"], "implement", conn) == "grok"
+
+
+def test_round_robin_updates_cached_exploration_spend_from_cost_ledger():
+    conn = _make_db()
+    conn.execute(
+        "INSERT INTO cost_entries (agent, type_id, total_cost_usd) VALUES (?, ?, ?)",
+        ("codex", "implement", 1.25),
+    )
+    conn.commit()
+
+    router = LiveQueryRouter()
+    assert router.select(["codex", "grok"], "implement", conn) == "codex"
+
+    row = conn.execute(
+        "SELECT exploration_spend_usd FROM routing_rotation_state WHERE task_type=?",
+        ("implement",),
+    ).fetchone()
+    assert row[0] == 1.25
 
 
 def test_calibration_ignores_baseline_seed_rows_per_harness_and_task_type():
