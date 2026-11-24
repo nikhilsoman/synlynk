@@ -1819,6 +1819,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     cost_log_parser.add_argument("--tokens-in", type=int, required=True, dest="tokens_in")
     cost_log_parser.add_argument("--tokens-out", type=int, required=True, dest="tokens_out")
     cost_log_parser.add_argument("--story-id", "--story", default=None, dest="story_id")
+    cost_log_parser.add_argument("--task-type", default=None, dest="task_type")
     cost_log_parser.add_argument("--job-id", default=None, dest="job_id")
     cost_log_parser.add_argument(
         "--pr", type=int, default=None,
@@ -3531,6 +3532,7 @@ def _dispatch_command(argv=None) -> None:
                 args.tokens_in,
                 args.tokens_out,
                 story_id=args.story_id,
+                task_type=args.task_type,
                 job_id=args.job_id,
                 pr=args.pr,
                 note=args.note,
