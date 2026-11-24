@@ -126,3 +126,56 @@ class ScenarioRunner:
             duration_seconds=duration,
             details=report.to_json(),
         )
+
+    def run_review_gate_matrix(self, conn) -> List[ScenarioResult]:
+        """Local (no VM) matrix proving which identity shapes satisfy cross-harness review.
+
+        Team identities are paired with a distinct teammate reviewer (the realistic
+        case); solo/edge identities are paired with themselves, since that is the
+        literal condition this scenario reproduces -- one harness account, no second identity to review with.
+        Caller is responsible for cwd (policy.json lookup) and for
+        passing an already-migrated connection, matching
+        synlynk.db._cross_harness_review_verdict's own contract.
+        """
+        from synlynk.db import _cross_harness_review_verdict
+        from synlynk.testbed.identities import STANDARD_IDENTITIES, SOLO_AND_EDGE_IDENTITIES
+
+        alice = STANDARD_IDENTITIES["node-1"]
+        bob = STANDARD_IDENTITIES["node-2"]
+        charlie = STANDARD_IDENTITIES["node-3"]
+        solo_claude = SOLO_AND_EDGE_IDENTITIES["solo_claude"]
+        gateway_poweruser = SOLO_AND_EDGE_IDENTITIES["gateway_poweruser"]
+        ci_headless = SOLO_AND_EDGE_IDENTITIES["ci_headless"]
+
+        pairings = [
+            (9001, alice, charlie),
+            (9002, bob, charlie),
+            (9003, charlie, alice),
+            (9004, solo_claude, solo_claude),
+            (9005, gateway_poweruser, gateway_poweruser),
+            (9006, ci_headless, ci_headless),
+        ]
+
+        results: List[ScenarioResult] = []
+        for pr_number, implementer, reviewer in pairings:
+            start_t = time.time()
+            conn.execute(
+                "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, pr_number) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                ("2026-11-21", implementer.harness, implementer.harness, implementer.model, "test", pr_number),
+            )
+            conn.execute(
+                "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, pr_number, agent_role) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                ("2026-11-21", reviewer.harness, reviewer.harness, reviewer.model, "test", pr_number, "qa"),
+            )
+            conn.commit()
+            ok, message = _cross_harness_review_verdict(conn, pr_number)
+            duration = time.time() - start_t
+            results.append(ScenarioResult(
+                name=f"review_gate_matrix:{implementer.username}",
+                status="PASSED" if ok else "FAILED",
+                duration_seconds=duration,
+                details=message,
+            ))
+        return results
