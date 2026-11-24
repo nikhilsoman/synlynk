@@ -1357,6 +1357,21 @@ def test_cmd_cost_log_records_native_reviewer_role(project_dir, monkeypatch):
     assert row == ("claude", "claude-sonnet-4-6", 2113, "qa", None)
 
 
+def test_cmd_cost_log_records_task_type(project_dir, monkeypatch):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+    monkeypatch.setattr(synlynk, "get_username", lambda: "nikhil")
+    cmd_cost_log(
+        agent="claude", tokens_in=10, tokens_out=5, task_type="review",
+    )
+    conn = synlynk._get_db()
+    row = conn.execute("SELECT type_id FROM cost_entries").fetchone()
+    conn.close()
+    assert row[0] == "review"
+
+
 def test_cmd_cost_log_rejects_invalid_role(project_dir, monkeypatch):
     import synlynk
 
