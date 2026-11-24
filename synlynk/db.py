@@ -2807,6 +2807,27 @@ def _insert_cost_row(
             except Exception:
                 pass
 
+        if type_id is None and job_id:
+            try:
+                type_row = conn.execute(
+                    "SELECT type_id FROM daemon_jobs WHERE job_id=?",
+                    (job_id,),
+                ).fetchone()
+                if type_row and type_row[0]:
+                    type_id = type_row[0]
+            except Exception:
+                pass
+        if type_id is None and story_id:
+            try:
+                type_row = conn.execute(
+                    "SELECT type_id FROM stories WHERE story_id=?",
+                    (story_id,),
+                ).fetchone()
+                if type_row and type_row[0]:
+                    type_id = type_row[0]
+            except Exception:
+                pass
+
         if epic_id is None and phase_id is None and story_id:
             try:
                 p_row = conn.execute(
@@ -2938,7 +2959,7 @@ def _insert_cost_row(
                 (session_date, agent, harness, agent_role, model, input_tokens, output_tokens, cache_read_tokens,
                  cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, type_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, pr_number, decision_revision, turn_usage_json,
                  estimated_input_tokens, estimated_output_tokens, estimated_cost_usd, compaction_event_type, requested_harness)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
         insert_params = (
                 session_date,
                 agent_val,

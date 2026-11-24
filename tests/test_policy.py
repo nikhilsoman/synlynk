@@ -286,15 +286,26 @@ def test_repo_policy_compatible_pairs_include_repo_only_task_types():
             assert result.allowed is True, (role, task_type)
 
 
-def test_repo_policy_routes_muse_only_to_implement_and_test_fallbacks():
+def test_repo_policy_routes_muse_to_every_task_type_fallback():
     repo_root = Path(__file__).resolve().parent.parent
     policy = load_policy(repo_path=str(repo_root))
     table = policy["dev_authority"]["task_allocation"]
 
     assert "muse" in table["implement"]["fallback"]
     assert "muse" in table["test"]["fallback"]
-    assert "muse" not in table["review"]["fallback"]
-    assert "muse" not in table["gh_write"]["fallback"]
+    assert "muse" in table["review"]["fallback"]
+    assert "muse" in table["gh_write"]["fallback"]
+
+
+def test_repo_policy_widens_every_task_type_to_all_other_harnesses():
+    repo_root = Path(__file__).resolve().parent.parent
+    policy = load_policy(repo_path=str(repo_root))
+    table = policy["dev_authority"]["task_allocation"]
+    harnesses = {"claude", "codex", "agy", "grok", "muse"}
+
+    for task_type, allocation in table.items():
+        assert set(allocation["fallback"]) == harnesses - {allocation["harness"]}
+        assert allocation["harness"] not in allocation["fallback"]
 
 
 def test_check_authority_gh_write_stays_allocation_only(tmp_path, monkeypatch):
