@@ -60,6 +60,7 @@ DEFAULT_WORKSPACE_POLICY: Dict[str, Any] = {
             "require_non_authoring_review": True,
             "review_fallback": "same_identity_comment_checklist",
         },
+        "sub_floor_exploration_mode": "observe",
         "conductor_authority": ["claude", "agy", "codex", "grok"],
         "release_authority": {"can_cut_release": ["pm"], "requires_human_approval": True},
         "human_authority_role": {"role": "pm", "requires_human_approval": True},
