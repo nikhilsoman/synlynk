@@ -16,12 +16,14 @@ _COST_ENTRIES_SCHEMA = """
         requested_harness TEXT
     )
 """
+_VIEW_SCHEMA = "CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries"
 
 
 def test_insert_cost_row_persists_requested_harness(tmp_path, monkeypatch):
     db_path = str(tmp_path / "state.db")
     conn = sqlite3.connect(db_path)
     conn.execute(_COST_ENTRIES_SCHEMA)
+    conn.execute(_VIEW_SCHEMA)
     conn.commit()
     conn.close()
     monkeypatch.setattr("synlynk._get_db", lambda *a, **k: sqlite3.connect(db_path))
@@ -41,6 +43,7 @@ def test_insert_cost_row_upsert_path_also_persists_requested_harness(tmp_path, m
     db_path = str(tmp_path / "state.db")
     conn = sqlite3.connect(db_path)
     conn.execute(_COST_ENTRIES_SCHEMA)
+    conn.execute(_VIEW_SCHEMA)
     conn.commit()
     conn.close()
     monkeypatch.setattr("synlynk._get_db", lambda *a, **k: sqlite3.connect(db_path))

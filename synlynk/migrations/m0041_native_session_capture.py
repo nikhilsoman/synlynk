@@ -10,11 +10,6 @@ from synlynk.migrations import Migration
 
 
 def _up(conn: sqlite3.Connection) -> None:
-    # Ensure cost_entries has session_id column for legacy databases where it was not added
-    cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
-    if "session_id" not in cols:
-        conn.execute("ALTER TABLE cost_entries ADD COLUMN session_id TEXT")
-
     conn.execute(
         """CREATE TABLE IF NOT EXISTS native_capture_cursor (
             session_id      TEXT PRIMARY KEY,
@@ -35,17 +30,25 @@ def _up(conn: sqlite3.Connection) -> None:
             PRIMARY KEY (session_id, pr_number, role)
         )"""
     )
-    conn.execute(
-        """CREATE UNIQUE INDEX IF NOT EXISTS idx_cost_entries_transcript_bucket
-           ON cost_entries (session_id, model, substr(session_date, 1, 10))
-           WHERE cost_source = 'transcript_derived'"""
-    )
-    conn.execute("DROP VIEW IF EXISTS cost_entries_effective")
-    conn.execute(
-        """CREATE VIEW cost_entries_effective AS
-           SELECT * FROM cost_entries
-           WHERE COALESCE(estimate_basis, '') != 'superseded_by_transcript'"""
-    )
+    cost_entries_exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cost_entries'"
+    ).fetchone()
+    if cost_entries_exists:
+        # Ensure cost_entries has session_id column for legacy databases where it was not added
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+        if "session_id" not in cols:
+            conn.execute("ALTER TABLE cost_entries ADD COLUMN session_id TEXT")
+        conn.execute(
+            """CREATE UNIQUE INDEX IF NOT EXISTS idx_cost_entries_transcript_bucket
+               ON cost_entries (session_id, model, substr(session_date, 1, 10))
+               WHERE cost_source = 'transcript_derived'"""
+        )
+        conn.execute("DROP VIEW IF EXISTS cost_entries_effective")
+        conn.execute(
+            """CREATE VIEW cost_entries_effective AS
+               SELECT * FROM cost_entries
+               WHERE COALESCE(estimate_basis, '') != 'superseded_by_transcript'"""
+        )
 
 
 MIGRATION = Migration(version=41, name="native_session_capture", up=_up)

@@ -52,6 +52,10 @@ def _ensure_cost_entries(conn):
             cost_source TEXT NOT NULL
         )"""
     )
+    conn.execute(
+        """CREATE VIEW IF NOT EXISTS cost_entries_effective AS
+        SELECT * FROM cost_entries"""
+    )
 
 
 def test_ranked_harness_for_task_promotes_candidate_with_better_metrics():

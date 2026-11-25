@@ -2626,8 +2626,9 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
     _run_legacy_migration_and_repairs(conn)
     run_pending_migrations(conn)
     _migrate_archetype_schema(conn)
-    from synlynk.db_schema import ensure_derived_roadmap_views
+    from synlynk.db_schema import ensure_cost_entries_effective_view, ensure_derived_roadmap_views
     ensure_derived_roadmap_views(conn)
+    ensure_cost_entries_effective_view(conn)
 
 
 def _migrate_archetype_schema(conn: sqlite3.Connection) -> None:

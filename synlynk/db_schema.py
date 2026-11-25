@@ -921,6 +921,23 @@ def _execute_script_statements(conn, script: str) -> None:
         raise sqlite3.OperationalError("incomplete SQL statement in trigger script")
 
 
+def ensure_cost_entries_effective_view(conn) -> None:
+    """Ensure cost_entries_effective view exists whenever cost_entries table exists."""
+    import sqlite3
+    has_table = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cost_entries'"
+    ).fetchone()
+    if has_table:
+        try:
+            conn.execute(
+                """CREATE VIEW IF NOT EXISTS cost_entries_effective AS
+                   SELECT * FROM cost_entries
+                   WHERE COALESCE(estimate_basis, '') != 'superseded_by_transcript'"""
+            )
+        except sqlite3.OperationalError:
+            pass
+
+
 def ensure_derived_roadmap_views(conn) -> None:
     """Ensure goals table has placement columns and instantiate derived roadmap views."""
     import sqlite3
