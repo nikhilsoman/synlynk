@@ -1,4 +1,5 @@
 import sqlite3
+import json
 import subprocess
 
 from synlynk.db import _migrate_onboarding_sessions
@@ -34,6 +35,20 @@ def test_verify_first_win_effect_accepts_valid_diff(tmp_path):
     assert verify_first_win_effect(str(tmp_path), "feat/first-win", base_branch="HEAD~1") is True
 
 
+def test_verify_first_win_effect_rejects_unknown_branch(tmp_path):
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True, capture_output=True)
+    (tmp_path / "README.md").write_text("# Initial\n")
+    subprocess.run(["git", "add", "README.md"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Init"], cwd=tmp_path, check=True, capture_output=True)
+    (tmp_path / "CONTRIBUTING.md").write_text("# Contributing Guide\n")
+    subprocess.run(["git", "add", "CONTRIBUTING.md"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "docs: add contributing guide"], cwd=tmp_path, check=True, capture_output=True)
+
+    assert verify_first_win_effect(str(tmp_path), "missing-first-win-branch") is False
+
+
 def test_execute_first_win_cycle(tmp_path):
     db_file = tmp_path / "state.db"
     conn = sqlite3.connect(str(db_file))
@@ -49,8 +64,9 @@ def test_execute_first_win_cycle(tmp_path):
     conn = sqlite3.connect(str(db_file))
     conn.row_factory = sqlite3.Row
     row = conn.execute(
-        "SELECT current_stage FROM onboarding_sessions WHERE session_id = ?",
+        "SELECT current_stage, first_win_meta FROM onboarding_sessions WHERE session_id = ?",
         (result["session_id"],),
     ).fetchone()
     conn.close()
     assert row["current_stage"] == STAGE_S10_BUILD_EXPERIENCE
+    assert json.loads(row["first_win_meta"])["status"] == "completed"
