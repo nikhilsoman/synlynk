@@ -34,6 +34,38 @@ def _cost_capture(payload: dict, final: bool) -> None:
 
 _HANDLERS = {("claude", "Stop"): [("cost_capture", False)], ("claude", "SessionEnd"): [("cost_capture", True)]}
 
+TAG = "synlynk hook claude "
+
+
+def _entry(event: str) -> dict:
+    return {"hooks": [{"type": "command", "command": f"{TAG}{event}", "timeout": 10}]}
+
+
+def merge_hooks(settings: dict) -> dict:
+    import copy
+    out = copy.deepcopy(settings)
+    hooks = out.setdefault("hooks", {})
+    for event in ("Stop", "SessionEnd"):
+        groups = hooks.setdefault(event, [])
+        if not any(h.get("command", "").startswith(TAG) for g in groups for h in g.get("hooks", [])):
+            groups.append(_entry(event))
+    return out
+
+
+def remove_hooks(settings: dict) -> dict:
+    import copy
+    out = copy.deepcopy(settings)
+    for event in list(out.get("hooks", {})):
+        groups = [g for g in out["hooks"][event]
+                  if not any(h.get("command", "").startswith(TAG) for h in g.get("hooks", []))]
+        if groups:
+            out["hooks"][event] = groups
+        else:
+            del out["hooks"][event]
+    if not out.get("hooks"):
+        out.pop("hooks", None)
+    return out
+
 
 def run(agent: str, event: str, stdin) -> int:
     try:
