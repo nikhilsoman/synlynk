@@ -61,6 +61,55 @@ STANDARD_IDENTITIES: Dict[str, SyntheticIdentity] = {
 }
 
 
+SOLO_AND_EDGE_IDENTITIES: Dict[str, SyntheticIdentity] = {
+    "solo_claude": SyntheticIdentity(
+        username="dana",
+        email="dana@test.synlynk",
+        role="dev",
+        harness="claude",
+        model_tier="pro",
+        model="claude-opus-4-6",
+        api_keys={
+            "ANTHROPIC_API_KEY": os.environ.get(
+                "ANTHROPIC_API_KEY", "mock-anthropic-key-testbed"
+            ),
+        },
+    ),
+    "gateway_poweruser": SyntheticIdentity(
+        username="erin",
+        email="erin@test.synlynk",
+        role="dev",
+        harness="claude",
+        model_tier="pro",
+        model="claude-opus-4-6-gateway",
+        api_keys={
+            "ANTHROPIC_BASE_URL": os.environ.get(
+                "ANTHROPIC_BASE_URL", "https://mock-gateway.test.synlynk"
+            ),
+            "ANTHROPIC_AUTH_TOKEN": os.environ.get(
+                "ANTHROPIC_AUTH_TOKEN", "mock-gateway-token-testbed"
+            ),
+            "CLAUDE_CONFIG_DIR": os.environ.get(
+                "CLAUDE_CONFIG_DIR", "/tmp/mock-claude-config-testbed"
+            ),
+        },
+    ),
+    "ci_headless": SyntheticIdentity(
+        username="ci-bot",
+        email="ci-bot@test.synlynk",
+        role="dev",
+        harness="codex",
+        model_tier="fast",
+        model="gpt-5.3-codex-headless",
+        api_keys={
+            "OPENAI_API_KEY": os.environ.get(
+                "OPENAI_API_KEY", "mock-openai-key-testbed"
+            ),
+        },
+    ),
+}
+
+
 def get_identity_for_node(node_index: int = 1) -> SyntheticIdentity:
     key = f"node-{node_index}"
     if key in STANDARD_IDENTITIES:
