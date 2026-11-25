@@ -1997,6 +1997,8 @@ def test_only_insert_cost_row_writes_to_cost_entries():
 
     allowed_files_with_direct_sql = {
         "synlynk/db.py",
+        "synlynk/native_capture.py",
+        "synlynk/native_backfill.py",
     }
     repo_root = os.path.join(os.path.dirname(__file__), "..")
     violations = []

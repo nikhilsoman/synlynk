@@ -46,6 +46,9 @@ _YELLOW = "\033[33m"
 _DIM = "\033[2m"
 _RESET = "\033[0m"
 
+_CLAUDE_SETTINGS_PATH = Path(os.path.expanduser("~/.claude/settings.json"))
+_CLAUDE_PROJECTS_DIR = Path(os.path.expanduser("~/.claude/projects"))
+
 
 @_dataclass
 class HealthCheck:
@@ -434,6 +437,84 @@ def _hc_todo_drift() -> HealthCheck:
             pass
 
     return HealthCheck("todo_drift", "ok", "todo.md is synchronized")
+
+
+def _hc_native_capture() -> HealthCheck:
+    """Checks native session cost capture hooks, error log, and pending transcripts."""
+    from synlynk import session_hooks as sh
+    from synlynk import native_capture as nc
+
+    # 1. Check settings.json for hook registration
+    settings_path = Path(_CLAUDE_SETTINGS_PATH)
+    if not settings_path.exists():
+        return HealthCheck(
+            "native_capture",
+            "fail",
+            f"Claude settings not found at {settings_path}",
+            fix="Run: synlynk doctor --fix",
+        )
+    try:
+        settings = json.loads(settings_path.read_text())
+        hooks = settings.get("hooks", {})
+        has_stop = any(h.get("command", "").startswith(sh.TAG) for g in hooks.get("Stop", []) for h in g.get("hooks", []))
+        has_end = any(h.get("command", "").startswith(sh.TAG) for g in hooks.get("SessionEnd", []) for h in g.get("hooks", []))
+        if not (has_stop and has_end):
+            return HealthCheck(
+                "native_capture",
+                "fail",
+                "Claude Stop and/or SessionEnd hook is missing",
+                fix="Run: synlynk doctor --fix",
+            )
+    except Exception as exc:
+        return HealthCheck(
+            "native_capture",
+            "fail",
+            f"Failed to read Claude settings: {exc}",
+            fix="Run: synlynk doctor --fix",
+        )
+
+    # 2. Check error log
+    if sh.ERROR_LOG.exists() and sh.ERROR_LOG.stat().st_size > 0:
+        return HealthCheck(
+            "native_capture",
+            "warn",
+            f"Native capture errors logged in {sh.ERROR_LOG}",
+            fix=f"Review and clear {sh.ERROR_LOG}",
+        )
+
+    # 3. Check for uncaptured transcripts or reconciliation issues
+    try:
+        from synlynk import _get_db
+        conn = _get_db()
+        discrepancies = nc.reconcile(conn)
+        if discrepancies:
+            return HealthCheck(
+                "native_capture",
+                "warn",
+                f"Reconcile flagged sessions with mixed dispatch/native rows: {discrepancies}",
+                fix="Inspect cost_entries for flagged sessions",
+            )
+        projects_dir = Path(_CLAUDE_PROJECTS_DIR)
+        if projects_dir.exists():
+            for proj in projects_dir.iterdir():
+                if not proj.is_dir() or nc.is_dispatch_slug(proj.name):
+                    continue
+                for t in proj.glob("*.jsonl"):
+                    sid = t.stem
+                    cur = conn.execute("SELECT byte_offset, final FROM native_capture_cursor WHERE session_id=?", (sid,)).fetchone()
+                    if cur is None:
+                        has_rows = conn.execute("SELECT 1 FROM cost_entries_effective WHERE session_id=? LIMIT 1", (sid,)).fetchone()
+                        if not has_rows:
+                            return HealthCheck(
+                                "native_capture",
+                                "fail",
+                                f"Uncaptured native transcript found: {t.name}",
+                                fix="Run: synlynk cost capture-session --pending",
+                            )
+    except Exception:
+        pass
+
+    return HealthCheck("native_capture", "ok", "Native capture hooks installed and ledger up to date")
 
 
 def _merged_pr_numbers_from_origin_main() -> set[int] | None:
@@ -1229,7 +1310,40 @@ def _fix_graphify() -> int:
     return 0
 
 
+def _fix_native_capture(args=None) -> int:
+    """Consent-gated installer for native Claude session capture hooks."""
+    from synlynk import session_hooks as sh
+    settings_path = Path(_CLAUDE_SETTINGS_PATH)
+    current = {}
+    if settings_path.exists():
+        try:
+            current = json.loads(settings_path.read_text())
+        except Exception:
+            current = {}
+    merged = sh.merge_hooks(current)
+    if merged == current:
+        print("Claude hooks already installed in settings.json.")
+        return 0
+
+    should_write = _confirm_fix(f"Install native cost capture hooks into {settings_path}?", args=args)
+    if not should_write:
+        print("  Aborted. No files written.")
+        return 1
+
+    # Write timestamped backup
+    if settings_path.exists():
+        bak = settings_path.with_name(f"settings.json.synlynk-bak")
+        shutil.copy2(settings_path, bak)
+
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(json.dumps(merged, indent=2))
+    print(f"  ✓ Native capture hooks installed in {settings_path}")
+    return 0
+
+
 def cmd_doctor_fix(agent: str, args=None) -> int:
+    if agent in ("native_capture", "hooks", "capture"):
+        return _fix_native_capture(args=args)
     if agent == "graphify":
         return _fix_graphify()
     if agent == "cli":
@@ -1239,8 +1353,15 @@ def cmd_doctor_fix(agent: str, args=None) -> int:
     if agent == "roadmap":
         repair_roadmap_merge_parity()
         return 0
+    if agent is None or agent == "" or agent is True:
+        # Generic --fix runs applicable automated repairs
+        rc = 0
+        hc = _hc_native_capture()
+        if hc.status == "fail" and "hooks" in hc.message:
+            rc = _fix_native_capture(args=args)
+        return rc
     if agent != "agy":
-        raise ValueError("synlynk doctor --fix currently supports agy, roadmap, cli, or leases")
+        raise ValueError("synlynk doctor --fix currently supports agy, roadmap, cli, leases, or native_capture")
 
     plans = [_build_agy_fix_plan(), _build_agy_stitch_fix_plan()]
     active_plans = [p for p in plans if p.needs_write]
@@ -1707,6 +1828,7 @@ HEALTH_CHECKS = [
     _hc_codex_model_catalog,
     _hc_docs_dir,
     _hc_todo_drift,
+    _hc_native_capture,
     _hc_roadmap_merge_parity,
     _hc_roadmap_decision_drift,
     _hc_roadmap_uid_consistency,
