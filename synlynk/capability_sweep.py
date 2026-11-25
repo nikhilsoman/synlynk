@@ -491,7 +491,7 @@ def _run_sweep(discovered: dict, skills: list) -> None:
                 label = SFIA_CODES.get(skill, {}).get("label", skill)
                 task = f"Write a minimal example demonstrating {label} for a small Python function."
                 executor_result = _dispatch_calibration_task(
-                    harness, task, model=model, role="dev", task_type="implement", requires_gh_write=False
+                    harness, task, model=model, role="dev", task_type="calibration", requires_gh_write=False
                 )
 
                 verifier_harness = _pick_verifier_harness(harness, available_harnesses)

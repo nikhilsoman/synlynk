@@ -87,6 +87,27 @@ def test_noop_cleanup_keeps_dirty_worktree(git_worktree_repo):
     assert _git(repo, "show-ref", "--verify", "refs/heads/dispatch/codex/noop").returncode == 0
 
 
+def test_capability_sweep_cleanup_removes_dirty_worktree(git_worktree_repo):
+    import synlynk.jobs as jobs
+
+    repo = git_worktree_repo
+    path = _job_worktree(repo)
+    (path / "calibration-output.txt").write_text("temporary calibration output")
+    job = {
+        "id": "job-calibration",
+        "worktree_path": str(path),
+        "worktree_branch": "dispatch/codex/noop",
+        "task_type": "calibration",
+    }
+
+    assert jobs._cleanup_noop_worktree(job) is True
+    assert not path.exists()
+    assert subprocess.run(
+        ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/dispatch/codex/noop"],
+        capture_output=True,
+    ).returncode != 0
+
+
 def test_noop_cleanup_keeps_branch_with_diff_from_origin_main(git_worktree_repo):
     import synlynk.jobs as jobs
 
