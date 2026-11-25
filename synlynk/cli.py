@@ -1863,6 +1863,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     link.add_argument("--session", required=True, dest="session_id")
     link.add_argument("--pr", type=int, required=True)
     link.add_argument("--role", choices=["implementer", "reviewer"], default="implementer")
+    backfill_cmd = cost_sub.add_parser("backfill-native", help="Backfill native sessions replacing estimated_manual rows with transcripts")
+    backfill_cmd.add_argument("--apply", action="store_true", help="Apply backfill changes (default: dry-run)")
 
     roadmap_parser = subparsers.add_parser("roadmap", help="Manage the roadmap")
     roadmap_sub = roadmap_parser.add_subparsers(dest="roadmap_action")
@@ -3621,6 +3623,30 @@ def _dispatch_command(argv=None) -> None:
             nc.link_session(conn, args.session_id, args.pr, role=args.role)
             print(f"Linked session {args.session_id} to PR #{args.pr} as {args.role}")
             return 0
+        elif args.cost_action == "backfill-native":
+            from synlynk import _get_db
+            import synlynk.native_backfill as nb
+            conn = _get_db()
+            views = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='view'")}
+            if "cost_entries_effective" not in views:
+                print("error: cost_entries_effective view not found; run migrations first", file=sys.stderr)
+                return 1
+            if args.apply:
+                applied = nb.apply_backfill(conn)
+                print(f"Applied backfill to {len(applied)} rows.")
+                for c in applied:
+                    new = "superseded_by_transcript" if c.action == "supersede" else "unverified_estimate"
+                    print(f"  row {c.row_id} ({c.session_date}): {c.old_basis} -> {new}")
+                print("Reminder: run 'git diff --numstat origin/main' before committing any regenerated costs.md.")
+                return 0
+            else:
+                plan = nb.plan_backfill(conn)
+                print(f"Planned backfill changes ({len(plan)} rows):")
+                for c in plan:
+                    new = "superseded_by_transcript" if c.action == "supersede" else "unverified_estimate"
+                    print(f"  row {c.row_id} ({c.session_date}): {c.old_basis} -> {new}")
+                print("Dry-run only. Pass --apply to execute.")
+                return 0
     elif args.command == "roadmap":
         if args.roadmap_action == "add":
             try:
