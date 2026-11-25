@@ -1568,6 +1568,34 @@ def test_review_codex_gh_write_keeps_repository_read_only(project_dir, monkeypat
     assert "sandbox_workspace_read_only" not in command
 
 
+def test_review_dispatch_child_skips_cli_reconciliation(project_dir, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+
+    class FakeProc:
+        pid = 12345
+
+    def fake_popen(command, *args, **kwargs):
+        captured["env"] = kwargs["env"]
+        return FakeProc()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(dispatch_mod, "_preflight_dispatch", lambda *a, **kw: {"passed": True})
+
+    dispatch_mod.dispatch_agent(
+        "codex",
+        "review the patch",
+        task_type="review",
+        role="qa",
+        force_agent=True,
+        skip_preflight=True,
+        context_mode="none",
+    )
+
+    assert captured["env"]["SYNLYNK_SKIP_RECONCILE"] == "1"
+
+
 def test_codex_review_permission_flags_match_live_network_no_write_probe():
     from synlynk._constants import _CODEX_NETWORK_PERMISSION
     from synlynk.dispatch import _permissions_to_flags

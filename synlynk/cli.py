@@ -10,6 +10,11 @@ import re
 _SYNLYNK_DIR = ".synlynk"
 
 
+def _should_skip_reconciliation() -> bool:
+    """Return whether this read-only child must avoid flat-file lock writes."""
+    return os.environ.get("SYNLYNK_SKIP_RECONCILE") == "1"
+
+
 def _synlynk_repo_root(start=None):
     """Return the enclosing synlynk checkout, if ``start`` is inside one."""
     path = Path.cwd() if start is None else Path(start)
@@ -2743,7 +2748,11 @@ def _dispatch_command(argv=None) -> None:
             _cmd_name = tok
             break
     _repo_initialized = os.path.exists(".synlynk/config.json") or os.path.exists(".synlynk/workspace.json")
-    if _cmd_name != "report" and (_repo_initialized or _cmd_name != "init"):
+    if (
+        not _should_skip_reconciliation()
+        and _cmd_name != "report"
+        and (_repo_initialized or _cmd_name != "init")
+    ):
         _reconcile_jobs()
         try:
             from synlynk.capability_watch import spawn_staleness_check_thread

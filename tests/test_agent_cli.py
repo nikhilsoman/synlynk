@@ -4555,6 +4555,14 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
     assert "All dispatched agents share one GitHub identity" not in repaired_claude_md
 
 
+def test_review_dispatch_child_bypasses_reconciliation(monkeypatch):
+    import synlynk.cli as cli
+
+    monkeypatch.setenv("SYNLYNK_SKIP_RECONCILE", "1")
+
+    assert cli._should_skip_reconciliation() is True
+
+
 def test_detect_drift_between_two_versions_of_a_roadmap_doc():
     """Compare roadmap versions at the synlynk-bot intermediate difficulty."""
     from synlynk.db import detect_roadmap_doc_drift
