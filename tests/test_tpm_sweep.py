@@ -781,3 +781,53 @@ def test_membership_drift_recomputes_part_and_refreshes_ticket(tmp_path):
     finally:
         conn.close()
 
+
+def test_live_35_packaging_regression(tmp_path):
+    """LIVE-35 regression: 12 task stories + 7 umbrella/in-progress parents under one goal -> one proposal of 12 with 7 context entries and 'complete goal' packaging line."""
+    import sqlite3
+    from synlynk.tpm_sweep import package_next_release_proposal, format_release_proposal_markdown
+
+    conn = sqlite3.connect(tmp_path / "test.db")
+    try:
+        conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, role TEXT, estimated_tokens INTEGER, gh_issue TEXT, readiness TEXT, status TEXT, goal_id TEXT, priority INTEGER, umbrella INTEGER DEFAULT 0, phase TEXT)")
+        conn.execute("CREATE TABLE goals (id INTEGER PRIMARY KEY, goal_id TEXT, outcome TEXT, phase_title TEXT, status TEXT, roadmap_priority TEXT)")
+
+        conn.execute("INSERT INTO goals (id, goal_id, outcome, phase_title, status, roadmap_priority) VALUES (1, 'goal-live35', 'Roadmap Studio', 'Roadmap Studio Visual Proposal Editor', 'active', 'P1')")
+
+        # 12 ready task stories
+        for i in range(1, 13):
+            conn.execute(
+                "INSERT INTO stories (story_id, title, role, estimated_tokens, readiness, status, goal_id, priority, phase, umbrella) VALUES (?, ?, 'dev', 25000, 'ready', 'open', 'goal-live35', ?, 'phase-1', 0)",
+                (f"story-task-{i:02d}", f"Task Story {i}", i),
+            )
+
+        # 7 parent stories: 4 umbrella (umbrella=1), 3 in_progress
+        for i in range(1, 5):
+            conn.execute(
+                "INSERT INTO stories (story_id, title, role, estimated_tokens, readiness, status, goal_id, priority, phase, umbrella) VALUES (?, ?, 'pm', 25000, 'ready', 'open', 'goal-live35', ?, 'phase-1', 1)",
+                (f"story-umb-{i:02d}", f"Parent Umbrella {i}", 100 + i),
+            )
+        for i in range(1, 4):
+            conn.execute(
+                "INSERT INTO stories (story_id, title, role, estimated_tokens, readiness, status, goal_id, priority, phase, umbrella) VALUES (?, ?, 'architect', 25000, 'ready', 'in_progress', 'goal-live35', ?, 'phase-1', 0)",
+                (f"story-inp-{i:02d}", f"In Progress Parent {i}", 200 + i),
+            )
+        conn.commit()
+
+        proposal = package_next_release_proposal(conn=conn, repo_root=str(tmp_path))
+        assert proposal is not None
+        assert len(proposal["stories"]) == 12
+        assert len(proposal["context_stories"]) == 7
+
+        body = format_release_proposal_markdown(proposal)
+        assert "## 📦 Packaging" in body
+        assert "complete goal" in body
+        assert "### Context Stories" in body
+        for i in range(1, 5):
+            assert f"story-umb-{i:02d}" in body
+        for i in range(1, 4):
+            assert f"story-inp-{i:02d}" in body
+    finally:
+        conn.close()
+
+
