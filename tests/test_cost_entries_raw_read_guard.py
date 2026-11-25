@@ -10,6 +10,7 @@ ALLOWED = {
     "synlynk/db_schema.py",
     "synlynk/native_capture.py",   # upsert/rescan targets the raw table
     "synlynk/native_backfill.py",
+    "bin/backfill_api_equivalent_usd.py",
 }
 
 

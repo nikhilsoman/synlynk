@@ -1039,6 +1039,7 @@ def test_migrate_repairs_turn_usage_json_on_bootstrapped_schema(tmp_path):
         "CREATE TABLE cost_entries_legacy AS "
         f"SELECT {quoted_columns} FROM cost_entries"
     )
+    conn.execute("DROP VIEW IF EXISTS cost_entries_effective")
     conn.execute("DROP TABLE cost_entries")
     conn.execute("ALTER TABLE cost_entries_legacy RENAME TO cost_entries")
     conn.execute(f"PRAGMA user_version = {_DB_MIGRATION_VERSION}")

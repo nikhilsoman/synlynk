@@ -58,6 +58,11 @@ def generate_daily_sync(workspace_dir: str = ".") -> Dict[str, Any]:
             if row:
                 unblocked_task = f"{row[0]}: {row[1]}"
             # Check yesterday's burn
+            try:
+                from synlynk.db_schema import ensure_cost_entries_effective_view
+                ensure_cost_entries_effective_view(conn)
+            except Exception:
+                pass
             cur.execute("SELECT SUM(cost_usd) FROM cost_entries_effective")
             cost_row = cur.fetchone()
             if cost_row and cost_row[0] is not None:

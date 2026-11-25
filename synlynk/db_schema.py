@@ -928,14 +928,18 @@ def ensure_cost_entries_effective_view(conn) -> None:
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cost_entries'"
     ).fetchone()
     if has_table:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+        condition = "WHERE COALESCE(estimate_basis, '') != 'superseded_by_transcript'" if "estimate_basis" in cols else ""
+        view_sql = f"SELECT * FROM cost_entries {condition}".strip()
         try:
-            conn.execute(
-                """CREATE VIEW IF NOT EXISTS cost_entries_effective AS
-                   SELECT * FROM cost_entries
-                   WHERE COALESCE(estimate_basis, '') != 'superseded_by_transcript'"""
-            )
+            conn.execute(f"CREATE VIEW IF NOT EXISTS cost_entries_effective AS {view_sql}")
         except sqlite3.OperationalError:
-            pass
+            # If the database is opened in read-only mode, persistent CREATE VIEW fails.
+            # Create a TEMP VIEW in the in-memory temp schema instead.
+            try:
+                conn.execute(f"CREATE TEMP VIEW IF NOT EXISTS cost_entries_effective AS {view_sql}")
+            except sqlite3.OperationalError:
+                pass
 
 
 def ensure_derived_roadmap_views(conn) -> None:
