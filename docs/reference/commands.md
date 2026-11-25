@@ -70,6 +70,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `goal link` (primary) — goal
 - `goal status` (primary) — goal
 - `goal update` (primary) — goal
+- `goal packaging` (secondary) — goal
 - `story create` (primary) — goal
 - `story list` (primary) — goal
 - `story ready` (secondary) — goal
@@ -78,6 +79,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `story reclaim` (secondary) — goal
 - `story claim` (secondary) — goal
 - `story update` (secondary) — goal
+- `story depend` (secondary) — goal
 - `story sync` (secondary) — goal
 - `backlog capture` (secondary) — open
 - `backlog list` (secondary) — open
@@ -142,6 +144,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `governs sweep` (primary) — sustain
 - `spec lint` (primary) — goal
 - `release` (primary) — release
+- `release-split approve` (secondary) — release
 - `marketing ceremony` (secondary) — release
 - `marketing sync-pr` (secondary) — release
 - `pr check` (primary) — release
