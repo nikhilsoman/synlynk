@@ -46,6 +46,10 @@ def _make_conn():
         )
         """
     )
+    conn.execute(
+        """CREATE VIEW IF NOT EXISTS cost_entries_effective AS
+        SELECT * FROM cost_entries"""
+    )
     return conn
 
 
@@ -471,6 +475,9 @@ def test_cli_capability_report_runs_without_error(tmp_path, monkeypatch):
     )
     conn.execute(
         "CREATE TABLE cost_entries (story_id TEXT, total_cost_usd REAL, pr_number INTEGER, job_id TEXT)"
+    )
+    conn.execute(
+        "CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries"
     )
     conn.commit()
     conn.close()

@@ -469,7 +469,7 @@ def resolve_burn_rate_multiplier(harness: str, model: str, conn=None) -> float:
     try:
         pair_row = conn.execute(
             "SELECT COUNT(*), AVG(COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0)) "
-            "FROM cost_entries WHERE lower(harness) = lower(?) AND model = ?",
+            "FROM cost_entries_effective WHERE lower(harness) = lower(?) AND model = ?",
             (harness, model),
         ).fetchone()
         pair_count = pair_row[0] if pair_row else 0
@@ -479,7 +479,7 @@ def resolve_burn_rate_multiplier(harness: str, model: str, conn=None) -> float:
 
         harness_row = conn.execute(
             "SELECT AVG(COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0)) "
-            "FROM cost_entries WHERE lower(harness) = lower(?)",
+            "FROM cost_entries_effective WHERE lower(harness) = lower(?)",
             (harness,),
         ).fetchone()
         harness_avg = float(harness_row[0] or 0.0) if harness_row else 0.0
@@ -501,7 +501,7 @@ def refresh_burn_rate_weights(conn=None) -> int:
         conn = _pkg("_get_db")()
     try:
         pairs = conn.execute(
-            "SELECT harness, model, COUNT(*) FROM cost_entries "
+            "SELECT harness, model, COUNT(*) FROM cost_entries_effective "
             "WHERE harness IS NOT NULL AND model IS NOT NULL "
             "GROUP BY lower(harness), model "
             "HAVING COUNT(*) >= ?",
@@ -1229,8 +1229,7 @@ def is_quota_calibration_stale(conn, threshold_hours: int = 24) -> bool:
 
 def maybe_calibrate_quota(conn=None) -> list[dict[str, Any]]:
     """Automatically re-calibrates quota ceilings for every harness/window
-    that has at least two quota_snapshots rows, deriving delta_tokens from
-    cost_entries actual usage between those two snapshot timestamps instead
+    that has at least two quota_snapshots rows, deriving delta_tokens from cost_entries_effective actual usage between those two snapshot timestamps instead
     of requiring a human to supply p1_pct/p2_pct/delta_tokens by hand.
 
     Also refreshes the quota_burn_rate_weights cache (Task 3) in the same
@@ -1258,7 +1257,7 @@ def maybe_calibrate_quota(conn=None) -> list[dict[str, Any]]:
             p1_pct, p1_at = snaps[1]
             delta_row = conn.execute(
                 "SELECT COALESCE(SUM(COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0)), 0) "
-                "FROM cost_entries WHERE lower(harness) = lower(?) "
+                "FROM cost_entries_effective WHERE lower(harness) = lower(?) "
                 "AND recorded_at > ? AND recorded_at <= ?",
                 (harness, p1_at, p2_at),
             ).fetchone()

@@ -229,6 +229,10 @@ def _snapshots_db():
             cost_source TEXT NOT NULL
         )"""
     )
+    conn.execute(
+        """CREATE VIEW IF NOT EXISTS cost_entries_effective AS
+        SELECT * FROM cost_entries"""
+    )
     return conn
 
 

@@ -92,6 +92,7 @@ def make_test_db(path: str):
             cache_read_tokens INTEGER, total_cost_usd REAL, notes TEXT,
             cost_source TEXT DEFAULT 'actual'
         );
+        CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries;
         INSERT INTO roadmap_arcs (version, title, status) VALUES ('v0.11.0', 'Retention Layer', 'active');
         INSERT INTO roadmap_phases (arc_version, phase_title, status, notes)
             VALUES ('v0.11.0', 'Plan', 'done', '[agent:codex]'),
@@ -211,6 +212,7 @@ def test_generate_viz_data_includes_file_tree(tmp_path, monkeypatch):
         CREATE TABLE roadmap_phases (id INTEGER PRIMARY KEY, arc_version TEXT, phase_title TEXT, status TEXT DEFAULT 'planned', priority TEXT, story_id TEXT, notes TEXT);
         CREATE TABLE stories (id INTEGER PRIMARY KEY, story_id TEXT UNIQUE, title TEXT, status TEXT DEFAULT 'open', phase TEXT DEFAULT 'build', estimated_tokens INTEGER, created_at TEXT);
         CREATE TABLE cost_entries (id INTEGER PRIMARY KEY, session_date TEXT, agent TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER, total_cost_usd REAL, notes TEXT, cost_source TEXT DEFAULT 'actual');
+        CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries;
         CREATE TABLE source_symbols (id INTEGER PRIMARY KEY AUTOINCREMENT, head_sha TEXT NOT NULL, file TEXT NOT NULL, language TEXT NOT NULL, symbol TEXT NOT NULL, symbol_type TEXT NOT NULL, line INTEGER, scanned_at TEXT NOT NULL);
         INSERT INTO source_symbols (head_sha, file, language, symbol, symbol_type, line, scanned_at)
             VALUES ('abc', 'synlynk/viz.py', 'python', 'generate_gantt_html', 'function', 930, '2026-07-11T00:00:00Z');

@@ -551,7 +551,7 @@ def import_legacy_cost_entries(conn: sqlite3.Connection) -> dict[str, int]:
         "input_tokens", "output_tokens", "cache_read_tokens", "total_cost_usd",
         "actual_usd", "payment_mode", "cost_source", "recorded_at",
     ) if name in columns]
-    rows = conn.execute(f"SELECT {', '.join(names)} FROM cost_entries WHERE job_id IS NOT NULL")
+    rows = conn.execute(f"SELECT {', '.join(names)} FROM cost_entries_effective WHERE job_id IS NOT NULL")
     records = []
     for row in rows.fetchall():
         item = dict(zip(names, row))

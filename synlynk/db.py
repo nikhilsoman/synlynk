@@ -105,7 +105,7 @@ def _job_execution_identity(conn, job_id: str) -> tuple[str | None, str | None]:
     row = conn.execute(
         """SELECT COALESCE(NULLIF(ce.harness, ''), NULLIF(dj.harness, ''), NULLIF(ce.agent, ''), NULLIF(dj.agent, '')),
                   COALESCE(NULLIF(ce.model, ''), NULLIF(dj.resolved_model, ''), NULLIF(dj.requested_model, ''))
-             FROM cost_entries ce
+             FROM cost_entries_effective ce
              LEFT JOIN daemon_jobs dj ON dj.job_id = ce.job_id
             WHERE ce.job_id=?
             ORDER BY ce.id DESC LIMIT 1""",
@@ -216,7 +216,7 @@ def _native_cost_entry_identity(
     rows = conn.execute(
         f"""SELECT COALESCE(NULLIF(harness, ''), NULLIF(agent, '')),
                          NULLIF(model, '')
-             FROM cost_entries
+             FROM cost_entries_effective
             WHERE pr_number=?
               AND job_id IS NULL
               {role_sql}
@@ -359,7 +359,7 @@ def _implementation_job_from_linked_issues(conn, pr_number: int) -> tuple[str | 
 
     rows = conn.execute(
         """SELECT DISTINCT ce.job_id, ce.story_id
-            FROM cost_entries ce
+            FROM cost_entries_effective ce
              JOIN daemon_jobs dj ON dj.job_id=ce.job_id
             WHERE ce.story_id=?
             ORDER BY ce.id DESC""",
@@ -377,7 +377,7 @@ def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
     implementation = conn.execute(
         """SELECT DISTINCT ce.job_id
              FROM capability_ratings cr
-             JOIN cost_entries ce ON ce.story_id=cr.story_id
+             JOIN cost_entries_effective ce ON ce.story_id=cr.story_id
             LEFT JOIN daemon_jobs dj ON dj.job_id=ce.job_id
             WHERE cr.pr_number=?
             ORDER BY ce.id DESC""",
@@ -389,7 +389,7 @@ def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
         return False, f"ambiguous implementation job provenance for PR #{pr_number}"
     if not implementation_job_id:
         exact = conn.execute(
-            """SELECT DISTINCT ce.job_id FROM cost_entries ce JOIN daemon_jobs dj ON dj.job_id=ce.job_id
+            """SELECT DISTINCT ce.job_id FROM cost_entries_effective ce JOIN daemon_jobs dj ON dj.job_id=ce.job_id
                 WHERE ce.pr_number=? ORDER BY ce.id""",
             (pr_number,),
         ).fetchall()
@@ -2626,8 +2626,9 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
     _run_legacy_migration_and_repairs(conn)
     run_pending_migrations(conn)
     _migrate_archetype_schema(conn)
-    from synlynk.db_schema import ensure_derived_roadmap_views
+    from synlynk.db_schema import ensure_cost_entries_effective_view, ensure_derived_roadmap_views
     ensure_derived_roadmap_views(conn)
+    ensure_cost_entries_effective_view(conn)
 
 
 def _migrate_archetype_schema(conn: sqlite3.Connection) -> None:
@@ -2871,7 +2872,7 @@ def _insert_cost_row(
                 pass
         if job_id is not None:
             existing = conn.execute(
-                "SELECT id FROM cost_entries WHERE job_id=?",
+                "SELECT id FROM cost_entries_effective WHERE job_id=?",
                 (job_id,),
             ).fetchone()
             if existing:
@@ -3029,7 +3030,7 @@ def get_costs_by_harness(conn: sqlite3.Connection = None) -> dict[str, float]:
         rows = conn.execute(
             "SELECT COALESCE(NULLIF(harness, ''), NULLIF(agent, ''), 'unknown'), "
             "SUM(COALESCE(total_cost_usd, 0.0)) "
-            "FROM cost_entries "
+            "FROM cost_entries_effective "
             "GROUP BY COALESCE(NULLIF(harness, ''), NULLIF(agent, ''), 'unknown')"
         ).fetchall()
         return {r[0]: round(float(r[1] or 0.0), 4) for r in rows}
@@ -3050,7 +3051,7 @@ def get_costs_by_agent_role(conn: sqlite3.Connection = None) -> dict[str, float]
         rows = conn.execute(
             "SELECT COALESCE(NULLIF(agent_role, ''), 'unattributed'), "
             "SUM(COALESCE(total_cost_usd, 0.0)) "
-            "FROM cost_entries "
+            "FROM cost_entries_effective "
             "GROUP BY COALESCE(NULLIF(agent_role, ''), 'unattributed')"
         ).fetchall()
         return {r[0]: round(float(r[1] or 0.0), 4) for r in rows}
@@ -3168,7 +3169,7 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
                     # Legacy cost rows have no stable unique key (job_id is null).
                     # Match a prior import by the flat-file fingerprint fields.
                     existing = conn.execute(
-                        "SELECT 1 FROM cost_entries "
+                        "SELECT 1 FROM cost_entries_effective "
                         "WHERE session_date=? AND IFNULL(agent,'')=IFNULL(?, '') "
                         "AND IFNULL(model,'')=IFNULL(?, '') "
                         "AND IFNULL(input_tokens, -1)=IFNULL(?, -1) "
@@ -4144,7 +4145,7 @@ def _generate_costs_md() -> None:
     conn = _get_db()
     cursor = conn.execute(
         "SELECT session_date, agent, model, input_tokens, output_tokens, "
-        "total_cost_usd, cost_source, story_id, notes, api_equivalent_usd, actual_usd, payment_mode FROM cost_entries ORDER BY id ASC"
+        "total_cost_usd, cost_source, story_id, notes, api_equivalent_usd, actual_usd, payment_mode FROM cost_entries_effective ORDER BY id ASC"
     )
     rows = cursor.fetchall() if hasattr(cursor, "fetchall") else []
     conn.close()
@@ -4179,7 +4180,7 @@ def _generate_costs_md() -> None:
     config = load_config()
     billing = config.get("harness_billing", {})
     conn2 = _get_db()
-    c2 = conn2.execute("SELECT agent, SUM(actual_usd), SUM(api_equivalent_usd) FROM cost_entries WHERE payment_mode='subscription' GROUP BY agent")
+    c2 = conn2.execute("SELECT agent, SUM(actual_usd), SUM(api_equivalent_usd) FROM cost_entries_effective WHERE payment_mode='subscription' GROUP BY agent")
     sub_data = {r[0]: {"actual": r[1] or 0.0, "api": r[2] or 0.0} for r in c2.fetchall()} if hasattr(c2, "fetchall") else {}
     conn2.close()
 

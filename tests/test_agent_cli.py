@@ -22,6 +22,7 @@ def _governs_gate_db():
         CREATE TABLE goal_contributions (story_id TEXT, goal_id TEXT, link_status TEXT);
         CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, story_id TEXT, gh_write_target TEXT);
         CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
+        CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries;
         CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
         CREATE TABLE roadmap_phases (id INTEGER PRIMARY KEY);
         """
@@ -165,6 +166,7 @@ def test_governs_pr_check_ignores_unrelated_null_target_cost_job():
             job_id TEXT PRIMARY KEY, story_id TEXT, task TEXT, gh_write_target TEXT
         );
         CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
+        CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries;
         CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
         """
     )
@@ -190,6 +192,7 @@ def test_governs_pr_check_flags_untagged_job_sharing_pr_story():
             job_id TEXT PRIMARY KEY, story_id TEXT, task TEXT, gh_write_target TEXT
         );
         CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
+        CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries;
         CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
         """
     )
@@ -215,6 +218,7 @@ def test_governs_pr_check_flags_original_gap_two_untagged_job_for_pr_2029():
         CREATE TABLE stories (story_id TEXT PRIMARY KEY, goal_id TEXT);
         CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, story_id TEXT, task TEXT, gh_write_target TEXT);
         CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
+        CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries;
         CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
         """
     )
@@ -242,6 +246,7 @@ def test_governs_pr_check_flags_job_referencing_linked_issue():
             job_id TEXT PRIMARY KEY, story_id TEXT, task TEXT, gh_write_target TEXT
         );
         CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
+        CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries;
         CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
         """
     )
@@ -267,6 +272,7 @@ def test_governs_pr_check_walks_attributable_jobs_and_ignores_other_prs():
         CREATE TABLE stories (story_id TEXT PRIMARY KEY, goal_id TEXT);
         CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, story_id TEXT, task TEXT, gh_write_target TEXT);
         CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
+        CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries;
         CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
         """
     )
