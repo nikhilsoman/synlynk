@@ -175,6 +175,10 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `cost audit import` (secondary) — sustain
 - `cost audit report` (secondary) — sustain
 - `cost audit correct` (secondary) — sustain
+- `cost capture-session` (secondary) — sustain
+- `cost link-session` (secondary) — sustain
+- `cost backfill-native` (secondary) — sustain
+- `hook` (secondary) — sustain
 - `context checkpoint` (secondary) — sustain
 - `context pack` (secondary) — sustain
 - `credit grant` (secondary) — sustain
