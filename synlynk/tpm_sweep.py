@@ -1341,12 +1341,19 @@ def package_next_release_proposal(
 
             open_pr_story_ids = _get_open_pr_story_ids(repo_root)
 
-            # Build planner input
+            # Build planner input and check for unflagged umbrella patterns (gh:#5525)
+            import re
+            umbrella_pattern = re.compile(r"(?i)\b(fixes|part of)\s+#\d+\b")
+            umbrella_warnings = []
+
             planner_stories = []
             story_row_map = {}
             for r in rows:
                 sid, title, role, tokens, gh_issue, gid, status, umbrella, phase = r
                 story_row_map[sid] = r
+                if not umbrella and title and umbrella_pattern.search(title):
+                    umbrella_warnings.append(f"Story {sid} looks like an umbrella; set the flag")
+                    logger.warning("Story %s looks like an umbrella; set the flag", sid)
                 planner_stories.append({
                     "story_id": sid,
                     "status": status,
@@ -1474,6 +1481,7 @@ def package_next_release_proposal(
             "packaging_plan": packaging_plan,
             "role_breakdown": role_breakdown,
             "bookend_horizon": meta["bookend_horizon"],
+            "warnings": umbrella_warnings if resolved_target_goal else [],
         }
     finally:
         if own_conn:

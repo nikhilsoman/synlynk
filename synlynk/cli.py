@@ -332,7 +332,7 @@ _TOP_LEVEL_COMMANDS = (
     "backup", "state", "ops", "selftest", "config", "sentinel", "dispatch", "jobs", "relay",
     "logs", "shell", "open", "launch", "run", "story", "pm", "tpm", "score", "charter", "charters", "cost",
     "roadmap", "policy", "credit", "backlog", "quota", "schedule", "pr", "capability",
-    "instructions", "marketing", "roles", "release", "viz", "provenance",
+    "instructions", "marketing", "roles", "release", "release-split", "viz", "provenance",
     "backfill-capability-ratings",
     "board", "concierge", "addon", "autonomy", "context",
     "gateway", "spec", "onboard",
@@ -665,6 +665,16 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     goal_update_parser.add_argument(
         "--supersede-with", dest="supersede_with", default=None,
         help="Mark this goal superseded and relink its open stories to GOAL_ID",
+    )
+    goal_packaging_parser = goal_sub.add_parser("packaging", help="Configure goal packaging flags (gh:#5525)")
+    goal_packaging_parser.add_argument("--goal", required=True, dest="goal_id", help="Target goal ID")
+    goal_packaging_parser.add_argument(
+        "--independent-phases", action="store_true", default=None, dest="independent_phases",
+        help="Enable independent phase packaging for this goal",
+    )
+    goal_packaging_parser.add_argument(
+        "--no-independent-phases", action="store_false", dest="independent_phases",
+        help="Disable independent phase packaging for this goal",
     )
 
     governs_parser = subparsers.add_parser("governs", help="Manage GOVERNS lifecycle and reconciliation")
@@ -1759,8 +1769,15 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     story_update_parser.add_argument("--title", default=None, help="Update story title")
     story_update_parser.add_argument("--role", default=None, help="Update story role")
     story_update_parser.add_argument("--phase", default=None, help="Update story phase")
+    story_update_parser.add_argument("--umbrella", action="store_true", default=None, dest="umbrella", help="Mark as umbrella story")
+    story_update_parser.add_argument("--no-umbrella", action="store_false", dest="umbrella", help="Clear umbrella story flag")
     story_update_parser.add_argument("--harness", default=None, help="Harness identity; auto-detected if omitted")
     story_update_parser.add_argument("--override", action="store_true", help="Force-take claim if transitioning to in_progress")
+
+    story_depend_parser = story_sub.add_parser("depend", help="Record a story dependency (gh:#5525)")
+    story_depend_parser.add_argument("story_id")
+    story_depend_parser.add_argument("--on", required=True, dest="depends_on_story_id", help="Story ID this story depends on")
+
     story_sub.add_parser("sync", help="Sync/render todo.md from state.db")
 
     pm_parser = subparsers.add_parser("pm", help="PM agent commands")
@@ -2333,6 +2350,13 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     release_parser.add_argument(
         '--post-release', action='store_true',
         help='Execute autonomous post-release SOP (tagging, GitHub release, collateral sync, milestone closeout)')
+
+    release_split_parser = subparsers.add_parser("release-split", help="Manage release splits (gh:#5525)")
+    release_split_sub = release_split_parser.add_subparsers(dest="release_split_action")
+    rsa = release_split_sub.add_parser("approve", help="Approve mid-phase release split (pm role only)")
+    rsa.add_argument("--goal", required=True, dest="goal_id", help="Goal ID")
+    rsa.add_argument("--phase", required=True, dest="phase", help="Phase to approve splitting")
+    rsa.add_argument("--role", default="pm", help="Role executing approval (default: pm)")
 
     viz_parser = subparsers.add_parser("viz", help="Open Vizor dashboard for this workspace")
     viz_parser.add_argument("--serve", action="store_true",
@@ -3507,9 +3531,16 @@ def _dispatch_command(argv=None) -> None:
                 title=getattr(args, "title", None),
                 role=getattr(args, "role", None),
                 phase=getattr(args, "phase", None),
+                umbrella=getattr(args, "umbrella", None),
                 override=getattr(args, "override", False),
                 harness=getattr(args, "harness", None),
             ) or 0)
+        elif args.story_action == "depend":
+            from synlynk.db import cmd_story_depend
+            sys.exit(cmd_story_depend(
+                args.story_id,
+                args.depends_on_story_id,
+            ))
         elif args.story_action == "sync":
             from synlynk.db import _generate_todo_md
             _generate_todo_md()
@@ -4029,6 +4060,12 @@ def _dispatch_command(argv=None) -> None:
                 deadline=args.deadline,
                 supersede_with=args.supersede_with,
             )
+        elif action == "packaging":
+            from synlynk.db import cmd_goal_packaging
+            sys.exit(cmd_goal_packaging(
+                args.goal_id,
+                independent_phases=args.independent_phases,
+            ))
         else:
             help_parsers.get("goal", parser).print_help()
     elif args.command == "intent":
@@ -4286,6 +4323,16 @@ def _dispatch_command(argv=None) -> None:
             if getattr(args, "auto_publish", False):
                 rel_kwargs["auto_publish"] = True
             cmd_release(**rel_kwargs)
+    elif args.command == "release-split":
+        if getattr(args, "release_split_action", None) == "approve":
+            from synlynk.db import cmd_release_split_approve
+            sys.exit(cmd_release_split_approve(
+                goal_id=args.goal_id,
+                phase=args.phase,
+                role=getattr(args, "role", "pm"),
+            ))
+        else:
+            help_parsers.get("release-split", parser).print_help()
     elif args.command == "marketing":
         if getattr(args, "marketing_action", None) == "ceremony":
             cmd_marketing_ceremony(

@@ -221,7 +221,7 @@ class AuthorityResult:
     reason: str = ""
 
 
-_ACTION_PREFIXES = ("roadmap_edit", "goal_create", "merge", "release_cut", "task_dispatch:")
+_ACTION_PREFIXES = ("roadmap_edit", "goal_create", "merge", "release_cut", "release_split_approve", "task_dispatch:")
 
 
 def _matches_approval_rule(action: str, policy: Dict[str, Any]) -> Optional[str]:
@@ -290,6 +290,8 @@ def check_authority(
         allowed = _merge_role_allowed(role, policy, repo_path)
     elif action == "release_cut":
         allowed = role in policy["release_authority"]["can_cut_release"]
+    elif action == "release_split_approve":
+        allowed = role in policy.get("release_authority", {}).get("can_split_releases", ["pm"])
     elif action.startswith("task_dispatch:"):
         task_type = action.split(":", 1)[1]
         table = policy["dev_authority"]["task_allocation"]
