@@ -3708,6 +3708,8 @@ def init(force: bool = False, agents: list = None,
                   f"← runs {agent_names} in parallel")
     print(f"\n  Background Supervision:")
     print(f"    {_CYAN}synlynk daemon --install-service{_RESET}  ← supervise daemon across reboots (launchd/systemd)")
+    print(f"\n  Native Session Cost Capture:")
+    print(f"    {_CYAN}synlynk doctor --fix{_RESET}  ← install Stop/SessionEnd hooks in ~/.claude/settings.json")
     print(f"\n  Next: {_DIM}synlynk status  ·  synlynk jobs  ·  synlynk dispatch --help{_RESET}\n")
 
 # --- module extractions (backwards compat) ---
