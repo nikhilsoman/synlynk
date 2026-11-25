@@ -1853,6 +1853,19 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     cost_audit_correct_parser.add_argument("--apply", action="store_true", help="Append the correction; omit to preview")
     cost_audit_sub.add_parser("report", help="Print the read-only cost audit report as JSON")
 
+    cap = cost_sub.add_parser("capture-session", help="Capture a native Claude session's usage from its transcript")
+    cap.add_argument("--session", dest="session_id")
+    cap.add_argument("--transcript")
+    cap.add_argument("--pending", action="store_true", help="Sweep all pending native transcripts")
+    cap.add_argument("--projects-dir", default=None)
+    cap.add_argument("--final", action="store_true")
+    link = cost_sub.add_parser("link-session", help="Link a captured session to a PR")
+    link.add_argument("--session", required=True, dest="session_id")
+    link.add_argument("--pr", type=int, required=True)
+    link.add_argument("--role", choices=["implementer", "reviewer"], default="implementer")
+    backfill_cmd = cost_sub.add_parser("backfill-native", help="Backfill native sessions replacing estimated_manual rows with transcripts")
+    backfill_cmd.add_argument("--apply", action="store_true", help="Apply backfill changes (default: dry-run)")
+
     roadmap_parser = subparsers.add_parser("roadmap", help="Manage the roadmap")
     roadmap_sub = roadmap_parser.add_subparsers(dest="roadmap_action")
     roadmap_add_parser = roadmap_sub.add_parser("add", help="Add or update a roadmap arc or phase")
@@ -2378,6 +2391,10 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     concierge_synth_parser.add_argument("--scope", default="")
     concierge_synth_parser.add_argument("--criteria", default="")
     concierge_synth_parser.add_argument("--out", default=None, help="Write output to this file instead of stdout")
+
+    hook_parser = subparsers.add_parser("hook", help="Session hook dispatcher for external agents")
+    hook_parser.add_argument("agent", help="Agent name (e.g. claude)")
+    hook_parser.add_argument("event", help="Hook event name (e.g. Stop, SessionEnd)")
 
     from synlynk.addon import list_available_addons as _list_available_addons
     addon_parser = subparsers.add_parser(
@@ -3562,7 +3579,74 @@ def _dispatch_command(argv=None) -> None:
                     args.source_kind, args.account, args.record_id,
                     args.replacement, args.reason, apply=args.apply,
                 )
-                print(json.dumps(result, indent=2, sort_keys=True))
+        elif args.cost_action == "capture-session":
+            from synlynk import _get_db
+            import synlynk.native_capture as nc
+            conn = _get_db()
+            if args.pending and args.session_id:
+                print("error: --pending cannot be combined with --session", file=sys.stderr)
+                return 1
+            if args.pending:
+                summary = nc.sweep(conn, projects_dir=args.projects_dir)
+                print(f"Captured {summary['captured']} sessions ({summary['skipped_dispatch']} dispatch skipped, {summary['errors']} errors)")
+                return 0
+            if not args.session_id:
+                print("error: --session required unless --pending is set", file=sys.stderr)
+                return 1
+            t_path = args.transcript
+            if not t_path:
+                from pathlib import Path
+                import glob
+                matches = glob.glob(os.path.expanduser(f"~/.claude/projects/*/{args.session_id}.jsonl"))
+                if len(matches) == 1:
+                    t_path = matches[0]
+                elif not matches:
+                    print(f"error: transcript not found for session {args.session_id}", file=sys.stderr)
+                    return 1
+                else:
+                    print(f"error: multiple transcripts found for session {args.session_id}: {matches}", file=sys.stderr)
+                    return 1
+            try:
+                res = nc.capture(conn, args.session_id, t_path, final=args.final)
+                print(f"Captured {res['records']} records for session {args.session_id}")
+                return 0
+            except nc.TranscriptMissingError:
+                print(f"error: transcript not found: {t_path}", file=sys.stderr)
+                return 1
+            except Exception as e:
+                print(f"error: capture failed: {e}", file=sys.stderr)
+                return 1
+        elif args.cost_action == "link-session":
+            from synlynk import _get_db
+            import synlynk.native_capture as nc
+            conn = _get_db()
+            nc.link_session(conn, args.session_id, args.pr, role=args.role)
+            print(f"Linked session {args.session_id} to PR #{args.pr} as {args.role}")
+            return 0
+        elif args.cost_action == "backfill-native":
+            from synlynk import _get_db
+            import synlynk.native_backfill as nb
+            conn = _get_db()
+            views = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='view'")}
+            if "cost_entries_effective" not in views:
+                print("error: cost_entries_effective view not found; run migrations first", file=sys.stderr)
+                return 1
+            if args.apply:
+                applied = nb.apply_backfill(conn)
+                print(f"Applied backfill to {len(applied)} rows.")
+                for c in applied:
+                    new = "superseded_by_transcript" if c.action == "supersede" else "unverified_estimate"
+                    print(f"  row {c.row_id} ({c.session_date}): {c.old_basis} -> {new}")
+                print("Reminder: run 'git diff --numstat origin/main' before committing any regenerated costs.md.")
+                return 0
+            else:
+                plan = nb.plan_backfill(conn)
+                print(f"Planned backfill changes ({len(plan)} rows):")
+                for c in plan:
+                    new = "superseded_by_transcript" if c.action == "supersede" else "unverified_estimate"
+                    print(f"  row {c.row_id} ({c.session_date}): {c.old_basis} -> {new}")
+                print("Dry-run only. Pass --apply to execute.")
+                return 0
     elif args.command == "roadmap":
         if args.roadmap_action == "add":
             try:
@@ -4417,6 +4501,12 @@ def _dispatch_command(argv=None) -> None:
         else:
             for name in list_available_addons():
                 print(f"  - {name}")
+    elif args.command == "hook":
+        from synlynk import session_hooks
+        try:
+            return session_hooks.run(args.agent, args.event, sys.stdin)
+        finally:
+            sys.exit(0)
     elif args.command == "context":
         from synlynk.context_compaction import checkpoint, pack, inject
         import getpass

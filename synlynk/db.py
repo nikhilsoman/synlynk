@@ -230,14 +230,34 @@ def _implementation_identity_from_native_cost_entry(
     conn, pr_number: int
 ) -> tuple[str | None, str | None]:
     """Resolve implementation identity recorded by a native session."""
-    return _native_cost_entry_identity(conn, pr_number, reviewer=False)
+    ident = _native_cost_entry_identity(conn, pr_number, reviewer=False)
+    if ident != (None, None):
+        return ident
+    try:
+        from synlynk.native_capture import linked_session_identity
+        linked = linked_session_identity(conn, pr_number, "implementer")
+        if linked:
+            return linked
+    except Exception:
+        pass
+    return (None, None)
 
 
 def _review_identity_from_native_cost_entry(
     conn, pr_number: int
 ) -> tuple[str | None, str | None]:
     """Resolve reviewer identity recorded by a native session."""
-    return _native_cost_entry_identity(conn, pr_number, reviewer=True)
+    ident = _native_cost_entry_identity(conn, pr_number, reviewer=True)
+    if ident != (None, None):
+        return ident
+    try:
+        from synlynk.native_capture import linked_session_identity
+        linked = linked_session_identity(conn, pr_number, "reviewer")
+        if linked:
+            return linked
+    except Exception:
+        pass
+    return (None, None)
 
 
 def _review_job_for_pr(conn, pr_number: int):
