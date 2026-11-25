@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import time
 from dataclasses import dataclass, field
@@ -11,6 +12,7 @@ from synlynk import pricing
 
 CHUNK_BYTES = 1 << 20
 ANCHOR_BYTES = 4096
+_GH_PR_RE = re.compile(r"\bgh\b[^|;&\n]*?\bpr\s+(review|merge|create|checks|view|comment|update-branch|diff|ready)\b[^|;&\n]*?\b(\d{2,6})\b")
 
 
 class TranscriptFormatError(Exception):
@@ -46,6 +48,7 @@ class ParseResult:
     records: list
     pr_links: list
     consumed: int
+    tool_pr_links: list = field(default_factory=list)
 
 
 _USAGE_KEYS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
@@ -54,7 +57,7 @@ _USAGE_KEYS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "
 def parse_chunk(data: bytes, known_ids: set) -> ParseResult:
     end = data.rfind(b"\n") + 1  # only complete lines
     seen = set(known_ids)       # never mutate the caller's set
-    records, pr_links = [], []
+    records, pr_links, tool_pr_links = [], [], []
     for raw in data[:end].splitlines():
         if not raw.strip():
             continue
@@ -78,13 +81,27 @@ def parse_chunk(data: bytes, known_ids: set) -> ParseResult:
         mid = msg.get("id")
         if not mid:
             raise TranscriptFormatError("assistant record without message.id")
+
+        # Scan tool use for GitHub PR commands
+        ts = obj.get("timestamp") or ""
+        content = msg.get("content") or []
+        if isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "tool_use" and item.get("name") == "Bash":
+                    inp = item.get("input") or {}
+                    cmd = inp.get("command") or ""
+                    if isinstance(cmd, str):
+                        for m in _GH_PR_RE.finditer(cmd):
+                            verb, num_str = m.group(1), m.group(2)
+                            role = "reviewer" if verb in ("review", "merge") else ("implementer" if verb == "create" else "implementer")
+                            tool_pr_links.append((int(num_str), ts, role))
+
         if mid in seen:
             continue
         seen.add(mid)
-        ts = obj.get("timestamp") or ""
         records.append(Record(mid, model, ts[:10], usage["input_tokens"], usage["output_tokens"],
                               usage["cache_creation_input_tokens"], usage["cache_read_input_tokens"]))
-    return ParseResult(records, pr_links, end)
+    return ParseResult(records, pr_links, end, tool_pr_links)
 
 
 def bucketize(records) -> dict:
@@ -227,6 +244,10 @@ def capture(conn, session_id: str, transcript, *, final: bool = False, budget_s=
                 conn.execute(
                     "INSERT OR IGNORE INTO session_pr_links (session_id, pr_number, role, first_seen_ts, source) "
                     "VALUES (?, ?, 'implementer', ?, 'pr-link')", (session_id, pr, ts))
+            for pr, ts, role in res.tool_pr_links:
+                conn.execute(
+                    "INSERT OR IGNORE INTO session_pr_links (session_id, pr_number, role, first_seen_ts, source) "
+                    "VALUES (?, ?, ?, ?, 'tool-use')", (session_id, pr, role, ts))
             conn.execute(
                 "INSERT INTO native_capture_cursor (session_id, transcript_path, byte_offset, anchor, final, updated_at) "
                 "VALUES (?, ?, ?, ?, 0, datetime('now')) ON CONFLICT(session_id) DO UPDATE SET "
@@ -280,4 +301,19 @@ def reconcile(conn) -> list:
     return [r[0] for r in conn.execute(
         "SELECT session_id FROM cost_entries WHERE session_id IS NOT NULL "
         "GROUP BY session_id HAVING SUM(cost_source='transcript_derived')>0 AND SUM(job_id IS NOT NULL)>0 ORDER BY session_id")]
+
+
+def link_session(conn, session_id, pr_number, *, role="implementer", source="manual"):
+    with conn:
+        conn.execute("INSERT OR IGNORE INTO session_pr_links (session_id, pr_number, role, first_seen_ts, source) "
+                     "VALUES (?, ?, ?, datetime('now'), ?)", (session_id, pr_number, role, source))
+
+
+def linked_session_identity(conn, pr_number, role):
+    row = conn.execute(
+        "SELECT ce.harness, ce.model FROM session_pr_links l JOIN cost_entries_effective ce "
+        "ON ce.session_id = l.session_id AND ce.cost_source='transcript_derived' "
+        "WHERE l.pr_number=? AND l.role=? ORDER BY ce.output_tokens DESC LIMIT 1", (pr_number, role)).fetchone()
+    return tuple(row) if row else None
+
 
