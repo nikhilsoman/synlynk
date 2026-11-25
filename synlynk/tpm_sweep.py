@@ -895,6 +895,35 @@ def _derive_dynamic_bookends(rel_ver: str, conn, repo_root: str = ".") -> dict:
     }
 
 
+def _get_open_pr_story_ids(repo_root: str = ".") -> set[str]:
+    """Return story IDs referenced by currently open pull requests or branch names."""
+    import re
+    import subprocess
+    try:
+        res = subprocess.run(
+            ["gh", "pr", "list", "--state", "open", "--json", "headRefName,title,body"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        if res.returncode != 0 or not res.stdout.strip():
+            return set()
+        data = json.loads(res.stdout)
+        story_pattern = re.compile(r"\b(story-[A-Za-z0-9_-]+)\b")
+        found = set()
+        for item in data:
+            for field in ("headRefName", "title", "body"):
+                val = item.get(field) or ""
+                for m in story_pattern.findall(val):
+                    found.add(m)
+        return found
+    except Exception as exc:
+        logger.warning("Failed to query open PR story IDs: %s", exc)
+        return set()
+
+
 def _cluster_candidate_stories(stories_list: list[dict], target_count: int = 12) -> list[dict]:
     """Cluster candidate stories by thematic goal and subsystem proximity."""
     if len(stories_list) <= target_count:
@@ -1199,21 +1228,142 @@ def package_next_release_proposal(
 
             rel_ver = f"v{version_str}"
 
+        from synlynk.release_packaging import load_limits, plan_goal_release
+        limits = load_limits(repo_root)
+
+        packaging_plan = None
+        context_stories = []
+
         if resolved_target_goal:
-            # Goal-aware packaging per dec-fcec4295: package ready/draft stories sharing target_goal_id up to ~12 stories
+            # Goal-aware packaging per dec-fb8ce5f7: whole goal packaged via pure release planner
+            story_cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)").fetchall()}
+            umbrella_col = "s.umbrella" if "umbrella" in story_cols else "0 as umbrella"
+            phase_col = "s.phase" if "phase" in story_cols else "NULL as phase"
+
             rows = conn.execute(
-                "SELECT s.story_id, s.title, s.role, s.estimated_tokens, s.gh_issue, s.goal_id "
+                f"SELECT s.story_id, s.title, s.role, s.estimated_tokens, s.gh_issue, s.goal_id, s.status, {umbrella_col}, {phase_col} "
                 "FROM stories s "
                 "WHERE (s.goal_id = ? OR s.goal_id = ?) "
                 "  AND s.status NOT IN ('done', 'archived') "
                 "ORDER BY CASE s.readiness WHEN 'ready' THEN 1 WHEN 'draft' THEN 2 WHEN 'advisory' THEN 3 ELSE 4 END, "
                 "  COALESCE(s.priority, 0) DESC, "
-                "  s.rowid ASC LIMIT 12",
+                "  s.rowid ASC",
                 (resolved_target_goal, resolved_target_goal),
             ).fetchall()
-            target_cap = 12
+
+            if not rows:
+                return None
+
+            goal_story_ids = {r[0] for r in rows}
+
+            # Read dependencies if table exists
+            deps = []
+            has_deps = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='story_dependencies'"
+            ).fetchone()
+            if has_deps and goal_story_ids:
+                dep_rows = conn.execute(
+                    "SELECT story_id, depends_on_story_id FROM story_dependencies"
+                ).fetchall()
+                deps = [(s1, s2) for s1, s2 in dep_rows if s1 in goal_story_ids or s2 in goal_story_ids]
+
+            # Read approved splits if table exists
+            approved_splits = set()
+            has_approvals = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='release_split_approvals'"
+            ).fetchone()
+            if has_approvals:
+                app_rows = conn.execute(
+                    "SELECT phase FROM release_split_approvals WHERE goal_id=?",
+                    (resolved_target_goal,),
+                ).fetchall()
+                approved_splits = {r[0] for r in app_rows}
+
+            # Read independent phases flag if table exists
+            independent_phases = False
+            has_flags = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='goal_packaging_flags'"
+            ).fetchone()
+            if has_flags:
+                flag_row = conn.execute(
+                    "SELECT independent_phases FROM goal_packaging_flags WHERE goal_id=?",
+                    (resolved_target_goal,),
+                ).fetchone()
+                if flag_row and flag_row[0]:
+                    independent_phases = bool(flag_row[0])
+
+            open_pr_story_ids = _get_open_pr_story_ids(repo_root)
+
+            # Build planner input
+            planner_stories = []
+            story_row_map = {}
+            for r in rows:
+                sid, title, role, tokens, gh_issue, gid, status, umbrella, phase = r
+                story_row_map[sid] = r
+                planner_stories.append({
+                    "story_id": sid,
+                    "status": status,
+                    "umbrella": bool(umbrella),
+                    "has_open_pr": sid in open_pr_story_ids,
+                    "phase": phase,
+                    "estimated_tokens": tokens,
+                })
+
+            plan = plan_goal_release(
+                planner_stories,
+                deps,
+                limits,
+                approved_splits=approved_splits,
+                independent_phases=independent_phases,
+            )
+
+            if plan.escalation:
+                return {
+                    "escalation": plan.escalation,
+                    "goal_id": resolved_target_goal,
+                    "proposal": None,
+                }
+
+            packaging_plan = plan
+            candidate_stories = []
+            for sid in plan.parts[0] if plan.parts else []:
+                r = story_row_map[sid]
+                sid, title, role, tokens, gh_issue, gid = r[0], r[1], r[2] or "dev", r[3] or 25000, r[4], r[5]
+                inum = int(gh_issue) if gh_issue and str(gh_issue).isdigit() else None
+                candidate_stories.append({
+                    "story_id": sid,
+                    "issue_number": inum,
+                    "title": title,
+                    "role": role,
+                    "goal_id": gid,
+                    "harness": _resolve_harness(role, repo_root),
+                    "estimated_tokens": tokens,
+                    "estimated_cost_usd": round(tokens * 0.000002, 2),
+                    "status": "Ready",
+                })
+
+            for sid in plan.context:
+                r = story_row_map[sid]
+                sid, title, role, tokens, gh_issue, gid = r[0], r[1], r[2] or "dev", r[3] or 25000, r[4], r[5]
+                inum = int(gh_issue) if gh_issue and str(gh_issue).isdigit() else None
+                context_stories.append({
+                    "story_id": sid,
+                    "issue_number": inum,
+                    "title": title,
+                    "role": role,
+                    "goal_id": gid,
+                    "harness": _resolve_harness(role, repo_root),
+                    "estimated_tokens": tokens,
+                    "estimated_cost_usd": round(tokens * 0.000002, 2),
+                    "status": r[6],
+                })
+
+            # For goals, skip _cluster_candidate_stories truncation
+            clustered_stories = _cluster_candidate_stories(candidate_stories, target_count=len(candidate_stories))
+
         else:
-            # Orphan / maintenance stories: flat cap of 5 stories under maintenance theme
+            # Orphan / maintenance stories: flat cap of mixed_pool_cap stories under maintenance theme
+            mixed_cap = limits.get("mixed_pool_cap", 5)
             if has_goals:
                 query = (
                     "SELECT s.story_id, s.title, s.role, s.estimated_tokens, s.gh_issue, s.goal_id "
@@ -1223,39 +1373,40 @@ def package_next_release_proposal(
                     "  AND (s.goal_id IS NULL OR s.goal_id = '' OR g.id IS NULL) "
                     "ORDER BY CASE s.readiness WHEN 'advisory' THEN 1 WHEN 'ready' THEN 2 ELSE 3 END, "
                     "  COALESCE(s.priority, 0) DESC, "
-                    "  s.rowid DESC LIMIT 5"
+                    f"  s.rowid DESC LIMIT {mixed_cap}"
                 )
             else:
                 query = (
                     "SELECT story_id, title, role, estimated_tokens, gh_issue, goal_id FROM stories "
                     "WHERE (readiness='advisory' OR (readiness IN ('ready', 'draft') AND status NOT IN ('done', 'archived'))) "
-                    "ORDER BY CASE readiness WHEN 'advisory' THEN 1 WHEN 'ready' THEN 2 ELSE 3 END, rowid ASC LIMIT 5"
+                    "ORDER BY CASE readiness WHEN 'advisory' THEN 1 WHEN 'ready' THEN 2 ELSE 3 END, "
+                    f"rowid ASC LIMIT {mixed_cap}"
                 )
             rows = conn.execute(query).fetchall()
-            target_cap = 5
+            target_cap = mixed_cap
             resolved_theme = resolved_theme or "Maintenance & Operational Hardening"
 
-        if not rows:
-            return None
+            if not rows:
+                return None
 
-        candidate_stories = []
-        for r in rows:
-            sid, title, role, tokens, gh_issue, gid = r[0], r[1], r[2] or "dev", r[3] or 25000, r[4], r[5]
-            inum = int(gh_issue) if gh_issue and str(gh_issue).isdigit() else None
-            candidate_stories.append({
-                "story_id": sid,
-                "issue_number": inum,
-                "title": title,
-                "role": role,
-                "goal_id": gid,
-                "harness": _resolve_harness(role, repo_root),
-                "estimated_tokens": tokens,
-                "estimated_cost_usd": round(tokens * 0.000002, 2),
-                "status": "Ready",
-            })
+            candidate_stories = []
+            for r in rows:
+                sid, title, role, tokens, gh_issue, gid = r[0], r[1], r[2] or "dev", r[3] or 25000, r[4], r[5]
+                inum = int(gh_issue) if gh_issue and str(gh_issue).isdigit() else None
+                candidate_stories.append({
+                    "story_id": sid,
+                    "issue_number": inum,
+                    "title": title,
+                    "role": role,
+                    "goal_id": gid,
+                    "harness": _resolve_harness(role, repo_root),
+                    "estimated_tokens": tokens,
+                    "estimated_cost_usd": round(tokens * 0.000002, 2),
+                    "status": "Ready",
+                })
 
-        # Apply clustering with the goal-aware cap
-        clustered_stories = _cluster_candidate_stories(candidate_stories, target_count=target_cap)
+            clustered_stories = _cluster_candidate_stories(candidate_stories, target_count=target_cap)
+
         role_breakdown: dict[str, list[str]] = {}
         for s in clustered_stories:
             role_breakdown.setdefault(s["role"], []).append(s["title"])
@@ -1272,6 +1423,8 @@ def package_next_release_proposal(
             "bookend_wtd": meta["bookend_wtd"],
             "bookend_today": meta["bookend_today"],
             "stories": clustered_stories,
+            "context_stories": context_stories,
+            "packaging_plan": packaging_plan,
             "role_breakdown": role_breakdown,
             "bookend_horizon": meta["bookend_horizon"],
         }
@@ -1302,6 +1455,10 @@ def dispatch_tpm_advisory_proposal(
     try:
         proposal = package_next_release_proposal(conn=conn, repo_root=repo_root)
         if not proposal:
+            return None
+
+        if proposal.get("proposal") is None and proposal.get("escalation"):
+            logger.warning("Release packaging escalation for goal %s: %s", proposal.get("goal_id"), proposal["escalation"])
             return None
 
         rel_ver = proposal["release_version"]

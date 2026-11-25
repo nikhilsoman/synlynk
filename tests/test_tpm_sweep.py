@@ -401,3 +401,164 @@ def test_package_next_release_proposal_derives_version_from_active_arc(tmp_path)
     finally:
         conn.close()
 
+
+
+def test_package_next_release_proposal_packages_thirteen_stories_whole(tmp_path):
+    import sqlite3
+    from synlynk.tpm_sweep import package_next_release_proposal
+
+    conn = sqlite3.connect(tmp_path / "test.db")
+    try:
+        conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, role TEXT, estimated_tokens INTEGER, gh_issue TEXT, readiness TEXT, status TEXT, goal_id TEXT, priority INTEGER, umbrella INTEGER DEFAULT 0, phase TEXT)")
+        conn.execute("CREATE TABLE goals (id INTEGER PRIMARY KEY, goal_id TEXT, outcome TEXT, phase_title TEXT, status TEXT, roadmap_priority TEXT)")
+        conn.execute("INSERT INTO goals (id, goal_id, outcome, phase_title, status, roadmap_priority) VALUES (1, 'goal-13', 'Thirteen Outcome', 'Phase 13', 'active', 'P1')")
+        for i in range(1, 14):
+            conn.execute(
+                "INSERT INTO stories (story_id, title, readiness, status, goal_id, priority) VALUES (?, ?, 'ready', 'open', 'goal-13', ?)",
+                (f"s-{i:02d}", f"Story {i}", i),
+            )
+        conn.commit()
+
+        proposal = package_next_release_proposal(conn=conn, repo_root=str(tmp_path))
+        assert proposal is not None
+        assert proposal.get("escalation") is None
+        assert len(proposal["stories"]) == 13
+        assert [s["story_id"] for s in proposal["stories"]] == [f"s-{i:02d}" for i in range(13, 0, -1)]
+    finally:
+        conn.close()
+
+
+def test_package_next_release_proposal_separates_in_progress_and_umbrella_into_context(tmp_path):
+    import sqlite3
+    from synlynk.tpm_sweep import package_next_release_proposal
+
+    conn = sqlite3.connect(tmp_path / "test.db")
+    try:
+        conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, role TEXT, estimated_tokens INTEGER, gh_issue TEXT, readiness TEXT, status TEXT, goal_id TEXT, priority INTEGER, umbrella INTEGER DEFAULT 0, phase TEXT)")
+        conn.execute("CREATE TABLE goals (id INTEGER PRIMARY KEY, goal_id TEXT, outcome TEXT, phase_title TEXT, status TEXT, roadmap_priority TEXT)")
+        conn.execute("INSERT INTO goals (id, goal_id, outcome, phase_title, status, roadmap_priority) VALUES (1, 'goal-19', 'Nineteen Outcome', 'Phase 19', 'active', 'P1')")
+        # 12 ready open stories
+        for i in range(1, 13):
+            conn.execute(
+                "INSERT INTO stories (story_id, title, readiness, status, goal_id, priority) VALUES (?, ?, 'ready', 'open', 'goal-19', ?)",
+                (f"s-{i:02d}", f"Plain Story {i}", i),
+            )
+        # 4 in_progress stories
+        for i in range(13, 17):
+            conn.execute(
+                "INSERT INTO stories (story_id, title, readiness, status, goal_id, priority) VALUES (?, ?, 'ready', 'in_progress', 'goal-19', ?)",
+                (f"s-{i:02d}", f"In Progress Story {i}", i),
+            )
+        # 3 umbrella stories
+        for i in range(17, 20):
+            conn.execute(
+                "INSERT INTO stories (story_id, title, readiness, status, goal_id, priority, umbrella) VALUES (?, ?, 'ready', 'open', 'goal-19', ?, 1)",
+                (f"s-{i:02d}", f"Umbrella Story {i}", i),
+            )
+        conn.commit()
+
+        proposal = package_next_release_proposal(conn=conn, repo_root=str(tmp_path))
+        assert proposal is not None
+        assert len(proposal["stories"]) == 12
+        context_ids = [s["story_id"] for s in proposal.get("context_stories", [])]
+        assert len(context_ids) == 7
+        assert "s-13" in context_ids
+        assert "s-17" in context_ids
+    finally:
+        conn.close()
+
+
+def test_package_next_release_proposal_returns_escalation_when_plan_escalates(tmp_path):
+    import sqlite3
+    from synlynk.tpm_sweep import package_next_release_proposal
+
+    conn = sqlite3.connect(tmp_path / "test.db")
+    try:
+        conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, role TEXT, estimated_tokens INTEGER, gh_issue TEXT, readiness TEXT, status TEXT, goal_id TEXT, priority INTEGER, umbrella INTEGER DEFAULT 0, phase TEXT)")
+        conn.execute("CREATE TABLE goals (id INTEGER PRIMARY KEY, goal_id TEXT, outcome TEXT, phase_title TEXT, status TEXT, roadmap_priority TEXT)")
+        conn.execute("INSERT INTO goals (id, goal_id, outcome, phase_title, status, roadmap_priority) VALUES (1, 'goal-40', 'Forty Outcome', 'Phase 40', 'active', 'P1')")
+        # 40 stories over the 30 ceiling, all with phase='build' (no distinct phase data)
+        for i in range(1, 41):
+            conn.execute(
+                "INSERT INTO stories (story_id, title, readiness, status, goal_id, priority, phase) VALUES (?, ?, 'ready', 'open', 'goal-40', ?, 'build')",
+                (f"s-{i:02d}", f"Story {i}", i),
+            )
+        conn.commit()
+
+        res = package_next_release_proposal(conn=conn, repo_root=str(tmp_path))
+        assert res is not None
+        assert res.get("proposal") is None
+        assert res.get("escalation") == "no phase data"
+        assert res.get("goal_id") == "goal-40"
+    finally:
+        conn.close()
+
+
+def test_package_next_release_proposal_open_pr_lands_in_context(tmp_path, monkeypatch):
+    import sqlite3
+    from synlynk.tpm_sweep import package_next_release_proposal
+
+    conn = sqlite3.connect(tmp_path / "test.db")
+    try:
+        conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, role TEXT, estimated_tokens INTEGER, gh_issue TEXT, readiness TEXT, status TEXT, goal_id TEXT, priority INTEGER, umbrella INTEGER DEFAULT 0, phase TEXT)")
+        conn.execute("CREATE TABLE goals (id INTEGER PRIMARY KEY, goal_id TEXT, outcome TEXT, phase_title TEXT, status TEXT, roadmap_priority TEXT)")
+        conn.execute("INSERT INTO goals (id, goal_id, outcome, phase_title, status, roadmap_priority) VALUES (1, 'goal-pr', 'PR Outcome', 'Phase PR', 'active', 'P1')")
+        for i in range(1, 4):
+            conn.execute(
+                "INSERT INTO stories (story_id, title, readiness, status, goal_id, priority) VALUES (?, ?, 'ready', 'open', 'goal-pr', ?)",
+                (f"s-{i:02d}", f"Story {i}", i),
+            )
+        conn.commit()
+
+        # Inject open PRs mentioning s-02
+        monkeypatch.setattr("synlynk.tpm_sweep._get_open_pr_story_ids", lambda repo_root: {"s-02"})
+
+        proposal = package_next_release_proposal(conn=conn, repo_root=str(tmp_path))
+        assert proposal is not None
+        assert len(proposal["stories"]) == 2
+        packaged_ids = [s["story_id"] for s in proposal["stories"]]
+        assert "s-01" in packaged_ids and "s-03" in packaged_ids
+        context_ids = [s["story_id"] for s in proposal.get("context_stories", [])]
+        assert context_ids == ["s-02"]
+    finally:
+        conn.close()
+
+
+def test_package_next_release_proposal_independent_phases_and_operator_approval(tmp_path):
+    import sqlite3
+    from synlynk.tpm_sweep import package_next_release_proposal
+
+    conn = sqlite3.connect(tmp_path / "test.db")
+    try:
+        conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, role TEXT, estimated_tokens INTEGER, gh_issue TEXT, readiness TEXT, status TEXT, goal_id TEXT, priority INTEGER, umbrella INTEGER DEFAULT 0, phase TEXT)")
+        conn.execute("CREATE TABLE goals (id INTEGER PRIMARY KEY, goal_id TEXT, outcome TEXT, phase_title TEXT, status TEXT, roadmap_priority TEXT)")
+        conn.execute("CREATE TABLE story_dependencies (story_id TEXT NOT NULL, depends_on_story_id TEXT NOT NULL, PRIMARY KEY (story_id, depends_on_story_id))")
+        conn.execute("CREATE TABLE release_split_approvals (goal_id TEXT NOT NULL, phase TEXT NOT NULL, approved_by TEXT, approved_at TEXT, PRIMARY KEY (goal_id, phase))")
+        conn.execute("CREATE TABLE goal_packaging_flags (goal_id TEXT PRIMARY KEY, independent_phases INTEGER NOT NULL DEFAULT 0)")
+
+        conn.execute("INSERT INTO goals (id, goal_id, outcome, phase_title, status, roadmap_priority) VALUES (1, 'goal-indep', 'Indep Outcome', 'Phase Indep', 'active', 'P1')")
+        conn.execute("INSERT INTO goal_packaging_flags (goal_id, independent_phases) VALUES ('goal-indep', 1)")
+
+        for i in range(1, 5):
+            conn.execute("INSERT INTO stories (story_id, title, readiness, status, goal_id, priority, phase) VALUES (?, ?, 'ready', 'open', 'goal-indep', ?, 'p1')", (f"p1-{i}", f"P1 Story {i}", i))
+        for i in range(1, 5):
+            conn.execute("INSERT INTO stories (story_id, title, readiness, status, goal_id, priority, phase) VALUES (?, ?, 'ready', 'open', 'goal-indep', ?, 'p2')", (f"p2-{i}", f"P2 Story {i}", i))
+        conn.commit()
+
+        proposal = package_next_release_proposal(conn=conn, repo_root=str(tmp_path))
+        assert proposal is not None
+        assert len(proposal["stories"]) == 4
+        assert [s["story_id"] for s in proposal["stories"]] == [f"p1-{i}" for i in range(4, 0, -1)]
+
+        # Now test approved oversized phase: 35 stories in p1 under goal-oversized
+        conn.execute("INSERT INTO goals (id, goal_id, outcome, phase_title, status, roadmap_priority) VALUES (2, 'goal-oversized', 'Over Outcome', 'Phase Over', 'active', 'P1')")
+        conn.execute("INSERT INTO release_split_approvals (goal_id, phase, approved_by) VALUES ('goal-oversized', 'p1', 'pm')")
+        for i in range(1, 36):
+            conn.execute("INSERT INTO stories (story_id, title, readiness, status, goal_id, priority, phase) VALUES (?, ?, 'ready', 'open', 'goal-oversized', ?, 'p1')", (f"over-{i:02d}", f"Over Story {i}", i))
+        conn.commit()
+
+        prop_over = package_next_release_proposal(conn=conn, repo_root=str(tmp_path), target_goal_id="goal-oversized")
+        assert prop_over is not None
+        assert len(prop_over["stories"]) == 30
+    finally:
+        conn.close()
