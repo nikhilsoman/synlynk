@@ -5771,7 +5771,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         if discipline and phase:
                             rows = conn.execute(
                                 """SELECT cost_entries.input_tokens, cost_entries.output_tokens
-                                   FROM cost_entries
+                                   FROM cost_entries_effective
                                    JOIN stories ON cost_entries.story_id = stories.story_id
                                    WHERE stories.discipline = ?
                                      AND stories.phase = ?

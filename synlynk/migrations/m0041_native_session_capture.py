@@ -10,6 +10,11 @@ from synlynk.migrations import Migration
 
 
 def _up(conn: sqlite3.Connection) -> None:
+    # Ensure cost_entries has session_id column for legacy databases where it was not added
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+    if "session_id" not in cols:
+        conn.execute("ALTER TABLE cost_entries ADD COLUMN session_id TEXT")
+
     conn.execute(
         """CREATE TABLE IF NOT EXISTS native_capture_cursor (
             session_id      TEXT PRIMARY KEY,

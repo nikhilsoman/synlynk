@@ -117,7 +117,8 @@ def _make_db_with_floor(agent: str, task_type: str, cycles: float, n: int):
     import sqlite3
     conn = sqlite3.connect(":memory:")
     conn.execute("CREATE TABLE capability_ratings (story_id TEXT, agent TEXT, discipline TEXT, pr_review_cycles REAL)")
-    conn.execute("CREATE TABLE cost_entries (agent TEXT, type_id TEXT, total_cost_usd REAL)")
+    conn.execute("CREATE TABLE cost_entries (agent TEXT, type_id TEXT, total_cost_usd REAL, estimate_basis TEXT)")
+    conn.execute("CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries WHERE COALESCE(estimate_basis, '') != 'superseded_by_transcript'")
     conn.execute("CREATE TABLE routing_rotation_state (task_type TEXT PRIMARY KEY, cursor INTEGER NOT NULL DEFAULT 0, updated_at TEXT)")
     for i in range(n):
         conn.execute(
@@ -159,7 +160,10 @@ def test_review_routing_excludes_implementer_harness_from_eligible_pool(monkeypa
     )
     conn.execute(
         "CREATE TABLE cost_entries ("
-        "id INTEGER PRIMARY KEY, job_id TEXT, harness TEXT, agent TEXT, model TEXT)"
+        "id INTEGER PRIMARY KEY, job_id TEXT, harness TEXT, agent TEXT, model TEXT, estimate_basis TEXT)"
+    )
+    conn.execute(
+        "CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries WHERE COALESCE(estimate_basis, '') != 'superseded_by_transcript'"
     )
     conn.execute(
         "INSERT INTO daemon_jobs "

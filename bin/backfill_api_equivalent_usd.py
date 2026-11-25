@@ -33,7 +33,7 @@ SELECT
     input_tokens,
     output_tokens,
     COALESCE(cache_read_tokens, 0) AS cache_read_tokens
-FROM cost_entries
+FROM cost_entries_effective
 WHERE cost_source = 'estimated_manual'
   AND input_tokens IS NOT NULL
   AND output_tokens IS NOT NULL

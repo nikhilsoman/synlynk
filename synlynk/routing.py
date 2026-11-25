@@ -213,7 +213,7 @@ class LiveQueryRouter:
         }
         costs = {
             h: [row[0] for row in conn.execute(
-                "SELECT total_cost_usd FROM cost_entries "
+                "SELECT total_cost_usd FROM cost_entries_effective "
                 "WHERE agent=? AND type_id=? AND total_cost_usd IS NOT NULL",
                 (h, task_type),
             ).fetchall()]
@@ -307,7 +307,7 @@ class LiveQueryRouter:
     @staticmethod
     def _exploration_spend(conn: sqlite3.Connection, harness: str, task_type: str) -> float:
         row = conn.execute(
-            "SELECT COALESCE(SUM(total_cost_usd), 0) FROM cost_entries "
+            "SELECT COALESCE(SUM(total_cost_usd), 0) FROM cost_entries_effective "
             "WHERE agent=? AND type_id=? AND total_cost_usd IS NOT NULL",
             (harness, task_type),
         ).fetchone()

@@ -101,11 +101,11 @@ def sync_harness_models_window(
     Returns:
         list[dict]: List of updated model records.
     """
-    # 1. Discover models from cost_entries
+    # 1. Discover models from cost_entries_effective
     try:
         cost_rows = conn.execute("""
             SELECT agent, model, MIN(recorded_at), MAX(recorded_at)
-            FROM cost_entries
+            FROM cost_entries_effective
             WHERE agent IS NOT NULL AND model IS NOT NULL AND model != ''
             GROUP BY agent, model
         """).fetchall()

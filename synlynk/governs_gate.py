@@ -181,7 +181,7 @@ def pr_governs_linkage_violations(conn, pr_number: int | None) -> list[dict[str,
 
     if "job_id" in cost_cols:
         for job_id, cost_story_id in conn.execute(
-            "SELECT job_id, story_id FROM cost_entries WHERE job_id IS NOT NULL"
+            "SELECT job_id, story_id FROM cost_entries_effective WHERE job_id IS NOT NULL"
         ).fetchall():
             job_story_id, task, target = job_metadata.get(job_id, (None, None, None))
             story_id = job_story_id or cost_story_id

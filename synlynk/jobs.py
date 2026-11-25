@@ -4901,7 +4901,7 @@ def _ensure_daemon_job_cost_entry(
             )
         try:
             existing = conn.execute(
-                "SELECT 1 FROM cost_entries WHERE job_id=?", (job_id,)
+                "SELECT 1 FROM cost_entries_effective WHERE job_id=?", (job_id,)
             ).fetchone()
         except Exception:
             return False
@@ -4950,7 +4950,7 @@ def _ensure_daemon_job_cost_entry(
             )
             try:
                 recorded = conn.execute(
-                    "SELECT 1 FROM cost_entries WHERE job_id=?", (job_id,)
+                    "SELECT 1 FROM cost_entries_effective WHERE job_id=?", (job_id,)
                 ).fetchone()
             except Exception:
                 recorded = None

@@ -831,7 +831,7 @@ def _subscription_actual_usd(
     prior_total = 0
     try:
         cur = conn.execute(
-            "SELECT COALESCE(SUM(input_tokens + output_tokens), 0) FROM cost_entries "
+            "SELECT COALESCE(SUM(input_tokens + output_tokens), 0) FROM cost_entries_effective "
             "WHERE (harness=? OR agent=?) AND session_date LIKE ? "
             "AND cost_source != 'true_up_reconciliation'",
             (agent, agent, prior_prefix),
@@ -1056,7 +1056,7 @@ def cmd_cost_true_up(month: str = None, harness: str = None) -> dict:
         if harness:
             where.append("(harness=? OR agent=?)")
             params.extend([harness, harness])
-        actual = float(conn.execute("SELECT COALESCE(SUM(actual_usd), 0) FROM cost_entries WHERE " + " AND ".join(where), params).fetchone()[0] or 0.0)
+        actual = float(conn.execute("SELECT COALESCE(SUM(actual_usd), 0) FROM cost_entries_effective WHERE " + " AND ".join(where), params).fetchone()[0] or 0.0)
     finally:
         conn.close()
     billed = 0.0
@@ -1068,7 +1068,7 @@ def cmd_cost_true_up(month: str = None, harness: str = None) -> dict:
             if not cfg.get("allow_extra_usage", False):
                 continue
             total_tokens = conn.execute(
-                "SELECT COALESCE(SUM(input_tokens + output_tokens), 0) FROM cost_entries "
+                "SELECT COALESCE(SUM(input_tokens + output_tokens), 0) FROM cost_entries_effective "
                 "WHERE (harness=? OR agent=?) AND session_date LIKE ? "
                 "AND cost_source != 'true_up_reconciliation'",
                 (agent_name, agent_name, month + "%"),
@@ -1110,7 +1110,7 @@ def _estimate_tshirt_tokens(story_id: str = None, discipline: str = None, phase:
 
     Returns (in_tokens, out_tokens, estimate_basis).
     Tier 1: story's estimated_tokens column, split evenly in/out.
-    Tier 2: historical average from cost_entries actual/estimated_token_rate rows,
+    Tier 2: historical average from cost_entries_effective actual/estimated_token_rate rows,
             same discipline+phase, with at least 3 samples.
     Tier 3: fixed conservative default.
     """
@@ -1128,13 +1128,13 @@ def _estimate_tshirt_tokens(story_id: str = None, discipline: str = None, phase:
 
         if discipline and phase:
             rows = conn.execute(
-                """SELECT cost_entries.input_tokens, cost_entries.output_tokens
-                   FROM cost_entries
-                   JOIN stories ON cost_entries.story_id = stories.story_id
+                """SELECT cost_entries_effective.input_tokens, cost_entries_effective.output_tokens
+                   FROM cost_entries_effective
+                   JOIN stories ON cost_entries_effective.story_id = stories.story_id
                    WHERE stories.discipline = ?
                      AND stories.phase = ?
-                     AND cost_entries.cost_source IN ('actual', 'estimated_token_rate')
-                   ORDER BY cost_entries.id DESC
+                     AND cost_entries_effective.cost_source IN ('actual', 'estimated_token_rate')
+                   ORDER BY cost_entries_effective.id DESC
                    LIMIT ?""",
                 (discipline, phase, _HISTORICAL_AVG_LOOKBACK),
             ).fetchall()
@@ -1296,7 +1296,7 @@ def check_budgets() -> None:
     conn = _pkg("_get_db")()
     try:
         total_usd = conn.execute(
-            "SELECT COALESCE(SUM(total_cost_usd), 0) FROM cost_entries"
+            "SELECT COALESCE(SUM(total_cost_usd), 0) FROM cost_entries_effective"
         ).fetchone()[0]
     finally:
         conn.close()
@@ -1325,7 +1325,7 @@ def check_budgets() -> None:
     conn = _pkg("_get_db")()
     try:
         failed_row = conn.execute(
-            "SELECT COUNT(*), COALESCE(SUM(total_cost_usd), 0) FROM cost_entries "
+            "SELECT COUNT(*), COALESCE(SUM(total_cost_usd), 0) FROM cost_entries_effective "
             "WHERE cost_source = 'estimated_tshirt' AND estimate_basis = 'fixed_default' "
             "AND notes LIKE '%failed job%'"
         ).fetchone()
@@ -1341,7 +1341,7 @@ def check_budgets() -> None:
     conn = _pkg("_get_db")()
     try:
         payment_rows = conn.execute(
-            "SELECT agent, payment_mode, actual_usd FROM cost_entries "
+            "SELECT agent, payment_mode, actual_usd FROM cost_entries_effective "
             "WHERE payment_mode IS NOT NULL ORDER BY id"
         ).fetchall()
     finally:
