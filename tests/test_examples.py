@@ -1,8 +1,21 @@
-from synlynk.examples import active_items, greet
+from synlynk.examples import active_items, greet, make_slug
 
 
 def test_greet_returns_a_friendly_message():
     assert greet("Ada") == "Hello, Ada!"
+
+
+def test_make_slug_manages_defined_normalization_requirements():
+    assert make_slug("  Requirements Management  ") == "requirements-management"
+
+
+def test_make_slug_rejects_an_empty_requirement_input():
+    try:
+        make_slug("   ")
+    except ValueError as error:
+        assert str(error) == "text must contain at least one non-whitespace character"
+    else:
+        raise AssertionError("make_slug should reject whitespace-only input")
 
 
 def test_write_3_test_cases_for_a_general_scenario_happy_path():
