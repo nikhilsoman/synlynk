@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+import subprocess
 import pytest
 from synlynk.release_sop import (
     get_current_repo_version,
@@ -88,6 +89,7 @@ def test_execute_post_release_sop_dry_run(tmp_path):
 
 
 def test_check_and_trigger_post_release_all_done(tmp_path, monkeypatch):
+    (tmp_path / "VERSION").write_text("0.32.9\n", encoding="utf-8")
     conn = sqlite3.connect(tmp_path / "test.db")
     conn.execute(
         "CREATE TABLE approval_tickets (id INTEGER PRIMARY KEY, story_id TEXT, action TEXT, status TEXT, constituent_story_ids TEXT)"
@@ -116,6 +118,75 @@ def test_check_and_trigger_post_release_all_done(tmp_path, monkeypatch):
     assert res is not None
     assert res["release_version"] == "v0.33.0"
     assert called == ["v0.33.0"]
+    conn.close()
+
+
+def test_check_and_trigger_post_release_supersedes_stale_ticket(tmp_path, monkeypatch):
+    (tmp_path / "VERSION").write_text("0.33.0\n", encoding="utf-8")
+    conn = sqlite3.connect(tmp_path / "test.db")
+    conn.execute(
+        "CREATE TABLE approval_tickets (id INTEGER PRIMARY KEY, story_id TEXT, action TEXT, status TEXT, constituent_story_ids TEXT)"
+    )
+    conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, status TEXT)")
+    conn.execute(
+        "INSERT INTO approval_tickets (story_id, action, status, constituent_story_ids) "
+        "VALUES ('v0.32.9', 'release_proposal', 'approved', ?)",
+        (json.dumps(["story-1"]),),
+    )
+    conn.execute("INSERT INTO stories VALUES ('story-1', 'done')")
+    conn.commit()
+
+    def fail_if_called(**kwargs):
+        pytest.fail("stale release ticket triggered the post-release SOP")
+
+    monkeypatch.setattr("synlynk.release_sop.execute_post_release_sop", fail_if_called)
+
+    assert check_and_trigger_post_release(conn=conn, repo_root=str(tmp_path)) is None
+    status = conn.execute("SELECT status FROM approval_tickets").fetchone()[0]
+    assert status == "superseded"
+    conn.close()
+
+
+def test_check_and_trigger_post_release_skips_existing_release_commit(tmp_path, monkeypatch):
+    (tmp_path / "VERSION").write_text("0.33.0\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(tmp_path),
+            "-c",
+            "user.name=Test User",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "--allow-empty",
+            "-qm",
+            "chore(release): v0.33.1 [Already shipped]",
+        ],
+        check=True,
+    )
+    conn = sqlite3.connect(tmp_path / "test.db")
+    conn.execute(
+        "CREATE TABLE approval_tickets (id INTEGER PRIMARY KEY, story_id TEXT, action TEXT, status TEXT, constituent_story_ids TEXT)"
+    )
+    conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, status TEXT)")
+    conn.execute(
+        "INSERT INTO approval_tickets (story_id, action, status, constituent_story_ids) "
+        "VALUES ('v0.33.1', 'release_proposal', 'approved', ?)",
+        (json.dumps(["story-1"]),),
+    )
+    conn.execute("INSERT INTO stories VALUES ('story-1', 'done')")
+    conn.commit()
+
+    def fail_if_called(**kwargs):
+        pytest.fail("shipped release triggered the post-release SOP again")
+
+    monkeypatch.setattr("synlynk.release_sop.execute_post_release_sop", fail_if_called)
+
+    assert check_and_trigger_post_release(conn=conn, repo_root=str(tmp_path)) is None
+    status = conn.execute("SELECT status FROM approval_tickets").fetchone()[0]
+    assert status == "shipped"
     conn.close()
 
 

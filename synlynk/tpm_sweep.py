@@ -543,6 +543,39 @@ def check_and_trigger_post_release(conn=None, repo_root: str = ".") -> Optional[
             return None
 
         ticket_id, release_ver, constituent_json, ticket_status = row[0], row[1], row[2], row[3]
+
+        from packaging.version import parse as parse_version
+        from synlynk.release_sop import get_current_repo_version
+
+        current_ver = get_current_repo_version(repo_root)
+        if current_ver and parse_version(release_ver.lstrip("v")) <= parse_version(
+            current_ver.lstrip("v")
+        ):
+            logger.info(
+                "Superseding release ticket %s for %s; repository VERSION is %s",
+                ticket_id,
+                release_ver,
+                current_ver,
+            )
+            conn.execute(
+                "UPDATE approval_tickets SET status='superseded' WHERE id=?",
+                (ticket_id,),
+            )
+            conn.commit()
+            return None
+
+        if _release_commit_exists(release_ver, repo_root):
+            logger.info(
+                "Release commit already exists for %s; skipping post-release SOP",
+                release_ver,
+            )
+            conn.execute(
+                "UPDATE approval_tickets SET status='shipped' WHERE id=?",
+                (ticket_id,),
+            )
+            conn.commit()
+            return None
+
         if not constituent_json:
             return None
 
@@ -575,6 +608,28 @@ def check_and_trigger_post_release(conn=None, repo_root: str = ".") -> Optional[
     finally:
         if own_conn:
             conn.close()
+
+
+def _release_commit_exists(version: str, repo_root: str) -> bool:
+    """Return whether git history contains the exact release commit for version."""
+    import re
+    import subprocess
+
+    clean_ver = version.lstrip("v").strip()
+    try:
+        result = subprocess.run(
+            ["git", "-C", repo_root, "log", "--format=%s"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return False
+
+    release_subject = re.compile(
+        rf"^chore\(release\): v{re.escape(clean_ver)}(?:\s|$)"
+    )
+    return any(release_subject.match(subject) for subject in result.stdout.splitlines())
 
 
 def poll_and_process_proposal_comments(conn=None) -> Optional[dict]:
