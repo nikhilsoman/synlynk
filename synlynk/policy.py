@@ -63,6 +63,11 @@ DEFAULT_WORKSPACE_POLICY: Dict[str, Any] = {
         "sub_floor_exploration_mode": "observe",
         "conductor_authority": ["claude", "agy", "codex", "grok"],
         "release_authority": {"can_cut_release": ["pm"], "requires_human_approval": True},
+        "release_packaging": {
+            "goal_story_ceiling": 30,
+            "goal_token_ceiling": 1_500_000,
+            "mixed_pool_cap": 5,
+        },
         "human_authority_role": {"role": "pm", "requires_human_approval": True},
         "approval_required_for": [
             "security_sensitive_paths:.github/workflows/**,.synlynk/policy.json,.synlynk/github_apps/**",
