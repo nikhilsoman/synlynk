@@ -503,7 +503,7 @@ def _hc_native_capture() -> HealthCheck:
                     sid = t.stem
                     cur = conn.execute("SELECT byte_offset, final FROM native_capture_cursor WHERE session_id=?", (sid,)).fetchone()
                     if cur is None:
-                        has_rows = conn.execute("SELECT 1 FROM cost_entries WHERE session_id=? LIMIT 1", (sid,)).fetchone()
+                        has_rows = conn.execute("SELECT 1 FROM cost_entries_effective WHERE session_id=? LIMIT 1", (sid,)).fetchone()
                         if not has_rows:
                             return HealthCheck(
                                 "native_capture",
