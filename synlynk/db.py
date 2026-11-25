@@ -5023,6 +5023,7 @@ def cmd_story_update(
     title: Optional[str] = None,
     role: Optional[str] = None,
     phase: Optional[str] = None,
+    umbrella: Optional[bool] = None,
     override: bool = False,
     harness: Optional[str] = None,
     duration_seconds: int = 2700,
@@ -5121,12 +5122,118 @@ def cmd_story_update(
         if phase is not None:
             updates.append("phase=?")
             params.append(phase)
+        if umbrella is not None:
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(stories)").fetchall()}
+            if "umbrella" in cols:
+                updates.append("umbrella=?")
+                params.append(1 if umbrella else 0)
         if updates:
             params.append(story_id)
             conn.execute(f"UPDATE stories SET {', '.join(updates)} WHERE story_id=?", params)
             conn.commit()
 
         print(f"  {_GREEN}✓{_RESET} Story {story_id} updated successfully")
+        return 0
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def cmd_story_depend(story_id: str, depends_on_story_id: str, conn=None) -> int:
+    """Record that story_id depends on depends_on_story_id."""
+    from synlynk import _GREEN, _RED, _RESET, _get_db
+
+    if story_id == depends_on_story_id:
+        print(f"  {_RED}✗{_RESET} Self-dependency rejected: {story_id} cannot depend on itself.")
+        return 1
+
+    owns_conn = False
+    if conn is None:
+        conn = _get_db()
+        owns_conn = True
+
+    try:
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS story_dependencies (
+                story_id            TEXT NOT NULL,
+                depends_on_story_id TEXT NOT NULL,
+                PRIMARY KEY (story_id, depends_on_story_id)
+            )"""
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO story_dependencies (story_id, depends_on_story_id) VALUES (?, ?)",
+            (story_id, depends_on_story_id),
+        )
+        conn.commit()
+        print(f"  {_GREEN}✓{_RESET} Dependency recorded: {story_id} depends on {depends_on_story_id}")
+        return 0
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def cmd_release_split_approve(goal_id: str, phase: str, role: str = "pm", repo_path: str = ".", conn=None) -> int:
+    """Approve mid-phase release split for an oversized phase (pm role only)."""
+    from synlynk import _GREEN, _RED, _RESET, _get_db
+    from synlynk.policy import check_authority
+
+    auth = check_authority("release_split_approve", role=role, repo_path=repo_path)
+    if not auth.allowed:
+        print(f"  {_RED}✗{_RESET} Authority denied: role {role!r} is not authorized to approve release splits per policy.json.")
+        return 1
+
+    owns_conn = False
+    if conn is None:
+        conn = _get_db()
+        owns_conn = True
+
+    try:
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS release_split_approvals (
+                goal_id     TEXT NOT NULL,
+                phase       TEXT NOT NULL,
+                approved_by TEXT,
+                approved_at TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (goal_id, phase)
+            )"""
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO release_split_approvals (goal_id, phase, approved_by, approved_at) VALUES (?, ?, ?, datetime('now'))",
+            (goal_id, phase, role),
+        )
+        conn.commit()
+        print(f"  {_GREEN}✓{_RESET} Approved release split for goal {goal_id} phase {phase} (by {role})")
+        return 0
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def cmd_goal_packaging(goal_id: str, independent_phases: bool, conn=None) -> int:
+    """Configure goal packaging flags (e.g. independent_phases)."""
+    from synlynk import _GREEN, _RESET, _get_db
+
+    owns_conn = False
+    if conn is None:
+        conn = _get_db()
+        owns_conn = True
+
+    try:
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS goal_packaging_flags (
+                goal_id            TEXT PRIMARY KEY,
+                independent_phases INTEGER NOT NULL DEFAULT 0
+            )"""
+        )
+        val = 1 if independent_phases else 0
+        conn.execute(
+            "INSERT INTO goal_packaging_flags (goal_id, independent_phases) VALUES (?, ?) "
+            "ON CONFLICT(goal_id) DO UPDATE SET independent_phases=excluded.independent_phases",
+            (goal_id, val),
+        )
+        conn.commit()
+        status_label = "enabled" if independent_phases else "disabled"
+        print(f"  {_GREEN}✓{_RESET} Independent phases {status_label} for goal {goal_id}")
         return 0
     finally:
         if owns_conn:

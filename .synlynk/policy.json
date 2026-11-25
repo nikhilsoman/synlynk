@@ -212,6 +212,9 @@
       "can_cut_release": [
         "pm"
       ],
+      "can_split_releases": [
+        "pm"
+      ],
       "requires_human_approval": true
     },
     "release_packaging": {
