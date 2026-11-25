@@ -933,7 +933,9 @@ def ensure_cost_entries_effective_view(conn) -> None:
         view_sql = f"SELECT * FROM cost_entries {condition}".strip()
         try:
             conn.execute(f"CREATE VIEW IF NOT EXISTS cost_entries_effective AS {view_sql}")
-        except sqlite3.OperationalError:
+        except sqlite3.OperationalError as exc:
+            if "already exists" in str(exc).lower():
+                return
             # If the database is opened in read-only mode, persistent CREATE VIEW fails.
             # Create a TEMP VIEW in the in-memory temp schema instead.
             try:
