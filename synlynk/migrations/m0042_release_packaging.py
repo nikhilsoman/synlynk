@@ -38,6 +38,34 @@ def _up(conn: sqlite3.Connection) -> None:
         )"""
     )
 
+    app_cols = {row[1] for row in conn.execute("PRAGMA table_info(approval_tickets)")}
+    if app_cols:
+        if "goal_id" not in app_cols:
+            try:
+                conn.execute("ALTER TABLE approval_tickets ADD COLUMN goal_id TEXT")
+            except Exception:
+                pass
+        if "part_index" not in app_cols:
+            try:
+                conn.execute("ALTER TABLE approval_tickets ADD COLUMN part_index INTEGER DEFAULT 1")
+            except Exception:
+                pass
+        if "total_parts" not in app_cols:
+            try:
+                conn.execute("ALTER TABLE approval_tickets ADD COLUMN total_parts INTEGER DEFAULT 1")
+            except Exception:
+                pass
+        if "continuation_ticket_url" not in app_cols:
+            try:
+                conn.execute("ALTER TABLE approval_tickets ADD COLUMN continuation_ticket_url TEXT")
+            except Exception:
+                pass
+        if "split_reason" not in app_cols:
+            try:
+                conn.execute("ALTER TABLE approval_tickets ADD COLUMN split_reason TEXT")
+            except Exception:
+                pass
+
     if "gh_issue" in story_columns:
         placeholders = ", ".join("?" for _ in _LIVE_35_PARENT_ISSUES)
         conn.execute(

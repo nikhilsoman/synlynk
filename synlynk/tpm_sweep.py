@@ -744,6 +744,53 @@ def format_release_proposal_markdown(proposal: dict) -> str:
     else:
         lines.append("* **dev:** Core feature implementation and test suites.")
 
+    plan = proposal.get("packaging_plan")
+    if plan:
+        lines.append("\n---\n")
+        lines.append("## 📦 Packaging\n")
+        total_st = plan.total_stories
+        total_tok = plan.total_tokens
+        st_ceil = plan.limits.get("goal_story_ceiling", 30)
+        tok_ceil = plan.limits.get("goal_token_ceiling", 1500000)
+        ceilings_str = f"ceilings: {st_ceil} stories, {tok_ceil:,} tokens"
+        stats_str = f"{total_st} packageable stories, {total_tok:,} tokens ({ceilings_str})"
+
+        part_idx = proposal.get("part_index") or 1
+        total_p = proposal.get("total_parts") or (len(plan.parts) if plan.parts else 1)
+        independent_phase = proposal.get("independent_phase")
+        cont_ticket = proposal.get("continuation_ticket")
+
+        if independent_phase:
+            lines.append(f"* **Status:** independent phase {independent_phase} ({stats_str})")
+        elif total_p > 1:
+            split_reason = proposal.get("split_reason")
+            if not split_reason and plan.split_reasons:
+                split_reason = plan.split_reasons[0]
+            reason_str = f", {split_reason}" if split_reason else ""
+            remainder_str = f", remainder tracked in {cont_ticket}" if cont_ticket else ""
+            lines.append(f"* **Status:** part {part_idx} of {total_p}{reason_str}{remainder_str} ({stats_str})")
+        else:
+            lines.append(f"* **Status:** complete goal ({stats_str})")
+
+        if plan.context:
+            context_list = proposal.get("context_stories", [])
+            lines.append("\n### Context Stories (Underway / Umbrella / Open PR)")
+            if context_list:
+                for cs in context_list:
+                    cs_id = cs.get("story_id", "")
+                    cs_title = cs.get("title", "")
+                    cs_status = cs.get("status", "")
+                    lines.append(f"* `{cs_id}`: {cs_title} ({cs_status})")
+            else:
+                for cid in plan.context:
+                    lines.append(f"* `{cid}`")
+
+        cross_deps = proposal.get("cross_goal_dependencies", [])
+        if cross_deps:
+            lines.append("\n### Cross-Goal Dependencies (External)")
+            for cd in cross_deps:
+                lines.append(f"* `{cd[0]}` depends on `{cd[1]}` (outside this goal)")
+
     lines.append("\n---\n")
     lines.append("## 🔭 Roadmap Horizon (Book-End 2)")
     lines.append(f"* {proposal.get('bookend_horizon', 'Next scheduled milestone in roadmap.')}\n")
@@ -1433,21 +1480,31 @@ def package_next_release_proposal(
             conn.close()
 
 
+def _bump_semver(v: str) -> str:
+    """Return next patch version, e.g. v0.39.2 -> v0.39.3."""
+    clean = v.lstrip("v").strip()
+    parts = clean.split(".")
+    if len(parts) == 3 and parts[2].isdigit():
+        return f"v{parts[0]}.{parts[1]}.{int(parts[2]) + 1}"
+    return f"{v}.1"
+
+
 def dispatch_tpm_advisory_proposal(
     conn=None,
     max_active_proposals: int = 3,
     assignee: str = "nikhilsoman",
     repo_root: str = ".",
 ) -> Optional[str]:
-    """Create a single-release proposal issue assigned to the operator if under max limit.
+    """Create release proposal issue(s) assigned to the operator if under max limit.
 
     Dedup guards:
-    1. Global cap: no more than ``max_active_proposals`` open release_proposal
-       tickets may exist at once.
-    2. Per-version dedup: if an open (or held) proposal already exists for the
-       same ``release_version``, skip filing a duplicate.
+    1. Global cap: no more than ``max_active_proposals`` open non-continuation
+       release_proposal tickets may exist at once (continuations are exempt per dec-fb8ce5f7).
+    2. Per-version/part dedup: if an open (or held) proposal already exists, skip duplicate.
+    3. Idempotent continuations and independent phase proposals filed transactionally.
     """
     from synlynk.db import _get_db
+    from synlynk.gh_role import run_gh_as_role
 
     own_conn = conn is None
     if own_conn:
@@ -1476,10 +1533,12 @@ def dispatch_tpm_advisory_proposal(
         except Exception as exc:
             logger.warning("Stale proposal auto-reconciliation failed: %s", exc)
 
-        # Check active unapproved proposals (global cap)
+        # Check active unapproved proposals (global cap - continuations exempt)
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(approval_tickets)")}
+        part_filter = " AND (part_index IS NULL OR part_index <= 1)" if "part_index" in cols else ""
         try:
             count_row = conn.execute(
-                "SELECT COUNT(*) FROM approval_tickets WHERE action='release_proposal' AND status='open'"
+                f"SELECT COUNT(*) FROM approval_tickets WHERE action='release_proposal' AND status='open'{part_filter}"
             ).fetchone()
             val = count_row[0] if count_row else 0
             active_count = int(val) if isinstance(val, (int, float, str)) and str(val).isdigit() else 0
@@ -1487,8 +1546,25 @@ def dispatch_tpm_advisory_proposal(
             logger.warning("Failed to query active proposal count: %s", exc)
             active_count = 0
 
-        if active_count >= max_active_proposals:
-            return None
+        plan = proposal.get("packaging_plan")
+        target_goal = proposal.get("target_goal_id")
+
+        # Check if goal has independent_phases flag
+        is_independent_phases = False
+        if target_goal:
+            try:
+                has_flags = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='goal_packaging_flags'"
+                ).fetchone()
+                if has_flags:
+                    fl_row = conn.execute(
+                        "SELECT independent_phases FROM goal_packaging_flags WHERE goal_id=?",
+                        (target_goal,),
+                    ).fetchone()
+                    if fl_row and fl_row[0]:
+                        is_independent_phases = bool(fl_row[0])
+            except Exception:
+                pass
 
         # Per-version dedup: skip if an open or held proposal already exists for this version
         try:
@@ -1506,66 +1582,255 @@ def dispatch_tpm_advisory_proposal(
         except Exception as exc:
             logger.warning("Per-version dedup check failed: %s", exc)
 
-        body = format_release_proposal_markdown(proposal)
-        title = f"[Proposal] {rel_ver}: {proposal['theme']}"
+        if active_count >= max_active_proposals:
+            return None
 
-        # Attempt to file GitHub issue via gh CLI as the TPM agent role
-        issue_url = None
+        # Determine parts to dispatch
+        num_parts = len(plan.parts) if (plan and plan.parts) else 1
+
+        if is_independent_phases and num_parts > 1:
+            # File independent proposals for each phase
+            first_url = None
+            cur_ver = rel_ver
+            for idx, part_story_ids in enumerate(plan.parts, 1):
+                # Query stories for this phase
+                part_stories = []
+                for sid in part_story_ids:
+                    srow = conn.execute(
+                        "SELECT story_id, title, role, estimated_tokens, gh_issue, goal_id, phase FROM stories WHERE story_id=?",
+                        (sid,),
+                    ).fetchone()
+                    if srow:
+                        inum = int(srow[4]) if srow[4] and str(srow[4]).isdigit() else None
+                        part_stories.append({
+                            "story_id": srow[0],
+                            "issue_number": inum,
+                            "title": srow[1],
+                            "role": srow[2] or "dev",
+                            "goal_id": srow[5],
+                            "harness": _resolve_harness(srow[2] or "dev", repo_root),
+                            "estimated_tokens": srow[3] or 25000,
+                            "estimated_cost_usd": round((srow[3] or 25000) * 0.000002, 2),
+                            "status": "Ready",
+                        })
+                phase_name = srow[6] if (srow and len(srow) > 6 and srow[6]) else f"phase-{idx}"
+                phase_theme = proposal["theme"]
+
+                part_proposal = dict(proposal)
+                part_proposal["release_version"] = cur_ver
+                part_proposal["theme"] = phase_theme
+                part_proposal["stories"] = part_stories
+                part_proposal["independent_phase"] = phase_name
+                part_proposal["part_index"] = idx
+                part_proposal["total_parts"] = num_parts
+
+                body = format_release_proposal_markdown(part_proposal)
+                title = f"[Proposal] {cur_ver}: {phase_theme}"
+
+                issue_url = None
+                try:
+                    res = run_gh_as_role(
+                        "tpm",
+                        [
+                            "issue", "create",
+                            "--title", title,
+                            "--body", body,
+                            "--assignee", assignee,
+                            "--label", "tpm-advisory,release-proposal",
+                        ],
+                        timeout=15,
+                    )
+                    if res.returncode == 0:
+                        issue_url = res.stdout.strip()
+                except Exception as exc:
+                    logger.error("gh issue create failed: %s", exc)
+
+                if not issue_url:
+                    issue_url = f"https://github.com/nikhilsoman/synlynk/issues/simulated-{int(os.getpid())}-{idx}"
+
+                if not first_url:
+                    first_url = issue_url
+
+                # Record in approval_tickets
+                constituent_ids = [s["story_id"] for s in part_stories]
+                try:
+                    conn.execute(
+                        "INSERT INTO approval_tickets (story_id, action, issue_url, status, constituent_story_ids, theme, goal_id, part_index, total_parts) "
+                        "VALUES (?, 'release_proposal', ?, 'open', ?, ?, ?, ?, ?)",
+                        (cur_ver, issue_url, json.dumps(constituent_ids), phase_theme, target_goal, idx, num_parts),
+                    )
+                    conn.commit()
+                except Exception as exc:
+                    logger.error("Failed to insert approval_ticket for independent phase %s: %s", cur_ver, exc)
+                cur_ver = _bump_semver(cur_ver)
+
+            return first_url
+
+        # Otherwise coupled continuation handling
+        part1_proposal = dict(proposal)
+        part1_proposal["part_index"] = 1
+        part1_proposal["total_parts"] = num_parts
+
+        # File part 1 issue
+        body1 = format_release_proposal_markdown(part1_proposal)
+        title1 = f"[Proposal] {rel_ver}: {proposal['theme']}"
+
+        issue_url1 = None
         try:
-            from synlynk.gh_role import run_gh_as_role
-
             res = run_gh_as_role(
                 "tpm",
                 [
                     "issue", "create",
-                    "--title", title,
-                    "--body", body,
+                    "--title", title1,
+                    "--body", body1,
                     "--assignee", assignee,
                     "--label", "tpm-advisory,release-proposal",
                 ],
                 timeout=15,
             )
             if res.returncode == 0:
-                issue_url = res.stdout.strip()
-            else:
-                logger.error(
-                    "gh issue create for %s failed (rc=%d): %s",
-                    rel_ver, res.returncode, res.stderr.strip() if hasattr(res, 'stderr') else "",
-                )
+                issue_url1 = res.stdout.strip()
         except Exception as exc:
             logger.error("gh issue create for %s raised: %s", rel_ver, exc)
-            issue_url = None
 
-        if not issue_url:
-            issue_url = f"https://github.com/nikhilsoman/synlynk/issues/simulated-{int(os.getpid())}"
+        if not issue_url1:
+            issue_url1 = f"https://github.com/nikhilsoman/synlynk/issues/simulated-{int(os.getpid())}-1"
 
-        # Record in approval_tickets table
-        constituent_ids = [s["story_id"] for s in proposal.get("stories", [])]
-        constituent_ids_json = json.dumps(constituent_ids)
+        constituent_ids1 = [s["story_id"] for s in proposal.get("stories", [])]
+        extra_cols = []
+        extra_vals = []
+        if "constituent_story_ids" in cols:
+            extra_cols.append("constituent_story_ids")
+            extra_vals.append(json.dumps(constituent_ids1))
+        if "theme" in cols:
+            extra_cols.append("theme")
+            extra_vals.append(proposal["theme"])
+        if "goal_id" in cols:
+            extra_cols.append("goal_id")
+            extra_vals.append(target_goal)
+        if "part_index" in cols:
+            extra_cols.append("part_index")
+            extra_vals.append(1)
+        if "total_parts" in cols:
+            extra_cols.append("total_parts")
+            extra_vals.append(num_parts)
+
+        col_list = "story_id, action, issue_url, status" + "".join(f", {c}" for c in extra_cols)
+        placeholders = "?, 'release_proposal', ?, 'open'" + ", ?" * len(extra_cols)
         try:
-            cols = {row[1] for row in conn.execute("PRAGMA table_info(approval_tickets)")}
-            extra_cols: list[str] = []
-            extra_vals: list[Any] = []
-            if "constituent_story_ids" in cols:
-                extra_cols.append("constituent_story_ids")
-                extra_vals.append(constituent_ids_json)
-            if "theme" in cols:
-                extra_cols.append("theme")
-                extra_vals.append(proposal["theme"])
-            col_list = "story_id, action, issue_url, status" + "".join(f", {c}" for c in extra_cols)
-            placeholders = "?, 'release_proposal', ?, 'open'" + ", ?" * len(extra_cols)
             conn.execute(
                 f"INSERT INTO approval_tickets ({col_list}) VALUES ({placeholders})",
-                (rel_ver, issue_url, *extra_vals),
+                (rel_ver, issue_url1, *extra_vals),
             )
             conn.commit()
         except Exception as exc:
             logger.error(
                 "Failed to insert approval_ticket for %s (%s): %s",
-                rel_ver, issue_url, exc,
+                rel_ver, issue_url1, exc,
             )
 
-        return issue_url
+        # If goal is split into multiple parts, file continuation transactionally
+        if num_parts > 1:
+            part2_ver = _bump_semver(rel_ver)
+            part2_theme = f"{proposal['theme']} (part 2)"
+            part2_story_ids = plan.parts[1]
+            part2_stories = []
+            for sid in part2_story_ids:
+                srow = conn.execute(
+                    "SELECT story_id, title, role, estimated_tokens, gh_issue, goal_id FROM stories WHERE story_id=?",
+                    (sid,),
+                ).fetchone()
+                if srow:
+                    inum = int(srow[4]) if srow[4] and str(srow[4]).isdigit() else None
+                    part2_stories.append({
+                        "story_id": srow[0],
+                        "issue_number": inum,
+                        "title": srow[1],
+                        "role": srow[2] or "dev",
+                        "goal_id": srow[5],
+                        "harness": _resolve_harness(srow[2] or "dev", repo_root),
+                        "estimated_tokens": srow[3] or 25000,
+                        "estimated_cost_usd": round((srow[3] or 25000) * 0.000002, 2),
+                        "status": "Ready",
+                    })
+
+            part2_proposal = dict(proposal)
+            part2_proposal["release_version"] = part2_ver
+            part2_proposal["theme"] = part2_theme
+            part2_proposal["stories"] = part2_stories
+            part2_proposal["part_index"] = 2
+            part2_proposal["total_parts"] = num_parts
+
+            body2 = format_release_proposal_markdown(part2_proposal)
+            title2 = f"[Proposal] {part2_ver}: {part2_theme}"
+
+            # Check if continuation already exists
+            existing_cont = None
+            if "goal_id" in cols and "part_index" in cols:
+                existing_cont = conn.execute(
+                    "SELECT issue_url FROM approval_tickets WHERE action='release_proposal' AND goal_id=? AND part_index=2 AND status IN ('open', 'held')",
+                    (target_goal,),
+                ).fetchone()
+
+            issue_url2 = existing_cont[0] if existing_cont else None
+            if not issue_url2:
+                try:
+                    res2 = run_gh_as_role(
+                        "tpm",
+                        [
+                            "issue", "create",
+                            "--title", title2,
+                            "--body", body2,
+                            "--assignee", assignee,
+                            "--label", "tpm-advisory,release-proposal",
+                        ],
+                        timeout=15,
+                    )
+                    if res2.returncode == 0:
+                        issue_url2 = res2.stdout.strip()
+                except Exception as exc:
+                    logger.error("gh issue create for continuation %s raised: %s", part2_ver, exc)
+
+                if not issue_url2:
+                    issue_url2 = f"https://github.com/nikhilsoman/synlynk/issues/simulated-{int(os.getpid())}-2"
+
+                extra_cols2 = []
+                extra_vals2 = []
+                if "constituent_story_ids" in cols:
+                    extra_cols2.append("constituent_story_ids")
+                    extra_vals2.append(json.dumps(part2_story_ids))
+                if "theme" in cols:
+                    extra_cols2.append("theme")
+                    extra_vals2.append(part2_theme)
+                if "goal_id" in cols:
+                    extra_cols2.append("goal_id")
+                    extra_vals2.append(target_goal)
+                if "part_index" in cols:
+                    extra_cols2.append("part_index")
+                    extra_vals2.append(2)
+                if "total_parts" in cols:
+                    extra_cols2.append("total_parts")
+                    extra_vals2.append(num_parts)
+                if "split_reason" in cols and plan.split_reasons:
+                    extra_cols2.append("split_reason")
+                    extra_vals2.append(plan.split_reasons[0])
+
+                col_list2 = "story_id, action, issue_url, status" + "".join(f", {c}" for c in extra_cols2)
+                placeholders2 = "?, 'release_proposal', ?, 'open'" + ", ?" * len(extra_cols2)
+                conn.execute(
+                    f"INSERT INTO approval_tickets ({col_list2}) VALUES ({placeholders2})",
+                    (part2_ver, issue_url2, *extra_vals2),
+                )
+
+                # Link continuation to part 1 ticket
+                if "continuation_ticket_url" in cols:
+                    conn.execute(
+                        "UPDATE approval_tickets SET continuation_ticket_url=? WHERE issue_url=?",
+                        (issue_url2, issue_url1),
+                    )
+                conn.commit()
+
+        return issue_url1
     finally:
         if own_conn:
             conn.close()
