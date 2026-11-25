@@ -2390,6 +2390,10 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     concierge_synth_parser.add_argument("--criteria", default="")
     concierge_synth_parser.add_argument("--out", default=None, help="Write output to this file instead of stdout")
 
+    hook_parser = subparsers.add_parser("hook", help="Session hook dispatcher for external agents")
+    hook_parser.add_argument("agent", help="Agent name (e.g. claude)")
+    hook_parser.add_argument("event", help="Hook event name (e.g. Stop, SessionEnd)")
+
     from synlynk.addon import list_available_addons as _list_available_addons
     addon_parser = subparsers.add_parser(
         "addon", help="Turnkey plug-and-play add-on bundles (quality, security, observability)")
@@ -4471,6 +4475,12 @@ def _dispatch_command(argv=None) -> None:
         else:
             for name in list_available_addons():
                 print(f"  - {name}")
+    elif args.command == "hook":
+        from synlynk import session_hooks
+        try:
+            return session_hooks.run(args.agent, args.event, sys.stdin)
+        finally:
+            sys.exit(0)
     elif args.command == "context":
         from synlynk.context_compaction import checkpoint, pack, inject
         import getpass
