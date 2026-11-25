@@ -242,3 +242,42 @@ def capture(conn, session_id: str, transcript, *, final: bool = False, budget_s=
         with conn:
             conn.execute("UPDATE native_capture_cursor SET final=1 WHERE session_id=?", (session_id,))
     return {"records": total, "complete": complete, "rescan": rescan}
+
+
+def is_dispatch_slug(slug: str) -> bool:
+    # Dispatch jobs run in <repo>/worktrees/job-<id>; Claude-managed interactive worktrees are
+    # <repo>/.claude/worktrees/<name> (slug contains "claude-worktrees-") and are captured.
+    return "worktrees-job-" in slug and "claude-worktrees-" not in slug
+
+
+def _has_job_rows(conn, session_id) -> bool:
+    return bool(conn.execute("SELECT 1 FROM cost_entries WHERE session_id=? AND job_id IS NOT NULL LIMIT 1", (session_id,)).fetchone())
+
+
+def sweep(conn, projects_dir=None) -> dict:
+    base = Path(projects_dir or os.path.expanduser("~/.claude/projects"))
+    out = {"captured": 0, "skipped_dispatch": 0, "errors": 0}
+    for proj in sorted(p for p in base.iterdir() if p.is_dir()) if base.exists() else []:
+        dispatch_dir = is_dispatch_slug(proj.name)
+        for t in sorted(proj.glob("*.jsonl")):
+            sid = t.stem
+            if dispatch_dir or _has_job_rows(conn, sid):
+                out["skipped_dispatch"] += 1
+                continue
+            cur = conn.execute("SELECT byte_offset, final FROM native_capture_cursor WHERE session_id=?", (sid,)).fetchone()
+            if cur and cur[1] and t.stat().st_size == cur[0]:
+                continue
+            try:
+                capture(conn, sid, t)
+                out["captured"] += 1
+            except (TranscriptFormatError, TranscriptMissingError, sqlite3.Error) as exc:
+                out["errors"] += 1
+                _log_error(f"sweep session={sid}: {type(exc).__name__}")
+    return out
+
+
+def reconcile(conn) -> list:
+    return [r[0] for r in conn.execute(
+        "SELECT session_id FROM cost_entries WHERE session_id IS NOT NULL "
+        "GROUP BY session_id HAVING SUM(cost_source='transcript_derived')>0 AND SUM(job_id IS NOT NULL)>0 ORDER BY session_id")]
+
