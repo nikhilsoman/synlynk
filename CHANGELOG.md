@@ -9,6 +9,25 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.39.6] - 2026-11-26
+### Added
+- feat(viz): generalize Roadmap Studio into multi-source Proposal Studio (#5568)
+- feat(viz): generic Role Operations Panel for Agent Studio + Overview widget (#5567)
+- feat(cli): add 'synlynk maintainer wake' subcommand (#5564)
+- feat(maintainer): gate a Slack push on promotion via notify_slack setting (#5563)
+- feat(maintainer): register fence-hint contributor for pending proposals (#5562)
+- feat(maintainer): wire run_maintainer_wake_cycle into scheduler triage pass (#5561)
+- feat(maintainer): run_maintainer_wake_cycle acts on triage/burndown/sweep findings (#5560)
+- feat(maintainer): evidence-weighted proximal selection with tier provenance (#5559)
+- feat(maintainer): role-aware action registry with typed FieldSpec (#5558)
+### Fixed
+- fix(onboarding): add maintainer to GitHub App identity roles_info (#5566)
+### Changed
+- ci: add nightly + manual GitHub Actions trigger for Maintainer's wake cycle (#5565)
+- refactor(maintainer): cluster_open_issues and is_issue_remediated read taxonomy from config (#5557)
+
+---
+
 ## [v0.39.1] - 2026-11-24
 ### Added
 - **Hetzner Cloud Swarm Runner Driver & Vertical Host Orchestration (#5360, PR #5464):**
