@@ -14,9 +14,13 @@ from synlynk.maintainer_registry import (
 
 @pytest.fixture(autouse=True)
 def _clear():
+    import synlynk.maintainer
+    from synlynk.maintainer_registry import _REGISTRY
+    snapshot = dict(_REGISTRY)
     clear_registry()
     yield
-    clear_registry()
+    _REGISTRY.clear()
+    _REGISTRY.update(snapshot)
 
 
 def test_register_action_stores_defaults_and_typed_filter_schema():
@@ -120,3 +124,43 @@ def test_get_action_config_rejects_unknown_override_keys(tmp_path):
 def test_get_action_config_raises_for_unregistered_action_id(tmp_path):
     with pytest.raises(KeyError):
         get_action_config("maintainer:nonexistent", repo_root=str(tmp_path))
+
+
+def test_build_maintainer_ops_data_shapes_actions_from_registry_and_proposals(tmp_path, monkeypatch):
+    import json
+    import synlynk.maintainer
+    from synlynk.maintainer_registry import (
+        FieldSpec, register_action, clear_registry, build_maintainer_ops_data,
+    )
+
+    monkeypatch.chdir(tmp_path)
+    clear_registry()
+    register_action(
+        role_slug="maintainer", name="sentinel_triage",
+        default_config={"mode": "dry_run", "enabled": True, "exclude_codes": []},
+        filter_schema=[FieldSpec(name="exclude_codes", type="list[str]", default=[], label="Exclude alert codes")],
+        run_fn=lambda **kwargs: {},
+    )
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "maintainer_proposals.json").write_text(json.dumps({
+        "generated_at": 0,
+        "proposals": [
+            {"proposal_id": "maintainer-sentinel-abc", "title": "Sentinel: E501",
+             "source": "maintainer:sentinel_triage", "action": "sentinel_triage",
+             "tier_provenance": ["sentinel"]},
+            {"proposal_id": "maintainer-backlog-backend", "title": "Backlog Burndown Sprint: backend",
+             "source": "maintainer:backlog_burndown", "action": "backlog_burndown"},
+        ],
+    }))
+
+    data = build_maintainer_ops_data("maintainer", repo_root=str(tmp_path))
+    assert len(data["actions"]) == 1
+    action = data["actions"][0]
+    assert action["name"] == "sentinel_triage"
+    assert action["enabled"] is True
+    assert action["mode"] == "dry_run"
+    assert action["last_run"] is None
+    assert action["config"] == {"mode": "dry_run", "enabled": True, "exclude_codes": []}
+    assert action["filter_schema"] == [{"name": "exclude_codes", "type": "list[str]", "default": [], "label": "Exclude alert codes"}]
+    assert [p["proposal_id"] for p in action["pending_proposals"]] == ["maintainer-sentinel-abc"]
+

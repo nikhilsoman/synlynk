@@ -130,6 +130,22 @@ def test_generate_roles_html_lists_attachable_capabilities():
     assert "Attach" in rendered
 
 
+def test_maintainer_role_card_includes_operations_panel():
+    from synlynk.viz.roles import generate_roles_html
+
+    data = {
+        "agents": [
+            {"slug": "maintainer", "title": "Platform Maintainer", "harness": "claude",
+             "ops_data": {"actions": [{"name": "sentinel_triage", "enabled": True, "mode": "dry_run", "last_run": None, "pending_proposals": [], "filter_schema": [], "config": {}}],
+                          "taxonomy_status": {"schema_valid": True, "validation_error": None}}},
+        ]
+    }
+    html = generate_roles_html(data, port=8321)
+    assert "ops-panel" in html
+    assert "sentinel_triage" in html
+
+
+
 
 
 
