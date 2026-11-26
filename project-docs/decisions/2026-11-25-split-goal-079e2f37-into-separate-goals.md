@@ -1,0 +1,51 @@
+<!-- generated - source of truth is state.db -->
+---
+decision_id: dec-082d00aa
+topic: "Split goal-079e2f37 into separate goals. goal-13762e51 = dispatch and worktree reliability across harness sandboxes (5 stories: #2859 #3020 #3039 #2954 #3091), roadmap arc v0.39.8. Is this a coherent standalone goal? One paragraph, then approve / approve with changes / reject."
+date: 2026-11-25
+panel: [claude]
+status: approved
+---
+
+## Topic
+Split goal-079e2f37 into separate goals. goal-13762e51 = dispatch and worktree reliability across harness sandboxes (5 stories: #2859 #3020 #3039 #2954 #3091), roadmap arc v0.39.8. Is this a coherent standalone goal? One paragraph, then approve / approve with changes / reject.
+
+## Panel Inputs
+
+### claude
+[model=sonnet; version=2.1.327 (Claude Code)]
+
+**Panel position: approve with changes.**
+
+I'm judging from the goal framing and issue numbers only. I haven't opened #2859, #3020, #3039, #2954 or #3091, so the first change below is a check I haven't done.
+
+**Coherence.** "Dispatch and worktree reliability across harness sandboxes" is a real, standalone theme. Our recent history shows a single failure class. Worktrees are sparse-checkout and miss `.github/` and `.synlynk/github_apps/`. Harness sandboxes deny GH writes. Grok jobs get "cancelled" mid-task. Agy times out. The circuit breaker kills jobs that already succeeded. All of these break at the same boundary, where a dispatched job meets a worktree plus a harness sandbox. Five stories is also a sensible size for one arc slot, and v0.39.8 is a patch-level arc, which suits a reliability theme with no new surface area. It is far better than leaving these stories inside a 343-story goal that can't be released as a unit, which is the problem #5525 is solving.
+
+**Risks and required changes:**
+
+1. **Verify membership.** Confirm each of the five stories is about the sandbox/worktree boundary. A story on cost inflation, review routing or status-label false negatives belongs in a different goal. Those are separate failure classes (#1377, #1937). Moving any such story out of this goal is better than blurring it.
+2. **Write a measurable exit criterion.** "Reliability" is unfalsifiable as stated. I suggest something like: a dispatched job on each of the four harnesses completes a worktree-based task with a GH write, and no spurious sandbox/worktree failures appear across N consecutive jobs. Without that, the goal never closes.
+3. **Satisfy the Roadmap Drift Gate.** The arc v0.39.8 needs a backing approved decision that links goal-13762e51. The untracked `2026-11-25-split-goal-079e2f37-…` files must be committed with the correct goal linkage. Otherwise `synlynk pr check` blocks when `require_linked_goal_mode` is `enforce`.
+4. **Open a parent tracking issue now.** The series protocol requires one with Intent, Context and Associated Tickets. The GOVERNS-linkage gap memory says to create it at spec time rather than rely on dispatch-time gates.
+5. **Record dependencies.** If any of the five stories depend on a story staying behind in the other goals, record that with the new `synlynk story` dependency CLI (#5535). Otherwise the split can strand them.
+
+**Recommendation: approve with changes.** The goal is coherent as a standalone unit, conditional on changes 1–3 before the split lands. Changes 4 and 5 are housekeeping.
+
+## Synthesis
+Decision: **Approve with changes.**
+
+The panel's one position is that goal-13762e51, "dispatch and worktree reliability across harness sandboxes", holds together as a standalone goal. Its stories (#2859, #3020, #3039, #2954, #3091) fit the failure class we keep seeing, where a dispatched job meets a worktree and a harness sandbox. Examples are sparse-checkout worktrees that lack `.github/` and `.synlynk/github_apps/`, sandbox-denied GitHub writes, Grok "cancelled" cutoffs, Agy timeouts, and a circuit breaker that kills jobs that already succeeded. Five stories is a releasable size, and a patch-level arc (v0.39.8) suits a reliability theme that adds no new surface. Splitting it out also removes these stories from the 343-story parent, which can't ship as one unit.
+
+The approval comes with these conditions. The panel member did not open the five issues, so the first is unchecked.
+
+1. **Verify membership before the split lands.** Open each of the five issues and confirm it concerns the worktree/sandbox boundary. Move out any story that is really about cost inflation, review routing or job-status false negatives. Those are separate failure classes.
+2. **Add a measurable exit criterion.** For example: a dispatched job on each of the four harnesses completes a worktree-based task including a GitHub write, with no spurious sandbox or worktree failures across N consecutive jobs. Without one, "reliability" never closes.
+3. **Satisfy the Roadmap Drift Gate.** Arc v0.39.8 needs a backing approved decision that links goal-13762e51. The untracked `2026-11-25-split-goal-079e2f37-…` decision files must be committed with correct goal linkage, or `synlynk pr check` will block under `enforce`.
+4. **Housekeeping.** Open a parent tracking issue with Intent, Context and Associated Tickets now. Record any cross-goal story dependencies with the `synlynk story` dependency CLI (#5535), so the split doesn't strand a story.
+
+Conditions 1–3 gate the split. Condition 4 can follow.
+
+## Decision
+Decision: **Approve with changes.**
+
+> Signatures: see 2026-11-25-split-goal-079e2f37-into-separate-goals.json
