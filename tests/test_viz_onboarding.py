@@ -186,3 +186,13 @@ def test_generate_onboarding_html_renders_three_views():
     assert "Behind the Curtain" in html
     assert "state.db" in html
 
+
+def test_roles_info_includes_maintainer():
+    import inspect
+
+    from synlynk.viz import onboarding
+
+    source = inspect.getsource(onboarding)
+    assert '"maintainer"' in source or "'maintainer'" in source
+
+
