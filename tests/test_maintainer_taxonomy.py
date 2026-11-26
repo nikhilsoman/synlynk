@@ -139,3 +139,91 @@ def test_load_taxonomy_falls_back_on_negative_proximal_selection_weight(tmp_path
     result = load_taxonomy(repo_root=str(tmp_path))
     assert result["schema_valid"] is False
     assert "keyword_weight" in result["validation_error"]
+
+from synlynk.maintainer_taxonomy import load_domain_pack, doc_type_extensions
+
+
+def test_load_domain_pack_merges_cluster_keywords_over_repo_defaults(tmp_path):
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "maintainer_taxonomy.json").write_text(json.dumps({
+        "schema_version": 1,
+        "cluster_keywords": {"backend": ["sqlite"]},
+        "remediation_topics": ["topic a"],
+    }))
+    (synlynk_dir / "domain_pack.json").write_text(json.dumps({
+        "schema_version": 1,
+        "pack_name": "test-pack",
+        "cluster_keywords": {"backend": ["sqlite", "postgres"], "ops": ["pager"]},
+        "remediation_topics": ["topic b"],
+        "doc_type_extensions": {"compliance_doc": ["hipaa"]},
+    }))
+
+    pack = load_domain_pack(repo_root=str(tmp_path))
+    assert pack["pack_name"] == "test-pack"
+
+    keywords = cluster_keywords(repo_root=str(tmp_path))
+    assert keywords["backend"] == ["sqlite", "postgres"]
+    assert keywords["ops"] == ["pager"]
+
+    topics = remediation_topics(repo_root=str(tmp_path))
+    assert "topic b" in topics
+
+
+def test_load_domain_pack_returns_none_when_absent(tmp_path):
+    assert load_domain_pack(repo_root=str(tmp_path)) is None
+
+
+def test_load_domain_pack_falls_back_on_unsupported_schema_version(tmp_path):
+    """DECIDE panel defect #5 applies to the domain pack too."""
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "domain_pack.json").write_text(json.dumps({"schema_version": 99, "pack_name": "bad"}))
+
+    pack = load_domain_pack(repo_root=str(tmp_path))
+    assert pack is None
+
+    result = load_taxonomy(repo_root=str(tmp_path))
+    assert result["schema_valid"] is False
+    assert "domain_pack" in result["validation_error"]
+
+
+def test_doc_type_extensions_reads_domain_pack(tmp_path):
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "domain_pack.json").write_text(json.dumps({
+        "schema_version": 1,
+        "pack_name": "test-pack",
+        "doc_type_extensions": {"shot_list": ["shotlist", "shot-list"]},
+    }))
+    assert doc_type_extensions(repo_root=str(tmp_path)) == {"shot_list": ["shotlist", "shot-list"]}
+
+
+def test_load_domain_pack_falls_back_on_invalid_doc_type_extensions_shape(tmp_path):
+    """DECIDE panel re-review 2026-11-24 (Codex, Tasks 1-2): the domain pack
+    needs the same per-field shape validation as the taxonomy file, not just
+    a schema_version check."""
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "domain_pack.json").write_text(json.dumps({
+        "schema_version": 1,
+        "pack_name": "test-pack",
+        "doc_type_extensions": {"shot_list": "shotlist"},  # should be a list, not a str
+    }))
+
+    assert load_domain_pack(repo_root=str(tmp_path)) is None
+    result = load_taxonomy(repo_root=str(tmp_path))
+    assert result["schema_valid"] is False
+    assert "doc_type_extensions" in result["validation_error"]
+
+
+def test_load_domain_pack_falls_back_on_invalid_cluster_keywords_shape(tmp_path):
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "domain_pack.json").write_text(json.dumps({
+        "schema_version": 1,
+        "pack_name": "test-pack",
+        "cluster_keywords": {"ops": [1, 2]},  # list entries must be strings
+    }))
+
+    assert load_domain_pack(repo_root=str(tmp_path)) is None

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "pack_name": "synlynk-default",
+  "cluster_keywords": {
+    "backend": ["sqlite", "database", "server", "api", "endpoint", "query"],
+    "frontend": ["css", "html", "ui", "vizor", "widget", "render"],
+    "cli": ["argparse", "subcommand", "cli.py", "command"],
+    "docs": ["readme", "docstring", "documentation", "spec"],
+    "sentinel": ["alert", "circuit breaker", "sentinel", "flatline"],
+    "testing": ["pytest", "fixture", "test_", "flaky"]
+  },
+  "remediation_topics": ["invariant 1", "circuit breaker", "daemon supervision"],
+  "doc_type_extensions": {}
+}

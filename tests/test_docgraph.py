@@ -161,3 +161,20 @@ def test_docgraph_skips_transient_dirs(tmp_path):
     assert not any(".claude/" in p for p in paths)
 
 
+
+from synlynk.docgraph import classify_doc_type
+
+
+def test_classify_doc_type_checks_extensions_before_general_doc_fallback():
+    extensions = {"compliance_doc": ["hipaa", "compliance/"]}
+    assert classify_doc_type("docs/hipaa-checklist.md", extensions=extensions) == "compliance_doc"
+    assert classify_doc_type("compliance/annual-review.md", extensions=extensions) == "compliance_doc"
+
+
+def test_classify_doc_type_builtin_buckets_take_priority_over_extensions():
+    extensions = {"compliance_doc": ["readme"]}
+    assert classify_doc_type("README.md", extensions=extensions) == "readme"
+
+
+def test_classify_doc_type_without_extensions_unchanged():
+    assert classify_doc_type("docs/notes.md") == "general_doc"

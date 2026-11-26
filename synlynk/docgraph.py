@@ -95,8 +95,14 @@ def parse_yaml_frontmatter(text: str) -> Tuple[Dict[str, Any], str]:
     return result, body
 
 
-def classify_doc_type(rel_path: str) -> str:
-    """Classify markdown document by directory or filename convention."""
+def classify_doc_type(rel_path: str, extensions: Optional[Dict[str, List[str]]] = None) -> str:
+    """Classify markdown document by directory or filename convention.
+
+    `extensions` (doc_type -> substring list, from a domain pack's
+    doc_type_extensions) is checked after the built-in structural buckets and
+    before the general_doc fallback, per spec
+    docs/superpowers/specs/2026-11-24-maintainer-full-autonomy-design.md §7.
+    """
     norm = rel_path.replace("\\", "/").lower()
     base = os.path.basename(norm)
 
@@ -126,6 +132,13 @@ def classify_doc_type(rel_path: str) -> str:
         return "strategy"
     if "blog" in norm:
         return "blog"
+
+    if extensions:
+        for doc_type, substrings in extensions.items():
+            for substring in substrings:
+                if substring.lower() in norm:
+                    return doc_type
+
     return "general_doc"
 
 

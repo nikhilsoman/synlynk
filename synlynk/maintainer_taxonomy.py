@@ -146,29 +146,95 @@ def _load_taxonomy_file(repo_root: str) -> dict:
     return data
 
 
-def load_taxonomy(repo_root: str = ".") -> Dict[str, Any]:
-    """Full validated taxonomy config, merged with built-in defaults.
+def _domain_pack_path(repo_root: str) -> str:
+    return os.path.join(repo_root, ".synlynk", "domain_pack.json")
 
-    Returns a dict with cluster_keywords, remediation_topics,
-    proximal_selection, schema_valid, and validation_error -- the latter two
-    so Vizor's Role Operations Panel (Task 13) can surface a "using built-in
-    defaults -- config failed validation" banner (spec §6, DECIDE panel
-    defect #5) without the loader itself ever raising.
-    """
-    data, error = _load_taxonomy_file_raw(repo_root)
+
+def _load_domain_pack_raw(repo_root: str) -> Tuple[Optional[dict], Optional[str]]:
+    """Returns (pack_or_None, validation_error). Same never-raise contract as
+    _load_taxonomy_file_raw (DECIDE panel defect #5)."""
+    path = _domain_pack_path(repo_root)
+    if not os.path.exists(path):
+        return None, None
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError) as exc:
+        return None, f"malformed JSON in domain_pack.json ({path}): {exc}"
+
+    if not isinstance(data, dict):
+        return None, f"domain_pack.json must contain a JSON object, got {type(data).__name__}"
+
+    schema_version = data.get("schema_version")
+    if schema_version not in _SUPPORTED_TAXONOMY_SCHEMA_VERSIONS:
+        return None, f"unsupported schema_version {schema_version!r} in domain_pack.json (supported: {sorted(_SUPPORTED_TAXONOMY_SCHEMA_VERSIONS)})"
+
+    # DECIDE panel re-review 2026-11-24 (Codex): same per-field shape
+    # validation as the taxonomy file (Task 1), reusing its validators.
+    if "cluster_keywords" in data:
+        shape_error = _validate_cluster_keywords_shape(data["cluster_keywords"])
+        if shape_error:
+            return None, f"domain_pack.json: {shape_error}"
+    if "remediation_topics" in data:
+        shape_error = _validate_remediation_topics_shape(data["remediation_topics"])
+        if shape_error:
+            return None, f"domain_pack.json: {shape_error}"
+    if "doc_type_extensions" in data:
+        shape_error = _validate_doc_type_extensions_shape(data["doc_type_extensions"])
+        if shape_error:
+            return None, f"domain_pack.json: {shape_error}"
+
+    return data, None
+
+
+def load_domain_pack(repo_root: str = ".") -> Optional[dict]:
+    """Load .synlynk/domain_pack.json, or None if it doesn't exist/fails validation."""
+    pack, _ = _load_domain_pack_raw(repo_root)
+    return pack
+
+
+def doc_type_extensions(repo_root: str = ".") -> Dict[str, List[str]]:
+    """doc_type -> matcher-substring list, from the domain pack (empty if none)."""
+    pack = load_domain_pack(repo_root)
+    if not pack:
+        return {}
+    extensions = pack.get("doc_type_extensions")
+    return extensions if isinstance(extensions, dict) else {}
+
+
+def load_taxonomy(repo_root: str = ".") -> Dict[str, Any]:
+    """Full validated taxonomy config: domain pack layered over
+    .synlynk/maintainer_taxonomy.json, falling back to built-in defaults.
+    Never raises (DECIDE panel defect #5) -- schema_valid/validation_error
+    report either loader's outcome for the Role Operations Panel banner."""
+    data, taxonomy_error = _load_taxonomy_file_raw(repo_root)
+    pack, pack_error = _load_domain_pack_raw(repo_root)
 
     cluster = data.get("cluster_keywords")
-    cluster = cluster if isinstance(cluster, dict) and cluster else dict(_BUILTIN_CLUSTER_KEYWORDS)
+    cluster = dict(cluster) if isinstance(cluster, dict) and cluster else dict(_BUILTIN_CLUSTER_KEYWORDS)
+    if pack:
+        pack_keywords = pack.get("cluster_keywords")
+        if isinstance(pack_keywords, dict):
+            cluster.update(pack_keywords)
 
     topics = data.get("remediation_topics")
-    topics = tuple(topics) if isinstance(topics, list) and topics else _BUILTIN_REMEDIATION_TOPICS
+    topics_list = list(topics) if isinstance(topics, list) and topics else list(_BUILTIN_REMEDIATION_TOPICS)
+    if pack:
+        pack_topics = pack.get("remediation_topics")
+        if isinstance(pack_topics, list):
+            for topic in pack_topics:
+                if topic not in topics_list:
+                    topics_list.append(topic)
 
     proximal = data.get("proximal_selection")
     proximal = proximal if isinstance(proximal, dict) and proximal else dict(_BUILTIN_PROXIMAL_SELECTION)
 
+    error = taxonomy_error or (f"domain_pack.json: {pack_error}" if pack_error else None)
+
     return {
         "cluster_keywords": cluster,
-        "remediation_topics": topics,
+        "remediation_topics": tuple(topics_list),
         "proximal_selection": proximal,
         "schema_valid": error is None,
         "validation_error": error,
