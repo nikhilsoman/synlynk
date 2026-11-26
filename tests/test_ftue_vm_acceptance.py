@@ -4,6 +4,27 @@ import subprocess
 from unittest.mock import MagicMock, patch
 import pytest
 from synlynk.testbed.driver import ExecResult, NodeHandle, OrbDriver
+import json
+
+from synlynk.testbed.scenarios import ScenarioRunner
+
+
+def _enable_enforce_policy(project_dir, monkeypatch, mode="enforce"):
+    import synlynk.db as db
+
+    policy_path = project_dir / ".synlynk" / "policy.json"
+    policy_path.parent.mkdir(parents=True, exist_ok=True)
+    policy_path.write_text(json.dumps({
+        "overrides": {
+            "merge_authority": {
+                "cross_harness_review_required": True,
+                "cross_harness_review_required_mode": mode,
+            }
+        }
+    }))
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setattr(db, "_pr_closing_issue_numbers", lambda _pr: [])
+    monkeypatch.setattr(db, "_pr_head_branch", lambda _pr: "feat/review-gate-matrix")
 
 
 def _is_orbctl_available():
@@ -68,3 +89,70 @@ def test_live_orb_ftue_e2e(tmp_path):
         assert "Linux" in res.stdout
     finally:
         driver.destroy_node(node_id)
+
+
+def test_review_gate_matrix_reproduces_solo_harness_gap(project_dir, monkeypatch):
+    """Solo-harness/gateway/headless identities fail cross-harness review
+    with no carve-out, while team identities with a distinct teammate pass."""
+    import synlynk
+
+    _enable_enforce_policy(project_dir, monkeypatch)
+    conn = synlynk._get_db()
+
+    results = ScenarioRunner().run_review_gate_matrix(conn)
+
+    by_name = {r.name: r for r in results}
+    assert by_name["review_gate_matrix:alice"].status == "PASSED"
+    assert by_name["review_gate_matrix:bob"].status == "PASSED"
+    assert by_name["review_gate_matrix:charlie"].status == "PASSED"
+
+    assert by_name["review_gate_matrix:dana"].status == "FAILED"
+    assert "same harness+model" in by_name["review_gate_matrix:dana"].details
+    assert by_name["review_gate_matrix:erin"].status == "FAILED"
+    assert "same harness+model" in by_name["review_gate_matrix:erin"].details
+
+    # ci_headless's outcome is reported, not pre-judged -- surfaced
+    # for human review rather than asserted on, since current code treats every
+    # self-paired identity the same way regardless of whether it's human or bot.
+    print(f"ci_headless verdict: {by_name['review_gate_matrix:ci-bot'].status} "
+          f"-- {by_name['review_gate_matrix:ci-bot'].details}")
+
+    conn.close()
+
+
+@pytest.mark.parametrize("mode,expected_should_block", [("observe", False), ("enforce", True)])
+def test_cross_harness_gate_mode_blocks_only_in_enforce(project_dir, monkeypatch, mode, expected_should_block):
+    """The raw verdict always fails for a solo identity; only enforce mode blocks on it."""
+    import synlynk
+    import synlynk.db as db
+    from synlynk.policy_gates import _evaluate_gate, classify_cross_harness_verdict
+    from synlynk.testbed.identities import SOLO_AND_EDGE_IDENTITIES
+
+    _enable_enforce_policy(project_dir, monkeypatch, mode=mode)
+    conn = synlynk._get_db()
+    solo_claude = SOLO_AND_EDGE_IDENTITIES["solo_claude"]
+    pr_number = 9100
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, pr_number) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("2026-11-21", solo_claude.harness, solo_claude.harness, solo_claude.model, "test", pr_number),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, pr_number, agent_role) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("2026-11-21", solo_claude.harness, solo_claude.harness, solo_claude.model, "test", pr_number, "qa"),
+    )
+    conn.commit()
+
+    ok, message = db._cross_harness_review_verdict(conn, pr_number)
+    assert not ok
+
+    evaluation = _evaluate_gate(
+        conn, pr_number=pr_number, gate="cross_harness_review",
+        mode_key="cross_harness_review_required_mode", policy_section="merge_authority",
+        verdict=classify_cross_harness_verdict(ok, message),
+    )
+
+    assert evaluation.verdict == "warn"
+    assert evaluation.should_block is expected_should_block
+    conn.close()
