@@ -7,13 +7,8 @@ import subprocess
 from datetime import datetime, timezone
 from typing import List, Optional
 
+from synlynk.maintainer_taxonomy import cluster_keywords, remediation_topics
 from synlynk.sentinel import _iter_sentinel_alerts, _normalize_sentinel_severity
-
-_REMEDIATION_TOPICS = (
-    "invariant 1",
-    "circuit breaker",
-    "daemon supervision",
-)
 
 SEVERITY_RANKS = {
     "CRITICAL": 4,
@@ -45,9 +40,10 @@ def is_issue_remediated(
             if any(pat in msg_lower for pat in num_patterns):
                 return True
 
+    topics = remediation_topics()
     for msg in commit_messages:
         msg_lower = msg.lower()
-        for topic in _REMEDIATION_TOPICS:
+        for topic in topics:
             if topic in issue_lower and topic in msg_lower:
                 return True
         if "circuit breaker" in issue_lower and "live-19" in msg_lower:
@@ -259,37 +255,27 @@ def cmd_maintainer_sweep(repo_root: str = ".", refresh_graph: bool = False) -> i
 
 
 def cluster_open_issues(issues: list[dict]) -> dict[str, list[dict]]:
-    """Cluster open issues by domain / label proximity for focused burndown sprints."""
-    clusters: dict[str, list[dict]] = {
-        "backend": [],
-        "frontend": [],
-        "cli": [],
-        "docs": [],
-        "sentinel": [],
-        "testing": [],
-        "other": [],
-    }
-    for iss in issues:
-        title = (iss.get("title") or "").lower()
-        labels = [str(l).lower() for l in iss.get("labels", [])]
-        text = f"{title} {' '.join(labels)}"
+    """Cluster open issues by keyword/label match against the repo's taxonomy."""
+    keywords_by_cluster = cluster_keywords()
+    clustered: dict[str, list[dict]] = {name: [] for name in keywords_by_cluster}
+    clustered["other"] = []
 
-        if any(k in text for k in ("backend", "db", "sqlite", "migration", "state.db", "sql")):
-            clusters["backend"].append(iss)
-        elif any(k in text for k in ("css", "html", "vizor", "template", "frontend")):
-            clusters["frontend"].append(iss)
-        elif any(k in text for k in ("cli", "argument", "flag", "command", "parser")):
-            clusters["cli"].append(iss)
-        elif any(k in text for k in ("docs", "readme", "spec", "blog", "guide")):
-            clusters["docs"].append(iss)
-        elif any(k in text for k in ("sentinel", "stall", "alert", "health", "crash")):
-            clusters["sentinel"].append(iss)
-        elif any(k in text for k in ("test", "pytest", "mock", "fixture", "e2e")):
-            clusters["testing"].append(iss)
-        else:
-            clusters["other"].append(iss)
+    for issue in issues:
+        title = str(issue.get("title") or "").lower()
+        body = str(issue.get("body") or "").lower()
+        labels = [str(l).lower() for l in (issue.get("labels") or [])]
+        haystack = f"{title} {body} {' '.join(labels)}"
 
-    return {k: v for k, v in clusters.items() if v}
+        matched = False
+        for cluster_name, keywords in keywords_by_cluster.items():
+            if any(kw.lower() in haystack for kw in keywords):
+                clustered[cluster_name].append(issue)
+                matched = True
+                break
+        if not matched:
+            clustered["other"].append(issue)
+
+    return {name: items for name, items in clustered.items() if items}
 
 
 def run_backlog_burndown_sweep(

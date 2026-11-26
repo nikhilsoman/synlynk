@@ -5,6 +5,8 @@ from synlynk.maintainer import (
     triage_sentinel_alerts,
     format_triage_issue,
     probe_reproduction,
+    cluster_open_issues,
+    is_issue_remediated,
 )
 
 
@@ -62,3 +64,37 @@ def test_probe_reproduction_executes_check(tmp_path):
     assert isinstance(res, dict)
     assert "reproduced" in res
     assert "output" in res
+
+def test_cluster_open_issues_uses_repo_taxonomy_file(tmp_path, monkeypatch):
+    import json
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "maintainer_taxonomy.json").write_text(json.dumps({
+        "schema_version": 1,
+        "cluster_keywords": {"video": ["ffmpeg", "transcode"]},
+        "remediation_topics": [],
+    }))
+    monkeypatch.chdir(tmp_path)
+
+    issues = [{"number": 1, "title": "ffmpeg transcode crashes on odd framerates", "labels": []}]
+    clustered = cluster_open_issues(issues)
+    assert "video" in clustered
+    assert clustered["video"][0]["number"] == 1
+
+
+def test_is_issue_remediated_uses_repo_remediation_topics(tmp_path, monkeypatch):
+    import json
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "maintainer_taxonomy.json").write_text(json.dumps({
+        "schema_version": 1,
+        "cluster_keywords": {},
+        "remediation_topics": ["frame drop"],
+    }))
+    monkeypatch.chdir(tmp_path)
+
+    remediated = is_issue_remediated(
+        issue_text="frame drop bug in the renderer",
+        commit_messages=["fix: resolve frame drop issue in renderer path"],
+    )
+    assert remediated is True
