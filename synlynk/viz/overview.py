@@ -9,6 +9,12 @@ def generate_overview_html(data: dict, port: int) -> str:
     workspace_name = str(workspace.get("name") or "workspace")
     updated_at = str(workspace.get("updated_at") or "")
 
+    maintainer_ops = data.get("maintainer_ops")
+    maintainer_widget_html = ""
+    if maintainer_ops:
+        from synlynk.viz.role_ops_panel import generate_condensed_widget_html
+        maintainer_widget_html = generate_condensed_widget_html("maintainer", maintainer_ops)
+
     # 1. Active sentinel alerts, grouped by pattern code.
     from synlynk.viz.data import group_workspace_sentinel_alerts
 
@@ -885,6 +891,7 @@ def generate_overview_html(data: dict, port: int) -> str:
           {jobs_html}
         </div>
       </div>
+      {maintainer_widget_html}
     </div>
 
     <div class="shortcuts-section">

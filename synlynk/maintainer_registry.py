@@ -113,3 +113,46 @@ def get_action_config(action_id: str, repo_root: str = ".") -> Dict[str, Any]:
             raise ValueError(f"unknown config key(s) {sorted(unknown)} for action {action_id!r}")
         config.update(overrides)
     return config
+
+
+def build_maintainer_ops_data(role_slug: str, repo_root: str = ".") -> Dict[str, Any]:
+    """Assemble the Role Operations Panel's input dict for one role from
+    this registry's registered actions and Task 6's persisted proposals.
+
+    Caller still has to attach the result under data["maintainer_ops"] (for
+    generate_overview_html) or agent["ops_data"] (for generate_roles_html) --
+    see Task 13's "Known residual item" note above for where that wiring
+    still needs to happen in synlynk/viz/data.py.
+    """
+    from synlynk.maintainer import load_maintainer_proposals
+    from synlynk.maintainer_taxonomy import load_taxonomy
+
+    proposals_by_action: Dict[str, List[Dict[str, Any]]] = {}
+    for proposal in load_maintainer_proposals(repo_root=repo_root):
+        proposals_by_action.setdefault(proposal.get("action", ""), []).append(proposal)
+
+    actions = []
+    for action in registered_actions(role_slug=role_slug).values():
+        config = get_action_config(action.action_id, repo_root=repo_root)
+        actions.append({
+            "name": action.name,
+            "enabled": bool(config.get("enabled", True)),
+            "mode": config.get("mode", "dry_run"),
+            "last_run": None,
+            "config": config,
+            "filter_schema": [
+                {"name": f.name, "type": f.type, "default": f.default, "label": f.label}
+                for f in action.filter_schema
+            ],
+            "pending_proposals": proposals_by_action.get(action.name, []),
+        })
+
+    taxonomy = load_taxonomy(repo_root=repo_root)
+    return {
+        "actions": actions,
+        "taxonomy_status": {
+            "schema_valid": taxonomy["schema_valid"],
+            "validation_error": taxonomy["validation_error"],
+        },
+    }
+

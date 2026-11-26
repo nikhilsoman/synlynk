@@ -798,6 +798,7 @@ def _run_sentinel_triage_action(mode: str, repo_root: str = ".", cycle_id: str =
                 "title": f"Sentinel: {group['code']}",
                 "severity": severity_label,
                 "cluster": "sentinel",
+                "tier_provenance": ["sentinel"],
                 "stories": [story],
             }
             proposals.append(proposal)
