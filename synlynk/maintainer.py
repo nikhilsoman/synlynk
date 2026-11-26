@@ -531,3 +531,354 @@ def select_proposal_target(
     tier_provenance = sorted({e.tier for e in winning_evidence})
     return winning_id, tier_provenance
 
+
+def _qa_role_token_available(repo_root: str = ".") -> bool:
+    """True only if a qa-role GitHub App token is actually provisioned.
+    Never checks SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH or any host/personal
+    credential -- per CLAUDE.md, "Personal GitHub token is strictly
+    off-limits to every agent/harness," with no carve-out for Maintainer
+    (spec §5.3a, DECIDE panel defect #2)."""
+    import os
+
+    app_dir = os.path.join(repo_root, ".synlynk", "github_apps", "qa")
+    return os.path.isdir(app_dir) and bool(os.listdir(app_dir))
+
+
+# Promotion-boundary guards (spec §5.3a, DECIDE panel re-review 2026-11-24
+# defect #2). dry_run staging must make zero external calls; only "promote"
+# mode may open a GitHub issue, and only within these guards. The cap and
+# the rate limit are deliberately separate knobs: the cap bounds a single
+# cycle's blast radius, the window bounds sustained promotion rate across
+# many cycles (e.g. a scheduler that fires every few minutes).
+_MAX_PROMOTIONS_PER_CYCLE = 5
+_MAX_PROMOTIONS_PER_WINDOW = 10
+_PROMOTION_WINDOW_SECONDS = 3600
+
+# How long an "attempting" entry with no matching "completed" entry is
+# treated as still in flight (DECIDE panel re-review 2026-11-24 round 2,
+# condition 3). A crash-then-immediate-retry for the same signature must
+# not file a duplicate issue just because the open-issue/audit-log dedupe
+# checks can't see an in-progress write.
+_PROMOTION_ATTEMPT_LOCK_SECONDS = 300
+
+
+def _promotion_audit_log_path(repo_root: str) -> str:
+    import os
+
+    return os.path.join(repo_root, ".synlynk", "maintainer_promotion_audit.jsonl")
+
+
+def _read_promotion_audit_log(repo_root: str = ".") -> list[dict]:
+    """Append-only JSONL reader (DECIDE panel re-review 2026-11-24, defect
+    #2): one JSON object per line, not a single JSON array. A line that
+    fails to parse (e.g. a write that was cut off mid-flush) is skipped
+    rather than invalidating the whole log."""
+    import json
+
+    path = _promotion_audit_log_path(repo_root)
+    if not os.path.exists(path):
+        return []
+    entries = []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entries.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    except OSError:
+        return []
+    return entries
+
+
+def _append_promotion_audit_log(repo_root: str, entry: dict) -> None:
+    """Append one JSON object as its own line. Never rewrites the file, so
+    a crash immediately after this call still leaves every prior line
+    intact (DECIDE panel re-review 2026-11-24, defect #2)."""
+    import json
+
+    path = _promotion_audit_log_path(repo_root)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry) + "\n")
+
+
+def _finding_signature(story: dict) -> str:
+    """Stable identity for a finding, used to dedupe promotions across
+    cycles and against already-open GitHub issues (DECIDE panel re-review
+    2026-11-24, defect #2). story_id already encodes the fingerprint/domain
+    that produced the finding, so it's sufficient on its own; title is only
+    a fallback for a story with no story_id."""
+    return str(story.get("story_id") or story.get("title") or "")
+
+
+def _open_github_issue_signatures(repo_root: str = ".") -> set:
+    """Signatures already filed as open GitHub issues, read from
+    maintainer-finding-labeled issues' bodies (each carries a
+    `<!-- finding-signature: SIG -->` marker, written by
+    _ensure_github_issue_for_story). Best-effort: no qa token, a gh
+    failure, or unparseable output all degrade to an empty set rather than
+    raising -- dedupe then falls back to the audit log alone."""
+    import json
+    import re
+    import subprocess
+
+    if not _qa_role_token_available(repo_root):
+        return set()
+    try:
+        result = subprocess.run(
+            [
+                "python3", "bin/synlynk.py", "gh", "--role", "qa", "--",
+                "issue", "list", "--label", "maintainer-finding",
+                "--state", "open", "--json", "body",
+            ],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        issues = json.loads(result.stdout or "[]")
+    except Exception:
+        return set()
+    signatures = set()
+    for issue in issues:
+        match = re.search(r"<!-- finding-signature: (.+?) -->", issue.get("body") or "")
+        if match:
+            signatures.add(match.group(1))
+    return signatures
+
+
+def _promotions_in_cycle(repo_root: str, cycle_id: str) -> int:
+    """Count of external writes attempted this cycle (distinct signatures
+    attempted)."""
+    return len({
+        e.get("signature")
+        for e in _read_promotion_audit_log(repo_root)
+        if e.get("cycle_id") == cycle_id and e.get("status") in ("attempting", "completed")
+    })
+
+
+def _promotions_in_window(repo_root: str, now: float) -> int:
+    """Count distinct signatures attempted within the rolling window."""
+    cutoff = now - _PROMOTION_WINDOW_SECONDS
+    return len({
+        e.get("signature")
+        for e in _read_promotion_audit_log(repo_root)
+        if e.get("status") in ("attempting", "completed") and e.get("ts", 0) >= cutoff
+    })
+
+
+def _has_in_flight_attempt(repo_root: str, signature: str, now: float) -> bool:
+    """True if an "attempting" entry for this signature has no matching
+    "completed" entry anywhere in the log, and is still within
+    _PROMOTION_ATTEMPT_LOCK_SECONDS of now (DECIDE panel re-review
+    2026-11-24 round 2, condition 3)."""
+    entries = _read_promotion_audit_log(repo_root)
+    completed_signatures = {
+        e.get("signature") for e in entries if e.get("status") == "completed"
+    }
+    if signature in completed_signatures:
+        return False
+    return any(
+        e.get("signature") == signature
+        and e.get("status") == "attempting"
+        and now - e.get("ts", 0) < _PROMOTION_ATTEMPT_LOCK_SECONDS
+        for e in entries
+    )
+
+
+def _ensure_github_issue_for_story(story: dict, repo_root: str = ".", cycle_id: str = "") -> Optional[int]:
+    """Open a GitHub issue for a story that has none yet, via the qa-role
+    write path (spec §5.3). Returns the issue number on success, or None
+    if the story was staged instead of promoted."""
+    existing = story.get("github_issue")
+    if existing:
+        return int(existing)
+
+    if not _qa_role_token_available(repo_root):
+        return None
+
+    import time
+    now = time.time()
+
+    signature = _finding_signature(story)
+    audit_log = _read_promotion_audit_log(repo_root)
+    if any(e.get("signature") == signature and e.get("status") == "completed" for e in audit_log):
+        return None
+    if _has_in_flight_attempt(repo_root, signature, now):
+        return None
+    if signature in _open_github_issue_signatures(repo_root):
+        return None
+
+    if _promotions_in_cycle(repo_root, cycle_id) >= _MAX_PROMOTIONS_PER_CYCLE:
+        return None
+    if _promotions_in_window(repo_root, now) >= _MAX_PROMOTIONS_PER_WINDOW:
+        return None
+
+    _append_promotion_audit_log(repo_root, {
+        "cycle_id": cycle_id, "signature": signature, "status": "attempting", "ts": now,
+    })
+
+    import re
+    import subprocess
+
+    title = story.get("title") or f"Maintainer finding: {story.get('story_id', 'untitled')}"
+    body = (story.get("body") or "Filed by Maintainer's autonomous wake cycle.") + (
+        f"\n\n<!-- finding-signature: {signature} -->"
+    )
+    result = subprocess.run(
+        [
+            "python3", "bin/synlynk.py", "gh", "--role", "qa", "--",
+            "issue", "create", "--title", title, "--body", body,
+            "--label", "maintainer-finding",
+        ],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if result.returncode != 0:
+        return None
+
+    stdout = result.stdout or ""
+    match = re.search(r"#(\d+)", stdout) or re.search(r"/issues/(\d+)", stdout)
+    issue_number = int(match.group(1)) if match else None
+
+    _append_promotion_audit_log(repo_root, {
+        "cycle_id": cycle_id, "signature": signature, "status": "completed",
+        "ts": time.time(), "issue_number": issue_number,
+    })
+    return issue_number
+
+
+def _run_sentinel_triage_action(mode: str, repo_root: str = ".", cycle_id: str = "") -> dict:
+    groups = triage_sentinel_alerts(max_age_days=7)
+    proposals = []
+    for group in groups:
+        severity_label = "critical" if group["severity"] == "CRITICAL" else (
+            "high" if group["severity"] == "ERROR" else "normal"
+        )
+        if severity_label in ("critical", "high"):
+            story = {
+                "story_id": group["fingerprint"],
+                "title": format_triage_issue(group)[:80],
+                "github_issue": None,
+            }
+            if mode == "promote":
+                story["github_issue"] = _ensure_github_issue_for_story(story, repo_root=repo_root, cycle_id=cycle_id)
+            proposals.append({
+                "proposal_id": f"maintainer-sentinel-{group['fingerprint']}",
+                "source": "maintainer:sentinel_triage",
+                "title": f"Sentinel: {group['code']}",
+                "severity": severity_label,
+                "cluster": "sentinel",
+                "stories": [story],
+            })
+    return {"mode": mode, "groups": len(groups), "proposals": proposals}
+
+
+def _run_backlog_burndown_action(mode: str, repo_root: str = ".", cycle_id: str = "") -> dict:
+    result = run_backlog_burndown_sweep(repo_root=repo_root, dry_run=(mode != "promote"))
+    sprint = result.get("sprint_staged")
+    proposals = []
+    if sprint:
+        proposals.append({
+            "proposal_id": f"maintainer-backlog-{sprint['domain']}",
+            "source": "maintainer:backlog_burndown",
+            "title": sprint["title"],
+            "severity": "normal",
+            "cluster": sprint["domain"],
+            "stories": [],
+        })
+    return {"mode": mode, "proposals": proposals, **result}
+
+
+def _run_mesh_sweep_action(mode: str, repo_root: str = ".", cycle_id: str = "") -> dict:
+    exit_code = cmd_maintainer_sweep(repo_root=repo_root, refresh_graph=(mode == "promote"))
+    return {"mode": mode, "exit_code": exit_code, "proposals": []}
+
+
+def _persist_maintainer_proposals(proposals: list[dict], repo_root: str = ".") -> None:
+    """Write this cycle's pending proposals to a side-file so page renders
+    can read them without re-running the wake cycle."""
+    import json
+    import time
+
+    path = os.path.join(repo_root, ".synlynk", "maintainer_proposals.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump({"generated_at": time.time(), "proposals": proposals}, handle, indent=2)
+
+
+def load_maintainer_proposals(repo_root: str = ".") -> list[dict]:
+    """Read the last wake cycle's persisted proposals."""
+    import json
+
+    path = os.path.join(repo_root, ".synlynk", "maintainer_proposals.json")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        return list(data.get("proposals") or [])
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return []
+
+
+from synlynk.maintainer_registry import FieldSpec, register_action, get_action_config
+
+register_action(
+    role_slug="maintainer",
+    name="sentinel_triage",
+    default_config={"enabled": True, "mode": "dry_run"},
+    filter_schema=[FieldSpec(name="exclude_codes", type="list[str]", default=[], label="Exclude alert codes")],
+    run_fn=_run_sentinel_triage_action,
+)
+register_action(
+    role_slug="maintainer",
+    name="backlog_burndown",
+    default_config={"enabled": True, "mode": "dry_run"},
+    filter_schema=[FieldSpec(name="exclude_labels", type="list[str]", default=[], label="Exclude labels")],
+    run_fn=_run_backlog_burndown_action,
+)
+register_action(
+    role_slug="maintainer",
+    name="mesh_sweep",
+    default_config={"enabled": True, "mode": "dry_run"},
+    filter_schema=[],
+    run_fn=_run_mesh_sweep_action,
+)
+
+
+def run_maintainer_wake_cycle(repo_root: str = ".") -> dict:
+    """Run Maintainer's autonomous wake-cycle SOP: sentinel triage, backlog
+    burndown, mesh sweep -- mirroring run_tpm_wake_cycle()'s shape (spec §5.1).
+    Each registered action runs in dry_run (stage, no side effects) or
+    promote (real side effects) mode per its settings-registry config."""
+    import time
+    import uuid
+
+    from synlynk.maintainer_registry import registered_actions
+
+    cycle_id = f"cycle-{int(time.time())}-{uuid.uuid4().hex[:8]}"
+
+    results: dict = {}
+    for action_id, action in registered_actions(role_slug="maintainer").items():
+        config = get_action_config(action_id, repo_root=repo_root)
+        if not config.get("enabled", True):
+            results[action.name] = {"skipped": True}
+            continue
+        mode = config.get("mode", "dry_run")
+        outcome = action.run_fn(mode=mode, repo_root=repo_root, cycle_id=cycle_id)
+        results[action.name] = outcome
+
+    all_proposals = []
+    for action_name, outcome in results.items():
+        for proposal in (outcome.get("proposals") or []):
+            all_proposals.append({**proposal, "action": action_name})
+    _persist_maintainer_proposals(all_proposals, repo_root=repo_root)
+
+    return results
+
+
