@@ -280,6 +280,7 @@ def generate_roles_onboarding_html(repo_root: str = ".", port: int = 27472) -> s
         ("architect", "Lead Architect", "claude", "System architecture, specifications, technical decisions, and charter governance."),
         ("marketing", "Marketing Engineer", "agy", "Release communications, documentation compilation, and build diary blogs."),
         ("infra", "DevOps & Infrastructure", "grok", "Pulumi IaC, AWS cloud resource management, and CI/CD pipelines."),
+        ("maintainer", "Platform Maintainer", "claude", "Sentinel-alert triage, backlog burndown, and mesh/contract-drift sweeps."),
     ]
 
     cards_html = []
