@@ -46,3 +46,32 @@ def test_fencing_py_does_not_import_any_feature_module():
         assert not re.search(rf"^\s*(from|import)\s+synlynk\.{forbidden}\b", source, re.MULTILINE), (
             f"fencing.py must not import synlynk.{forbidden} by name"
         )
+
+
+def test_maintainer_fence_hint_contributor_adds_hint_when_proposals_pending(monkeypatch):
+    clear_hint_contributors()
+    from synlynk.maintainer_hints import maintainer_fence_hint_contributor
+    register_hint_contributor(maintainer_fence_hint_contributor)
+
+    monkeypatch.setattr("synlynk.maintainer_hints._pending_proposal_count", lambda: 3)
+
+    data = FenceData(command="exec", kind="actual", in_tokens=10, out_tokens=10, cost_usd=0.01, basis="actual")
+    rendered = render_task_fence(data)
+    assert "3 maintainer proposals pending" in rendered
+
+    clear_hint_contributors()
+
+
+def test_maintainer_fence_hint_contributor_silent_when_nothing_pending(monkeypatch):
+    clear_hint_contributors()
+    from synlynk.maintainer_hints import maintainer_fence_hint_contributor
+    register_hint_contributor(maintainer_fence_hint_contributor)
+
+    monkeypatch.setattr("synlynk.maintainer_hints._pending_proposal_count", lambda: 0)
+
+    data = FenceData(command="exec", kind="actual", in_tokens=10, out_tokens=10, cost_usd=0.01, basis="actual")
+    rendered = render_task_fence(data)
+    assert "maintainer proposal" not in rendered
+
+    clear_hint_contributors()
+

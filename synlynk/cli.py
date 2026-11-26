@@ -7,6 +7,8 @@ import time
 from pathlib import Path
 import re
 
+import synlynk.maintainer_hints  # noqa: F401 -- registers the fence-hint contributor on import
+
 _SYNLYNK_DIR = ".synlynk"
 
 
