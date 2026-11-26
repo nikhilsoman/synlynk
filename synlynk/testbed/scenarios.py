@@ -137,7 +137,7 @@ class ScenarioRunner:
         passing an already-migrated connection, matching
         synlynk.db._cross_harness_review_verdict's own contract.
         """
-        from synlynk.db import _cross_harness_review_verdict
+        from synlynk.db import _cross_harness_review_verdict, _insert_cost_row
         from synlynk.testbed.identities import STANDARD_IDENTITIES, SOLO_AND_EDGE_IDENTITIES
 
         alice = STANDARD_IDENTITIES["node-1"]
@@ -159,17 +159,23 @@ class ScenarioRunner:
         results: List[ScenarioResult] = []
         for pr_number, implementer, reviewer in pairings:
             start_t = time.time()
-            conn.execute(
-                "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, pr_number) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                ("2026-11-21", implementer.harness, implementer.harness, implementer.model, "test", pr_number),
+            _insert_cost_row(
+                session_date="2026-11-21",
+                agent=implementer.harness,
+                harness=implementer.harness,
+                model=implementer.model,
+                cost_source="estimated_manual",
+                pr_number=pr_number,
             )
-            conn.execute(
-                "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, pr_number, agent_role) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                ("2026-11-21", reviewer.harness, reviewer.harness, reviewer.model, "test", pr_number, "qa"),
+            _insert_cost_row(
+                session_date="2026-11-21",
+                agent=reviewer.harness,
+                harness=reviewer.harness,
+                model=reviewer.model,
+                cost_source="estimated_manual",
+                pr_number=pr_number,
+                agent_role="qa",
             )
-            conn.commit()
             ok, message = _cross_harness_review_verdict(conn, pr_number)
             duration = time.time() - start_t
             results.append(ScenarioResult(
