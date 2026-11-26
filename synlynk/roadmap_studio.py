@@ -11,11 +11,15 @@ See docs/superpowers/specs/2026-11-15-roadmap-studio-visual-proposal-ui-design.m
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from typing import Any, Optional
 
 from synlynk.board import _columns, _open_product_db
+from synlynk.maintainer import load_maintainer_proposals
 from synlynk.tpm_sweep import _apply_approve, _apply_drop, _apply_hold
+
+logger = logging.getLogger(__name__)
 
 RELEASE_PROPOSAL_ACTION = "release_proposal"
 
@@ -61,8 +65,82 @@ def _version_sort_key(version_str: str) -> tuple:
     return tuple(parts)
 
 
+def normalize_proposal_for_studio(raw: dict, default_source: str = "tpm") -> dict:
+    """Shared card-rendering schema (DECIDE panel defect #4, 2026-11-24;
+    validation boundary added per re-review defect #4, same day; fixed
+    per re-review round 2 conditions 4-5, same day).
+
+    Maps a TPM story row (from the `stories` table) or a Task 6
+    maintainer-proposal dict (from load_maintainer_proposals()) onto one
+    consistent shape so synlynk/viz/roadmap_studio.py's cardHtml JS never
+    special-cases the source. Every key below is always present with a
+    defined default -- never absent, never None where a string/list is
+    expected -- so the JS template never reads `undefined`.
+
+    Each field's *raw* shape is checked before any coercion runs (round-2
+    condition 4). The earlier version called `list(raw.get("tier_provenance")
+    or [])` unconditionally -- if a producer passed a non-empty string
+    there, `or []` never triggers (a non-empty string is truthy) and
+    `list("abc")` silently becomes `['a', 'b', 'c']`, which then looks
+    like a valid list of strings to a check that only runs after the
+    coercion. Checking `isinstance(..., list)` first, before touching the
+    value, catches that instead of laundering it into a technically-valid
+    shape.
+
+    On an invalid field, only *that* field falls back to its default --
+    not just `severity` (round-2 condition 5) -- and a warning is logged
+    each time, so a malformed producer is visible in logs rather than
+    silently degraded.
+    """
+    from synlynk.proposal_schema import VALID_SEVERITIES
+
+    story_id = raw.get("story_id") or raw.get("proposal_id") or ""
+    title = raw.get("title") or raw.get("story_id") or raw.get("proposal_id") or "Untitled"
+    source = raw.get("source") or default_source
+
+    severity = raw.get("severity")
+    if not isinstance(severity, str) or severity not in VALID_SEVERITIES:
+        if severity is not None:
+            logger.warning(
+                "normalize_proposal_for_studio: invalid severity %r for story_id=%r, falling back to 'normal'",
+                severity, story_id,
+            )
+        severity = "normal"
+
+    github_issue = raw.get("github_issue")
+    if github_issue is None:
+        github_issue = raw.get("gh_issue")
+    if github_issue is not None and not isinstance(github_issue, int):
+        logger.warning(
+            "normalize_proposal_for_studio: invalid github_issue %r for story_id=%r, falling back to None",
+            github_issue, story_id,
+        )
+        github_issue = None
+
+    tier_provenance = raw.get("tier_provenance")
+    if not isinstance(tier_provenance, list) or not all(isinstance(x, str) for x in tier_provenance):
+        if tier_provenance is not None:
+            logger.warning(
+                "normalize_proposal_for_studio: invalid tier_provenance %r for story_id=%r, falling back to []",
+                tier_provenance, story_id,
+            )
+        tier_provenance = []
+
+    return {
+        "story_id": str(story_id),
+        "title": str(title),
+        "source": str(source),
+        "severity": severity,
+        "github_issue": github_issue,
+        "tier_provenance": tier_provenance,
+    }
+
+
 def studio_data(repo_path: str = ".", *, conn: Optional[sqlite3.Connection] = None) -> dict:
-    """Return open/held release_proposal tickets (with resolved constituent stories) and the backlog pool."""
+    """Return open/held release_proposal tickets (with resolved constituent stories), the
+    backlog pool, and pending maintainer proposals (DECIDE panel defect #4, 2026-11-24:
+    this is the function /api/roadmap_studio actually serves, so normalization and the
+    maintainer-proposal merge both happen here, not in the viz/ render-shell module)."""
     active_conn, owns = _conn(conn, repo_path)
     try:
         ticket_rows = active_conn.execute(
@@ -86,7 +164,7 @@ def studio_data(repo_path: str = ".", *, conn: Optional[sqlite3.Connection] = No
                     f"ORDER BY proposal_order ASC NULLS LAST, rowid ASC",
                     story_ids,
                 ).fetchall()
-                stories = [dict(r) for r in story_rows]
+                stories = [normalize_proposal_for_studio(dict(r)) for r in story_rows]
             tickets.append(
                 {
                     "id": row_dict["id"],
@@ -104,12 +182,18 @@ def studio_data(repo_path: str = ".", *, conn: Optional[sqlite3.Connection] = No
             "SELECT story_id, title, role, estimated_tokens, gh_issue FROM stories "
             "WHERE (readiness='advisory' OR (readiness IN ('ready','draft') AND status NOT IN ('done','archived')))"
         ).fetchall()
-        backlog = [dict(r) for r in backlog_rows if r["story_id"] not in claimed]
+        backlog = [normalize_proposal_for_studio(dict(r)) for r in backlog_rows if r["story_id"] not in claimed]
 
-        return {"tickets": tickets, "backlog": backlog}
+        maintainer_proposals = [
+            normalize_proposal_for_studio(raw, default_source="maintainer")
+            for raw in load_maintainer_proposals(repo_root=repo_path)
+        ]
+
+        return {"tickets": tickets, "backlog": backlog, "maintainer_proposals": maintainer_proposals}
     finally:
         if owns:
             active_conn.close()
+
 
 
 def approve_ticket(ticket_id: int, repo_path: str = ".", *, conn: Optional[sqlite3.Connection] = None) -> dict:

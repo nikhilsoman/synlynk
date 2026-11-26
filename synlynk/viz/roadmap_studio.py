@@ -7,12 +7,18 @@ See docs/superpowers/specs/2026-11-15-roadmap-studio-visual-proposal-ui-design.m
 from synlynk.viz.chrome import _live_js
 
 
-def generate_roadmap_studio_html(port: int) -> str:
-    """Render the Roadmap Studio shell; ticket/backlog data comes from GET api/roadmap_studio."""
+def generate_proposal_studio_html(port: int) -> str:
+    """Generate the per-workspace Proposal Studio canvas (proposal_studio.html).
+
+    Generalized from TPM-only Roadmap Studio (spec §5.5,
+    docs/superpowers/specs/2026-11-24-maintainer-full-autonomy-design.md) to
+    render multi-source proposals (tpm / maintainer:backlog_burndown /
+    maintainer:mesh_sweep / maintainer:sentinel_triage) alongside each other.
+    """
     live = _live_js(port)
     return """<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>synlynk Vizor — Roadmap Studio</title>
+<title>synlynk Vizor — Proposal Studio</title>
 <style>
 :root{--bg:#f6f8fa;--panel:#fff;--panel-2:#f1f5f9;--ink:#1f2328;--muted:#667085;--line:#d8dee4;--accent:#0d9e87;--accent-bg:#e6f7f4;--warn:#dc2626;--shadow:0 2px 8px rgba(31,35,40,0.06);--provisional:#d97706;--hold-bg:#fef3c7;--hold-border:#d97706;--hold-ink:#92400e;--drop-bg:#fee2e2;--drop-border:#dc2626;--drop-ink:#991b1b}
 @media (prefers-color-scheme: dark){
@@ -23,6 +29,11 @@ main{max-width:1600px;margin:0 auto;padding:28px 24px 70px}
 .eyebrow{color:var(--accent);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:11px}
 h1{font-size:30px;margin:6px 0 4px;font-weight:700}
 .subtitle{color:var(--muted);margin:0 0 20px;font-size:13px}
+.needs-attention-lane{background:var(--panel-2);border:1px solid var(--warn);border-radius:10px;padding:10px;margin-bottom:16px}
+.lane-header{font-size:13px;font-weight:700;color:var(--warn);margin-bottom:8px}
+.lane-cards{display:flex;gap:10px;flex-wrap:wrap}
+.source-badge{font-size:10px;padding:2px 6px;border-radius:4px;background:var(--accent-bg);color:var(--accent);font-weight:700;margin-right:4px}
+.issue-link{font-size:10px;color:var(--muted);text-decoration:none;margin-right:4px}
 .board{display:flex;gap:14px;align-items:start;overflow-x:auto;padding-bottom:16px}
 .column{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px;min-width:260px;min-height:280px;display:flex;flex-direction:column}
 .column.dragover{border-color:var(--accent)}
@@ -55,6 +66,10 @@ h1{font-size:30px;margin:6px 0 4px;font-weight:700}
 <h1>Roadmap Studio</h1>
 <p class="subtitle">Drag, approve, hold, revise, drop, and pin stories against open release proposals. Writes go straight to the product <code>state.db</code> via the same paths as the GitHub-comment grammar.</p>
 <div class="provisional-banner">Nothing below is final. A release only ships once you Approve it.</div>
+<div id="needs-attention-lane" class="needs-attention-lane">
+  <div class="lane-header">Needs attention now</div>
+  <div id="needs-attention-cards" class="lane-cards"></div>
+</div>
 <div id="board" class="board"></div>
 <div class="backlog" id="backlog-pane">
   <h2>Backlog</h2>
@@ -65,6 +80,11 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 let studioData={tickets:[],backlog:[]};
 
 function cardHtml(story,ticketId,openTickets){
+  const sourceLabel = (story.source || 'tpm').replace('maintainer:', 'M: ');
+  const sourceBadge = `<span class="source-badge source-${sourceLabel.replace(/[^a-z0-9]/gi, '-')}">${sourceLabel}</span>`;
+  const issueLink = story.github_issue
+    ? `<a class="issue-link" href="https://github.com/${window.__SYNLYNK_REPO__ || ''}/issues/${story.github_issue}" target="_blank">#${story.github_issue}</a>`
+    : '';
   let action='';
   if(ticketId!=null){
     action=`<button class="btn btn-drop" onclick="dropStory('${esc(story.story_id)}')">Drop</button>`;
@@ -74,6 +94,8 @@ function cardHtml(story,ticketId,openTickets){
     action=`<select class="pin-select" id="${pinId}">${options}</select> <button class="btn btn-pin" onclick="pinStory(Number(document.getElementById('${pinId}').value),'${esc(story.story_id)}')">Pin</button>`;
   }
   return `<article class="card" draggable="true" data-story-id="${esc(story.story_id)}" data-ticket-id="${ticketId??''}">
+    ${sourceBadge}
+    ${issueLink}
     <h3>${esc(story.title||story.story_id)}</h3>
     <div class="meta">${esc(story.story_id)} &middot; ${esc(story.role||'')}</div>
     <div class="card-actions">${action}</div>
@@ -81,6 +103,18 @@ function cardHtml(story,ticketId,openTickets){
 }
 
 function draw(){
+  const attentionCards = document.getElementById('needs-attention-cards');
+  if (attentionCards) {
+    const urgent = [];
+    (studioData.tickets || []).forEach(ticket => {
+      (ticket.stories || []).forEach(story => {
+        if (story.severity === 'critical' || story.severity === 'high') {
+          urgent.push(cardHtml(story, ticket.id, studioData.tickets));
+        }
+      });
+    });
+    attentionCards.innerHTML = urgent.join('');
+  }
   const openTickets=(studioData.tickets||[]).filter(t=>t.status==='open'||t.status==='held');
   document.getElementById('board').innerHTML=studioData.tickets.map(t=>{
     const overCap=(t.stories||[]).length>5;
@@ -166,3 +200,10 @@ function reorderStories(ticketId,orderedStoryIds){post('api/roadmap_studio/reord
 function pinStory(ticketId,storyId){post('api/roadmap_studio/pin',{ticket_id:ticketId,story_id:storyId})}
 load();
 </script></body></html>"""
+
+
+# Backward-compatible alias -- synlynk/viz/cache.py imports this name directly
+# to key the roadmap_studio.html route; keeping it avoids a broken bookmark
+# (spec §5.5: "old route kept as an alias").
+generate_roadmap_studio_html = generate_proposal_studio_html
+
