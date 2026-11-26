@@ -268,7 +268,7 @@ def cluster_open_issues(issues: list[dict]) -> dict[str, list[dict]]:
 
         matched = False
         for cluster_name, keywords in keywords_by_cluster.items():
-            if any(kw.lower() in haystack for kw in keywords):
+            if cluster_name.lower() in haystack or any(kw.lower() in haystack for kw in keywords):
                 clustered[cluster_name].append(issue)
                 matched = True
                 break
