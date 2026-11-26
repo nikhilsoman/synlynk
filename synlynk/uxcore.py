@@ -134,7 +134,7 @@ def _story_cost_est(tokens) -> Optional[float]:
 def _dream_cost_breakdown(conn, dream_id: str) -> tuple:
     try:
         rows = conn.execute(
-            "SELECT COALESCE(SUM(total_cost_usd), 0), cost_source FROM cost_entries "
+            "SELECT COALESCE(SUM(total_cost_usd), 0), cost_source FROM cost_entries_effective "
             "WHERE notes LIKE ? GROUP BY cost_source",
             (f"%{dream_id}%",),
         ).fetchall()
@@ -153,7 +153,7 @@ def _dream_cost_breakdown(conn, dream_id: str) -> tuple:
 def _fetch_cost_rows(conn) -> list:
     try:
         return conn.execute(
-            "SELECT session_date, agent, total_cost_usd, notes, cost_source FROM cost_entries ORDER BY id"
+            "SELECT session_date, agent, total_cost_usd, notes, cost_source FROM cost_entries_effective ORDER BY id"
         ).fetchall()
     except Exception:
         return []

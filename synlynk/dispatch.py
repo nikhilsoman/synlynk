@@ -278,6 +278,92 @@ def _eligible_harnesses_for_task_type(task_type: str, config_path: str = ".synly
         return []
 
 
+def _filter_review_collision_harnesses(
+    eligible_harnesses: Sequence[str],
+    *,
+    task_type: Optional[str],
+    task: str,
+    db_conn,
+    role: Optional[str] = None,
+) -> list[str]:
+    """Remove the PR implementer from a review router candidate pool.
+
+    Cross-harness review is a pre-routing constraint: the implementer's
+    harness must never reach ``LiveQueryRouter`` as a review candidate. The
+    implementation identity is resolved from the same dispatch provenance
+    used by the merge gate, with a native-session cost row as a fallback.
+    Missing or ambiguous provenance is deliberately non-blocking here; the
+    existing merge gate remains authoritative when the review is submitted.
+    """
+    if task_type not in {"review", "pr_review"} and role != "pm":
+        return list(eligible_harnesses)
+
+    excluded = set()
+    try:
+        from synlynk.db import (
+            _implementation_identity_from_native_cost_entry,
+            _implementation_job_from_branch,
+            _job_execution_identity,
+        )
+
+        for pr_number in _explicit_pr_numbers(task):
+            job_id = _implementation_job_from_branch(db_conn, pr_number)
+            identity = _job_execution_identity(db_conn, job_id) if job_id else (None, None)
+            if not any(identity):
+                identity = _implementation_identity_from_native_cost_entry(db_conn, pr_number)
+            harness = identity[0]
+            if harness:
+                excluded.add(harness.strip().lower())
+    except (OSError, sqlite3.Error, TypeError, ValueError):
+        return list(eligible_harnesses)
+
+    return [harness for harness in eligible_harnesses if harness.strip().lower() not in excluded]
+
+
+def _filter_dispatch_harnesses(
+    harnesses: list[str],
+    *,
+    task: str = "",
+    task_type: Optional[str] = None,
+    requires: Optional[list] = None,
+    grants: Optional[list] = None,
+    revokes: Optional[list] = None,
+    requires_gh_write: bool = False,
+) -> list[str]:
+    """Remove candidates that cannot physically satisfy this dispatch.
+
+    Policy eligibility is a learned/routing pool, not a capability grant. Do
+    this static capability gate before the pool reaches ``LiveQueryRouter`` so
+    an incapable harness cannot win round-robin selection and fail later.
+    """
+    from synlynk.capability_probe import (
+        CAP_GH_WRITE,
+        evaluate_harness_capabilities,
+        infer_task_required_capabilities,
+    )
+
+    required = infer_task_required_capabilities(
+        task=task,
+        task_type=task_type,
+        requires=requires,
+        requires_gh_write=requires_gh_write,
+    )
+    baselines_map = _pkg("HARNESS_CAPABILITY_BASELINES", HARNESS_CAPABILITY_BASELINES)
+    filtered = []
+    for harness in harnesses:
+        baseline = baselines_map.get(harness, {})
+        # GitHub-write capability is a hard baseline fact; grants may widen
+        # tool permissions but cannot make an unavailable harness available.
+        if CAP_GH_WRITE in required and not baseline.get("can_gh_write", False):
+            continue
+        evaluation = evaluate_harness_capabilities(
+            harness, required, grants=grants, revokes=revokes
+        )
+        if evaluation.allowed:
+            filtered.append(harness)
+    return filtered
+
+
 # Last auto-routing fallback, consumed by the CLI when it records the job.
 # Overwritten on the next fallback. Never changes the harness that was chosen.
 _pending_routing_fallback: Optional[dict] = None
@@ -358,9 +444,41 @@ def _resolve_dispatch_agent(
         return requested_agent
 
     eligible = _eligible_harnesses_for_task_type(task_type)
+    eligible = _filter_review_collision_harnesses(
+        eligible,
+        task_type=task_type,
+        task=task,
+        db_conn=db,
+        role=role,
+    )
+    policy_eligible = list(eligible)
+    eligible = _filter_dispatch_harnesses(
+        eligible,
+        task=task,
+        task_type=task_type,
+        requires_gh_write=requires_gh_write,
+    )
+    if not eligible and policy_eligible:
+        from synlynk.capability_probe import NoCapableHarnessError
+
+        raise NoCapableHarnessError(
+            f"Dispatch failed: no eligible harness can satisfy task {task!r}"
+        )
     if len(eligible) > 1:
-        from synlynk.routing import LiveQueryRouter
-        fallback = LiveQueryRouter().select(eligible, task_type, db)
+        from synlynk.routing import LiveQueryRouter, SUB_FLOOR_GUARDED_TASK_TYPES
+        router = LiveQueryRouter()
+        fallback = router.select(eligible, task_type, db)
+        if (
+            router.last_selection.get("sub_floor")
+            and (requires_gh_write or task_type in SUB_FLOOR_GUARDED_TASK_TYPES)
+        ):
+            from synlynk.routing import sub_floor_exploration_mode
+
+            if sub_floor_exploration_mode() == "enforce":
+                raise RuntimeError(
+                    "sub-floor exploration requires human approval before dispatch "
+                    f"of {task_type!r} via {fallback!r}"
+                )
     elif eligible:
         fallback = eligible[0]
     else:
@@ -5652,13 +5770,13 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                             discipline, phase = row[0], row[1]
                         if discipline and phase:
                             rows = conn.execute(
-                                """SELECT cost_entries.input_tokens, cost_entries.output_tokens
-                                   FROM cost_entries
-                                   JOIN stories ON cost_entries.story_id = stories.story_id
+                                """SELECT cost_entries_effective.input_tokens, cost_entries_effective.output_tokens
+                                   FROM cost_entries_effective
+                                   JOIN stories ON cost_entries_effective.story_id = stories.story_id
                                    WHERE stories.discipline = ?
                                      AND stories.phase = ?
-                                     AND cost_entries.cost_source IN ('actual', 'estimated_token_rate')
-                                   ORDER BY cost_entries.id DESC
+                                     AND cost_entries_effective.cost_source IN ('actual', 'estimated_token_rate')
+                                   ORDER BY cost_entries_effective.id DESC
                                    LIMIT ?""",
                                 (discipline, phase, 20),
                             ).fetchall()

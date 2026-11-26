@@ -193,6 +193,7 @@ def _sync_arc_create_args(tmp_path, monkeypatch, target_date):
     conn.execute(
         "CREATE TABLE cost_entries (actual_usd REAL, estimate_basis TEXT, epic_id INTEGER)"
     )
+    conn.execute("CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries")
     conn.execute(
         "INSERT INTO roadmap_arcs VALUES (1, 'v1.0.0', 'First release', "
         "'planned', ?, NULL, 1, 'arc-u1')",
@@ -290,6 +291,7 @@ def test_render_arc_description_includes_notes_then_agenda(tmp_path):
     conn.execute(
         "CREATE TABLE cost_entries (actual_usd REAL, estimate_basis TEXT, epic_id INTEGER)"
     )
+    conn.execute("CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries")
     conn.execute(
         "INSERT INTO roadmap_arcs VALUES (1, 'v0.26.7', 'Jantt', 'planned', NULL, "
         "'Pitch paragraph.\\n\\n## Investigation\\nSkinny payloads first.', 1, 'arc-jantt')"
@@ -335,6 +337,7 @@ def test_sync_arc_creates_milestone_when_absent(tmp_path, monkeypatch):
         "CREATE TABLE IF NOT EXISTS cost_entries ("
         "actual_usd REAL, estimate_basis TEXT, epic_id INTEGER)"
     )
+    conn.execute("CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries")
     conn.execute(
         "INSERT INTO roadmap_arcs VALUES (1, 'v1.0.0', 'First release', 'planned', NULL, NULL, 1, 'arc-first')"
     )
@@ -375,6 +378,7 @@ def test_sync_arc_adopts_existing_milestone_by_title_instead_of_posting(
             id INTEGER PRIMARY KEY, version TEXT, title TEXT, status TEXT,
             target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN, arc_uid TEXT
         );
+        CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries;
         CREATE TABLE github_sync_map (
             entity_type TEXT, entity_id TEXT, github_number INTEGER,
             github_node_id TEXT, content_hash TEXT, last_synced_at TEXT,
@@ -390,6 +394,7 @@ def test_sync_arc_adopts_existing_milestone_by_title_instead_of_posting(
         CREATE TABLE cost_entries (
             actual_usd REAL, estimate_basis TEXT, epic_id INTEGER
         );
+        CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries;
         INSERT INTO roadmap_arcs
         VALUES (47, 'v0.26.0', 'Existing release', 'planned', NULL, NULL, 1, 'arc-47');
         """
@@ -446,6 +451,7 @@ def test_sync_arc_still_posts_when_no_existing_milestone_matches(tmp_path, monke
         CREATE TABLE cost_entries (
             actual_usd REAL, estimate_basis TEXT, epic_id INTEGER
         );
+        CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries;
         INSERT INTO roadmap_arcs
         VALUES (47, 'v0.26.0', 'New release', 'planned', NULL, NULL, 1, 'arc-47');
         """
@@ -503,6 +509,7 @@ def test_sync_arc_skips_patch_when_content_hash_unchanged(tmp_path, monkeypatch)
         "CREATE TABLE IF NOT EXISTS cost_entries ("
         "actual_usd REAL, estimate_basis TEXT, epic_id INTEGER)"
     )
+    conn.execute("CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries")
     conn.execute(
         "INSERT INTO roadmap_arcs VALUES (1, 'v1.0.0', 'First release', 'planned', NULL, NULL, 1, 'arc-u1')"
     )
@@ -553,6 +560,7 @@ def _mapped_arc_connection(tmp_path):
     conn.execute(
         "CREATE TABLE cost_entries (actual_usd REAL, estimate_basis TEXT, epic_id INTEGER)"
     )
+    conn.execute("CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries")
     conn.execute(
         "INSERT INTO roadmap_arcs VALUES "
         "(1, 'v1.0.0', 'First release', 'planned', NULL, 'Updated notes', 1, 'arc-u1')"
@@ -641,6 +649,7 @@ def test_sync_arc_noop_when_not_milestone_eligible(tmp_path, monkeypatch):
         "CREATE TABLE IF NOT EXISTS cost_entries ("
         "actual_usd REAL, estimate_basis TEXT, epic_id INTEGER)"
     )
+    conn.execute("CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries")
     conn.execute(
         "INSERT INTO roadmap_arcs VALUES (2, 'Future Expansions', NULL, 'planned', NULL, NULL, 0, 'arc-future')"
     )

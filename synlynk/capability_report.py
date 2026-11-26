@@ -6,6 +6,7 @@ docs/superpowers/specs/2026-10-11-synlynk-capability-report-design.md (gh:#1993)
 from __future__ import annotations
 
 from collections import defaultdict
+import copy
 import json
 import statistics
 
@@ -51,7 +52,7 @@ def _fetch_rows(conn):
         "SELECT cr.story_id, cr.agent, cr.discipline, cr.pr_review_cycles, "
         "cr.dispatch_rework, cr.micro_rework, "
         f"{qv_select}, ce.total_cost_usd, ce.pr_number, ce.job_id "
-        "FROM capability_ratings cr JOIN cost_entries ce ON cr.story_id = ce.story_id "
+        "FROM capability_ratings cr JOIN cost_entries_effective ce ON cr.story_id = ce.story_id "
         f"WHERE cr.agent != 'local' AND cr.story_id NOT LIKE 'seed-%' AND cr.story_id NOT LIKE 'local-seed-%'{quality_filter}"
     )
     rows = conn.execute(query).fetchall()
@@ -253,6 +254,29 @@ def format_summary_for_json(summary: dict) -> list:
     ]
 
 
+def project_task_allocation(current_task_allocation: dict, proposals: list) -> dict:
+    """Return the task allocation that results from applying report proposals.
+
+    The projection is independent of the policy file: it copies the current
+    allocation and changes only task types represented by measured proposals.
+    """
+    projected = copy.deepcopy(current_task_allocation)
+    for proposal in proposals:
+        task_type = proposal["task_type"]
+        new_harness = proposal["proposed_harness"]
+        old_harness = proposal["current_harness"]
+        allocation = projected.setdefault(
+            task_type, {"harness": new_harness, "fallback": []}
+        )
+        allocation["harness"] = new_harness
+        fallbacks = allocation.setdefault("fallback", [])
+        if old_harness not in fallbacks:
+            fallbacks.insert(0, old_harness)
+        if new_harness in fallbacks:
+            fallbacks.remove(new_harness)
+    return projected
+
+
 def _load_policy(path: str = ".synlynk/policy.json") -> dict:
     with open(path) as policy_file:
         return json.load(policy_file)
@@ -325,6 +349,9 @@ def cmd_capability_report(
             json.dumps(
                 {
                     "proposals": proposals,
+                    "task_allocation": project_task_allocation(
+                        current_task_allocation, proposals
+                    ),
                     "summary": format_summary_for_json(summary),
                     "skipped_no_mapping": skipped_no_mapping,
                 },

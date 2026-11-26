@@ -906,7 +906,7 @@ def _scenario_migrate(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
         ).fetchall()
         cost_rows = conn.execute(
             "SELECT session_date, agent, model, input_tokens, output_tokens, cache_read_tokens, total_cost_usd, cost_source "
-            "FROM cost_entries ORDER BY id"
+            "FROM cost_entries_effective ORDER BY id"
         ).fetchall()
         devlog_rows = conn.execute(
             "SELECT author, entry_date, session_title, body FROM devlog_entries ORDER BY id"

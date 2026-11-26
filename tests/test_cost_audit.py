@@ -28,6 +28,10 @@ def ledger():
            actual_usd REAL, payment_mode TEXT, cost_source TEXT, recorded_at TEXT
         )"""
     )
+    conn.execute(
+        """CREATE VIEW IF NOT EXISTS cost_entries_effective AS
+        SELECT * FROM cost_entries"""
+    )
     return conn
 
 

@@ -16,6 +16,7 @@ from synlynk.capability_report import (
     build_buckets,
     format_text_report,
     format_summary_for_json,
+    project_task_allocation,
     propose_diff,
     summarize_buckets,
 )
@@ -44,6 +45,10 @@ def _make_conn():
             story_id TEXT, total_cost_usd REAL, pr_number INTEGER, job_id TEXT
         )
         """
+    )
+    conn.execute(
+        """CREATE VIEW IF NOT EXISTS cost_entries_effective AS
+        SELECT * FROM cost_entries"""
     )
     return conn
 
@@ -395,6 +400,31 @@ def test_format_summary_for_json_surfaces_bucket_rates():
     ]
 
 
+def test_project_task_allocation_applies_measured_proposals_without_mutating_current():
+    current = {
+        "implement": {"harness": "claude", "fallback": ["codex"]},
+        "test": {"harness": "codex", "fallback": []},
+    }
+    proposals = [
+        {
+            "task_type": "implement",
+            "current_harness": "claude",
+            "proposed_harness": "agy",
+        }
+    ]
+
+    projected = project_task_allocation(current, proposals)
+
+    assert projected == {
+        "implement": {"harness": "agy", "fallback": ["claude", "codex"]},
+        "test": {"harness": "codex", "fallback": []},
+    }
+    assert current == {
+        "implement": {"harness": "claude", "fallback": ["codex"]},
+        "test": {"harness": "codex", "fallback": []},
+    }
+
+
 def test_format_text_report_with_proposal_matches_example_shape():
     proposals = [
         {
@@ -446,6 +476,9 @@ def test_cli_capability_report_runs_without_error(tmp_path, monkeypatch):
     conn.execute(
         "CREATE TABLE cost_entries (story_id TEXT, total_cost_usd REAL, pr_number INTEGER, job_id TEXT)"
     )
+    conn.execute(
+        "CREATE VIEW IF NOT EXISTS cost_entries_effective AS SELECT * FROM cost_entries"
+    )
     conn.commit()
     conn.close()
 
@@ -457,14 +490,16 @@ def test_cli_capability_report_runs_without_error(tmp_path, monkeypatch):
         [repo_root, env.get("PYTHONPATH", "")]
     ).rstrip(os.pathsep)
     result = subprocess.run(
-        [sys.executable, "-m", "synlynk", "capability", "report"],
+        [sys.executable, "-m", "synlynk", "capability", "report", "--json"],
         capture_output=True,
         text=True,
         cwd=str(tmp_path),
         env=env,
     )
     assert result.returncode == 0, result.stderr
-    assert "rows skipped" in result.stdout
+    report = _json.loads(result.stdout)
+    assert report["task_allocation"] == {}
+    assert "rows skipped" not in result.stdout
 
 
 @pytest.mark.skipif(

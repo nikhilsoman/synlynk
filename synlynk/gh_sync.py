@@ -284,7 +284,7 @@ def _cost_rollup_for_arc(conn, arc_uid: str) -> dict:
     row = conn.execute(
         "SELECT COALESCE(SUM(actual_usd), 0.0), COUNT(*), "
         "SUM(CASE WHEN estimate_basis='epic_unresolved' THEN 1 ELSE 0 END) "
-        "FROM cost_entries WHERE epic_id=?",
+        "FROM cost_entries_effective WHERE epic_id=?",
         (positional_id[0],),
     ).fetchone()
     return {

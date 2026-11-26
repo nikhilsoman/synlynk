@@ -77,6 +77,7 @@
         "implement": {
           "harness": "codex",
           "fallback": [
+            "claude",
             "grok",
             "agy",
             "muse"
@@ -86,6 +87,7 @@
         "test": {
           "harness": "codex",
           "fallback": [
+            "claude",
             "grok",
             "agy",
             "muse"
@@ -93,51 +95,54 @@
         },
         "css": {
           "harness": "agy",
-          "fallback": []
+          "fallback": ["claude", "codex", "grok", "muse"]
         },
         "templates": {
           "harness": "agy",
-          "fallback": []
+          "fallback": ["claude", "codex", "grok", "muse"]
         },
         "content": {
           "harness": "agy",
-          "fallback": []
+          "fallback": ["claude", "codex", "grok", "muse"]
         },
         "subpages": {
           "harness": "agy",
-          "fallback": []
+          "fallback": ["claude", "codex", "grok", "muse"]
         },
         "canvas": {
           "harness": "grok",
-          "fallback": []
+          "fallback": ["claude", "codex", "agy", "muse"]
         },
         "js": {
           "harness": "grok",
-          "fallback": []
+          "fallback": ["claude", "codex", "agy", "muse"]
         },
         "infra": {
           "harness": "grok",
-          "fallback": []
+          "fallback": ["claude", "codex", "agy", "muse"]
         },
         "refactor": {
           "harness": "codex",
-          "fallback": []
+          "fallback": ["claude", "agy", "grok", "muse"]
         },
         "cli-plumbing": {
           "harness": "codex",
-          "fallback": []
+          "fallback": ["claude", "agy", "grok", "muse"]
         },
         "review": {
           "harness": "codex",
           "fallback": [
             "claude",
-            "agy"
+            "agy",
+            "grok",
+            "muse"
           ]
         },
         "gh_write": {
           "harness": "codex",
           "fallback": [
             "grok",
+            "muse",
             "claude",
             "agy"
           ]
@@ -145,29 +150,37 @@
         "pm": {
           "harness": "claude",
           "fallback": [
-            "agy",
-            "codex"
+            "codex",
+            "grok",
+            "muse",
+            "agy"
           ]
         },
         "brainstorm": {
           "harness": "claude",
           "fallback": [
-            "agy",
-            "codex"
+            "codex",
+            "grok",
+            "muse",
+            "agy"
           ]
         },
         "architecture-review": {
           "harness": "claude",
           "fallback": [
-            "agy",
-            "codex"
+            "codex",
+            "grok",
+            "muse",
+            "agy"
           ]
         },
         "deploy": {
           "harness": "claude",
           "fallback": [
-            "agy",
-            "codex"
+            "codex",
+            "grok",
+            "muse",
+            "agy"
           ],
           "calibration_eligible": [
             "claude",
@@ -188,6 +201,7 @@
       "cross_harness_review_required_mode": "observe",
       "cross_harness_review_note": "Reviewer must differ from implementer in harness AND model, not just role identity. Enforced by synlynk pr check from cost_entries/job metadata (gh:#1991)."
     },
+    "sub_floor_exploration_mode": "observe",
     "conductor_authority": [
       "claude",
       "agy",
@@ -198,7 +212,15 @@
       "can_cut_release": [
         "pm"
       ],
+      "can_split_releases": [
+        "pm"
+      ],
       "requires_human_approval": true
+    },
+    "release_packaging": {
+      "goal_story_ceiling": 30,
+      "goal_token_ceiling": 1500000,
+      "mixed_pool_cap": 5
     },
     "governs_authority": {
       "require_linked_goal": true,

@@ -105,7 +105,7 @@ def _job_execution_identity(conn, job_id: str) -> tuple[str | None, str | None]:
     row = conn.execute(
         """SELECT COALESCE(NULLIF(ce.harness, ''), NULLIF(dj.harness, ''), NULLIF(ce.agent, ''), NULLIF(dj.agent, '')),
                   COALESCE(NULLIF(ce.model, ''), NULLIF(dj.resolved_model, ''), NULLIF(dj.requested_model, ''))
-             FROM cost_entries ce
+             FROM cost_entries_effective ce
              LEFT JOIN daemon_jobs dj ON dj.job_id = ce.job_id
             WHERE ce.job_id=?
             ORDER BY ce.id DESC LIMIT 1""",
@@ -216,7 +216,7 @@ def _native_cost_entry_identity(
     rows = conn.execute(
         f"""SELECT COALESCE(NULLIF(harness, ''), NULLIF(agent, '')),
                          NULLIF(model, '')
-             FROM cost_entries
+             FROM cost_entries_effective
             WHERE pr_number=?
               AND job_id IS NULL
               {role_sql}
@@ -230,14 +230,34 @@ def _implementation_identity_from_native_cost_entry(
     conn, pr_number: int
 ) -> tuple[str | None, str | None]:
     """Resolve implementation identity recorded by a native session."""
-    return _native_cost_entry_identity(conn, pr_number, reviewer=False)
+    ident = _native_cost_entry_identity(conn, pr_number, reviewer=False)
+    if ident != (None, None):
+        return ident
+    try:
+        from synlynk.native_capture import linked_session_identity
+        linked = linked_session_identity(conn, pr_number, "implementer")
+        if linked:
+            return linked
+    except Exception:
+        pass
+    return (None, None)
 
 
 def _review_identity_from_native_cost_entry(
     conn, pr_number: int
 ) -> tuple[str | None, str | None]:
     """Resolve reviewer identity recorded by a native session."""
-    return _native_cost_entry_identity(conn, pr_number, reviewer=True)
+    ident = _native_cost_entry_identity(conn, pr_number, reviewer=True)
+    if ident != (None, None):
+        return ident
+    try:
+        from synlynk.native_capture import linked_session_identity
+        linked = linked_session_identity(conn, pr_number, "reviewer")
+        if linked:
+            return linked
+    except Exception:
+        pass
+    return (None, None)
 
 
 def _review_job_for_pr(conn, pr_number: int):
@@ -359,7 +379,7 @@ def _implementation_job_from_linked_issues(conn, pr_number: int) -> tuple[str | 
 
     rows = conn.execute(
         """SELECT DISTINCT ce.job_id, ce.story_id
-            FROM cost_entries ce
+            FROM cost_entries_effective ce
              JOIN daemon_jobs dj ON dj.job_id=ce.job_id
             WHERE ce.story_id=?
             ORDER BY ce.id DESC""",
@@ -377,7 +397,7 @@ def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
     implementation = conn.execute(
         """SELECT DISTINCT ce.job_id
              FROM capability_ratings cr
-             JOIN cost_entries ce ON ce.story_id=cr.story_id
+             JOIN cost_entries_effective ce ON ce.story_id=cr.story_id
             LEFT JOIN daemon_jobs dj ON dj.job_id=ce.job_id
             WHERE cr.pr_number=?
             ORDER BY ce.id DESC""",
@@ -389,7 +409,7 @@ def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
         return False, f"ambiguous implementation job provenance for PR #{pr_number}"
     if not implementation_job_id:
         exact = conn.execute(
-            """SELECT DISTINCT ce.job_id FROM cost_entries ce JOIN daemon_jobs dj ON dj.job_id=ce.job_id
+            """SELECT DISTINCT ce.job_id FROM cost_entries_effective ce JOIN daemon_jobs dj ON dj.job_id=ce.job_id
                 WHERE ce.pr_number=? ORDER BY ce.id""",
             (pr_number,),
         ).fetchall()
@@ -2626,8 +2646,9 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
     _run_legacy_migration_and_repairs(conn)
     run_pending_migrations(conn)
     _migrate_archetype_schema(conn)
-    from synlynk.db_schema import ensure_derived_roadmap_views
+    from synlynk.db_schema import ensure_cost_entries_effective_view, ensure_derived_roadmap_views
     ensure_derived_roadmap_views(conn)
+    ensure_cost_entries_effective_view(conn)
 
 
 def _migrate_archetype_schema(conn: sqlite3.Connection) -> None:
@@ -2712,6 +2733,7 @@ def _insert_cost_row(
     total_cost_usd: float = 0.0,
     notes: str = None,
     story_id: str = None,
+    type_id: str = None,
     epic_id: int = None,
     phase_id: int = None,
     estimate_basis: str = None,
@@ -2806,6 +2828,27 @@ def _insert_cost_row(
             except Exception:
                 pass
 
+        if type_id is None and job_id:
+            try:
+                type_row = conn.execute(
+                    "SELECT type_id FROM daemon_jobs WHERE job_id=?",
+                    (job_id,),
+                ).fetchone()
+                if type_row and type_row[0]:
+                    type_id = type_row[0]
+            except Exception:
+                pass
+        if type_id is None and story_id:
+            try:
+                type_row = conn.execute(
+                    "SELECT type_id FROM stories WHERE story_id=?",
+                    (story_id,),
+                ).fetchone()
+                if type_row and type_row[0]:
+                    type_id = type_row[0]
+            except Exception:
+                pass
+
         if epic_id is None and phase_id is None and story_id:
             try:
                 p_row = conn.execute(
@@ -2849,7 +2892,7 @@ def _insert_cost_row(
                 pass
         if job_id is not None:
             existing = conn.execute(
-                "SELECT id FROM cost_entries WHERE job_id=?",
+                "SELECT id FROM cost_entries_effective WHERE job_id=?",
                 (job_id,),
             ).fetchone()
             if existing:
@@ -2870,6 +2913,7 @@ def _insert_cost_row(
                         payment_mode=?,
                         notes=?,
                         story_id=?,
+                        type_id=COALESCE(?, type_id),
                         epic_id=?,
                         phase_id=?,
                         dispatch_context=COALESCE(?, dispatch_context),
@@ -2901,6 +2945,7 @@ def _insert_cost_row(
                         payment_mode,
                         notes,
                         story_id,
+                        type_id,
                         epic_id,
                         phase_id,
                         dispatch_context,
@@ -2933,9 +2978,9 @@ def _insert_cost_row(
                 return
         insert_sql = """INSERT INTO cost_entries
                 (session_date, agent, harness, agent_role, model, input_tokens, output_tokens, cache_read_tokens,
-                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, pr_number, decision_revision, turn_usage_json,
+                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, type_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, pr_number, decision_revision, turn_usage_json,
                  estimated_input_tokens, estimated_output_tokens, estimated_cost_usd, compaction_event_type, requested_harness)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
         insert_params = (
                 session_date,
                 agent_val,
@@ -2953,6 +2998,7 @@ def _insert_cost_row(
                 payment_mode,
                 notes,
                 story_id,
+                type_id,
                 epic_id,
                 phase_id,
                 job_id,
@@ -3004,7 +3050,7 @@ def get_costs_by_harness(conn: sqlite3.Connection = None) -> dict[str, float]:
         rows = conn.execute(
             "SELECT COALESCE(NULLIF(harness, ''), NULLIF(agent, ''), 'unknown'), "
             "SUM(COALESCE(total_cost_usd, 0.0)) "
-            "FROM cost_entries "
+            "FROM cost_entries_effective "
             "GROUP BY COALESCE(NULLIF(harness, ''), NULLIF(agent, ''), 'unknown')"
         ).fetchall()
         return {r[0]: round(float(r[1] or 0.0), 4) for r in rows}
@@ -3025,7 +3071,7 @@ def get_costs_by_agent_role(conn: sqlite3.Connection = None) -> dict[str, float]
         rows = conn.execute(
             "SELECT COALESCE(NULLIF(agent_role, ''), 'unattributed'), "
             "SUM(COALESCE(total_cost_usd, 0.0)) "
-            "FROM cost_entries "
+            "FROM cost_entries_effective "
             "GROUP BY COALESCE(NULLIF(agent_role, ''), 'unattributed')"
         ).fetchall()
         return {r[0]: round(float(r[1] or 0.0), 4) for r in rows}
@@ -3143,7 +3189,7 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
                     # Legacy cost rows have no stable unique key (job_id is null).
                     # Match a prior import by the flat-file fingerprint fields.
                     existing = conn.execute(
-                        "SELECT 1 FROM cost_entries "
+                        "SELECT 1 FROM cost_entries_effective "
                         "WHERE session_date=? AND IFNULL(agent,'')=IFNULL(?, '') "
                         "AND IFNULL(model,'')=IFNULL(?, '') "
                         "AND IFNULL(input_tokens, -1)=IFNULL(?, -1) "
@@ -4119,7 +4165,7 @@ def _generate_costs_md() -> None:
     conn = _get_db()
     cursor = conn.execute(
         "SELECT session_date, agent, model, input_tokens, output_tokens, "
-        "total_cost_usd, cost_source, story_id, notes, api_equivalent_usd, actual_usd, payment_mode FROM cost_entries ORDER BY id ASC"
+        "total_cost_usd, cost_source, story_id, notes, api_equivalent_usd, actual_usd, payment_mode FROM cost_entries_effective ORDER BY id ASC"
     )
     rows = cursor.fetchall() if hasattr(cursor, "fetchall") else []
     conn.close()
@@ -4154,7 +4200,7 @@ def _generate_costs_md() -> None:
     config = load_config()
     billing = config.get("harness_billing", {})
     conn2 = _get_db()
-    c2 = conn2.execute("SELECT agent, SUM(actual_usd), SUM(api_equivalent_usd) FROM cost_entries WHERE payment_mode='subscription' GROUP BY agent")
+    c2 = conn2.execute("SELECT agent, SUM(actual_usd), SUM(api_equivalent_usd) FROM cost_entries_effective WHERE payment_mode='subscription' GROUP BY agent")
     sub_data = {r[0]: {"actual": r[1] or 0.0, "api": r[2] or 0.0} for r in c2.fetchall()} if hasattr(c2, "fetchall") else {}
     conn2.close()
 
@@ -4977,6 +5023,7 @@ def cmd_story_update(
     title: Optional[str] = None,
     role: Optional[str] = None,
     phase: Optional[str] = None,
+    umbrella: Optional[bool] = None,
     override: bool = False,
     harness: Optional[str] = None,
     duration_seconds: int = 2700,
@@ -5075,12 +5122,118 @@ def cmd_story_update(
         if phase is not None:
             updates.append("phase=?")
             params.append(phase)
+        if umbrella is not None:
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(stories)").fetchall()}
+            if "umbrella" in cols:
+                updates.append("umbrella=?")
+                params.append(1 if umbrella else 0)
         if updates:
             params.append(story_id)
             conn.execute(f"UPDATE stories SET {', '.join(updates)} WHERE story_id=?", params)
             conn.commit()
 
         print(f"  {_GREEN}✓{_RESET} Story {story_id} updated successfully")
+        return 0
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def cmd_story_depend(story_id: str, depends_on_story_id: str, conn=None) -> int:
+    """Record that story_id depends on depends_on_story_id."""
+    from synlynk import _GREEN, _RED, _RESET, _get_db
+
+    if story_id == depends_on_story_id:
+        print(f"  {_RED}✗{_RESET} Self-dependency rejected: {story_id} cannot depend on itself.")
+        return 1
+
+    owns_conn = False
+    if conn is None:
+        conn = _get_db()
+        owns_conn = True
+
+    try:
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS story_dependencies (
+                story_id            TEXT NOT NULL,
+                depends_on_story_id TEXT NOT NULL,
+                PRIMARY KEY (story_id, depends_on_story_id)
+            )"""
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO story_dependencies (story_id, depends_on_story_id) VALUES (?, ?)",
+            (story_id, depends_on_story_id),
+        )
+        conn.commit()
+        print(f"  {_GREEN}✓{_RESET} Dependency recorded: {story_id} depends on {depends_on_story_id}")
+        return 0
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def cmd_release_split_approve(goal_id: str, phase: str, role: str = "pm", repo_path: str = ".", conn=None) -> int:
+    """Approve mid-phase release split for an oversized phase (pm role only)."""
+    from synlynk import _GREEN, _RED, _RESET, _get_db
+    from synlynk.policy import check_authority
+
+    auth = check_authority("release_split_approve", role=role, repo_path=repo_path)
+    if not auth.allowed:
+        print(f"  {_RED}✗{_RESET} Authority denied: role {role!r} is not authorized to approve release splits per policy.json.")
+        return 1
+
+    owns_conn = False
+    if conn is None:
+        conn = _get_db()
+        owns_conn = True
+
+    try:
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS release_split_approvals (
+                goal_id     TEXT NOT NULL,
+                phase       TEXT NOT NULL,
+                approved_by TEXT,
+                approved_at TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (goal_id, phase)
+            )"""
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO release_split_approvals (goal_id, phase, approved_by, approved_at) VALUES (?, ?, ?, datetime('now'))",
+            (goal_id, phase, role),
+        )
+        conn.commit()
+        print(f"  {_GREEN}✓{_RESET} Approved release split for goal {goal_id} phase {phase} (by {role})")
+        return 0
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def cmd_goal_packaging(goal_id: str, independent_phases: bool, conn=None) -> int:
+    """Configure goal packaging flags (e.g. independent_phases)."""
+    from synlynk import _GREEN, _RESET, _get_db
+
+    owns_conn = False
+    if conn is None:
+        conn = _get_db()
+        owns_conn = True
+
+    try:
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS goal_packaging_flags (
+                goal_id            TEXT PRIMARY KEY,
+                independent_phases INTEGER NOT NULL DEFAULT 0
+            )"""
+        )
+        val = 1 if independent_phases else 0
+        conn.execute(
+            "INSERT INTO goal_packaging_flags (goal_id, independent_phases) VALUES (?, ?) "
+            "ON CONFLICT(goal_id) DO UPDATE SET independent_phases=excluded.independent_phases",
+            (goal_id, val),
+        )
+        conn.commit()
+        status_label = "enabled" if independent_phases else "disabled"
+        print(f"  {_GREEN}✓{_RESET} Independent phases {status_label} for goal {goal_id}")
         return 0
     finally:
         if owns_conn:
@@ -5606,6 +5759,7 @@ def cmd_cost_log(
     tokens_in: int,
     tokens_out: int,
     story_id: str = None,
+    task_type: str = None,
     job_id: str = None,
     pr: int = None,
     note: str = None,
@@ -5672,6 +5826,7 @@ def cmd_cost_log(
         total_cost_usd=est_cost,
         notes=note,
         story_id=story_id,
+        type_id=task_type,
         api_equivalent_usd=payment_value.api_equivalent_usd,
         actual_usd=payment_value.actual_usd,
         payment_mode=payment_value.mode,
