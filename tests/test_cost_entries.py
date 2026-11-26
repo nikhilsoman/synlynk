@@ -30,6 +30,11 @@ def _create_cost_test_db(db_path):
             compaction_event_type TEXT
         )"""
     )
+    conn.execute(
+        """CREATE VIEW IF NOT EXISTS cost_entries_effective AS
+        SELECT * FROM cost_entries
+        WHERE COALESCE(estimate_basis, '') != 'superseded_by_transcript'"""
+    )
     conn.execute("CREATE TABLE stories (story_id TEXT PRIMARY KEY, role TEXT)")
     conn.execute(
         "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, role TEXT, context_mode TEXT, session_id TEXT)"

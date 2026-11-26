@@ -213,7 +213,7 @@ def ranked_harness_for_task(
             rows = db.execute(
                 """SELECT cr.pr_review_cycles, ce.total_cost_usd
                      FROM capability_ratings cr
-                     JOIN cost_entries ce ON ce.story_id = cr.story_id
+                     JOIN cost_entries_effective ce ON ce.story_id = cr.story_id
                     WHERE cr.agent = ? AND lower(cr.discipline) = lower(?)
                       AND ce.harness = cr.agent""",
                 (harness, task_type),

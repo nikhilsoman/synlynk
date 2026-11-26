@@ -5770,13 +5770,13 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                             discipline, phase = row[0], row[1]
                         if discipline and phase:
                             rows = conn.execute(
-                                """SELECT cost_entries.input_tokens, cost_entries.output_tokens
-                                   FROM cost_entries
-                                   JOIN stories ON cost_entries.story_id = stories.story_id
+                                """SELECT cost_entries_effective.input_tokens, cost_entries_effective.output_tokens
+                                   FROM cost_entries_effective
+                                   JOIN stories ON cost_entries_effective.story_id = stories.story_id
                                    WHERE stories.discipline = ?
                                      AND stories.phase = ?
-                                     AND cost_entries.cost_source IN ('actual', 'estimated_token_rate')
-                                   ORDER BY cost_entries.id DESC
+                                     AND cost_entries_effective.cost_source IN ('actual', 'estimated_token_rate')
+                                   ORDER BY cost_entries_effective.id DESC
                                    LIMIT ?""",
                                 (discipline, phase, 20),
                             ).fetchall()

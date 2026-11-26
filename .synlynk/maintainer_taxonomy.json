@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "cluster_keywords": {
+    "backend": ["sqlite", "database", "server", "api", "endpoint", "query"],
+    "frontend": ["css", "html", "ui", "vizor", "widget", "render"],
+    "cli": ["argparse", "subcommand", "cli.py", "command"],
+    "docs": ["readme", "docstring", "documentation", "spec"],
+    "sentinel": ["alert", "circuit breaker", "sentinel", "flatline"],
+    "testing": ["pytest", "fixture", "test_", "flaky"]
+  },
+  "remediation_topics": ["invariant 1", "circuit breaker", "daemon supervision"],
+  "proximal_selection": {
+    "code_graph_weights": {"distance_1": 0.6, "distance_2": 0.3},
+    "doc_graph_weights": {"shared_doc": 0.4, "shared_issue_or_pr": 0.3},
+    "keyword_weight": 0.2,
+    "join_threshold": 0.5
+  }
+}

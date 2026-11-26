@@ -21,8 +21,13 @@ def _make_db():
     """)
     conn.execute("""
         CREATE TABLE cost_entries (
-            agent TEXT, type_id TEXT, total_cost_usd REAL
+            agent TEXT, type_id TEXT, total_cost_usd REAL, estimate_basis TEXT
         )
+    """)
+    conn.execute("""
+        CREATE VIEW IF NOT EXISTS cost_entries_effective AS
+        SELECT * FROM cost_entries
+        WHERE COALESCE(estimate_basis, '') != 'superseded_by_transcript'
     """)
     conn.execute("""
         CREATE TABLE routing_rotation_state (

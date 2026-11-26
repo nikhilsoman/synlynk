@@ -830,7 +830,7 @@ def generate_viz_data(db_path: Optional[str] = None) -> dict:
     def _story_cost_actual(conn, story_id: str) -> float:
         try:
             rows = conn.execute(
-                "SELECT COALESCE(SUM(total_cost_usd), 0) FROM cost_entries WHERE notes LIKE ?",
+                "SELECT COALESCE(SUM(total_cost_usd), 0) FROM cost_entries_effective WHERE notes LIKE ?",
                 (f"%{story_id}%",),
             ).fetchone()
         except Exception:
@@ -840,7 +840,7 @@ def generate_viz_data(db_path: Optional[str] = None) -> dict:
     def _dream_cost_breakdown(conn, dream_id: str) -> tuple:
         try:
             rows = conn.execute(
-                "SELECT COALESCE(SUM(total_cost_usd), 0), cost_source FROM cost_entries "
+                "SELECT COALESCE(SUM(total_cost_usd), 0), cost_source FROM cost_entries_effective "
                 "WHERE notes LIKE ? GROUP BY cost_source",
                 (f"%{dream_id}%",),
             ).fetchall()

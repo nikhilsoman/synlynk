@@ -12,7 +12,7 @@ def test_approval_tickets_table_exists(project_dir):
     assert cols == {
         "id", "story_id", "action", "issue_url", "status",
         "opened_at", "resolved_at", "consumed_at", "constituent_story_ids",
-        "theme",
+        "theme", "goal_id", "part_index", "total_parts", "continuation_ticket_url", "split_reason",
     }
 
 

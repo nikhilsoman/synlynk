@@ -82,7 +82,7 @@ def export_capability_pack(
                    AVG(COALESCE(ce.total_cost_usd, 0.0)) as cost_usd,
                    COUNT(*) as task_count
             FROM capability_ratings cr
-            LEFT JOIN cost_entries ce ON cr.story_id = ce.story_id
+            LEFT JOIN cost_entries_effective ce ON cr.story_id = ce.story_id
             WHERE cr.agent != 'local' AND cr.story_id NOT LIKE 'seed-%'
             GROUP BY cr.agent, model, cr.discipline
         """

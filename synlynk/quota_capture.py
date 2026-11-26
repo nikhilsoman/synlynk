@@ -305,7 +305,7 @@ def weekly_cost_usd(conn, harness: str, *, now: datetime) -> float:
     try:
         row = conn.execute(
             """SELECT COALESCE(SUM(total_cost_usd), 0)
-                 FROM cost_entries
+                 FROM cost_entries_effective
                 WHERE session_date >= ?
                   AND (lower(COALESCE(harness, agent)) = lower(?))""",
             (cutoff, harness),

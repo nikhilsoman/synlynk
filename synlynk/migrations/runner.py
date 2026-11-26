@@ -32,6 +32,8 @@ from synlynk.migrations.m0037_goals_arc_phase_uid import MIGRATION as M0037
 from synlynk.migrations.m0038_github_sync_map_uid_cutover import MIGRATION as M0038
 from synlynk.migrations.m0039_exploration_spend_cap import MIGRATION as M0039
 from synlynk.migrations.m0040_exploration_spend_tracking import MIGRATION as M0040
+from synlynk.migrations.m0041_native_session_capture import MIGRATION as M0041
+from synlynk.migrations.m0042_release_packaging import MIGRATION as M0042
 from synlynk.wal_ledger import write_transaction
 
 # Static, explicitly-imported registry. Append future Migration entries here
@@ -39,7 +41,8 @@ from synlynk.wal_ledger import write_transaction
 MIGRATIONS: list[Migration] = [
     M0016, M0017, M0018, M0019, M0020, M0021, M0022, M0023,
     M0024, M0025, M0026, M0027, M0028, M0029, M0030, M0031,
-    M0032, M0033, M0034, M0035, M0036, M0037, M0038, M0039, M0040,
+    M0032, M0033, M0034, M0035, M0036, M0037, M0038, M0039, M0040, M0041,
+    M0042,
 ]
 
 

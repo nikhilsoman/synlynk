@@ -518,7 +518,13 @@ CREATE TABLE IF NOT EXISTS approval_tickets (
     opened_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     resolved_at   TIMESTAMP,
     consumed_at   TIMESTAMP,
-    constituent_story_ids TEXT
+    constituent_story_ids TEXT,
+    theme         TEXT,
+    goal_id       TEXT,
+    part_index    INTEGER DEFAULT 1,
+    total_parts   INTEGER DEFAULT 1,
+    continuation_ticket_url TEXT,
+    split_reason  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_approval_tickets_story_action ON approval_tickets(story_id, action, status);
 
@@ -919,6 +925,29 @@ def _execute_script_statements(conn, script: str) -> None:
 
     if statement.strip():
         raise sqlite3.OperationalError("incomplete SQL statement in trigger script")
+
+
+def ensure_cost_entries_effective_view(conn) -> None:
+    """Ensure cost_entries_effective view exists whenever cost_entries table exists."""
+    import sqlite3
+    has_table = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cost_entries'"
+    ).fetchone()
+    if has_table:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+        condition = "WHERE COALESCE(estimate_basis, '') != 'superseded_by_transcript'" if "estimate_basis" in cols else ""
+        view_sql = f"SELECT * FROM cost_entries {condition}".strip()
+        try:
+            conn.execute(f"CREATE VIEW IF NOT EXISTS cost_entries_effective AS {view_sql}")
+        except sqlite3.OperationalError as exc:
+            if "already exists" in str(exc).lower():
+                return
+            # If the database is opened in read-only mode, persistent CREATE VIEW fails.
+            # Create a TEMP VIEW in the in-memory temp schema instead.
+            try:
+                conn.execute(f"CREATE TEMP VIEW IF NOT EXISTS cost_entries_effective AS {view_sql}")
+            except sqlite3.OperationalError:
+                pass
 
 
 def ensure_derived_roadmap_views(conn) -> None:

@@ -1076,7 +1076,7 @@ def test_dispatch_tpm_advisory_proposal_supersedes_stale_proposals(monkeypatch, 
 
 
 def test_package_next_release_proposal_goal_aware_ceiling_twelve(tmp_path):
-    """Verify package_next_release_proposal packages up to 12 stories from the target goal (dec-fcec4295)."""
+    """Verify package_next_release_proposal packages up to goal_story_ceiling (30) from the target goal (dec-fb8ce5f7 superseding dec-fcec4295)."""
     import sqlite3
     from synlynk.tpm_sweep import package_next_release_proposal
 
@@ -1098,13 +1098,13 @@ def test_package_next_release_proposal_goal_aware_ceiling_twelve(tmp_path):
         proposal = package_next_release_proposal(conn=conn, repo_root=str(tmp_path))
         assert proposal is not None
         assert proposal["theme"] == "Big Phase Title"
-        # Must package 12 stories (phase ceiling)
-        assert len(proposal["stories"]) == 12
+        # Must package all 14 stories under soft 30 ceiling
+        assert len(proposal["stories"]) == 14
         packaged_ids = [s["story_id"] for s in proposal["stories"]]
         # Highest priority stories first
         assert "s-14" in packaged_ids
         assert "s-13" in packaged_ids
-        assert "s-1" not in packaged_ids  # overflow
+        assert "s-1" in packaged_ids
     finally:
         conn.close()
 

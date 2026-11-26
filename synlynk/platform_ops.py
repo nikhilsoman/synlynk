@@ -357,7 +357,7 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
                         "SELECT agent, model, input_tokens, output_tokens, cache_read_tokens, "
                         "total_cost_usd, job_id, story_id, notes, recorded_at, session_date, "
                         "context_mode "
-                        "FROM cost_entries WHERE COALESCE(recorded_at, session_date) >= ?",
+                        "FROM cost_entries_effective WHERE COALESCE(recorded_at, session_date) >= ?",
                         (cutoff_s[:10],),
                     ).fetchall()
                     cost_has_ctx = True
@@ -365,7 +365,7 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
                     rows = conn.execute(
                         "SELECT agent, model, input_tokens, output_tokens, cache_read_tokens, "
                         "total_cost_usd, job_id, story_id, notes, recorded_at, session_date "
-                        "FROM cost_entries WHERE COALESCE(recorded_at, session_date) >= ?",
+                        "FROM cost_entries_effective WHERE COALESCE(recorded_at, session_date) >= ?",
                         (cutoff_s[:10],),
                     ).fetchall()
                     cost_has_ctx = False
