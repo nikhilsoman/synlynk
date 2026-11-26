@@ -1391,6 +1391,9 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "--limit", type=int, default=50,
         help="Max open issues to inspect",
     )
+    maintainer_wake_parser = maintainer_sub.add_parser(
+        "wake", help="Run Maintainer's autonomous wake cycle: sentinel triage, backlog burndown, mesh sweep")
+
 
     dispatch_parser = subparsers.add_parser(
         "dispatch", help="Dispatch a harness to run a task in the background")
@@ -3099,9 +3102,19 @@ def _dispatch_command(argv=None) -> None:
         else:
             sentinel_list()  # default: list
     elif args.command == "maintainer":
-        from synlynk.maintainer import cmd_maintainer_sweep, triage_sentinel_alerts, probe_reproduction, cmd_maintainer_burndown
+        from synlynk.maintainer import (
+            cmd_maintainer_sweep, triage_sentinel_alerts, probe_reproduction,
+            cmd_maintainer_burndown, run_maintainer_wake_cycle,
+        )
         action = getattr(args, "maintainer_action", None)
-        if action == "burndown":
+        if action == "wake":
+            result = run_maintainer_wake_cycle(repo_root=os.getcwd())
+            for name, outcome in result.items():
+                if outcome.get("skipped"):
+                    print(f"  {name}: skipped (disabled)")
+                else:
+                    print(f"  {name}: mode={outcome.get('mode')} {outcome}")
+        elif action == "burndown":
             raise SystemExit(cmd_maintainer_burndown(
                 repo_root=os.getcwd(),
                 dry_run=bool(getattr(args, "dry_run", False)),
