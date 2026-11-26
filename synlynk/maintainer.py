@@ -5,7 +5,8 @@ import os
 import re
 import subprocess
 from datetime import datetime, timezone
-from typing import List, Optional
+from dataclasses import dataclass
+from typing import List, Optional, Tuple
 
 from synlynk.maintainer_taxonomy import cluster_keywords, remediation_topics
 from synlynk.sentinel import _iter_sentinel_alerts, _normalize_sentinel_severity
@@ -372,3 +373,161 @@ def cmd_maintainer_burndown(repo_root: str = ".", dry_run: bool = False, limit: 
         s = res["sprint_staged"]
         print(f"\n  ✓ Staged Burndown Sprint: {s['title']}")
     return 0
+
+
+@dataclass(frozen=True)
+class Evidence:
+    tier: str  # "code_graph" | "doc_graph" | "keyword"
+    weight: float
+    detail: str
+
+
+def _code_graph_distance(file_a: str, file_b: str, repo_root: str = ".") -> Optional[int]:
+    """File-level graph distance (1 = a direct edge connects some node in
+    file_a to some node in file_b; 2 = one hop apart via a shared neighbor
+    file), or None if either file has no graph node.
+
+    DECIDE panel re-review 2026-11-24 (Codex): reads .synlynk/graphify-out/graph.json
+    directly and derives file-to-file adjacency from its node/edge lists on the fly.
+    """
+    import json
+    import os
+
+    if file_a == file_b:
+        return 0
+    graph_path = os.path.join(repo_root, ".synlynk", "graphify-out", "graph.json")
+    if not os.path.exists(graph_path):
+        return None
+    try:
+        with open(graph_path, "r", encoding="utf-8") as f:
+            graph = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+    nodes = [n for n in (graph.get("nodes") or []) if isinstance(n, dict) and n.get("id")]
+    edges = [e for e in (graph.get("edges") or graph.get("links") or []) if isinstance(e, dict)]
+    node_file = {str(n["id"]): n.get("file") for n in nodes}
+
+    file_adjacency: dict = {}
+    for edge in edges:
+        source_file = node_file.get(str(edge.get("source") or ""))
+        target_file = node_file.get(str(edge.get("target") or ""))
+        if not source_file or not target_file or source_file == target_file:
+            continue
+        file_adjacency.setdefault(source_file, set()).add(target_file)
+        file_adjacency.setdefault(target_file, set()).add(source_file)
+
+    if file_a not in file_adjacency or file_b not in file_adjacency:
+        return None
+    if file_b in file_adjacency[file_a]:
+        return 1
+    if any(file_b in file_adjacency.get(mid, set()) for mid in file_adjacency[file_a]):
+        return 2
+    return None
+
+
+def _load_docgraph(repo_root: str = "."):
+    """Load the persisted .synlynk/docgraph.json, or None if absent/unreadable."""
+    import json
+    import os
+
+    path = os.path.join(repo_root, ".synlynk", "docgraph.json")
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+    from synlynk.docgraph import DocGraph
+
+    return DocGraph(**{k: v for k, v in data.items() if k in DocGraph.__dataclass_fields__})
+
+
+def _proximal_selection_config(repo_root: str = ".") -> dict:
+    """Weights/threshold from .synlynk/maintainer_taxonomy.json's
+    proximal_selection block (spec §6), falling back to built-in defaults."""
+    from synlynk.maintainer_taxonomy import load_taxonomy
+
+    taxonomy = load_taxonomy(repo_root=repo_root)
+    return taxonomy.get("proximal_selection") or {
+        "code_graph_weights": {"distance_1": 0.6, "distance_2": 0.3},
+        "doc_graph_weights": {"shared_doc": 0.4, "shared_issue_or_pr": 0.3},
+        "keyword_weight": 0.2,
+        "join_threshold": 0.5,
+    }
+
+
+def _collect_evidence(candidate: dict, proposal: dict, repo_root: str = ".") -> List[Evidence]:
+    """Every Evidence record linking candidate to this one proposal, across
+    all three tiers (spec §5.6). Each tier contributes independently --
+    weights are summed by the caller, not first-match-wins."""
+    config = _proximal_selection_config(repo_root)
+    evidence: List[Evidence] = []
+    candidate_files = candidate.get("touched_files") or []
+    proposal_files = proposal.get("touched_files") or []
+
+    code_weights = config["code_graph_weights"]
+    for cf in candidate_files:
+        for pf in proposal_files:
+            distance = _code_graph_distance(cf, pf, repo_root)
+            if distance == 1:
+                evidence.append(Evidence("code_graph", code_weights["distance_1"], f"distance-1: {cf} <-> {pf}"))
+            elif distance == 2:
+                evidence.append(Evidence("code_graph", code_weights["distance_2"], f"distance-2: {cf} <-> {pf}"))
+
+    docgraph = _load_docgraph(repo_root)
+    if docgraph is not None:
+        doc_weights = config["doc_graph_weights"]
+        candidate_docs, candidate_refs = set(), set()
+        for f in candidate_files:
+            candidate_docs.update(docgraph.reverse_code_index.get(f, []))
+            candidate_refs.update(docgraph.reverse_doc_index.get(f, []))
+        proposal_docs, proposal_refs = set(), set()
+        for f in proposal_files:
+            proposal_docs.update(docgraph.reverse_code_index.get(f, []))
+            proposal_refs.update(docgraph.reverse_doc_index.get(f, []))
+        shared_docs = candidate_docs & proposal_docs
+        if shared_docs:
+            evidence.append(Evidence("doc_graph", doc_weights["shared_doc"], f"shared docs: {sorted(shared_docs)}"))
+        shared_issues = (set(candidate.get("issues_and_prs") or []) | candidate_refs) & (
+            set(proposal.get("issues_and_prs") or []) | proposal_refs
+        )
+        if shared_issues:
+            evidence.append(Evidence("doc_graph", doc_weights["shared_issue_or_pr"], f"shared issues/PRs: {sorted(shared_issues)}"))
+
+    if candidate.get("cluster") and candidate.get("cluster") == proposal.get("cluster"):
+        evidence.append(Evidence("keyword", config["keyword_weight"], f"cluster match: {candidate['cluster']}"))
+
+    return evidence
+
+
+def select_proposal_target(
+    candidate: dict, open_proposals: List[dict], repo_root: str = "."
+) -> Tuple[Optional[str], List[str]]:
+    """Weighted evidence-based proximal selection (spec §5.6). Returns
+    (proposal_id_or_None, tier_provenance) -- tier_provenance lists which
+    tiers contributed evidence to the winning proposal, recorded on the
+    proposal for the "why this grouping" UI detail. Deterministic
+    tie-break: highest score, then oldest created_at, then lexical
+    proposal_id.
+    """
+    config = _proximal_selection_config(repo_root)
+    threshold = config["join_threshold"]
+
+    scored = []
+    for proposal in open_proposals:
+        proposal_evidence = _collect_evidence(candidate, proposal, repo_root)
+        score = sum(e.weight for e in proposal_evidence)
+        if score >= threshold:
+            scored.append((score, proposal.get("created_at", ""), proposal["proposal_id"], proposal_evidence))
+
+    if not scored:
+        return None, []
+
+    scored.sort(key=lambda row: (-row[0], row[1], row[2]))
+    _, _, winning_id, winning_evidence = scored[0]
+    tier_provenance = sorted({e.tier for e in winning_evidence})
+    return winning_id, tier_provenance
+
