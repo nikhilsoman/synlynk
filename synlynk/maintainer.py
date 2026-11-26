@@ -754,6 +754,29 @@ def _ensure_github_issue_for_story(story: dict, repo_root: str = ".", cycle_id: 
     return issue_number
 
 
+def _notify_slack_on_promotion(proposal: dict, repo_root: str = ".") -> None:
+    from datetime import datetime, timezone
+
+    from synlynk import uxcore
+    from synlynk.notifiers.slack import _slack_webhook_url, post_to_webhook
+
+    webhook_url = _slack_webhook_url(repo_root=repo_root)
+    if not webhook_url:
+        return
+
+    event = uxcore.Event(
+        actor_id="maintainer",
+        action="maintainer_promote",
+        params={"proposal_id": proposal.get("proposal_id"), "source": proposal.get("source")},
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        result={"title": proposal.get("title"), "severity": proposal.get("severity")},
+    )
+    try:
+        post_to_webhook(webhook_url, event)
+    except Exception:
+        pass
+
+
 def _run_sentinel_triage_action(mode: str, repo_root: str = ".", cycle_id: str = "") -> dict:
     groups = triage_sentinel_alerts(max_age_days=7)
     proposals = []
@@ -769,14 +792,18 @@ def _run_sentinel_triage_action(mode: str, repo_root: str = ".", cycle_id: str =
             }
             if mode == "promote":
                 story["github_issue"] = _ensure_github_issue_for_story(story, repo_root=repo_root, cycle_id=cycle_id)
-            proposals.append({
+            proposal = {
                 "proposal_id": f"maintainer-sentinel-{group['fingerprint']}",
                 "source": "maintainer:sentinel_triage",
                 "title": f"Sentinel: {group['code']}",
                 "severity": severity_label,
                 "cluster": "sentinel",
                 "stories": [story],
-            })
+            }
+            proposals.append(proposal)
+            notify_config = get_action_config("maintainer:sentinel_triage", repo_root=repo_root)
+            if severity_label == "critical" or notify_config.get("notify_slack"):
+                _notify_slack_on_promotion(proposal, repo_root=repo_root)
     return {"mode": mode, "groups": len(groups), "proposals": proposals}
 
 
@@ -785,14 +812,18 @@ def _run_backlog_burndown_action(mode: str, repo_root: str = ".", cycle_id: str 
     sprint = result.get("sprint_staged")
     proposals = []
     if sprint:
-        proposals.append({
+        proposal = {
             "proposal_id": f"maintainer-backlog-{sprint['domain']}",
             "source": "maintainer:backlog_burndown",
             "title": sprint["title"],
             "severity": "normal",
             "cluster": sprint["domain"],
             "stories": [],
-        })
+        }
+        proposals.append(proposal)
+        notify_config = get_action_config("maintainer:backlog_burndown", repo_root=repo_root)
+        if notify_config.get("notify_slack"):
+            _notify_slack_on_promotion(proposal, repo_root=repo_root)
     return {"mode": mode, "proposals": proposals, **result}
 
 
@@ -831,21 +862,21 @@ from synlynk.maintainer_registry import FieldSpec, register_action, get_action_c
 register_action(
     role_slug="maintainer",
     name="sentinel_triage",
-    default_config={"enabled": True, "mode": "dry_run"},
+    default_config={"enabled": True, "mode": "dry_run", "notify_slack": False},
     filter_schema=[FieldSpec(name="exclude_codes", type="list[str]", default=[], label="Exclude alert codes")],
     run_fn=_run_sentinel_triage_action,
 )
 register_action(
     role_slug="maintainer",
     name="backlog_burndown",
-    default_config={"enabled": True, "mode": "dry_run"},
+    default_config={"enabled": True, "mode": "dry_run", "notify_slack": False},
     filter_schema=[FieldSpec(name="exclude_labels", type="list[str]", default=[], label="Exclude labels")],
     run_fn=_run_backlog_burndown_action,
 )
 register_action(
     role_slug="maintainer",
     name="mesh_sweep",
-    default_config={"enabled": True, "mode": "dry_run"},
+    default_config={"enabled": True, "mode": "dry_run", "notify_slack": False},
     filter_schema=[],
     run_fn=_run_mesh_sweep_action,
 )

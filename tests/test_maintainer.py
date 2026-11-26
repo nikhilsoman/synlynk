@@ -570,3 +570,30 @@ def test_run_maintainer_wake_cycle_dry_run_stories_carry_github_issue_placeholde
     assert story["github_issue"] is None
 
 
+def test_sentinel_triage_action_notifies_slack_for_critical_regardless_of_mode(monkeypatch):
+    from synlynk.maintainer import _run_sentinel_triage_action
+
+    critical_group = {
+        "fingerprint": "CRITICAL:X",
+        "severity": "CRITICAL",
+        "code": "X",
+        "total_occurrences": 1,
+        "sample_messages": ["boom"],
+    }
+    monkeypatch.setattr("synlynk.maintainer.triage_sentinel_alerts", lambda **kwargs: [critical_group])
+    monkeypatch.setattr(
+        "synlynk.maintainer._ensure_github_issue_for_story",
+        lambda story, repo_root=".", cycle_id="": 1,
+    )
+
+    notified = []
+    monkeypatch.setattr(
+        "synlynk.maintainer._notify_slack_on_promotion",
+        lambda proposal, repo_root=".": notified.append(proposal["proposal_id"]),
+    )
+
+    _run_sentinel_triage_action(mode="dry_run", cycle_id="cycle-test")
+    assert len(notified) == 1
+
+
+
