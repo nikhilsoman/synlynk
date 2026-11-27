@@ -5,6 +5,7 @@ import re
 from typing import Optional, Tuple, Union
 import sqlite3 as _sqlite3
 import importlib as _importlib
+from contextlib import contextmanager
 
 from synlynk._constants import (
     HARNESS_CAPABILITY_BASELINES,
@@ -466,6 +467,29 @@ def _migrate_db_with_schema_retry(conn: _sqlite3.Connection) -> None:
                 pass
 
 
+@contextmanager
+def _database_bootstrap_lock(db_path: str):
+    """Serialize WAL setup and schema bootstrap for one database file."""
+    lock_path = f"{db_path}.bootstrap.lock"
+    handle = open(lock_path, "a+")
+    try:
+        try:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        except (ImportError, OSError):
+            pass
+        yield
+    finally:
+        try:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        except (ImportError, OSError):
+            pass
+        handle.close()
+
+
 def migrate_cost_entries_for_compaction(db_path: str) -> None:
     conn = _sqlite3.connect(db_path)
     try:
@@ -635,9 +659,10 @@ def _get_db(
             conn.execute("BEGIN IMMEDIATE")
             conn.execute("ROLLBACK")
             from synlynk.wal_ledger import ensure_wal_pragmas
-            ensure_wal_pragmas(conn)
-            if migrate:
-                _migrate_db_with_schema_retry(conn)
+            with _database_bootstrap_lock(path):
+                ensure_wal_pragmas(conn)
+                if migrate:
+                    _migrate_db_with_schema_retry(conn)
             if migrate and not _IS_TESTING and os.path.abspath(path) == os.path.abspath(DB_PATH):
                 from synlynk.product_store import identity_slug_from_config
                 from synlynk.state_registry import ensure_registered_product, identity_metadata, product_identity
