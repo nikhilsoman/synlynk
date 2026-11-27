@@ -355,14 +355,22 @@ def _list_worktrees(main_repo_path: str, cwd_worktree_path: str) -> list:
 
 
 def _worktree_status_hint_entry(entry: WorktreeEntry):
-    """Return whether one worktree is stale, or None when it cannot be checked."""
+    """Return whether one worktree is stale, or None when it cannot be checked.
+
+    A clean worktree is stale only when its branch is already integrated; clean
+    alone is not evidence that it can be reclaimed.
+    """
     if not os.path.isdir(entry.path):
         return True
     try:
-        is_dirty, _ = _git_status_dirty(entry.path)
-        if is_dirty:
-            return False
-        return _git_is_ancestor(entry.branch, entry.path)
+        # These independent local Git probes can both be slow for a worktree
+        # with a large index. Run them together to keep `synlynk status` fast.
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            dirty_future = executor.submit(_git_status_dirty, entry.path)
+            ancestor_future = executor.submit(_git_is_ancestor, entry.branch, entry.path)
+            is_dirty, _ = dirty_future.result()
+            is_ancestor = ancestor_future.result()
+        return not is_dirty and is_ancestor
     except (subprocess.SubprocessError, OSError):
         return None
 

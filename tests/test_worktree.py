@@ -426,6 +426,40 @@ def test_worktree_status_hint_checks_entries_in_parallel(monkeypatch, tmp_path):
     assert len(thread_names) > 1
 
 
+def test_worktree_status_hint_probes_clean_and_ancestor_in_parallel(monkeypatch, tmp_path):
+    from synlynk import worktree as worktree_mod
+
+    entry = worktree_mod.WorktreeEntry(str(tmp_path / "wt"), "branch")
+    active = 0
+    max_active = 0
+    lock = threading.Lock()
+
+    monkeypatch.setattr(worktree_mod.os.path, "isdir", lambda _: True)
+
+    def probe(*_args):
+        nonlocal active, max_active
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+        time.sleep(0.02)
+        with lock:
+            active -= 1
+
+    def fake_status(path):
+        probe(path)
+        return False, ""
+
+    def fake_ancestor(branch, path):
+        probe(branch, path)
+        return True
+
+    monkeypatch.setattr(worktree_mod, "_git_status_dirty", fake_status)
+    monkeypatch.setattr(worktree_mod, "_git_is_ancestor", fake_ancestor)
+
+    assert worktree_mod._worktree_status_hint_entry(entry) is True
+    assert max_active == 2
+
+
 def test_worktree_status_hint_returns_none_when_no_worktrees(tmp_path, monkeypatch):
     from synlynk.worktree import _worktree_status_hint
 
