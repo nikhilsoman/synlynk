@@ -497,6 +497,30 @@ def test_sentinel_write_deduplicates_within_window_but_keeps_distinct_jobs(tmp_p
     assert len(_read_sentinel_alerts(sentinel_path=str(path))) == 2
 
 
+def test_sentinel_write_starts_new_occurrence_after_dedup_window(tmp_path, monkeypatch):
+    from synlynk.sentinel import _iter_sentinel_alerts, _write_sentinel_alert
+
+    path = tmp_path / "sentinel.md"
+    path.write_text(
+        "# Sentinel Alerts\n"
+        "- [WARN] [2020-01-01 00:00:00 UTC] RECURRING: same finding "
+        "[occurrences: 7; first seen: 2019-12-31 00:00:00 UTC; "
+        "last seen: 2020-01-01 00:00:00 UTC]\n"
+    )
+    monkeypatch.setattr(
+        "synlynk.sentinel._sentinel_policy",
+        lambda: {"dedup_window_seconds": 60, "active_ttl_seconds": {"WARN": 30}},
+    )
+
+    result = _write_sentinel_alert("WARN", "RECURRING", "same finding", str(path))
+    alert = _iter_sentinel_alerts(str(path), active_only=False)[0]
+
+    assert result["status"] == "deduplicated"
+    assert result["occurrences"] == 1
+    assert alert["occurrences"] == 1
+    assert alert["first_seen_dt"] == alert["last_seen_dt"]
+
+
 def test_sentinel_expiry_boundary_and_legacy_are_fail_safe(tmp_path):
     from datetime import datetime, timezone
     from synlynk.sentinel import _alert_is_active, _iter_sentinel_alerts
