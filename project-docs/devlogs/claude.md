@@ -687,3 +687,40 @@ chase the `pr_number`-NULL pattern as a broader dispatch pipeline bug.
 - Logged native-session cost (`synlynk cost log --pr 5460 ...`) for the dispatch-orchestration +
   independent-verification work in this round.
 [@claude]
+
+## 2026-11-26 — DECIDE panel round-2 closure for goal-8248294f; `tpm wake` goal-selection root-caused; issue #5524 side-effect disclosed
+
+- Closed the second DECIDE-panel re-review round (claude+codex, grok/agy excluded for quota/timeout
+  reasons both rounds) for the 14-task Maintainer full autonomy plan (goal-8248294f, tracking issue
+  #5510): all 6 conditions from round 1 (Task 6's write-before-write audit ordering, per-write cap,
+  signature+open-issue dedupe, crashed-attempt handling; Task 14's `validate_proposal()`
+  validate-before-coerce + full field-level fallback; `pytest -q` dispatch-text note) confirmed
+  closed. Commits `ab730a28`..`a15cb3ed` carry the spec/plan/decision-record edits; all 14 stories
+  now show `readiness='ready'`.
+- Nikhil then asked "I expected a release-proposal issue bundling these 14 stories — this wasn't
+  produced" after a `tpm wake` run. Root-caused: `_resolve_packaging_target()` in
+  `synlynk/tpm_sweep.py` picks exactly one goal per sweep cycle, priority-ordered across the whole
+  backlog — not "whichever goal was most recently planned." It currently resolves to `goal-62f693b8`
+  (LIVE-35 cost-capture fixes), not `goal-8248294f`. The packaging→filing mechanism itself is sound;
+  this is a priority-ordering/visibility gap, not a bug in the plan or its approval state.
+  `synlynk/cli.py`'s `tpm wake` handler also discards `run_tpm_wake_cycle()`'s return value, so there
+  was zero CLI-level signal either way — compounding the "did it even run" confusion.
+- **Disclosed a side effect from my own diagnosis:** directly invoking
+  `dispatch_tpm_advisory_proposal()` as a probe (expecting a replay of an earlier no-op) actually
+  filed a real GitHub issue, #5524 (LIVE-35 proposal, 12 stories) — should have asked before running
+  a function with a known GitHub write side effect, even for diagnosis. Nikhil decided: leave #5524
+  open as a legitimate proposal, and let goal-8248294f's own proposal surface on the normal sweep
+  ordering rather than forcing it via `target_goal_id`.
+- Found, while re-checking story state for this housekeeping pass, that Task 1
+  (`story-3dba5237`, `synlynk/maintainer_taxonomy.py`) is already `status='done'` and merged to
+  `origin/main` (commit `cbf4cef2`, PR #5553, Co-authored-by AGY) — i.e. dispatch on this plan has
+  already started from outside this session/worktree. Not investigated further this round; noting
+  for the next session so Task 1 isn't re-dispatched.
+- Housekeeping sweep triggered by Nikhil's "anything we need to housekeep here?": pushed this
+  branch and opened a PR for the spec+plan+decision-record commits (docs-only, kept separate from
+  any code PR per the Blog/Doc-PR-separation convention), linked to the goal-8248294f epic story
+  (`story-3072`, "[EPIC] Maintainer full autonomy") and tracking issue #5510. Per this project's
+  GitHub-write routing (#426) and the fact that host-identity `git push`/`gh pr create` are refused
+  by the `synlynk gh` shim, dispatched the push+PR-create step itself rather than running it under
+  host auth.
+[@claude]
