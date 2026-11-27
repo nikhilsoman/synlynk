@@ -18,6 +18,7 @@ NOTIFY_EVENT_TYPES = [
     "kill_job",
     "job_kill",
     "job_killed",
+    "maintainer_promote",
 ]
 
 
@@ -71,3 +72,16 @@ def run_once(webhook_url: str) -> None:
 
 def main(webhook_url: str) -> None:
     run_once(webhook_url)
+
+
+def _slack_webhook_url(repo_root: str = ".") -> str | None:
+    import os as _os
+
+    path = _os.path.join(repo_root, ".synlynk", "config.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+        return (config.get("notifiers") or {}).get("slack_webhook_url")
+    except (OSError, json.JSONDecodeError, AttributeError, TypeError):
+        return None
+

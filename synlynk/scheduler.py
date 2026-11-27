@@ -275,8 +275,8 @@ def _autonomy_pass_interval_seconds() -> int:
 
 def _run_maintainer_triage_pass() -> None:
     try:
-        from synlynk.maintainer import triage_sentinel_alerts
-        triage_sentinel_alerts(max_age_days=7)
+        from synlynk.maintainer import run_maintainer_wake_cycle
+        run_maintainer_wake_cycle()
     except Exception:
         pass
 

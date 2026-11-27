@@ -5,13 +5,14 @@ def generate_roles_html(data: dict, port: int) -> str:
     """Render the offline-first Workspace Agent Roles & Onboarding Studio."""
     workspace = data.get("workspace") or {}
     goals = data.get("goals") or []
-    agents = [agent for agent in (data.get("workspace_agents") or []) if not agent.get("disabled")]
+    agents = [agent for agent in (data.get("workspace_agents") or data.get("agents") or []) if not agent.get("disabled")]
     cards = []
     for agent in agents:
-        role = str(agent.get("role") or "unknown")
+        role = str(agent.get("role") or agent.get("slug") or "unknown")
+        slug = str(agent.get("slug") or agent.get("role") or "unknown")
         durability = str(agent.get("durability") or "dispatch-only")
         badge = "Durable" if durability == "durable" else "Dispatch-only"
-        harnesses = agent.get("target_harnesses") or ["Unassigned"]
+        harnesses = agent.get("target_harnesses") or ([agent["harness"]] if agent.get("harness") else ["Unassigned"])
         authorities = agent.get("autonomous_authorities") or []
         authority_html = "".join(
             f'<span class="authority {"enforced" if (a.get("enforced") if isinstance(a, dict) else False) else "guidance"}">'
@@ -19,6 +20,9 @@ def generate_roles_html(data: dict, port: int) -> str:
             f'<small>{"Enforced" if (a.get("enforced") if isinstance(a, dict) else False) else "Guidance"}</small></span>'
             for a in authorities
         )
+        from synlynk.viz.role_ops_panel import generate_role_ops_panel_html
+        ops_data = agent.get("ops_data")
+        ops_panel_html = generate_role_ops_panel_html(slug, ops_data) if ops_data else ""
         cards.append(f"""
         <article class="role-card">
           <div class="card-top"><span class="role-tag">@{html.escape(role)}</span>
@@ -44,6 +48,7 @@ def generate_roles_html(data: dict, port: int) -> str:
               <span class="save-status" aria-live="polite"></span>
             </form>
           </details>
+          {ops_panel_html}
           <div class="authorities">{authority_html}</div>
         </article>""")
     cards_html = "\n".join(cards) or '<div class="empty">No active workspace roles yet. Provision the first one below.</div>'
