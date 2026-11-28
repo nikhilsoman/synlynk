@@ -5835,6 +5835,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         agent_role=resolved_agent_role,
         worktree_path=worktree_path,
     )
+    if task_type == "review":
+        # Review children run in a read-only sandbox.  Their own synlynk CLI
+        # must not attempt the flat-file reconciliation lock, which is an
+        # unconditional ``a+`` write even for read-only commands.
+        proc_env["SYNLYNK_SKIP_RECONCILE"] = "1"
     parent_job_id = (
         os.environ.get("SYNLYNK_JOB_ID")
         or os.environ.get("SYNLYNK_PARENT_JOB_ID")
