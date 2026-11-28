@@ -11,6 +11,16 @@ from typing import Any, Dict
 def verify_first_win_effect(repo_dir: str, branch: str, base_branch: str = "main") -> bool:
     """Verify that a candidate first-win execution produced a non-empty, valid diff."""
     try:
+        branch_ref = subprocess.run(
+            ["git", "rev-parse", "--verify", f"{branch}^{{commit}}"],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if branch_ref.returncode != 0:
+            return False
+
         proc = subprocess.run(
             ["git", "diff", "--name-only", f"{base_branch}...{branch}"],
             cwd=repo_dir,
@@ -21,7 +31,7 @@ def verify_first_win_effect(repo_dir: str, branch: str, base_branch: str = "main
         if proc.returncode != 0:
             # Fallback to diff against HEAD~1
             proc = subprocess.run(
-                ["git", "diff", "--name-only", "HEAD~1...HEAD"],
+                ["git", "diff", "--name-only", f"HEAD~1...{branch}"],
                 cwd=repo_dir,
                 capture_output=True,
                 text=True,
@@ -62,6 +72,13 @@ def execute_first_win_cycle(
     conn.commit()
 
     session = advance_stage(conn, session_id, STAGE_S10_BUILD_EXPERIENCE)
+    meta["status"] = "completed"
+    meta["completed_at"] = time.time()
+    conn.execute(
+        "UPDATE onboarding_sessions SET first_win_meta = ?, updated_at = ? WHERE session_id = ?",
+        (json.dumps(meta), time.time(), session_id),
+    )
+    conn.commit()
     conn.close()
 
     return {
