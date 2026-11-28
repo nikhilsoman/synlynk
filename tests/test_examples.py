@@ -1,8 +1,22 @@
-from synlynk.examples import active_items, greet
+import pytest
+
+from synlynk.examples import active_items, calculate_shipping_cost, greet
 
 
 def test_greet_returns_a_friendly_message():
     assert greet("Ada") == "Hello, Ada!"
+
+
+def test_shipping_cost_meets_the_defined_requirements():
+    """Acceptance criteria for the small shipping-cost example."""
+    assert calculate_shipping_cost(25.00) == 5.99  # REQ-1: standard fee
+    assert calculate_shipping_cost(50.00) == 0.00  # REQ-2: free threshold
+
+
+def test_shipping_cost_rejects_invalid_order_totals():
+    """REQ-3: negative order totals are invalid input."""
+    with pytest.raises(ValueError, match="cannot be negative"):
+        calculate_shipping_cost(-1.00)
 
 
 def test_write_3_test_cases_for_a_general_scenario_happy_path():
