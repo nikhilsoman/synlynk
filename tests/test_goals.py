@@ -63,7 +63,7 @@ def test_goal_list_prints_active_goals(capsys):
     assert "Outcome A" in captured.out
 
 
-def test_goal_link_sets_primary_goal_id_on_story():
+def test_goal_link_sets_primary_goal_id_on_story(project_dir):
     from synlynk.db import cmd_goal_create, cmd_story_create, cmd_goal_link
     goal_id = cmd_goal_create(outcome="O", criterion="C", role="pm")
     story_id = cmd_story_create(title="Do the thing")
@@ -91,7 +91,7 @@ def test_goal_link_secondary_writes_contribution_not_primary(project_dir):
     assert contributions == [(goal_b,)]
 
 
-def test_goal_status_reports_story_counts(capsys):
+def test_goal_status_reports_story_counts(project_dir, capsys):
     from synlynk.db import cmd_goal_create, cmd_story_create, cmd_goal_link, cmd_goal_status
     from synlynk import _get_db
     goal_id = cmd_goal_create(outcome="Ship it", criterion="All stories done", role="pm")
@@ -131,7 +131,7 @@ def test_goal_update_changes_deadline():
     assert deadline == "2026-12-31"
 
 
-def test_goal_update_supersede_relinks_open_stories_but_not_done_stories():
+def test_goal_update_supersede_relinks_open_stories_but_not_done_stories(project_dir):
     from synlynk.db import cmd_goal_create, cmd_story_create, cmd_goal_link, cmd_goal_update
 
     old_goal = cmd_goal_create(outcome="Old", criterion="Replace me", role="pm")
