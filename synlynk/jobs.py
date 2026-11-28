@@ -7,7 +7,6 @@ import inspect
 import json
 import os
 import re
-import shutil
 import sqlite3
 import subprocess
 import sys
@@ -1113,6 +1112,8 @@ def _worktree_has_no_diff_against_base_branch(job: dict, worktree_path: str) -> 
 
 def _cleanup_noop_worktree(job: Optional[dict]) -> bool:
     """Remove a clean dispatch worktree whose branch has no diff from origin/main."""
+    import shutil
+
     if not job:
         return False
     worktree_path = job.get("worktree_path")
