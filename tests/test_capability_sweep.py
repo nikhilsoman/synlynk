@@ -593,6 +593,32 @@ def test_run_sweep_passes_model_to_dispatch_calibration_task(tmp_path, monkeypat
     assert dispatched_calls[1][2].get("model") == "gpt-5.4-mini"
 
 
+def test_run_sweep_enforces_running_cost_cap_across_combinations(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    from synlynk.capability_sweep import _run_sweep
+
+    dispatched_calls = []
+
+    def fake_dispatch(harness, task, **kwargs):
+        dispatched_calls.append((harness, kwargs["model"]))
+        return {"output": "ok", "cost_usd": 0.60, "status": "completed"}
+
+    monkeypatch.setattr("synlynk.capability_sweep._dispatch_calibration_task", fake_dispatch)
+    monkeypatch.setattr(
+        "synlynk.capability_sweep._verify_calibration_result",
+        lambda *args, **kwargs: {"quality": 9.0, "correct": True, "quality_verified": True},
+    )
+
+    _run_sweep(
+        {"grok": ["grok-build"], "muse": ["muse-spark-1.3"]},
+        ["PROG", "TEST"],
+        cost_cap=1.0,
+    )
+
+    assert len(dispatched_calls) == 2
+
+
 def test_cmd_capability_sweep_filters_by_harness(tmp_path, monkeypatch):
     from synlynk import capability_sweep
 
@@ -603,7 +629,7 @@ def test_cmd_capability_sweep_filters_by_harness(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(
         capability_sweep, "_run_sweep",
-        lambda discovered, skills: swept.append(discovered),
+        lambda discovered, skills, **kwargs: swept.append((discovered, kwargs["cost_cap"])),
     )
     monkeypatch.setattr(
         "synlynk.capability_watch.mark_capability_sweep_run",
@@ -613,7 +639,8 @@ def test_cmd_capability_sweep_filters_by_harness(tmp_path, monkeypatch):
     capability_sweep.cmd_capability_sweep(harness="codex")
 
     assert len(swept) == 1
-    assert list(swept[0].keys()) == ["codex"]
+    assert list(swept[0][0].keys()) == ["codex"]
+    assert swept[0][1] == 10.0
 
 
 def test_discover_models_prefers_active_db_models_over_fallback(tmp_path, monkeypatch):

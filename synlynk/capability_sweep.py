@@ -145,7 +145,7 @@ def cmd_capability_sweep(cost_cap_override: float = None, harness: str = None) -
         )
         raise SystemExit(1)
 
-    _run_sweep(discovered, _CALIBRATION_SKILLS)
+    _run_sweep(discovered, _CALIBRATION_SKILLS, cost_cap=cost_cap)
     from synlynk.capability_watch import mark_capability_sweep_run
     mark_capability_sweep_run(_get_db())
 
@@ -209,6 +209,13 @@ def cmd_capability_sweep_for_harness_model(harness_name: str, model_id: str, con
     total_cost = 0.0
     now = datetime.now(timezone.utc).isoformat()
     for task_id, role, skill, difficulty, template in tasks:
+        if total_cost >= cost_cap:
+            print(
+                f"  Calibration sweep for {harness_name}/{model_id} stopped: "
+                f"running cost ${total_cost:.2f} reached cap ${cost_cap:.2f}",
+                file=sys.stderr,
+            )
+            break
         prompt = template.format(context=f"a {skill} scenario at {difficulty} difficulty")
         executor_result = _dispatch_calibration_task(
             harness_name, prompt, model=model_id, db_conn=conn
@@ -466,7 +473,7 @@ def _verify_calibration_result(
     }
 
 
-def _run_sweep(discovered: dict, skills: list) -> None:
+def _run_sweep(discovered: dict, skills: list, cost_cap: float = None) -> None:
     """Dispatches one calibration task per (harness, model, skill), scored by a
     different harness (never the executor), and writes a baseline_seed row with
     a phantom sample_count (3-5) per result - light enough that real organic
@@ -485,6 +492,7 @@ def _run_sweep(discovered: dict, skills: list) -> None:
     # Independent verifier must be selected from all available configured harnesses,
     # so single-harness sweeps have an independent verifier available.
     available_harnesses = [h for h in HARNESS_CAPABILITY_BASELINES if h != "local"]
+    running_cost = 0.0
     for harness, models in discovered.items():
         for model in models:
             for skill in skills:
@@ -493,6 +501,14 @@ def _run_sweep(discovered: dict, skills: list) -> None:
                 executor_result = _dispatch_calibration_task(
                     harness, task, model=model, role="dev", task_type="implement", requires_gh_write=False
                 )
+                running_cost += _extract_task_cost_usd(executor_result)
+                if cost_cap is not None and running_cost > cost_cap:
+                    print(
+                        f"  Calibration sweep stopped: running cost ${running_cost:.2f} "
+                        f"exceeded cap ${cost_cap:.2f}",
+                        file=sys.stderr,
+                    )
+                    return
 
                 verifier_harness = _pick_verifier_harness(harness, available_harnesses)
                 verdict = _verify_calibration_result(
