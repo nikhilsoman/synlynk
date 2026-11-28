@@ -1128,7 +1128,11 @@ def _cleanup_noop_worktree(job: Optional[dict]) -> bool:
         )
     except Exception:
         return False
-    if status.returncode != 0 or status.stdout.strip():
+    capability_sweep = (job.get("task_type") or "").strip().lower() in {
+        "calibration",
+        "calibration_verify",
+    }
+    if status.returncode != 0 or (status.stdout.strip() and not capability_sweep):
         return False
 
     try:
@@ -1188,8 +1192,12 @@ def _cleanup_noop_worktree(job: Optional[dict]) -> bool:
             print(f"  ⚠ no-op worktree kept because its job log could not be preserved: {exc}")
             return False
 
+    remove_command = ["git", "-C", repo_root, "worktree", "remove"]
+    if capability_sweep:
+        remove_command.append("--force")
+    remove_command.append(worktree_path)
     removed = subprocess.run(
-        ["git", "-C", repo_root, "worktree", "remove", worktree_path],
+        remove_command,
         capture_output=True,
         text=True,
         check=False,
