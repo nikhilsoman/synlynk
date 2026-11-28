@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import List
+from datetime import datetime, timezone
+from typing import Any, List
 
 from synlynk import _get_db, load_config
 from synlynk.runners.manager import RunnerManager
@@ -34,6 +35,82 @@ class SwarmBatch:
     @property
     def is_orthogonal(self) -> bool:
         return check_orthogonal_files(self.touched_files or self.files_touched_by_task)
+
+
+@dataclass
+class SwarmLease:
+    """Lifecycle record for a dedicated vertical swarm host lease."""
+
+    lease_id: str
+    epic_id: str
+    driver: str
+    node_ids: List[str] = field(default_factory=list)
+    status: str = "active"
+    started_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+def calculate_vertical_host_size(task_count: int) -> str:
+    """Return the Hetzner server type for a vertical host's task count."""
+    if not isinstance(task_count, int) or isinstance(task_count, bool) or task_count < 1:
+        raise ValueError("task_count must be a positive integer")
+    if task_count <= 3:
+        return "cpx21"
+    if task_count <= 8:
+        return "cpx31"
+    return "cpx51"
+
+
+def _worktree_specs(tasks: List[Any]) -> List[dict]:
+    """Assign each milestone task a stable, isolated host-local worktree."""
+    specs = []
+    for index, task in enumerate(tasks, start=1):
+        if isinstance(task, dict):
+            task_id = task.get("task_id") or task.get("id") or str(task)
+        else:
+            task_id = str(task)
+        specs.append({"task_id": task_id, "path": f"worktrees/task-{index}"})
+    return specs
+
+
+def cmd_swarm_lease_dispatch(args) -> SwarmLease:
+    """Provision one vertical host and stripe its milestone tasks into worktrees."""
+    tasks = list(getattr(args, "tasks", None) or [])
+    if not tasks:
+        raise ValueError("at least one task is required to dispatch a swarm lease")
+
+    driver_name = getattr(args, "driver", "hetzner")
+    epic_id = str(getattr(args, "epic"))
+    requested_size = getattr(args, "size", "auto")
+    size_to_server_type = {
+        "small": "cpx21",
+        "medium": "cpx31",
+        "large": "cpx51",
+    }
+    server_type = (
+        calculate_vertical_host_size(len(tasks))
+        if requested_size == "auto"
+        else size_to_server_type.get(requested_size, requested_size)
+    )
+    spec = {
+        "epic_id": epic_id,
+        "driver": driver_name,
+        "task_count": len(tasks),
+        "server_type": server_type,
+        "worktrees": _worktree_specs(tasks),
+    }
+    runner_id = _manager().provision(spec, driver_name)
+    _publish_progress(runner_id, {
+        "status": "leased",
+        "epic_id": epic_id,
+        "driver": driver_name,
+        "task_count": len(tasks),
+    })
+    return SwarmLease(
+        lease_id=runner_id,
+        epic_id=epic_id,
+        driver=driver_name,
+        node_ids=[runner_id],
+    )
 
 
 def _manager():
