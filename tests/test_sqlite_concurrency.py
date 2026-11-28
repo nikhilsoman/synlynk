@@ -121,3 +121,25 @@ def test_lineage_concurrent_writes(tmp_path):
         t.join()
 
     assert not errors, f"Lineage concurrency errors: {errors}"
+
+
+def test_concurrent_local_dispatch_connections_do_not_race_migrations(tmp_path):
+    """Concurrent local dispatch connections must bootstrap one schema safely."""
+    db_file = str(tmp_path / "local-dispatch-migrations.db")
+    sqlite3.connect(db_file).close()
+    errors = []
+
+    def open_and_close(_idx):
+        try:
+            conn = synlynk._get_db(db_file)
+            conn.close()
+        except Exception as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=open_and_close, args=(idx,)) for idx in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
