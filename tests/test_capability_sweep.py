@@ -39,6 +39,13 @@ def test_fallback_models_for_muse_uses_muse_hardcoded_rates():
     assert all(model.startswith("muse-") for model in models)
 
 
+def test_model_prefixes_cover_muse_and_grok():
+    from synlynk.capability_sweep import _model_prefixes_for_harness
+
+    assert _model_prefixes_for_harness("muse") == ("muse-",)
+    assert _model_prefixes_for_harness("grok") == ("grok-",)
+
+
 def test_discover_models_selects_muse_catalog_models(monkeypatch):
     from synlynk import capability_sweep
     from synlynk import db

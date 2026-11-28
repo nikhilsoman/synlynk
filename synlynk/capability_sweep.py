@@ -14,6 +14,18 @@ _CALLS_PER_COMBINATION = 2
 _DEFAULT_SWEEP_COST_CAP_USD = 10.0
 _CALIBRATION_SKILLS = [skill for skill in ("PROG", "TEST", "REQM") if skill in SFIA_CODES]
 _SKILL_TO_DISCIPLINE = {"PROG": "backend", "TEST": "testing", "REQM": "architecture"}
+_HARNESS_MODEL_PREFIXES = {
+    "claude": ("claude-",),
+    "codex": ("gpt-",),
+    "agy": ("gemini-",),
+    "grok": ("grok-",),
+    "muse": ("muse-",),
+}
+
+
+def _model_prefixes_for_harness(harness: str) -> tuple[str, ...]:
+    """Return the model-id prefixes accepted for a harness's catalog rows."""
+    return _HARNESS_MODEL_PREFIXES.get(harness, ())
 
 
 def _discover_models(conn=None) -> dict:
@@ -35,14 +47,7 @@ def _discover_models(conn=None) -> dict:
                 from synlynk.db import get_active_harness_models
                 active = get_active_harness_models(conn, harness=harness)
                 if active:
-                    harness_model_prefixes = {
-                        "claude": ("claude-",),
-                        "codex": ("gpt-",),
-                        "agy": ("gemini-",),
-                        "grok": ("grok-",),
-                        "muse": ("muse-",),
-                    }
-                    prefixes = harness_model_prefixes.get(harness, ())
+                    prefixes = _model_prefixes_for_harness(harness)
                     prefix_models = [
                         row["model_id"]
                         for row in active
@@ -79,14 +84,7 @@ def _discover_models(conn=None) -> dict:
 
 def _fallback_models_for_harness(harness: str) -> list:
     """Return fallback model names for a harness from the hardcoded rates table."""
-    harness_model_prefixes = {
-        "claude": ("claude-",),
-        "codex": ("gpt-",),
-        "agy": ("gemini-",),
-        "grok": ("grok-",),
-        "muse": ("muse-",),
-    }
-    prefixes = harness_model_prefixes.get(harness, ())
+    prefixes = _model_prefixes_for_harness(harness)
     return [
         model
         for model in _HARDCODED_FALLBACK_RATES["models"]
