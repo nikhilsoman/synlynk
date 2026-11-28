@@ -216,7 +216,7 @@ def check_pr_roadmap_gate(
     decision_files: List[str] = []
     for f in changed_files or []:
         norm_f = f.replace("\\", "/").lstrip("./")
-        if norm_f.startswith("project-docs/decisions/") and norm_f.endswith(".md"):
+        if norm_f.startswith("project-docs/decisions/") and norm_f.endswith((".md", ".json")):
             decision_files.append(norm_f)
 
     if not decision_files:
