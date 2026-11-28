@@ -1,4 +1,17 @@
-from synlynk.examples import active_items, greet
+import pytest
+
+from synlynk.examples import active_items, calculate_total, greet
+
+
+def test_calculate_total_meets_its_defined_requirements():
+    """Requirements: multiply valid inputs and reject negative values."""
+    assert calculate_total(12.50, 2) == 25.00
+
+    with pytest.raises(ValueError):
+        calculate_total(-1.00, 2)
+
+    with pytest.raises(ValueError):
+        calculate_total(1.00, -2)
 
 
 def test_greet_returns_a_friendly_message():
