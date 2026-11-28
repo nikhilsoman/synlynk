@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import threading
 import urllib.request
 import urllib.error
@@ -67,12 +68,18 @@ class HetznerRunnerDriver(SwarmRunnerDriver):
             err_body = e.read().decode("utf-8", errors="replace")
             raise RuntimeError(f"Hetzner API error ({e.code}) on {method} {path}: {err_body}") from e
 
-    def build_cloud_init(self, job_spec: dict) -> str:
-        """Build cloud-init user-data script enforcing Layer 1 hardware shutdown watchdog."""
-        ttl_minutes = max(1, self.timeout_seconds // 60)
-        command = job_spec.get("command", ["echo", "synlynk-worker-ready"])
-        cmd_str = " ".join(command) if isinstance(command, list) else str(command)
-
+    def _build_user_data(
+        self,
+        runner_id: str,
+        ttl_seconds: int,
+        env: Optional[dict] = None,
+        command: Any = None,
+    ) -> str:
+        """Build self-contained cloud-init user-data for an ephemeral runner."""
+        ttl_minutes = max(1, int(ttl_seconds) // 60)
+        command = command or ["echo", "synlynk-worker-ready"]
+        cmd_str = shlex.join(command) if isinstance(command, list) else str(command)
+        env = env or {}
         lines = [
             "#cloud-config",
             "package_update: true",
@@ -82,16 +89,40 @@ class HetznerRunnerDriver(SwarmRunnerDriver):
             "  - python3-pip",
             "runcmd:",
             f"  - shutdown -h +{ttl_minutes}",  # Layer 1 OS watchdog
-            f"  - {cmd_str}",
-            "  - poweroff",  # Layer 2 process completion shutdown
+            "  - mkdir -p /opt/synlynk/worktrees",
+            f"  - echo 'runner_id={shlex.quote(str(runner_id))}' > /opt/synlynk/runner.env",
         ]
+        lines.extend(
+            f"  - export {key}={shlex.quote(str(value))}"
+            for key, value in sorted(env.items())
+        )
+        lines.extend(
+            [
+                f"  - {cmd_str}",
+                "  - poweroff",  # Layer 2 process completion shutdown
+            ]
+        )
         return "\n".join(lines)
+
+    def build_cloud_init(self, job_spec: dict) -> str:
+        """Build cloud-init user-data script enforcing Layer 1 hardware shutdown watchdog."""
+        return self._build_user_data(
+            runner_id=str(job_spec.get("runner_id", "synlynk-runner")),
+            ttl_seconds=self.timeout_seconds,
+            env=job_spec.get("env"),
+            command=job_spec.get("command"),
+        )
 
     def provision(self, job_spec: dict) -> str:
         """Create a dedicated single-tenant KVM VM on Hetzner Cloud."""
         runner_id = job_spec.get("runner_id") or f"synlynk-{uuid.uuid4().hex[:12]}"
         task_count = job_spec.get("task_count", 1)
-        server_type = job_spec.get("server_type") or calculate_vertical_host_size(task_count)
+        requested_size = job_spec.get("size")
+        server_type = (
+            job_spec.get("server_type")
+            or self.SERVER_TYPES.get(requested_size)
+            or calculate_vertical_host_size(task_count)
+        )
 
         payload = {
             "name": runner_id,
