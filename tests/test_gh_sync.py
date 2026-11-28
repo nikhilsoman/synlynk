@@ -424,6 +424,70 @@ def test_sync_arc_adopts_existing_milestone_by_title_instead_of_posting(
     conn.close()
 
 
+def test_sync_arc_recovers_from_stale_mapping_without_retargeting_milestone(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+
+    from synlynk import gh_sync
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.executescript(
+        """
+        CREATE TABLE roadmap_arcs (
+            id INTEGER PRIMARY KEY, version TEXT, title TEXT, status TEXT,
+            target_date TEXT, notes TEXT, is_milestone_eligible BOOLEAN, arc_uid TEXT
+        );
+        CREATE TABLE github_sync_map (
+            entity_type TEXT, entity_id TEXT, github_number INTEGER,
+            github_node_id TEXT, content_hash TEXT, last_synced_at TEXT,
+            PRIMARY KEY (entity_type, entity_id)
+        );
+        CREATE TABLE roadmap_uid_aliases (
+            old_uid TEXT PRIMARY KEY, new_uid TEXT NOT NULL, uid_kind TEXT NOT NULL,
+            reason TEXT NOT NULL
+        );
+        CREATE TABLE roadmap_phases (
+            id INTEGER PRIMARY KEY, arc_version TEXT, phase_title TEXT, status TEXT
+        );
+        CREATE TABLE cost_entries (actual_usd REAL, estimate_basis TEXT, epic_id INTEGER);
+        CREATE VIEW cost_entries_effective AS SELECT * FROM cost_entries;
+        INSERT INTO roadmap_arcs VALUES
+            (1, 'v0.26.10', 'Release', 'planned', NULL, NULL, 1, 'arc-2610');
+        INSERT INTO github_sync_map
+            (entity_type, entity_id, github_number, content_hash)
+            VALUES ('roadmap_arc', 'arc-2610', 21, 'stale-hash');
+        """
+    )
+    conn.commit()
+
+    calls = []
+
+    def fake_gh_api_json(args, **kwargs):
+        calls.append(args)
+        if args[0].endswith("/milestones/21"):
+            return {"number": 21, "node_id": "MI_wrong", "title": "0.39.2"}
+        if args[0].endswith("/milestones") and "POST" not in args:
+            return []
+        return {"number": 30, "node_id": "MI_new"}
+
+    monkeypatch.setattr(gh_sync, "_gh_api_json", fake_gh_api_json)
+
+    gh_sync.sync_arc(conn, arc_uid="arc-2610", owner="o", repo="r")
+
+    assert not any(
+        args[0].endswith("/milestones/21") and "PATCH" in args for args in calls
+    )
+    assert any(
+        args[0].endswith("/milestones") and "POST" in args for args in calls
+    )
+    assert conn.execute(
+        "SELECT github_number FROM github_sync_map "
+        "WHERE entity_type='roadmap_arc' AND entity_id='arc-2610'"
+    ).fetchone() == (30,)
+    conn.close()
+
+
 def test_sync_arc_still_posts_when_no_existing_milestone_matches(tmp_path, monkeypatch):
     import sqlite3
 
@@ -573,7 +637,7 @@ def _mapped_arc_connection(tmp_path):
     return conn
 
 
-def test_sync_arc_warns_and_skips_patch_when_mapped_title_has_drifted(
+def test_sync_arc_warns_and_recovers_when_mapped_title_has_drifted(
     tmp_path, monkeypatch, capsys
 ):
     from synlynk import gh_sync
@@ -583,15 +647,19 @@ def test_sync_arc_warns_and_skips_patch_when_mapped_title_has_drifted(
 
     def fake_gh_api_json(args, **kwargs):
         calls.append(args)
-        assert args[1:3] == ["--method", "GET"]
-        return {"number": 99, "node_id": "MI_wrong", "title": "v0.9.0"}
+        if args[0].endswith("/milestones/99"):
+            return {"number": 99, "node_id": "MI_wrong", "title": "v0.9.0"}
+        if args[0].endswith("/milestones") and "POST" not in args:
+            return []
+        return {"number": 100, "node_id": "MI_new"}
 
     monkeypatch.setattr(gh_sync, "_gh_api_json", fake_gh_api_json)
 
     gh_sync.sync_arc(conn, arc_uid="arc-u1", owner="o", repo="r")
 
-    assert len(calls) == 1
+    assert len(calls) == 3
     assert not any("PATCH" in call for call in calls)
+    assert any(args[0].endswith("/milestones") and "POST" in args for args in calls)
     warning = capsys.readouterr().err
     assert "arc-u1" in warning
     assert "v1.0.0" in warning

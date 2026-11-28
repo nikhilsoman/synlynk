@@ -215,18 +215,20 @@ def sync_arc(conn, arc_uid: str, owner: str, repo: str, role: str = "pm") -> Non
         live_title = live_milestone.get("title") if live_milestone else None
         if live_title != fields["title"]:
             print(
-                f"warning: refusing to sync arc {resolved_uid}: expected mapped milestone "
+                f"warning: stale mapping for arc {resolved_uid}: expected mapped milestone "
                 f"title {fields['title']!r}, found {live_title!r}",
                 file=sys.stderr,
             )
-            return
-        result = _gh_api_json(
-            [f"repos/{owner}/{repo}/milestones/{github_number}", "--method", "PATCH"]
-            + [f"-f{k}={v}" for k, v in payload.items()],
-            role=role,
-        )
-        node_id = result.get("node_id") if result else None
-    else:
+            mapped = None
+        else:
+            result = _gh_api_json(
+                [f"repos/{owner}/{repo}/milestones/{github_number}", "--method", "PATCH"]
+                + [f"-f{k}={v}" for k, v in payload.items()],
+                role=role,
+            )
+            node_id = result.get("node_id") if result else None
+
+    if not mapped:
         existing = _find_milestone_by_title(owner, repo, fields["title"], role=role)
         if existing is not None:
             github_number = existing["number"]
