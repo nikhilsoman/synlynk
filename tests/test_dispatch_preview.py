@@ -18,3 +18,27 @@ def test_preview_promotes_empirically_better_harness(tmp_path, monkeypatch):
     # design calls compose_dispatch_preview) returns the resolved harness
     # under "harness", not "agent".
     assert preview["harness"] == "grok"
+
+
+def test_preview_keeps_explicit_role_harness_when_headroom_prefers_another(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    policy_path = tmp_path / ".synlynk" / "policy.json"
+    policy_path.parent.mkdir(parents=True)
+    policy_path.write_text(
+        '{"schema_version": 1, "repo_id": "test", "capability_policy": {},'
+        ' "overrides": {"agent_roles": {"qa": {"default_harness": "claude"}},'
+        ' "dev_authority": {"task_allocation": '
+        '{"review": {"harness": "claude", "fallback": ["agy"]}}}}}'
+    )
+    monkeypatch.setattr(
+        "synlynk.quota_capture.prefer_harness_by_weekly_headroom",
+        lambda preferred, alternatives, conn: "agy",
+    )
+
+    preview = compose_dispatch_preview(
+        "review the pull request", task_type="review", role="qa"
+    )
+
+    assert preview["harness"] == "claude"
