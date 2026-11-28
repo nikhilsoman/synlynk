@@ -1,4 +1,19 @@
-from synlynk.examples import active_items, greet
+import pytest
+
+from synlynk.examples import active_items, calculate_discount, greet
+
+
+def test_calculate_discount_meets_the_defined_requirements():
+    """REQ-001 and REQ-003: calculate and round a valid discount."""
+    assert calculate_discount(100, 15) == 85.0
+    assert calculate_discount(19.99, 10) == 17.99
+
+
+@pytest.mark.parametrize("subtotal, rate", [(-1, 10), (10, -1), (10, 101)])
+def test_calculate_discount_rejects_inputs_outside_the_requirements(subtotal, rate):
+    """REQ-002: invalid values are rejected instead of producing a total."""
+    with pytest.raises(ValueError):
+        calculate_discount(subtotal, rate)
 
 
 def test_greet_returns_a_friendly_message():
