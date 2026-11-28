@@ -1253,6 +1253,25 @@ def _apply_workspace_defaults(config: dict) -> dict:
     for key, val in defaults["nudges"].items():
         if key not in config.get("nudges", {}):
             config.setdefault("nudges", {})[key] = val
+    swarm_defaults = {
+        "default": "local",
+        "enabled": ["local"],
+        "timeout_seconds": 900,
+        "hetzner": {
+            "location": "nbg1",
+            "image": "ubuntu-24.04",
+            "default_server_type": "cpx31",
+        },
+    }
+    if not isinstance(config.get("swarm_runners"), dict):
+        config["swarm_runners"] = {}
+    for key, val in swarm_defaults.items():
+        if key not in config["swarm_runners"]:
+            config["swarm_runners"][key] = val.copy() if isinstance(val, dict) else val
+    if not isinstance(config["swarm_runners"].get("hetzner"), dict):
+        config["swarm_runners"]["hetzner"] = {}
+    for key, val in swarm_defaults["hetzner"].items():
+        config["swarm_runners"]["hetzner"].setdefault(key, val)
     return config
 
 

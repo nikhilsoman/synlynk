@@ -11,6 +11,24 @@ def test_load_workspace_defaults_when_no_files_exist(tmp_path, monkeypatch):
     assert ws["mode"] == "solo"
 
 
+def test_load_workspace_normalizes_swarm_runner_schema(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk")
+    with open(".synlynk/workspace.json", "w") as f:
+        json.dump({"swarm_runners": {"enabled": ["local", "hetzner"]}}, f)
+
+    runners = synlynk.load_workspace()["swarm_runners"]
+
+    assert runners["default"] == "local"
+    assert runners["enabled"] == ["local", "hetzner"]
+    assert runners["timeout_seconds"] == 900
+    assert runners["hetzner"] == {
+        "location": "nbg1",
+        "image": "ubuntu-24.04",
+        "default_server_type": "cpx31",
+    }
+
+
 def test_load_billing_defaults_when_no_files_exist(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     billing = synlynk.load_billing()
