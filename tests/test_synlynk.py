@@ -6845,6 +6845,29 @@ def test_decide_record_uses_unique_stem_for_slug_collision(project_dir, monkeypa
         f"{prefix} 1", f"{prefix} 2"
     }
 
+
+def test_decide_record_regeneration_reuses_existing_stem(project_dir, monkeypatch):
+    """Regenerating one decision updates its files instead of allocating another stem."""
+    import synlynk
+
+    monkeypatch.setattr(
+        synlynk,
+        "_run_agent_sync",
+        lambda agent, prompt, timeout=120: "Analysis. Decision: proceed.",
+    )
+    synlynk.cmd_decide("Architecture choice", panel=["claude"], record=True)
+    conn = synlynk._get_db()
+    decision_id = conn.execute(
+        "SELECT decision_id FROM decisions WHERE topic=?", ("Architecture choice",)
+    ).fetchone()[0]
+    conn.close()
+
+    synlynk._write_decision_record_md(decision_id)
+
+    decisions_dir = project_dir / "project-docs" / "decisions"
+    assert len(list(decisions_dir.glob("*.md"))) == 1
+    assert len(list(decisions_dir.glob("*.json"))) == 1
+
 def test_decide_json_has_decision_id(project_dir, monkeypatch):
     import synlynk, json as _json
     monkeypatch.setattr(synlynk, "_run_agent_sync",
