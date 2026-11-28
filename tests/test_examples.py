@@ -1,4 +1,15 @@
-from synlynk.examples import active_items, greet
+import pytest
+
+from synlynk.examples import REQUIREMENTS, active_items, clamp, greet
+
+
+def test_clamp_implements_each_defined_requirement():
+    assert set(REQUIREMENTS) == {"REQ-1", "REQ-2", "REQ-3", "REQ-4"}
+    assert clamp(5, 0, 10) == 5  # REQ-1: value already in range
+    assert clamp(-1, 0, 10) == 0  # REQ-2: lower bound
+    assert clamp(11, 0, 10) == 10  # REQ-3: upper bound
+    with pytest.raises(ValueError):  # REQ-4: invalid bounds
+        clamp(5, 10, 0)
 
 
 def test_greet_returns_a_friendly_message():
