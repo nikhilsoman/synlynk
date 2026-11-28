@@ -340,5 +340,6 @@ def test_synlynk_init_wizard_dry_run_subprocess(tmp_path, monkeypatch):
         state_db,
         state_db.with_name(f'{state_db.name}-wal'),
         state_db.with_name(f'{state_db.name}-shm'),
+        state_db.with_name(f'{state_db.name}.bootstrap.lock'),
     }
     assert not (tmp_path / '.synlynk' / 'state.db').exists()
