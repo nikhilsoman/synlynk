@@ -63,6 +63,18 @@ def test_pr_mode_ignores_count_drift_when_readme_is_untouched(tmp_path, monkeypa
     assert not any(finding.check == "test_count" for finding in findings)
 
 
+def test_pr_mode_does_not_infer_main_when_base_ref_is_empty(tmp_path, monkeypatch):
+    _init_pr_repo(tmp_path, readme_touched=False)
+    _git(tmp_path, "update-ref", "-d", "refs/remotes/origin/main")
+    monkeypatch.setenv("GITHUB_BASE_REF", "")
+
+    findings = validate_readme_for_release(
+        str(tmp_path), "0.25.5", collected_test_count=5010, pr_mode=True
+    )
+
+    assert not any(finding.check == "test_count" for finding in findings)
+
+
 def test_pr_mode_still_enforces_count_when_base_ref_is_missing(tmp_path, monkeypatch):
     _init_pr_repo(tmp_path, readme_touched=False)
     monkeypatch.setenv("GITHUB_BASE_REF", "does-not-exist")
