@@ -1,51 +1,175 @@
-# synlynk.com Website Redesign (BS-5)
+<p align="center">
+  <img src="docs/img/logo/lockup.svg" alt="synlynk — neutral control plane for coding tasks" height="80">
+</p>
 
-This is the source code for the standalone redesign of synlynk.com. It is built using Eleventy v3, Nunjucks, and Vanilla CSS/JS.
+<p align="center"><strong>Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.</strong></p>
+<p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
-## Local Development
+<p align="center">
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-6253%20collected-brightgreen" alt="Tests"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.39.6-blue" alt="Version"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-Apache--2.0-green" alt="License"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
+</p>
 
-1. Navigate to the website folder:
+Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. The Python CLI injects scoped project context into every dispatch, uses empirical harness allocation only after a harness has at least five completed, merged jobs for the relevant task type, and follows the documented interim policy until then. See the [empirical capability policy](docs/blog/244-chore-empirical-capability-policy.md) and [routing policy](.synlynk/policy.json). Synlynk also tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
+
+**v0.39.6:** Maintainer Full Autonomy & Proposal Studio — Role-aware action registry with typed FieldSpec controls, evidence-weighted proximal selection with tier provenance, automated triage/burndown/sweep wake cycles with GitHub Actions scheduler, Slack notification gates, and generalized multi-source Proposal Studio with live status lanes (#5510, #5552–#5568).
+
+**v0.39.5:** Solo-Harness Review-Gate Matrix Testbed — Deterministic reproduction and regression coverage for solo-harness review-gate identity matrix (#5355, #5531).
+
+**v0.39.4:** Goal-Cohesive Release Packaging — Pure goal release planner grouping PRs by goal, release packaging schema with dependency invariants, and TPM sweep integration (#5525, #5530–#5538).
+
+**v0.39.3:** Native-Session Cost Capture & Cost-Ledger Gap Fixes — Native session cost capture, session-hook dispatcher, backfill, and acceptance suite (#5519–#5528).
+
+**v0.39.1:** Hetzner Cloud Swarm Runner Driver & Vertical Host Orchestration — Native Hetzner Cloud Runner Driver (`synlynk/runners/hetzner.py`), dual-mode `synlynk swarm lease` CLI with direct BYOT and hosted relay execution, triple-layer scale-to-zero watchdogs, and GitHub Actions workflow template (#5464).
+
+**v0.39.0:** Hardened FTUE, Vizor HUD, Bug-Report Intake & Core Data Integrity — Bulletproof First-Time User Experience and Vizor HUD (#5413/#5426-#5437), public bug-report intake with flight recorder (#5419), standalone ecosystem suite across 5 packages (`tokenprice`, `tokentrail`, `worktree-lease`, `harness-spec`, `token-breaker`), and 4 core data integrity liability remediations (#5462, #5463).
+
+**v0.38.3:** Harness Parity Phase 3: Live Routing & Manifest Mechanics — Live 14-day rolling capability router with rotation fallbacks (#5369, #5395), autonomous harness manifest schema validation and onboard/probe CLI mechanics, CLI-version preflight rediscovery, fail-closed local harness gates, and requested harness dual-ledger attribution.
+
+**v0.38.0:** FinOps Dual-Ledger Telemetry & Autonomous Daemon Resilience — Decoupled autonomous heal and TPM wake loops, guarded role authority checks, full post-release SOP automation, and dual-ledger token calibration (#5328, #5331, #5333).
+
+**v0.37.0:** Autonomous Operations & Universal Governance — Fail-closed preflight GOVERNS enforcement gate (#5119, #1990), continuous loop goal health verification, zero-mutation FTUE & Claude gateway passthrough (#5297–#5299), and workspace registry pruning (#5305).
+
+**v0.36.0:** Intent-Based Product Development (IBPD) Engine (Track 4) — Master Roadmap Phase 3 self-serve delivery ladder (Tiers 1–3), hosted edition capabilities, and engagement quote evaluation (#5247).
+
+**v0.35.0:** Fully-Derived Roadmap: Approach C Architecture (Track 3) — Eliminates structural drift via dynamic SQLite VIEWs (`roadmap_arcs`, `roadmap_phases`), moves roadmap placement to `goals`, and retargets foreign keys (#5245).
+
+**v0.34.0:** Synlynk Constitution & Charter Governance (Track 2) — Canonical normative law registry (Asimov Laws 0–3 + Intent Invariant), session bearings card injection, citation drift gate, and Sentinel/RCA law telemetry (#5245).
+
+**v0.33.0:** Synlynk Editions Registry & Gating Mechanics (Track 1) — Marginal cost-bearer capability classification engine, ordinal tier hierarchy, hosted infra gating, and doctor diagnostics (#5245, #5266).
+
+**v0.32.4:** Architectural Research Foundation & Operational Resilience — CoW-sparse virtualized workspaces (#4056), OS sandboxing & credential isolation (#4089), SCIP & Tree-sitter code intelligence (#2929), 3-way AST semantic merge & speculative rebase (#2844), distributed state.db sync & enterprise FinOps (#4010), agent GitHub App token isolation (#5220), and autonomous daemon supervisor resilience (#5221).
+
+## Documentation
+
+Start with the [documentation hub](docs/README.md), the [10-minute quickstart](docs/quickstart.md), or a [task-oriented how-to](docs/how-to/README.md). The complete [command reference](docs/reference/commands.md) is generated from `COMMAND_TAXONOMY`.
+
+| | | |
+|:---:|:---:|:---:|
+| [![Official Reference](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/site/src/assets/img/docs/synlynk-official-reference-thumb.png)](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/docs/synlynk-official-reference.pdf) | [![Command Reference](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/site/src/assets/img/docs/synlynk-command-reference-thumb.png)](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/docs/synlynk-command-reference.pdf) | [![Quick Start Guide](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/site/src/assets/img/docs/synlynk-quickstart-guide-thumb.png)](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/docs/synlynk-quickstart-guide.pdf) |
+| **[Official Reference](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/docs/synlynk-official-reference.pdf)** | **[Command Reference](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/docs/synlynk-command-reference.pdf)** | **[Quick Start Guide](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/docs/synlynk-quickstart-guide.pdf)** |
+| 14-page full reference: architecture, all commands, agent profiles, relay, SQLite schema, changelog | 9-page command catalog: flags, options, usage scenarios | 5-page getting started: install, init, dispatch, invite |
+
+## Install
+
+**From PyPI (Standard / Global CLI):**
+```bash
+pip install synlynk
+# or isolated via pipx
+pipx install synlynk
+```
+
+**From Source / Git:**
+```bash
+pipx install git+https://github.com/nikhilsoman/synlynk
+```
+
+**Visual Studio Code Extension:**
+Native IDE reach into agent dispatch, jobs, logs, and diagnostics is available in [`clients/vscode/`](clients/vscode/).
+
+**Run directly without installing (contributor / checkout mode):**
+```bash
+python3 bin/synlynk.py <command>
+```
+
+**Requirements:** Python 3.10+, stdlib only — zero required external dependencies.
+
+## Quick start
+
+Get up and running in 60 seconds:
+
+1. **Install synlynk globally:**
    ```bash
-   cd website
+   pipx install git+https://github.com/nikhilsoman/synlynk
    ```
 
-2. Install dependencies:
+2. **Initialize your project:**
+   Runs the interactive FTUE wizard to discover installed AI agent CLI tools, configure workspace topology, and bootstrap project state.
    ```bash
-   npm install
+   synlynk init --wizard
    ```
 
-3. Start the local development server (runs on port 8081):
+3. **Analyze repository structure:**
+   Scans the codebase to build and update the static source map.
    ```bash
-   npm run serve
+   synlynk scan
    ```
 
-4. Build the production site (outputs to `_site/`):
+4. **Migrate existing flat-file projects (optional):**
+   If you have a project created using an older version of synlynk, migrate its `project-docs/` markdown files to `state.db`.
    ```bash
-   npm run build
+   synlynk migrate
    ```
 
-## Sourcing Blog Posts
-
-Blog posts are written as markdown files inside the root directory `docs/blog/` (single source of truth).
-At config time, `.eleventy.js` automatically copies these markdown files into `website/src/blog/posts/` and registers them as the Eleventy `posts` collection.
-The `src/blog/posts/` directory is ignored by git to prevent committing duplicate files.
-
-## Blog Hero Images Pipeline
-
-To display custom screenshots or architecture diagrams for a blog post:
-
-1. Identify the matching brainstorm visual under `docs/brainstorm/<topic>/` (e.g. `docs/brainstorm/bs5-website-redesign/hero-v4.html`).
-2. Open the HTML file in a web browser.
-3. Capture a screenshot (e.g., using DevTools -> Command Menu -> "Capture node screenshot" on the main container).
-4. Save the image as a PNG at `website/src/assets/blog-heroes/<post-slug>.png`.
-5. Open `website/src/_data/blogHeroes.json` and add a mapping:
-   ```json
-   {
-     "post-slug": "assets/blog-heroes/filename.png"
-   }
+5. **Dispatch a task to an agent in the background:**
+   ```bash
+   synlynk dispatch claude --task "refactor auth module"
+   ```
+   `--task` must be a non-empty string — `dispatch_agent()` fails closed on an empty or whitespace-only task before creating any job, worktree, or cost entry (see [#720](https://github.com/nikhilsoman/synlynk/issues/720))
+   If `--task` is built from a shell variable in automation, don't interpolate it unchecked — an unset variable silently expands to an empty string
+   Sanity-check what a dispatch would actually send with `--dry-run` first:
+   ```bash
+   synlynk dispatch claude --task "$TASK_VAR" --dry-run
    ```
 
-### Gradient Fallbacks
-If a post does not have a mapped hero image in `blogHeroes.json`, the templates automatically render a premium color-shifting gradient containing the post's sequence number (e.g. `#30`).
+   Every dispatched agent is also asked to echo a receipt marker
+   (`SYNLYNK_TASK_RECEIVED: <task_sha256>`) as its literal first line of
+   output, confirming it received the exact task text before doing any
+   work. If a job's log is missing this marker (or prints it late, or with
+   the wrong digest) and no corroborating git activity shows up in its
+   worktree, Synlynk marks the job `task_delivery_failed` and skips
+   auto-finalize/push for that worktree — the files stay in place for
+   audit. If real work *did* land despite a missing/late marker, the job
+   is not blocked; it's flagged with a non-blocking WARN note instead
+   (see #720).
 
-<!-- Deployment trigger: 2026-06-29 -->
+6. **Check running jobs:**
+   ```bash
+   synlynk jobs
+   ```
+
+7. **Tail a job's output:**
+   ```bash
+   synlynk logs --job <job-id>
+   ```
+
+## How it works
+
+At the core of synlynk is a dual-storage model designed for agent speed and Git reliability:
+
+- **`state.db` is the permanent source of truth** for all project state, including stories, roadmaps, memories, devlogs, and costs.
+- **`project-docs/` flat files are write-through backups.** Every write to `state.db` automatically updates the corresponding markdown files in `project-docs/` (e.g., `todo.md`, `roadmap.md`, `memory.md`, `costs.md`). This ensures a human-readable, Git-trackable record of project state.
+- **`generate_context()` resolves state dynamically.** Once a project is migrated, it reads directly from the SQLite database to compile the current active context. For non-migrated repositories, it falls back to reading raw flat files.
+- **`synlynk exec <cmd>` manages context injection.** Before handing off to your AI tool, it compiles the active tasks and decisions, writes a compacted snapshot to `.synlynk/context.md` (active tasks only, no completed items), and checks cumulative spend limits in `.synlynk/config.json`. After the session ends, it detects flatline loops (3 consecutive failures of the same command) and writes alerts to `sentinel.md`.
+
+The AI tool is instructed (via `CLAUDE.md` / `GEMINI.md`) to read `.synlynk/context.md` at session start. Cost tracking is fully automated: `state.db` records costs to the `cost_entries` table, which are written through to `project-docs/costs.md`.
+
+## Commands
+
+Commands are grouped by where you'll reach for them in a typical project lifecycle.
+
+<!-- commands:start -->
+
+**Start here:**
+
+- `synlynk home`
+- `synlynk init`
+- `synlynk start`
+- `synlynk new`
+- `synlynk quickstart`
+- `synlynk brainstorm`
+- `synlynk brief`
+- `synlynk scan`
+- `synlynk join`
+- `synlynk governs`
+- `synlynk report`
+- `synlynk preflight`
+- `synlynk status`
+- `synlynk watch`
+- `synlynk viz`
+
+Full command reference: [docs/reference/commands.md](docs/reference/commands.md)
+
+<!-- commands:end -->
